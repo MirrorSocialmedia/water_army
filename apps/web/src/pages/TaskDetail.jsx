@@ -30,20 +30,28 @@ export function TaskDetail({ runId }) {
     () => events.some((e) => ['waiting_approval', 'approval_resolved'].includes(e.eventType)),
     [events],
   );
-  const sawTerminal = useMemo(
-    () => events.some((e) => ['succeeded', 'failed', 'cancelled', 'timed_out'].includes(e.eventType)),
-    [events],
-  );
-  // SSE is the live source of truth. The detail fetch can race ahead of the run
-  // reaching a terminal state (page opens mid-run), in which case the status
-  // badge / flow strip / result card stay stale until something re-fetches.
-  // When a terminal event has landed but the run row is still non-terminal,
-  // refresh once — the re-fetched row is terminal, so the effect self-terminates.
+  // SSE is the live source of truth for run state. The detail fetch can lag
+  // behind the DB (page opens mid-run, or a state change lands after the
+  // initial fetch) — in which case the status badge / flow strip / approval
+  // cards stay stale until something re-fetches. Every state-changing event
+  // (approval gate entry/exit, status flips, terminal) therefore triggers one
+  // detail refresh per event id; the refresh self-terminates because the
+  // re-fetched row already reflects the new state.
   const reloadRef = useRef(detail.reload);
   reloadRef.current = detail.reload;
+  const seenRefreshRef = useRef(null);
   useEffect(() => {
-    if (sawTerminal && run && !isTerminalStatus(run.status)) reloadRef.current();
-  }, [sawTerminal, run]);
+    const last = events[events.length - 1];
+    if (!last || seenRefreshRef.current === last.id) return;
+    const STATE_EVENTS = [
+      'waiting_approval', 'approval_resolved', 'status', 'retry_requested',
+      'succeeded', 'failed', 'cancelled', 'timed_out',
+    ];
+    if (STATE_EVENTS.includes(last.eventType) && run && !isTerminalStatus(run.status)) {
+      seenRefreshRef.current = last.id;
+      reloadRef.current();
+    }
+  }, [events, run]);
   // The SSE stream is the live source of truth; merge with the detail fetch
   // (deduped by event id) so the page shows history even before events land.
   const allEvents = useMemo(() => {
