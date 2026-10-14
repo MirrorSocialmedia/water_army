@@ -407,6 +407,11 @@ export function taskRoutes(app, deps = {}) {
       // Resume point: ?after=<eventId> (Last-Event-Id equivalent).
       let afterEvent = null;
       if (req.query.after) {
+        // Validate BEFORE Prisma: task_run_events.id is a Postgres uuid column,
+        // so a malformed cursor must be a 400, not a P2007 → 500 (live catch).
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.query.after)) {
+          throw badRequest('after must be a task event id (uuid)');
+        }
         const afterRows = await dbh.taskRunEvent.findMany({ where: { taskRunId: run.id, id: req.query.after } });
         afterEvent = afterRows.length ? afterRows[0] : null;
         if (!afterEvent) throw badRequest('after event not found for this run');

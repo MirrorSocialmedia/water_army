@@ -258,8 +258,11 @@ export function makeFakeDb({ users = [] } = {}) {
       create: async ({ data }) => {
         eventSeq += 1;
         eventClock += 1;
+        // UUID by default — faithful to the schema (@db.Uuid). The SSE
+        // ?after= cursor is a uuid, so the fake must produce uuids or the
+        // route's cursor validation (correctly) rejects fake ids.
         const row = {
-          id: data.id ?? `evt${eventSeq}`,
+          id: data.id ?? randomUUID(),
           taskRunId: data.taskRunId,
           eventType: data.eventType,
           message: data.message ?? null,

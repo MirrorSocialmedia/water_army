@@ -308,6 +308,12 @@ test('tasks API (P3)', async (t) => {
     }
   });
 
+  await t.test('SSE: malformed ?after= cursor → 400 (not a 500)', async () => {
+    const res = await app.inject({ method: 'GET', url: `/api/tasks/runs/${runId}/events?after=2026-10-14T18:55:40.456Z:not-a-uuid`, headers: { cookie: admin } });
+    assert.equal(res.statusCode, 400, res.body);
+    assert.match(res.json().error.code, /VALIDATION_ERROR|BAD_REQUEST/);
+  });
+
   await t.test('SSE: unauthenticated → 401', async () => {
     const res = await app.inject({ method: 'GET', url: `/api/tasks/runs/${runId}/events` });
     assert.equal(res.statusCode, 401);
