@@ -43,6 +43,7 @@ function publicPath(url) {
  * @param {object} [opts.redis]   ioredis instance (or fake)
  * @param {object} [opts.docker]  docker client wrapper (or fake)
  * @param {boolean}[opts.registerHealth] register health routes (default true)
+ * @param {object} [opts.logStream] pino stream override (test seam for log capture)
  * @returns {Promise<import('fastify').FastifyInstance>}
  */
 export async function buildApp(opts = {}) {
@@ -51,6 +52,7 @@ export async function buildApp(opts = {}) {
     logger: {
       level: config.logLevel,
       redact: { paths: [...PINO_REDACT_PATHS], censor: '***', removeOnly: false },
+      stream: opts.logStream,
     },
     bodyLimit: 1_000_000,
     ajv: {
@@ -195,6 +197,7 @@ export async function buildApp(opts = {}) {
     await closeRedis(redis);
   });
 
-  await app.ready();
+  // NOTE: no app.ready() here — callers (tests) may register extra routes
+  // before the first request; fastify boots lazily on listen()/inject().
   return app;
 }

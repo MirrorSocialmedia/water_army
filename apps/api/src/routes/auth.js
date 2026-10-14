@@ -42,7 +42,7 @@ const publicUser = (user) => ({
 export function authRoutes(app) {
   app.post('/api/auth/login', { schema: LOGIN_SCHEMA }, async (req, reply) => {
     const ip = req.ip;
-    const gate = app.rateLimiter(ip);
+    const gate = app.rateLimiter.check(ip);
     if (!gate.allowed) {
       await app.audit({
         action: 'auth.login_failed',
@@ -68,6 +68,7 @@ export function authRoutes(app) {
       : await verify(DUMMY_HASH, password);
 
     if (!user || !passwordOk) {
+      app.rateLimiter.hit(ip);
       await app.audit({
         action: 'auth.login_failed',
         status: 'failure',
@@ -84,6 +85,7 @@ export function authRoutes(app) {
       });
     }
     if (!user.isActive) {
+      app.rateLimiter.hit(ip);
       await app.audit({
         action: 'auth.login_failed',
         status: 'failure',

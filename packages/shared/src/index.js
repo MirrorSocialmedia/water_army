@@ -84,6 +84,8 @@ export const PINO_REDACT_PATHS = Object.freeze([
   '*.api-key',
   'api_key',
   'apiKey',
+  'token',
+  '*.token',
   'session',
   'sessionToken',
   'session_token',
