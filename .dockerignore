@@ -1,0 +1,15 @@
+# keep the image small and, critically, never bake .env into any image
+.git
+node_modules
+**/node_modules
+apps/web/dist
+.env
+.env.*
+!.env.example
+logs
+*.log
+coverage
+playwright-report
+test-results
+.dev
+docs

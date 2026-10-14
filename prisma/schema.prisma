@@ -1,0 +1,239 @@
+// water_army — Prisma schema (施工 MD §7 十表)
+// Versioned migrations live in ./migrations (committed; MD §3: schema/migrations must be in repo).
+// Regenerate client: npm run db:generate
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  // Prisma 7: connection URL moved out of the schema into prisma.config.js (CLI)
+  // and the driver adapter (PrismaClient). See prisma.config.js + plugins/db.js.
+}
+
+// ---------------------------------------------------------------- users
+
+enum Role {
+  admin
+  operator
+  viewer
+}
+
+model User {
+  id           String    @id @default(uuid()) @db.Uuid
+  username     String    @unique
+  passwordHash String    @map("password_hash") // argon2id — never plaintext/reversible
+  role         Role      @default(viewer)
+  isActive     Boolean   @default(true) @map("is_active")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  lastLoginAt  DateTime? @map("last_login_at")
+
+  sessions Session[]
+
+  @@map("users")
+}
+
+// ---------------------------------------------------------------- sessions
+// Opaque token; only its SHA-256 hash is stored (MD §7 sessions).
+model Session {
+  id         String   @id @default(uuid()) @db.Uuid
+  tokenHash  String   @unique @map("token_hash")
+  userId     String   @map("user_id") @db.Uuid
+  expiresAt  DateTime @map("expires_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  lastSeenAt DateTime @default(now()) @map("last_seen_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+// ---------------------------------------------------------------- provider_configs
+// encrypted_api_key = AES-256-GCM ciphertext (APP_ENCRYPTION_KEY, never in repo/DB plaintext path).
+model ProviderConfig {
+  id               String   @id @default(uuid()) @db.Uuid
+  name             String   @unique
+  providerType     String   @map("provider_type") // openai_compatible | webhook_agent
+  baseUrl          String   @map("base_url")
+  modelId          String?  @map("model_id")
+  encryptedApiKey  String?  @map("encrypted_api_key")
+  timeoutMs        Int      @default(120000) @map("timeout_ms")
+  isEnabled        Boolean  @default(true) @map("is_enabled")
+  capabilitiesJson Json?    @map("capabilities_json")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  taskDefinitions TaskDefinition[]
+
+  @@map("provider_configs")
+}
+
+// ---------------------------------------------------------------- task_definitions
+model TaskDefinition {
+  id                String    @id @default(uuid()) @db.Uuid
+  title             String
+  description       String?
+  taskType          String    @default("ai") @map("task_type")
+  providerConfigId  String    @map("provider_config_id") @db.Uuid
+  promptTemplate    String    @map("prompt_template")
+  mode              String    @default("analysis_only") // analysis_only | approved_tools
+  inputSchemaJson   Json?     @map("input_schema_json")
+  outputSchemaJson  Json?     @map("output_schema_json")
+  timeoutMs         Int       @default(120000) @map("timeout_ms")
+  maxAttempts       Int       @default(3) @map("max_attempts")
+  concurrencyKey    String?   @map("concurrency_key")
+  requiresApproval  Boolean   @default(false) @map("requires_approval")
+  createdBy         String    @map("created_by") @db.Uuid
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  providerConfig ProviderConfig @relation(fields: [providerConfigId], references: [id])
+  runs           TaskRun[]
+  schedules      Schedule[]
+
+  @@index([providerConfigId])
+  @@index([createdBy])
+  @@map("task_definitions")
+}
+
+// ---------------------------------------------------------------- task_runs
+enum TaskRunStatus {
+  queued
+  running
+  needs_approval
+  succeeded
+  failed
+  cancel_requested
+  cancelled
+  timed_out
+  skipped
+}
+
+model TaskRun {
+  id               String        @id @default(uuid()) @db.Uuid
+  taskDefinitionId String?       @map("task_definition_id") @db.Uuid // nullable: ad-hoc runs
+  scheduleId       String?       @map("schedule_id") @db.Uuid
+  status           TaskRunStatus @default(queued)
+  inputJson        Json?         @map("input_json")
+  resultJson       Json?         @map("result_json")
+  resultText       String?       @map("result_text")
+  errorCode        String?       @map("error_code")
+  errorMessage     String?       @map("error_message")
+  attempt          Int           @default(1)
+  queuedAt         DateTime?     @map("queued_at")
+  startedAt        DateTime?     @map("started_at")
+  finishedAt       DateTime?     @map("finished_at") // terminal statuses only
+  durationMs       Int?          @map("duration_ms")
+  requestedBy      String?       @map("requested_by") @db.Uuid
+  idempotencyKey   String?       @unique @map("idempotency_key") // unique within its scope (nullable = ad-hoc)
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+
+  taskDefinition TaskDefinition? @relation(fields: [taskDefinitionId], references: [id])
+  events         TaskRunEvent[]
+
+  // MD §7: status / created_at / schedule_id query indexes
+  @@index([status])
+  @@index([createdAt])
+  @@index([scheduleId])
+  @@index([taskDefinitionId])
+  @@index([requestedBy])
+  @@map("task_runs")
+}
+
+// ---------------------------------------------------------------- task_run_events
+model TaskRunEvent {
+  id        String   @id @default(uuid()) @db.Uuid
+  taskRunId String   @map("task_run_id") @db.Uuid
+  eventType String   @map("event_type") // queued/started/retry/approved/completed/failed/cancelled/timed_out
+  message   String?
+  payloadJson Json?  @map("payload_json") // secrets scrubbed before write
+  createdAt DateTime @default(now()) @map("created_at")
+
+  taskRun TaskRun @relation(fields: [taskRunId], references: [id], onDelete: Cascade)
+
+  @@index([taskRunId, createdAt])
+  @@map("task_run_events")
+}
+
+// ---------------------------------------------------------------- schedules
+// PostgreSQL = single source of truth; BullMQ scheduler is the execution index (MD §12.1).
+model Schedule {
+  id                String    @id @default(uuid()) @db.Uuid
+  name              String    @unique
+  taskDefinitionId  String    @map("task_definition_id") @db.Uuid
+  scheduleType      String    @map("schedule_type") // cron | interval
+  cronExpression    String?   @map("cron_expression")
+  intervalMs        Int?      @map("interval_ms")
+  timezone          String    @default("Asia/Taipei") // IANA tz, per-schedule
+  overlapPolicy     String    @default("skip_if_running") @map("overlap_policy") // skip_if_running | queue
+  isEnabled         Boolean   @default(true) @map("is_enabled")
+  nextRunAt         DateTime? @map("next_run_at")
+  lastRunAt         DateTime? @map("last_run_at")
+  lastStatus        String?   @map("last_status")
+  bullmqSchedulerId String?   @unique @map("bullmq_scheduler_id")
+  syncStatus        String    @default("synced") @map("sync_status") // synced | pending | sync_error
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  taskDefinition TaskDefinition @relation(fields: [taskDefinitionId], references: [id])
+
+  @@index([isEnabled])
+  @@index([taskDefinitionId])
+  @@map("schedules")
+}
+
+// ---------------------------------------------------------------- approval_requests
+model ApprovalRequest {
+  id            String    @id @default(uuid()) @db.Uuid
+  taskRunId     String    @map("task_run_id") @db.Uuid
+  toolName      String    @map("tool_name")
+  argumentsJson Json?     @map("arguments_json")
+  status        String    @default("pending") // pending | approved | rejected | expired
+  requestedAt   DateTime  @default(now()) @map("requested_at")
+  reviewedBy    String?   @map("reviewed_by") @db.Uuid // real human user id — AI cannot self-approve
+  reviewedAt    DateTime? @map("reviewed_at")
+  reviewNote    String?   @map("review_note")
+
+  @@index([taskRunId])
+  @@index([status])
+  @@map("approval_requests")
+}
+
+// ---------------------------------------------------------------- audit_events
+// Destructive ops, template changes, provider changes, schedule changes,
+// approve/reject and login failures all write here (MD §7/§13).
+model AuditEvent {
+  id           String   @id @default(uuid()) @db.Uuid
+  actorUserId  String?  @map("actor_user_id") @db.Uuid
+  action       String // e.g. auth.login_failed, container.stop, provider.update
+  resourceType String?  @map("resource_type")
+  resourceId   String?  @map("resource_id")
+  requestId    String?  @map("request_id")
+  ip           String?
+  status       String? // success | failure
+  detailsJson  Json?    @map("details_json") // secrets redacted before write
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  // MD §7 audit query indexes
+  @@index([createdAt])
+  @@index([actorUserId, createdAt])
+  @@index([action, createdAt])
+  @@index([resourceType, resourceId])
+  @@map("audit_events")
+}
+
+// ---------------------------------------------------------------- app_settings
+// Non-sensitive system settings only; sensitive keys via app-layer encryption or env secrets.
+model AppSetting {
+  key        String   @id // e.g. redroid.default_template, ui.default_timezone
+  valueJson  Json     @map("value_json")
+  updatedBy  String?  @map("updated_by") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@map("app_settings")
+}

@@ -1,0 +1,185 @@
+# =============================================================================
+# water_army — deployment topology (施工 MD §15)
+#
+# Security invariants (threat model T1):
+#   - ONLY `api` mounts /var/run/docker.sock (read-only). worker/web never see it.
+#   - postgres / redis publish NO host ports (compose-internal network only).
+#   - `web` is the single host-exposed service, bound to 127.0.0.1 only.
+#
+# Bring up:   sg docker -c 'docker compose up -d --build'
+# Stop:       sg docker -c 'docker compose stop'        (data volumes kept)
+# FULL RESET: sg docker -c 'docker compose down -v'     (DESTROYS db + queue data)
+# =============================================================================
+name: water-army
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  # ---------------------------------------------------------------- web
+  web:
+    build:
+      context: .
+      dockerfile: docker/web.Dockerfile
+    image: water-army/web:local
+    ports:
+      - "127.0.0.1:${WEB_PORT:-3012}:3012"
+    environment:
+      WEB_PORT: "3012"
+      API_UPSTREAM: http://api:3000
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    stop_grace_period: 10s
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3012/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    logging: *default-logging
+
+  # ---------------------------------------------------------------- api
+  api:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    image: water-army/api:local
+    # No host port: the web container proxies /api -> api:3000 (same-origin UI).
+    # Binding 0.0.0.0 is container-internal only (compose network), never published.
+    environment:
+      NODE_ENV: production
+      APP_HOST: 0.0.0.0
+      APP_PORT: "3000"
+      APP_PUBLIC_URL: ${APP_PUBLIC_URL:-http://127.0.0.1:3012}
+      APP_ENCRYPTION_KEY: ${APP_ENCRYPTION_KEY:?APP_ENCRYPTION_KEY missing — set it in .env}
+      SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET missing — set it in .env}
+      SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-12}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD missing — set it in .env}@postgres:5432/${POSTGRES_DB:-water_army}
+      REDIS_URL: redis://redis:6379
+      DOCKER_SOCKET_PATH: /var/run/docker.sock
+      DEFAULT_TIMEZONE: ${DEFAULT_TIMEZONE:-Asia/Taipei}
+      TASK_DEFAULT_TIMEOUT_MS: ${TASK_DEFAULT_TIMEOUT_MS:-120000}
+      TASK_MAX_TIMEOUT_MS: ${TASK_MAX_TIMEOUT_MS:-900000}
+      TASK_DEFAULT_ATTEMPTS: ${TASK_DEFAULT_ATTEMPTS:-3}
+      TASK_MAX_CONCURRENCY: ${TASK_MAX_CONCURRENCY:-4}
+      AI_PROVIDER_DEFAULT: ${AI_PROVIDER_DEFAULT:-}
+    volumes:
+      # THE ONLY service with Docker socket access — read-only.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    stop_grace_period: 30s
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    logging: *default-logging
+
+  # ---------------------------------------------------------------- worker
+  worker:
+    build:
+      context: .
+      dockerfile: docker/worker.Dockerfile
+    image: water-army/worker:local
+    # NO Docker socket here — hard boundary (MD §4 / threat T1).
+    environment:
+      NODE_ENV: production
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD missing — set it in .env}@postgres:5432/${POSTGRES_DB:-water_army}
+      WORKER_HEALTH_PORT: "3001"
+      TASK_MAX_CONCURRENCY: ${TASK_MAX_CONCURRENCY:-4}
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    stop_grace_period: 30s
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    logging: *default-logging
+
+  # ---------------------------------------------------------------- postgres
+  postgres:
+    image: postgres:17.6
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD missing — set it in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-water_army}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # No host ports — internal network only (MD §13.1).
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+    stop_grace_period: 30s
+    read_only: true
+    tmpfs:
+      - /var/run/postgresql
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    logging: *default-logging
+
+  # ---------------------------------------------------------------- redis
+  redis:
+    image: redis:7.4.5
+    # BullMQ works best with AOF persistence (MD §15 / BullMQ docs).
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    # No host ports — internal network only (MD §13.1).
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+    stop_grace_period: 10s
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    logging: *default-logging
+
+volumes:
+  pgdata:
+  redisdata:

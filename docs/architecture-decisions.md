@@ -219,3 +219,27 @@ latest                   | updated 2025-06-29
 - Redroid 候選映像二擇一（P5 實測）。
 - Redis persistence 配置（BullMQ 需要 AOF/快照策略 — P1 依 BullMQ 官方建議定）。
 - SSE 並行上限具體數值（P2/P3 依压測）。
+
+---
+
+## 8. P1 回寫（2026-10-14，落 lock 時發現的實際差異）
+
+依 §5.3 策略「P1 落 lock 前重查 + 衝突以同 major 最高 stable 實測相容為準並回寫本檔」：
+
+1. **V6 結果（Prisma 8 stable 時點）**：P1 落 lock 前重查 `npm view prisma dist-tags` → `latest` 仍係 **8.0.0-rc.22（RC）**、`next` = 8.0.0-rc.10、`prev` = **7.10.0** → 確認鎖定 **7.10.0**（同 §5.4 判定）。
+2. **Prisma 7 破壞性變更（實測，非 RC 文檔）**：`datasource.url` 已**從 schema.prisma 移除**（P1012）。新規則：
+   - CLI（migrate 等）連接 URL → **`prisma.config.js`**（本 repo 用 ESM JS 配置，零 TS — `defineConfig({ schema, datasource:{url}, migrations:{path} })`，從 `prisma/config` import）。
+   - Runtime `PrismaClient` 必經 **driver adapter** → 新增頂層依賴 **`@prisma/adapter-pg@7.10.0`**（與 prisma 同版；transitive `pg@^8.16.3` 入 lockfile）。`plugins/db.js` 用 `new PrismaPg({ connectionString })` + `new PrismaClient({ adapter })`。
+   - `prisma-client-js` generator 喺 7.10.0 仍存在，生成入 `node_modules/@prisma/client`（ESM import 實測 OK）；唔需要用 `prisma-client`（會生 TS 檔，違反 §2 零 TS）。
+3. **Web 新依賴**：**`@vitejs/plugin-react@6.1.2`**（peer `vite ^8.0.0` 滿足；oxc/rolldown/babel-compiler peer 全 optional）。無 vite 8 唔兼容嘅替代方案，lockfile 加呢一個。
+4. **Web router**：自製 hash router（`apps/web/src/router.js`，~40 行）— 唔引入 react-router-dom（唔喺 §5 表；唔擴供應鏈）。
+5. **映像 pin（compose，2026-10-14 manifest 實查存在）**：`postgres:17.6`、`redis:7.4.5`（`--appendonly yes` 按 BullMQ 建議）、`node:24`（api/worker/web 三 Dockerfile 統一）。
+6. **Host 工具補裝（唔係 repo 內容）**：host 原無 compose plugin（`docker compose` unknown command）→ user-level `~/.docker/cli-plugins/docker-compose` v2.40.3（sha256 驗過）。
+7. **lockfile 基準**：lockfileVersion 3，頂層 14 個直接依賴全部精確 pin（§5 表 13 個 + @prisma/adapter-pg）；`engines.node >=24` + `.nvmrc=24`。
+
+## 9. 未決項更新
+
+- ~~Prisma 8 stable 時點（V6）~~ → P1 重查：仍 RC，留 7.10.0（§8.1）。
+- ~~zod vs ajv（provider 回應/tool args）~~ → P1 決定：**ajv**（Fastify 內建，零新依賴）；P3 provider 回應/tool args 驗證用 ajv 直接 instantiate，唔引 zod。
+- Redis persistence 配置 → **AOF**（`redis-server --appendonly yes`，BullMQ 官方建議）— compose 已落。
+- SSE 並行上限 → 留 P2/P3 壓測（唔變）。
