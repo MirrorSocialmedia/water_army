@@ -181,7 +181,11 @@ const APPROVALS_QUERY = {
 const REVIEW_BODY = {
   type: 'object',
   additionalProperties: false,
-  properties: { note: { type: 'string', maxLength: 500 } },
+  // `note` is genuinely optional — the web UI sends an explicit `null` when the
+  // review-note field is left empty (note: (notes[id] ?? '').trim() || null),
+  // so the schema must accept null as well as absence. (P3 live-web-acceptance
+  // regression: note:null 400'd and silently broke every note-less approval.)
+  properties: { note: { type: 'string', maxLength: 500, nullable: true } },
 };
 
 const PROVIDER_BODY = {

@@ -399,6 +399,17 @@ test('tasks API (P3)', async (t) => {
     assert.equal(missing.statusCode, 404);
   });
 
+  await t.test('approvals: note null (web UI sends explicit null when note field empty) → 200', async () => {
+    const created = await app.inject({
+      method: 'POST', url: '/api/tasks/runs', headers: { cookie: op }, payload: { prompt: 'null note', provider: 'mock' },
+    });
+    const appr = await db.approvalRequest.create({ data: { taskRunId: created.json().taskRun.id, toolName: 'docker.restart_managed', argumentsJson: {} } });
+    const res = await app.inject({ method: 'POST', url: `/api/approvals/${appr.id}/approve`, headers: { cookie: admin }, payload: { note: null } });
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.json().approval.status, 'approved');
+    assert.equal(res.json().approval.reviewNote, null);
+  });
+
   // -------------------------------------------------------------- providers
   await t.test('providers: create stores encrypted key, never returns it (hasApiKey only)', async () => {
     const res = await app.inject({
