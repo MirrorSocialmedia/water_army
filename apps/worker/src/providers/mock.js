@@ -40,7 +40,7 @@ export const MOCK_BUILTIN_SCRIPTS = Object.freeze({
   'tool-restart-approve': {
     steps: [
       {
-        toolCalls: [{ name: 'docker.restart_managed', arguments: { container: 'water_army-api-1' } }],
+        toolCalls: [{ name: 'docker.restart_managed', arguments: { container: 'water-army-web-1' } }],
       },
       { content: 'Restart approval handled and the operation result is in the tool result above.', finishReason: 'stop' },
     ],
