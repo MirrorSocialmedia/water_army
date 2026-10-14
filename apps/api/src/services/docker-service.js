@@ -587,9 +587,16 @@ export function createDockerService({ docker, db, config, log = { info() {}, war
 
     const image = String(t?.image ?? '');
     if (!/^[a-z0-9][a-z0-9._/-]*(:[a-z0-9][a-z0-9._-]*)?(@sha256:[a-f0-9]{64})?$/.test(image)) {
-      fail('image must be an explicit tagged image (e.g. alpine:3.20) or digest — no untagged/implicit latest');
-    } else if (/(^|:)latest$/i.test(image)) {
-      fail('image tag "latest" is not allowed — pin an explicit version (MD §2-2)');
+      fail('image must be a valid explicit image reference');
+    } else {
+      // The tail after the last '/' may only carry tag/digest separators
+      // (registry ports always precede a '/').
+      const tail = image.slice(image.lastIndexOf('/') + 1);
+      if (!/[:@]/.test(tail)) {
+        fail('image must be explicitly tagged (e.g. alpine:3.20) or digest-pinned — no untagged/implicit latest');
+      } else if (/(^|:)latest$/i.test(tail)) {
+        fail('image tag "latest" is not allowed — pin an explicit version (MD §2-2)');
+      }
     }
 
     const cpu = t?.cpuLimit;
@@ -673,7 +680,8 @@ export function createDockerService({ docker, db, config, log = { info() {}, war
     }
 
     if (t?.privileged !== undefined && typeof t.privileged !== 'boolean') fail('privileged must be a boolean');
-    if (t?.privileged === true && !/^\S{10,200}$/.test(String(t?.privilegedReason ?? ''))) {
+    const privilegedReason = String(t?.privilegedReason ?? '').trim();
+    if (t?.privileged === true && (privilegedReason.length < 10 || privilegedReason.length > 200)) {
       fail('privileged=true requires a privilegedReason of 10-200 chars (redroid-class exception, MD §9.2)');
     }
     // host PID is never expressible in managed templates (no field for it).
@@ -709,7 +717,7 @@ export function createDockerService({ docker, db, config, log = { info() {}, war
       allowedHostPaths: [...allowedHostPaths].map(String),
       network,
       privileged: Boolean(t.privileged),
-      privilegedReason: t.privileged ? String(t.privilegedReason) : null,
+      privilegedReason: t.privileged ? privilegedReason : null,
     };
   }
 
