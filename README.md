@@ -2,9 +2,9 @@
 
 Docker 容器 + AI 任務自動化平台（7 階段 MVP 之中）。本地單一部署：一個 UI、一個 API、一個 worker、Postgres 17、Redis 7，全部跑喺同一部主機嘅 Docker 入面。
 
-- **api** — Fastify 5：auth（argon2id + session cookie）、RBAC、health、（P2 起：容器/任務/排程 API）
-- **worker** — BullMQ worker：執行容器任務（P2 起）
-- **web** — React 19 + Vite 8：6 頁 skeleton（P1 已上線，數據頁 P2 起接真 API）
+- **api** — Fastify 5：auth（argon2id + session cookie）、RBAC、health、容器 API（P2）、AI 任務/批准/provider 管理 API（P3）
+- **worker** — BullMQ worker：容器任務（P2）＋ AI 任務執行引擎（P3：agentic tool loop、approval gate、timeout/cancel/retry）。**無 Docker socket** — 容器操作全部經 api service token
+- **web** — React 19 + Vite 8：Dashboard、Containers（P2）、AI task runs list/detail（P3：狀態機視覺化、SSE 事件流、cancel/retry、approve/deny）
 - **postgres / redis** — 只在 compose 內部網絡，**唔 publish host port**
 
 施工依據：`docs/repo-audit.md`、`docs/architecture-decisions.md`（版本鎖定表）、`docs/build-checklist.md`。P0 已交付，本 README 屬 P1（Skeleton + Deployment）。
@@ -146,11 +146,43 @@ RBAC 角色階梯：`viewer < operator < admin`。401 = 未認證；403 = 角色
 
 錯誤分類（四類，見 `packages/shared` `DOCKER_ERROR`）：`CONTAINER_NOT_FOUND`(404)／`DOCKER_DAEMON_UNAVAILABLE`(503)／`DOCKER_PERMISSION_DENIED`(502)／`DOCKER_TIMEOUT`(504)／其餘 `DOCKER_ERROR`(502)。`NOT_MANAGED`(403) = managed gate；`NAME_TAKEN`/`FLOW_TOKEN_REUSED` 等 = 路由層 409/400。
 
-**P3–P5 將接**（skeleton 已喺 web）：`/tasks`、`/schedules`、`/devices`、`/ai-providers`、`/settings` 等 — 見 `docs/architecture-decisions.md`。
+**P3 起已接**：`/tasks`（list + detail）。**P4–P5 將接**：`/schedules`、`/devices`、`/ai-providers` 管理頁、`/settings` 等 — 見 `docs/architecture-decisions.md`。
+
+### P3 任務 API（已交付）
+
+| Method | Path | 說明 | Auth |
+|--------|------|------|------|
+| POST | `/tasks/runs` | 建立 AI 任務：`{prompt, provider?, title?, tools?, timeoutMs?, maxAttempts?, idempotencyKey?}` → 202 `{taskRun}`；provider 預設 = env `AI_PROVIDER`（`mock` = 內置可編排 mock） | operator+ |
+| GET | `/tasks/runs` | list（`?status=`、`?provider=`、分頁） | viewer+ |
+| GET | `/tasks/runs/:id` | detail：run + 全事件流 + approvals | viewer+ |
+| GET | `/tasks/runs/:id/events` | **SSE** 事件流：DB poll + `?after=<eventUuid>` cursor resume + heartbeat 25s + terminal 後 `done` 再 close；非法 cursor = 400（唔係 500） | viewer+ |
+| POST | `/tasks/runs/:id/cancel` | 真停取消：`cancel_requested` + 移除 waiting job；in-flight 靠 worker DB poll + AbortSignal；**cancel 後零 output/零事件**；冪等 | operator+ |
+| POST | `/tasks/runs/:id/retry` | manual retry（**terminal-only**）：同 run 新 attempt（`attempt+1`），舊輸出/事件全數保留 | operator+ |
+| GET | `/approvals` | 批准請求 list（`?status=pending/approved/rejected/expired/all`、`?runId=`） | viewer+ |
+| POST | `/approvals/:id/approve` / `.../reject` | 人工批准流：**只 admin 真人 session**（service token = 403 — AI 唔可能自批）；`{note?}` | **admin** |
+| GET | `/tools` | tool registry 元數據（name/description/safetyClass/args schema） | viewer+ |
+| GET/POST | `/providers` | AI provider 配置 CRUD（name + OpenAI-compatible baseUrl + **AES-256-GCM 加密** API key；key 永不傳回 API） | **admin** |
+| PATCH | `/providers/:name` | 更新 baseUrl/key（key 變更 = 重新加密） | **admin** |
+| POST | `/providers/:name/test` | 用該配置試打模型 endpoint（classified error 詞彙） | **admin** |
+
+**執行拓撲**：API 只寫 DB + 入 BullMQ 隊列；worker 消費 job 跑 agentic tool loop（readonly tool 自動執行、`approval_required` tool 落 `needs_approval` 等 admin）。worker 容器**無 Docker socket** — 所有容器 tool 經 API readonly 端點 + service token（`x-wa-service-token`，operator 身份、audit 可辨）。狀態：`queued → running → (needs_approval →) succeeded/failed/cancelled/timed_out`（`cancel_requested` 為過渡態）。
+
+**Mock 演示（零外部依賴）**：
+
+```bash
+# .env：AI_PROVIDER=mock、AI_MOCK_SCRIPT=tool-restart-approve（mock 會 list 容器 + 請求 restart 批准）
+sg docker -c 'docker compose up -d --build worker'
+curl -s -b /tmp/c.txt -X POST http://127.0.0.1:3012/api/tasks/runs \
+  -H 'content-type: application/json' \
+  -d '{"prompt":"檢查 managed 容器","provider":"mock"}'
+# → 202；SSE 跟事件：curl -sN -b /tmp/c.txt 'http://127.0.0.1:3012/api/tasks/runs/<id>/events'
+# 到 needs_approval 後，admin 喺 UI Tasks 頁或 API approve → run 繼續 → succeeded
+```
 
 ## 安全模型（T1 威脅）
 
-- **Docker socket 隔離**：只有 `api` 掛 `/var/run/docker.sock`（read-only）；worker/web 無。worker 執行容器經 api（P2）。
+- **Docker socket 隔離**：只有 `api` 掛 `/var/run/docker.sock`（read-only）；worker/web 無。worker 執行容器經 api（P2）；P3 嘅 AI tool 同樣只經 api（service token，worker 零 socket）。
+- **Service token**：`WORKER_API_TOKEN`（api + worker 同值 env）— worker→API 嘅機器身份，operator 權限、固定 UUID、audit 可辨（`actor: service:worker`）。**批准流永遠排除 service token**（`requireHuman` guard）— AI 唔可能自批自己嘅 tool call。
 - **網絡**：postgres/redis 零 host port；web 只綁 `127.0.0.1:3012`；api 零 host port（只經 web 反代）。
 - **容器硬化**：所有服務 `read_only: true`（必要目錄 tmpfs）+ `no-new-privileges` + `cap_drop: ALL` + log rotation（10m × 3）。
 - **Auth**：argon2id；session token 唔落 log、DB 只存 SHA-256；HttpOnly + SameSite=Lax cookie；未知 username 用 dummy hash 對齊 timing（防用户枚舉）；login 限流（失敗計數）。
@@ -201,7 +233,18 @@ P2 覆蓋（152 tests）：
 | `tests/integration/docker-templates-create.test.js` | 模板 allowlist CRUD、image pin 驗證、privileged reason、create 冪等（同 key 回放）、env 白名单、任意 payload 拒絶、例外表 grant/revoke |
 | `tests/integration/docker-sse.test.js` | **真 HTTP**（`app.listen` + fetch，唔係 inject）：preamble/headers、事件白名單過濾、torn-frame 稳健、abort→release、並行上限 503、daemon-down 503 — 13 tests |
 
-總計 **184 tests**。測試全部 hermetic（fake db/redis/docker），`node --test`（Node 內建 runner，零 test 依賴）。
+P3 覆蓋（101 tests）：
+
+| 檔案 | 範圍 |
+|------|------|
+| `tests/unit/task-run-state-machine.test.js` | 狀態機 transition 表、terminal-only retry、cancel 冪等、approval 生命周期、backoff |
+| `tests/unit/tool-registry.test.js` | fail-closed 查找、safety class gate、args schema 驗證（零依賴 subset）、scrub |
+| `tests/unit/provider-crypto.test.js` | AES-256-GCM round-trip、壞 key/tamper reject、格式 |
+| `tests/unit/scrub.test.js` | boundary-aware 敏感 key 脫敏、depth/node/string cap |
+| `tests/integration/task-engine.test.js` | worker engine（fake provider/queue）：agentic loop、tool 執行、approval wait + expire、**cancel 真停（零後續事件）**、timeout `timed_out`、retry 新 attempt 舊輸出保留 |
+| `tests/integration/tasks-api.test.js` | 全 app + fakes：create/list/detail/cancel/retry/approvals/tools/providers、**RBAC 矩陣**（401/403/200 逐 cell）、service token 自批 403、**SSE 真 HTTP**（snapshot/cursor resume/done/非法 cursor 400） |
+
+總計 **285 tests**（P1 32 + P2 152 + P3 101）。測試全部 hermetic（fake db/redis/docker），`node --test`（Node 內建 runner，零 test 依賴）。
 
 ## 疑難排解
 
@@ -229,7 +272,7 @@ P2 覆蓋（152 tests）：
 | P0 | Repo + docs + 版本鎖定 | ✅ |
 | **P1** | **Skeleton + Deployment（本 commit 系列）** | ✅ |
 | P2 | 容器核心（DockerService 全套、API、模板 allowlist、Web UI 兩頁、SSE） | ✅（live daemon 實測過，2026-10-14） |
-| P3 | AI providers（AES-256-GCM 加密 API key、模型呼叫） | 待開 |
+| P3 | AI 任務引擎：providers（AES-256-GCM 加密 key）+ task queue + tool registry + approval gate + Web UI | ✅（live 實測 2026-10-15，全循環 DB+SSE 實證） |
 | P4 | 排程（schedules → BullMQ repeatable）+ 通知 | 待開 |
 | P5 | Settings 頁面 + 用户管理 + audit 檢視 | 待開 |
 | P6 | 收尾：e2e、docs、security review | 待開 |

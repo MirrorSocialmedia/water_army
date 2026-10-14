@@ -302,3 +302,76 @@ latest                   | updated 2025-06-29
 - Web UI headless（chromium-1217）：登入 → list 頁 8 行實數據 + live CPU/mem、detail 4 tabs、SSE pill = LIVE、config tab 5 masked pills、0 意外 console error（1 個預期中嘅 pre-login 401）
 
 **Dev admin 密碼已重置**：`P2LiveAdmin!2026x`（原密碼喺舊 log 已 mask 唔回；正式部署必改）。
+
+---
+
+## 12. P3 架構決定（AI Provider + Task Queue + Tool Registry，2026-10-15）
+
+### 12.1 執行拓撲：API 只入隊，Worker 執行
+
+- 任務生命周期 = **DB 狀態機（`task_runs`）+ BullMQ 隊列（`task-runs`）+ 事件流（`task_run_events`）**。API 只寫 DB + 入隊（`task-queue.js` plugin 用 `buildRedisConnection()` 建 Queue）；worker 消費 job、驅動狀態機、落事件。
+- **iron rule（P1/P2 教訓）**：BullMQ 連線一律 `buildRedisConnection()`（api Queue 同 worker 同一 helper）；**每個 ioredis 實例必掛 `on('error')`**（否則 ioredis 未 catch error = process crash）；wiring 測試斷言 connection shape。
+- worker `/health` 加 **queue 狀態**（`connected/closed/error`，事件驅動 — `ready/error/close` 事件寫 flag，唔係 request-time probe）。
+- **boot reconcile**：worker 起動時 `reconcileStaleRuns` — 任何 `running` 但已唔喺 queue 嘅 run（worker crash 期間開跑緊）→ 標 `failed`（`WORKER_CRASHED`）+ 落事件。防「僵尸 running」。
+
+### 12.2 Tool 執行邊界：worker 無 Docker socket（硬驗收）
+
+- **worker 容器零 Docker socket mount**（`docker inspect` 實證）— 跟 P2 原則一致（只有 api 掛 `:ro` socket）。
+- tool handler 全部經 **API HTTP readonly 端點**（`GET /api/containers*`、`GET /api/health/ready`）＋ **service token**：header `x-wa-service-token` = env `WORKER_API_TOKEN`（api + worker 同值）。
+- API 端 service identity = **operator 角色、固定 UUID、audit 可辨**（actor = `service:worker` 樣式）— RBAC 照常行，P2 嘅 managed gate / 例外表 / audit 一併生效。AI 要動容器 = 必須經 API 真人授權層。
+- **AI 唔可能自批**：approve/reject route 只收 **admin 真人 session**（`requireHuman` guard）— service token 就算係 operator 都係 403（RBAC 矩陣實測）。
+
+### 12.3 Agentic tool loop + safety class（fail-closed）
+
+- tool registry = `packages/shared/src/tool-registry.js`（純元數據 + schema 驗證，零 I/O）；`findTool` **fail-closed**（未知 tool / disabled class → 拒絕，唔係 default-allow）。
+- safety class：`readonly`（自動執行）／`approval_required`（worker 落 `waiting_approval` 事件 + 寫 `approval_requests`，輪詢 DB 等 admin 決定）／`disabled`（registry 有 metadata 但 gate 掉 — 例如日後加 shell tool 嘅佔位）。
+- P3 工具集：`system.get_health`、`docker.list_managed_containers`、`docker.get_managed_container_status`、`docker.get_managed_container_logs`（readonly）＋ `docker.restart_managed`（approval_required，演示人工批准流）。
+- loop 上限：max rounds（防 runaway）；每個 tool result 過 `scrubObject`（boundary-aware 敏感 key 脫敏）先入事件/模型上下文。
+
+### 12.4 Approval gate
+
+- worker 喺 job 內 **1s 輪詢 DB** 等 `approval_requests.status`（`pending → approved/rejected/expired`）；同時 poll cancel/timeout 旗標 → 任何一個先至就真停。
+- run 取消/逾時 → 該 run 所有 pending approval 標 `expired`（唔會留懸空 approval 俾 admin 誤批）。
+- approval 記錄：`arguments`（JSON，已 scrub）、`requestedAt`、`reviewedAt`、`reviewedBy`（admin user id）、`note`。
+
+### 12.5 Cancel / Timeout / Retry 語義
+
+- **cancel 真停**：API 設 `cancel_requested` + best-effort 移除 waiting job（**in-flight 嘅真停靠 worker DB poll**，唔靠 queue）；provider fetch 傳 `AbortSignal`；cancel 之後**零 output / 零新事件**（live 實證：cancel 後 event count 凍結）。
+- **timeout** = run-level deadline（`startedAt + timeoutMs`，per-run 可設、cap `TASK_MAX_TIMEOUT_MS`）→ terminal `timed_out`；BullMQ job timeout 做 backstop（deadline + 30s）。
+- **retry**：auto（transient provider error：network/429/5xx，指數 backoff 1s→30s cap，`maxAttempts`）＋ manual（`POST /api/tasks/runs/:id/retry`，**terminal-only**）。兩者都 = 同 run row 嘅新 attempt（`attempt+1`），**舊 attempt 輸出/事件全數保留**喺 event 流（`attempt_started` 事件分隔）— 唔開新 run、唔覆蓋。
+
+### 12.6 Provider 層
+
+- **API key 加密**：AES-256-GCM（`packages/shared/src/provider-crypto.js`），key = env `APP_ENCRYPTION_KEY`（64 hex）；**api 同 worker 用同一 key**（worker 本地 decrypt 後直連模型 endpoint，**key 唔跨 queue** — BullMQ payload 只有 provider name）。
+- provider 解析：create body `provider` > env `AI_PROVIDER` > default；`mock` = 內置可編排 mock（`AI_MOCK_SCRIPT` = 內置名/檔案/inline JSON step 陣列：`delayMs/error/content/toolCalls/finishReason`）— 實測/演示用，零外部依賴。
+- OpenAI-compatible adapter：error classification（`PROVIDER_AUTH`/`PROVIDER_BAD_REQUEST`/`PROVIDER_RATE_LIMITED`/`PROVIDER_UPSTREAM`/`PROVIDER_TIMEOUT`，retryable set 明確）+ response redaction（error body 過 scrub 先入 log/事件）。
+
+### 12.7 SSE task events
+
+- `GET /api/tasks/runs/:id/events`：DB poll（1.5s）＋ `id:` cursor（`Last-Event-ID` / `?after=`，**cursor 必須係 uuid** — 非法 cursor = 400，唔係 500；25cd5fe 實測收錄）＋ heartbeat 25s ＋ terminal 後發 `done` 再 close ＋ 並行 cap（10）。
+- 事件 = `task_run_events` 表全量（`queued/attempt_started/provider_request/provider_response/tool_call/tool_result/waiting_approval/approval_resolved/status/retry_requested/succeeded/failed/cancelled/timed_out/output/error`）— **DB 即 event log**，重連 = `?after=` resume（live 實證：斷線後 cursor 補齊、零重複零遺漏）。
+- 測試：真 HTTP（`app.listen({port:0})` + fetch + AbortController）— 沿用 P2 鐵律（`app.inject` 唔能測 hijacked route）。
+
+### 12.8 BullMQ 實測收錄
+
+- **job id 唔得包含 `:`** — BullMQ 內部用 `:` 做 key namespace，`taskJobId` 由 `runId:attempt` 改 `runId-attempt`（f2a58b6；fake queue 同步修正保持誠實）。
+- 冪等入隊：同 `jobId` 重複 `add` → `JobExistsError`，service 層 catch 後照 DB 狀態行（唔建第二個 attempt）。
+
+### 12.9 RBAC 矩陣（P3 端點）
+
+| 端點 | viewer | operator | admin | service token (operator) |
+|------|:---:|:---:|:---:|:---:|
+| GET runs / run detail / approvals list / SSE | 200 | 200 | 200 | 200 |
+| POST run / cancel / retry | 403 | 200 | 200 | 200 |
+| GET/POST/PATCH providers（key 加密） | 403 | 403 | 200 | 403 |
+| POST approval approve/reject | 403 | 403 | 200 | **403（AI 唔可自批）** |
+| GET tools（registry 元數據） | 200 | 200 | 200 | 200 |
+| GET audit-events（P2 既有） | 403 | 403 | 200 | 403 |
+
+（服務 token 只用於 worker→API 嘅 readonly tool 路徑；矩陣入面 200 嘅 cell 係「權限上可以」，非生產用路徑。）
+
+### 12.10 其他實測收錄（P3）
+
+- **fake db `orderBy` 雙形狀**：Prisma `orderBy` 接受 object（`{createdAt:'desc'}`）同 array（`[{...}]`）— fake 必須兩種都支持（`applyOrderBy` helper），否則 P2 舊測試（array 形）同 P3 新路由（object 形）必有一邊炸。
+- **raw INSERT 冪等 seed**：e2e/seed 用固定 25 位 lowercase alnum id（cuid 形）— 短 id / hyphen id 會被 `normalizeRoute` 誤判（P2 已知陷阱，P3 seed 沿用）。
+- **web EventSource re-open**：browser `EventSource` 斷線重連會 resend `Last-Event-ID` **header**，而 API cursor 係 `?after=` **query** — client（`useTaskEvents`）自己持有 cursor，有 cursor 就 close + re-open 帶 `?after=`（零重複）；無 cursor 就俾 native retry 處理。
