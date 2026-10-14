@@ -342,7 +342,7 @@ export function createTaskRunService({ db, config = {}, enqueue, log = console }
    * Manual retry (MD §6.5: 重試必須係新 attempt，唔可偷偷覆蓋舊紀錄).
    * Allowed only from failed / timed_out / cancelled. Increments `attempt`,
    * clears the latest-attempt fields (the previous output stays preserved in
-   * the event stream), re-queues with job id `${runId}:${attempt}`.
+   * the event stream), re-queues with job id `${runId}-${attempt}` (taskJobId).
    */
   async function requestRetry(runId, { actorUserId = null, note = null } = {}) {
     const run = await loadRun(runId);

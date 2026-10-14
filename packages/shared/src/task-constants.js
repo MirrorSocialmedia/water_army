@@ -123,9 +123,12 @@ export const TASK_QUEUE_NAME = 'ai-tasks';
 /** BullMQ job name for task runs. */
 export const TASK_JOB_NAME = 'task-run';
 
-/** Deterministic job id per run+attempt → idempotent enqueue (no double jobs). */
+/** Deterministic job id per run+attempt → idempotent enqueue (no double jobs).
+ *  JOINER IS '-' (not ':'): BullMQ throws "Custom Id cannot contain :" on
+ *  custom job ids — a live-acceptance catch (2026-10-15, fake queue didn't
+ *  validate, so tests were green while real enqueue failed). */
 export function taskJobId(runId, attempt) {
-  return `${runId}:${attempt}`;
+  return `${runId}-${attempt}`;
 }
 
 /**

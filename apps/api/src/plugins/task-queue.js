@@ -7,7 +7,7 @@
  *    connect failure is an unhandled EventEmitter 'error' → process crash)
  *
  * Jobs are secret-free ({ runId, attempt }); the deterministic job id
- * `${runId}:${attempt}` makes enqueue idempotent (retries never double-up).
+ * `${runId}-${attempt}` (taskJobId) makes enqueue idempotent (retries never double-up).
  * BullMQ keeps only transport history (age-bounded); PostgreSQL is the
  * source of truth (MD §11.2 — queue 死咗都睇得到歷史).
  */

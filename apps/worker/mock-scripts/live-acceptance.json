@@ -1,0 +1,10 @@
+{
+  "steps": [
+    { "toolCalls": [{ "name": "docker.list_managed_containers", "arguments": { "pageSize": 10 } }] },
+    { "toolCalls": [{ "name": "docker.restart_managed", "arguments": { "container": "water-army-web-1" } }] },
+    {
+      "content": "Live acceptance complete: (1) listed managed containers over service-token HTTP, (2) executed the human-approved restart of water-army-web-1. Full tool results are in the event stream.",
+      "finishReason": "stop"
+    }
+  ]
+}

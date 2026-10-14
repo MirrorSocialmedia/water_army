@@ -392,6 +392,11 @@ export function makeFakeQueue() {
     jobs,
     async add(name, data, opts = {}) {
       const id = opts.jobId ?? `job${enqueued.length + 1}`;
+      // Faithful to BullMQ: custom job ids may NOT contain ':' (real BullMQ
+      // throws "Custom Id cannot contain :" — caught live 2026-10-15).
+      if (opts.jobId && String(opts.jobId).includes(':')) {
+        throw new Error('Custom Id cannot contain :');
+      }
       if (jobs.has(id)) {
         const err = new Error(`Job with id '${id}' already exists`);
         err.name = 'JobExistsError';

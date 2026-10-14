@@ -14,6 +14,7 @@ import {
   TASK_RUN_STATUS,
   TASK_RUN_TERMINAL,
   TASK_RUN_TRANSITIONS,
+  taskJobId,
 } from '../../packages/shared/src/task-constants.js';
 import { makeFakeDb, makeFakeQueue, testConfig } from '../helpers/fakes.js';
 
@@ -26,7 +27,9 @@ function makeService() {
     db,
     config: testConfig,
     log: { error() {}, warn() {}, info() {} },
-    enqueue: (jobData) => queue.add('task-run', jobData, { jobId: `${jobData.runId}:${jobData.attempt}` }),
+    // Shared taskJobId (single source of truth — job ids must not contain ':'
+    // because BullMQ rejects them; the fake queue now enforces the same).
+    enqueue: (jobData) => queue.add('task-run', jobData, { jobId: taskJobId(jobData.runId, jobData.attempt) }),
   });
   return { svc, db, queue };
 }
