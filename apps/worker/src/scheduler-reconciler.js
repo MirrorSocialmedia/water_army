@@ -101,20 +101,26 @@ export function createSchedulerReconciler({ db, queue, log = console } = {}) {
           const jobId = onceFireJobId(row.id, slotMs);
           const job = await queue.getJob(jobId);
           if (!job) {
-            await queue.add(SCHEDULE_FIRE_JOB_NAME, {
-              scheduleId: row.id,
-              schedHash: schedulingHash(row),
-              scheduledAt: new Date(slotMs).toISOString(),
-              once: true,
-            }, {
-              jobId,
-              delay: Math.max(0, slotMs - Date.now()),
-              attempts: 1,
-              timeout: SCHEDULE_FIRE_JOB_TIMEOUT_MS,
-              removeOnComplete: SCHEDULE_FIRE_REMOVE_ON_COMPLETE,
-              removeOnFail: SCHEDULE_FIRE_REMOVE_ON_FAIL,
-            });
-            summary.created += 1;
+            try {
+              await queue.add(SCHEDULE_FIRE_JOB_NAME, {
+                scheduleId: row.id,
+                schedHash: schedulingHash(row),
+                scheduledAt: new Date(slotMs).toISOString(),
+                once: true,
+              }, {
+                jobId,
+                delay: Math.max(0, slotMs - Date.now()),
+                attempts: 1,
+                timeout: SCHEDULE_FIRE_JOB_TIMEOUT_MS,
+                removeOnComplete: SCHEDULE_FIRE_REMOVE_ON_COMPLETE,
+                removeOnFail: SCHEDULE_FIRE_REMOVE_ON_FAIL,
+              });
+              summary.created += 1;
+            } catch (err) {
+              // Overlapping pass beat us to the add (same deterministic id) —
+              // the job exists now, which is exactly the desired state.
+              if (err?.name !== 'JobExistsError') throw err;
+            }
           }
         }
         continue;

@@ -595,7 +595,7 @@ export function makeFakeQueue() {
         tz: repeatOpts.tz ?? null,
         limit: repeatOpts.limit ?? null,
         // Real BullMQ getJobSchedulers() shape (template holds name/data/opts).
-        template: { name: template.name ?? key, data: template.data ?? {}, opts: template.opts ?? {} },
+        template: { data: template.data ?? {}, opts: template.opts ?? {} }, // real shape: template holds data+opts only; name is top-level
       });
     },
     async getJobSchedulers() {
