@@ -34,6 +34,8 @@ import { authRoutes } from './routes/auth.js';
 import { containerRoutes } from './routes/containers.js';
 import { templateRoutes } from './routes/templates.js';
 import { taskRoutes } from './routes/tasks.js';
+import { scheduleRoutes } from './routes/schedules.js';
+import { taskDefinitionRoutes } from './routes/task-definitions.js';
 
 /** Public (unauthenticated) route prefixes — everything else may need a session. */
 const PUBLIC_PREFIXES = ['/api/health', '/api/auth/login'];
@@ -218,6 +220,8 @@ export async function buildApp(opts = {}) {
   containerRoutes(app);
   templateRoutes(app);
   taskRoutes(app, { taskQueue });
+  scheduleRoutes(app);
+  taskDefinitionRoutes(app);
 
   // --- lifecycle ---------------------------------------------------------------
   app.addHook('onClose', async () => {

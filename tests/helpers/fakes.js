@@ -59,6 +59,11 @@ export function makeFakeDb({ users = [] } = {}) {
   const auditRows = [];
   let sessionSeq = 0;
 
+  // ---- P4 models (in-memory, Prisma-shaped) --------------------------------
+  const scheduleRows = new Map(); // by id
+  const definitionRows = new Map(); // by id
+  let scheduleSeq = 0;
+
   // ---- P3 models (in-memory, Prisma-shaped) --------------------------------
   const runRows = new Map(); // by id
   const eventRows = []; // append-only (createdAt ordered by push order)
@@ -76,6 +81,12 @@ export function makeFakeDb({ users = [] } = {}) {
     return [...runRows.values()].filter((r) => {
       if (where.id && r.id !== where.id) return false;
       if (where.idempotencyKey !== undefined && r.idempotencyKey !== where.idempotencyKey) return false;
+      if (where.scheduleId !== undefined && where.scheduleId !== null) {
+        if (Array.isArray(where.scheduleId) || where.scheduleId.in) {
+          const list = Array.isArray(where.scheduleId) ? where.scheduleId : where.scheduleId.in;
+          if (!list.includes(r.scheduleId)) return false;
+        } else if (r.scheduleId !== where.scheduleId) return false;
+      }
       if (where.status !== undefined) {
         let statusOk = false;
         if (Array.isArray(where.status)) statusOk = where.status.includes(r.status);
@@ -215,6 +226,13 @@ export function makeFakeDb({ users = [] } = {}) {
         return rows.map((r) => ({ ...r }));
       },
       count: async ({ where } = {}) => matchRunWhere(where).length,
+      findFirst: async ({ where } = {}) => {
+        const rows = matchRunWhere(where);
+        if (!rows.length) return null;
+        // Prisma findFirst without orderBy is non-deterministic; tests that
+        // rely on it use the status.in overlap query (first match is fine).
+        return { ...rows[0] };
+      },
       create: async ({ data }) => {
         runSeq += 1;
         const ts = now();
@@ -364,11 +382,114 @@ export function makeFakeDb({ users = [] } = {}) {
         return { ...row };
       },
     },
+    // ---- P4: schedules -------------------------------------------------------
+    schedule: {
+      findUnique: async ({ where }) => {
+        if (where.id && scheduleRows.has(where.id)) return { ...scheduleRows.get(where.id) };
+        if (where.name) {
+          const found = [...scheduleRows.values()].find((s) => s.name === where.name);
+          return found ? { ...found } : null;
+        }
+        return null;
+      },
+      findMany: async ({ where = {} } = {}) =>
+        [...scheduleRows.values()].filter((s) => {
+          if (where.isEnabled !== undefined && s.isEnabled !== where.isEnabled) return false;
+          if (where.taskDefinitionId && s.taskDefinitionId !== where.taskDefinitionId) return false;
+          return true;
+        }).map((s) => ({ ...s })),
+      count: async ({ where = {} } = {}) =>
+        [...scheduleRows.values()].filter((s) => {
+          if (where.isEnabled !== undefined && s.isEnabled !== where.isEnabled) return false;
+          if (where.taskDefinitionId && s.taskDefinitionId !== where.taskDefinitionId) return false;
+          return true;
+        }).length,
+      create: async ({ data }) => {
+        scheduleSeq += 1;
+        if (data.name && [...scheduleRows.values()].some((s) => s.name === data.name)) {
+          throw Object.assign(new Error(`Unique constraint failed on the fields: (name)`), { code: 'P2002' });
+        }
+        const ts = now();
+        const row = {
+          id: data.id ?? `sched${scheduleSeq}`,
+          name: data.name,
+          taskDefinitionId: data.taskDefinitionId,
+          scheduleType: data.scheduleType,
+          cronExpression: data.cronExpression ?? null,
+          intervalMs: data.intervalMs ?? null,
+          timezone: data.timezone ?? 'Asia/Taipei',
+          overlapPolicy: data.overlapPolicy ?? 'skip_if_running',
+          isEnabled: data.isEnabled ?? true,
+          nextRunAt: data.nextRunAt ?? null,
+          lastRunAt: data.lastRunAt ?? null,
+          lastStatus: data.lastStatus ?? null,
+          bullmqSchedulerId: data.bullmqSchedulerId ?? null,
+          syncStatus: data.syncStatus ?? 'synced',
+          createdAt: ts,
+          updatedAt: ts,
+        };
+        scheduleRows.set(row.id, row);
+        return { ...row };
+      },
+      update: async ({ where, data }) => {
+        const row = scheduleRows.get(where.id);
+        if (!row) throw Object.assign(new Error('schedule not found'), { code: 'P2025' });
+        if (data.name && data.name !== row.name && [...scheduleRows.values()].some((s) => s.id !== row.id && s.name === data.name)) {
+          throw Object.assign(new Error(`Unique constraint failed on the fields: (name)`), { code: 'P2002' });
+        }
+        Object.assign(row, data, { updatedAt: now() });
+        return { ...row };
+      },
+      delete: async ({ where }) => {
+        if (!scheduleRows.has(where.id)) throw Object.assign(new Error('schedule not found'), { code: 'P2025' });
+        scheduleRows.delete(where.id);
+        return {};
+      },
+    },
+    // ---- P4: task_definitions (read path for schedules UI + run-now) --------
+    taskDefinition: {
+      findUnique: async ({ where, include } = {}) => {
+        const row = where.id ? definitionRows.get(where.id) : null;
+        if (!row) return null;
+        const out = { ...row };
+        if (include?.providerConfig) {
+          out.providerConfig = providerRows.get(row.providerConfigId)
+            ? { ...providerRows.get(row.providerConfigId) }
+            : null;
+        }
+        return out;
+      },
+      findMany: async () => [...definitionRows.values()].map((d) => ({ ...d })),
+      create: async ({ data }) => {
+        const ts = now();
+        const row = {
+          id: data.id ?? `def${definitionRows.size + 1}`,
+          title: data.title,
+          description: data.description ?? null,
+          taskType: data.taskType ?? 'ai',
+          providerConfigId: data.providerConfigId,
+          promptTemplate: data.promptTemplate,
+          mode: data.mode ?? 'analysis_only',
+          inputSchemaJson: data.inputSchemaJson ?? null,
+          outputSchemaJson: data.outputSchemaJson ?? null,
+          timeoutMs: data.timeoutMs ?? 120000,
+          maxAttempts: data.maxAttempts ?? 3,
+          concurrencyKey: data.concurrencyKey ?? null,
+          requiresApproval: data.requiresApproval ?? false,
+          createdBy: data.createdBy ?? null,
+          createdAt: ts,
+          updatedAt: ts,
+        };
+        definitionRows.set(row.id, row);
+        return { ...row };
+      },
+    },
     // teardown seam
     $disconnect: async () => {},
     __state: {
       userRows, userById, sessionRows, settingRows, auditRows,
       runRows, eventRows, approvalRows, providerRows,
+      scheduleRows, definitionRows,
     },
   };
   return db;
@@ -384,15 +505,30 @@ export const fakeRedisOk = () => ({
  * Fake BullMQ Queue — records enqueue/remove calls so hermetic tests can
  * assert on queue traffic without Redis. add() mimics BullMQ's JobExistsError
  * on duplicate jobId (idempotent enqueue relies on this).
+ *
+ * P4: also fakes the BullMQ 6 Job Scheduler API (upsertJobScheduler /
+ * getJobSchedulers / removeJobScheduler) with the same parameter validation
+ * as the real thing (exactly one of pattern/every), plus a `__schedulerDown`
+ * seam to simulate redis writes failing mid-sync (sync_error path).
  */
 export function makeFakeQueue() {
   const enqueued = [];
   const removed = [];
   const jobs = new Map(); // id -> {id, name, data, state}
+  const schedulers = new Map(); // key -> {key, name, pattern, every, tz, data, opts}
+  let schedulerDown = false;
+  const down = () => {
+    const err = new Error('connect ECONNREFUSED 127.0.0.1:6379 (fake scheduler down)');
+    err.code = 'ECONNREFUSED';
+    return err;
+  };
   return {
     enqueued,
     removed,
     jobs,
+    schedulers,
+    __setSchedulerDown(flag = true) { schedulerDown = Boolean(flag); },
+    __isSchedulerDown() { return schedulerDown; },
     async add(name, data, opts = {}) {
       const id = opts.jobId ?? `job${enqueued.length + 1}`;
       // Faithful to BullMQ: custom job ids may NOT contain ':' (real BullMQ
@@ -422,6 +558,35 @@ export function makeFakeQueue() {
         return true;
       }
       return false;
+    },
+    // ---- P4: BullMQ 6 Job Scheduler API (same validation as the real one) --
+    async upsertJobScheduler(key, repeatOpts, template = {}) {
+      if (schedulerDown) throw down();
+      const { pattern, every } = repeatOpts ?? {};
+      if (pattern && every) throw new Error('Both .pattern and .every options are defined for this repeatable job');
+      if (!pattern && !every) throw new Error('Either .pattern or .every options must be defined for this repeatable job');
+      schedulers.set(key, {
+        key,
+        name: template.name ?? key,
+        pattern: pattern ?? null,
+        every: every ?? null,
+        tz: repeatOpts.tz ?? null,
+        limit: repeatOpts.limit ?? null,
+        data: template.data ?? {},
+        opts: template.opts ?? {},
+      });
+    },
+    async getJobSchedulers() {
+      if (schedulerDown) throw down();
+      return [...schedulers.values()].map((s) => ({ ...s }));
+    },
+    async getJobSchedulersCount() {
+      if (schedulerDown) throw down();
+      return schedulers.size;
+    },
+    async removeJobScheduler(key) {
+      if (schedulerDown) throw down();
+      return schedulers.delete(key);
     },
     __markActive(id) { const j = jobs.get(id); if (j) j.state = 'active'; },
     async close() {},

@@ -82,6 +82,9 @@ export function loadConfig(env = process.env, opts = {}) {
   const taskSseMaxConcurrent = optInt(e, 'TASK_SSE_MAX_CONCURRENT', 10);
   const taskSsePollMs = optInt(e, 'TASK_SSE_POLL_MS', 1_000);
   const taskSseHeartbeatMs = optInt(e, 'TASK_SSE_HEARTBEAT_MS', 25_000);
+  // P4 schedule knobs (MD §12.2: 過高頻率 400 — configurable minimum interval).
+  const scheduleMinIntervalMs = optInt(e, 'SCHEDULE_MIN_INTERVAL_MS', 10_000);
+  const scheduleMaxIntervalMs = optInt(e, 'SCHEDULE_MAX_INTERVAL_MS', 7 * 24 * 3_600_000);
 
   const databaseUrl = e.DATABASE_URL ?? '';
   if (!databaseUrl.startsWith('postgresql://')) {
@@ -128,6 +131,8 @@ export function loadConfig(env = process.env, opts = {}) {
     taskSseMaxConcurrent,
     taskSsePollMs,
     taskSseHeartbeatMs,
+    scheduleMinIntervalMs,
+    scheduleMaxIntervalMs,
     // P3 service identity: worker→API token (empty = service auth disabled).
     serviceToken: e.WORKER_API_TOKEN ?? '',
     // P3 provider default when POST /api/tasks/runs omits body.provider.

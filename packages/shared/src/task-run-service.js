@@ -169,6 +169,9 @@ export function createTaskRunService({ db, config = {}, enqueue, log = console }
    * @param {string[]} [input.tools] tool allowlist subset (MD §11.4)
    * @param {string} [input.idempotencyKey]
    * @param {string} [input.title]
+   * @param {string} [input.scheduleId] P4: originating schedule (uuid) — set on
+   *   scheduled + run-now fires; null for ad-hoc runs.
+   * @param {string} [input.taskDefinitionId] P4: originating definition (uuid)
    * @param {object} user {id, username}
    * @returns {Promise<{run:object, replay:boolean}>}
    */
@@ -198,6 +201,9 @@ export function createTaskRunService({ db, config = {}, enqueue, log = console }
       maxAttempts,
       tools: input.tools ?? null,
       title: input.title ?? null,
+      // P4: the SCHEDULED slot time for schedule-fired runs (auto + run-now).
+      // UI/API delay = run.createdAt − scheduledSlotAt (MD §1.4 盡力非硬性).
+      scheduledSlotAt: typeof input.scheduledSlotAt === 'string' ? input.scheduledSlotAt : null,
     };
 
     let run;
@@ -210,6 +216,9 @@ export function createTaskRunService({ db, config = {}, enqueue, log = console }
           queuedAt: new Date(),
           requestedBy: user?.id ?? null,
           idempotencyKey: input.idempotencyKey ?? null,
+          // P4: schedule lineage (both nullable — ad-hoc runs leave them null).
+          scheduleId: input.scheduleId ?? null,
+          taskDefinitionId: input.taskDefinitionId ?? null,
         },
       });
     } catch (err) {
@@ -289,7 +298,116 @@ export function createTaskRunService({ db, config = {}, enqueue, log = console }
         errors.push('idempotencyKey must match ^[A-Za-z0-9_-]{8,64}$');
       }
     }
+    for (const k of ['scheduleId', 'taskDefinitionId']) {
+      if (input[k] !== undefined && input[k] !== null) {
+        if (typeof input[k] !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(input[k])) {
+          errors.push(`${k} must be a uuid`);
+        }
+      }
+    }
     return errors;
+  }
+
+  // ------------------------------------------------------- P4: overlap skips
+  /**
+   * Record a SUPPRESSED schedule slot (overlap_policy = skip_if_running,
+   * MD §12.3: 「skip_if_running 時需記錄一筆 skipped run 或 schedule event，
+   * 並解釋被略過原因」).
+   *
+   * The run is created ALREADY terminal: `skipped` is a closed leaf in the
+   * transition table (no in/out edges) and finishRun() explicitly refuses to
+   * write it — a skipped run is never "finished", it is born skipped. No
+   * enqueue, no worker work: the slot left a trail (run row + event) and
+   * nothing else.
+   *
+   * Idempotent on `idempotencyKey` (per schedule+slot, scheduleSkipKey) — a
+   * redelivered fire of the same slot skips exactly once.
+   *
+   * @param {object} input
+   * @param {string} input.prompt  the prompt that WOULD have run (audit trail)
+   * @param {string} input.scheduleId
+   * @param {string} [input.taskDefinitionId]
+   * @param {string} [input.idempotencyKey]
+   * @param {string} [input.title]
+   * @param {string} input.reason  why the slot was skipped (human-readable)
+   * @param {string} [input.activeRunId] the run that caused the skip
+   * @param {string} [input.scheduledSlotAt] ISO of the suppressed slot
+   * @param {object} user {id, username}
+   * @returns {Promise<{run:object, replay:boolean}>}
+   */
+  async function createSkippedRun(input, user) {
+    const errors = [];
+    if (typeof input?.prompt !== 'string' || input.prompt.trim().length === 0) {
+      errors.push('prompt is required (non-empty string)');
+    }
+    if (typeof input?.scheduleId !== 'string' || input.scheduleId.length === 0) {
+      errors.push('scheduleId is required for a skipped run');
+    }
+    if (typeof input?.reason !== 'string' || input.reason.trim().length === 0) {
+      errors.push('reason is required (MD §12.3: 解釋被略過原因)');
+    }
+    if (typeof input?.idempotencyKey === 'string' && !/^[A-Za-z0-9_-]{8,64}$/.test(input.idempotencyKey)) {
+      errors.push('idempotencyKey must match ^[A-Za-z0-9_-]{8,64}$');
+    }
+    if (errors.length) {
+      throw new TaskRunError('VALIDATION_ERROR', `Invalid skipped run: ${errors.join('; ')}`, { status: 400 });
+    }
+
+    if (input.idempotencyKey) {
+      const existing = await db.taskRun.findUnique({ where: { idempotencyKey: input.idempotencyKey } });
+      if (existing) return { run: existing, replay: true };
+    }
+
+    const now = new Date();
+    const inputJson = {
+      prompt: input.prompt,
+      schedule: true,
+      skipped: {
+        reason: input.reason,
+        activeRunId: input.activeRunId ?? null,
+        scheduledSlotAt: input.scheduledSlotAt ?? null,
+        policy: 'skip_if_running',
+      },
+      title: input.title ?? null,
+    };
+
+    let run;
+    try {
+      run = await db.taskRun.create({
+        data: {
+          // Born terminal — see the method doc. finishedAt is written at
+          // birth (the only finishedAt write for this run's lifetime).
+          status: 'skipped',
+          inputJson,
+          attempt: 1,
+          queuedAt: now,
+          finishedAt: now,
+          durationMs: 0,
+          requestedBy: user?.id ?? null,
+          idempotencyKey: input.idempotencyKey ?? null,
+          scheduleId: input.scheduleId,
+          taskDefinitionId: input.taskDefinitionId ?? null,
+        },
+      });
+    } catch (err) {
+      if (String(err?.code ?? '').includes('P2002') && input.idempotencyKey) {
+        const existing = await db.taskRun.findUnique({ where: { idempotencyKey: input.idempotencyKey } });
+        if (existing) return { run: existing, replay: true };
+      }
+      throw err;
+    }
+
+    await recordEvent(run.id, TASK_EVENT.STATUS, {
+      message: `slot skipped: ${input.reason}`.slice(0, 500),
+      payload: {
+        from: null,
+        to: 'skipped',
+        reason: input.reason,
+        activeRunId: input.activeRunId ?? null,
+        scheduledSlotAt: input.scheduledSlotAt ?? null,
+      },
+    });
+    return { run, replay: false };
   }
 
   // ------------------------------------------------------------------ cancel
@@ -691,6 +809,7 @@ export function createTaskRunService({ db, config = {}, enqueue, log = console }
     recordEvent,
     // API side
     createRun,
+    createSkippedRun,
     requestCancel,
     requestRetry,
     resolveApproval,

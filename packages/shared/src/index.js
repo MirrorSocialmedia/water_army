@@ -33,6 +33,34 @@ export {
   TASK_DEFAULTS,
 } from './task-constants.js';
 
+/** Schedule domain constants (MD §1.4/§12 — PG source of truth + BullMQ index). */
+export {
+  SCHEDULE_TYPE,
+  SCHEDULE_SYNC_STATUS,
+  OVERLAP_POLICY,
+  SCHEDULE_ACTIVE_RUN_STATUSES,
+  SCHEDULE_FIRE_JOB_NAME,
+  schedulerIdFor,
+  onceFireJobId,
+  scheduleSlotKey,
+  scheduleSkipKey,
+  runNowKey,
+  SCHEDULE_MIN_INTERVAL_MS_DEFAULT,
+  SCHEDULE_RECONCILE_INTERVAL_MS_DEFAULT,
+  SCHEDULE_FIRE_JOB_TIMEOUT_MS,
+  SCHEDULE_FIRE_REMOVE_ON_COMPLETE,
+  SCHEDULE_FIRE_REMOVE_ON_FAIL,
+} from './schedule-constants.js';
+
+/** Schedule cron/timezone utilities (same cron-parser as BullMQ). */
+export {
+  isIanaTimezone,
+  validateCronExpression,
+  nextCronRun,
+  describeCron,
+  describeInterval,
+} from './schedule-cron.js';
+
 /** Tool registry metadata + arg validation (MD §11.4/§11.5). */
 export {
   TOOL_REGISTRY,
