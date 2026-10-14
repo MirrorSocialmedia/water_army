@@ -80,7 +80,7 @@ export function createQueueState() {
   };
 }
 
-export function bindQueueState(worker, state) {
+export function bindQueueState(worker, state, { probeMs = 15_000 } = {}) {
   worker.on('ready', () => {
     state.status = 'connected';
     state.lastError = null;
@@ -92,6 +92,24 @@ export function bindQueueState(worker, state) {
   worker.on('closed', () => {
     state.status = 'closed';
   });
+  // BullMQ 6 emits 'ready' ONCE (one-shot waitUntilReady, verified in
+  // dist/cjs/classes/worker.js). After a redis blip the backend
+  // auto-reconnects and jobs flow again, but the state would ratchet to
+  // 'error' forever (live-verified 2026-10-15: /health 503 + docker
+  // unhealthy for 10+ min AFTER recovery, while logs showed jobs
+  // completing). While degraded, probe with a real redis round trip.
+  const probe = setInterval(async () => {
+    if (state.status !== 'error') return;
+    try {
+      await worker.getJobCounts?.();
+      state.status = 'connected';
+      state.lastError = null;
+    } catch {
+      /* still degraded — retry next tick */
+    }
+  }, probeMs);
+  if (typeof probe.unref === 'function') probe.unref();
+  return () => clearInterval(probe);
   worker.on('active', () => {
     state.active += 1;
   });
@@ -194,7 +212,8 @@ export function createBullMqWorker(config, { Worker: WorkerCtor = BullMQWorker, 
     },
   );
 
-  bindQueueState(worker, state);
+  const stopStateProbe = bindQueueState(worker, state);
+  Object.defineProperty(worker, 'queueStateProbeStop', { value: stopStateProbe });
   worker.on('ready', () => workerLog.info('worker ready (queue: ai-tasks)'));
   worker.on('completed', (job) => {
     workerLog.info?.({ jobId: job?.id, runId: job?.data?.runId }, 'job completed');
@@ -385,6 +404,9 @@ export function createWorkerApp({
     log.info({ signal }, 'worker shutting down');
     try {
       reconcilerRef.impl?.stop();
+    } catch { /* best effort */ }
+    try {
+      worker.queueStateProbeStop?.();
     } catch { /* best effort */ }
     try {
       await worker.close();

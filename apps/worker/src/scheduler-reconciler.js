@@ -33,6 +33,7 @@ import {
   schedulerIdFor,
   onceFireJobId,
   schedulingHash,
+  SCHED_STALE_SLOT_TOLERANCE_MS,
 } from '@water-army/shared';
 
 /**
@@ -139,10 +140,14 @@ export function createSchedulerReconciler({ db, queue, log = console } = {}) {
         continue;
       }
 
+      // NOTE: real BullMQ scheduler entries OMIT absent fields (cron has no
+      // `every`, interval has no `pattern`/`tz`) — comparing `entry.every !==
+      // (want.every ?? null)` flagged `undefined !== null` as drift on EVERY
+      // pass (live-verified 2026-10-15). Normalize BOTH sides.
       const drifted =
-        entry.pattern !== (want.pattern ?? null) ||
-        entry.every !== (want.every ?? null) ||
-        entry.tz !== (want.tz ?? null) ||
+        (entry.pattern ?? null) !== (want.pattern ?? null) ||
+        (entry.every ?? null) !== (want.every ?? null) ||
+        (entry.tz ?? null) !== (want.tz ?? null) ||
         haveHash !== wantHash;
       if (drifted) {
         // Params moved under the index (e.g. a PATCH whose re-upsert failed
@@ -167,25 +172,49 @@ export function createSchedulerReconciler({ db, queue, log = console } = {}) {
       }
     }
 
-    // ------------------------------------------- orphan sweep (once jobs)
+    // --------------------------------------- orphan sweep (delayed fire jobs)
+    // Live-verified 2026-10-15 (BullMQ 6): the Job Scheduler materializes
+    // each enabled non-once schedule's NEXT fire as a DELAYED job whose id is
+    // `repeat:<schedulerId>:<slotMs>` (job-scheduler.js getSchedulerNextJobId).
+    // Those are LIVE, not orphans — the first sweep version removed them every
+    // pass (orphanJobs:3 in the boot log) and BullMQ silently re-added them.
+    // Rule:
+    //   - once schedule    → exactly ONE job may exist: the current slot's
+    //     deterministic id; anything else is stale (runAt PATCH leftover).
+    //   - non-once schedule→ never touch a FUTURE job (BullMQ owns it); only
+    //     remove jobs whose slot is already in the past (crash leftover).
+    //   - no enabled owner → true orphan, remove.
     const enabledOnce = new Map(enabled.filter((r) => r.scheduleType === SCHEDULE_TYPE.ONCE).map((r) => [r.id, r]));
+    const enabledNonOnce = new Map(enabled.filter((r) => r.scheduleType !== SCHEDULE_TYPE.ONCE).map((r) => [r.id, r]));
+    const nowMs = Date.now();
     for (const job of delayedJobs) {
       if (job?.name !== SCHEDULE_FIRE_JOB_NAME) continue;
       const sid = job?.data?.scheduleId;
-      const row = sid ? enabledOnce.get(sid) : null;
-      if (!row || !row.nextRunAt) {
-        // Schedule deleted/disabled, or once slot already consumed → orphan.
-        await job.remove().catch((err) => log.debug?.({ error: err.message }, 'orphan once-job remove no-op'));
-        summary.orphanJobs += 1;
+      const onceRow = sid ? enabledOnce.get(sid) : null;
+      if (onceRow) {
+        const expected = onceRow.nextRunAt
+          ? onceFireJobId(onceRow.id, new Date(onceRow.nextRunAt).getTime())
+          : null;
+        if (job.id !== expected) {
+          await job.remove().catch((err) => log.debug?.({ error: err.message }, 'stale once-job remove no-op'));
+          summary.orphanJobs += 1;
+        }
         continue;
       }
-      const currentJobId = onceFireJobId(row.id, new Date(row.nextRunAt).getTime());
-      if (job.id !== currentJobId) {
-        // Stale slot (e.g. the runAt PATCH failed to remove the old job) →
-        // keep exactly ONE fire per schedule: the current slot's job.
-        await job.remove().catch((err) => log.debug?.({ error: err.message }, 'stale once-job remove no-op'));
-        summary.orphanJobs += 1;
+      const nonOnceRow = sid ? enabledNonOnce.get(sid) : null;
+      if (nonOnceRow) {
+        const m = /^repeat:[^:]+:(\d+)$/.exec(String(job.id ?? ''));
+        const slotMs = m ? Number(m[1]) : NaN;
+        if (Number.isFinite(slotMs) && slotMs < nowMs - SCHED_STALE_SLOT_TOLERANCE_MS) {
+          // Past slot — can never fire (crash between fire and consumption).
+          await job.remove().catch((err) => log.debug?.({ error: err.message }, 'stale repeat-job remove no-op'));
+          summary.orphanJobs += 1;
+        }
+        continue;
       }
+      // No enabled schedule owns this job (deleted/disabled) → true orphan.
+      await job.remove().catch((err) => log.debug?.({ error: err.message }, 'orphan once-job remove no-op'));
+      summary.orphanJobs += 1;
     }
 
     // ------------------------------------------------ sync_status self-heal

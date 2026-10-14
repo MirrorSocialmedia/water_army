@@ -3,6 +3,7 @@
  * config. Kept dependency-free so the suite runs anywhere Node ≥22 runs.
  */
 import { randomUUID } from 'node:crypto';
+import { nextCronRun } from '@water-army/shared';
 
 /**
  * Sort rows by a Prisma-style orderBy spec. Accepts BOTH forms Prisma allows:
@@ -517,12 +518,41 @@ export function makeFakeQueue() {
   const jobs = new Map(); // id -> {id, name, data, state}
   const schedulers = new Map(); // key -> {key, name, pattern, every, tz, data, opts}
   let schedulerDown = false;
+  let schedulerHang = false; // models ioredis offline-queue: the command is
+  // accepted but NEVER settles while redis is down (live-verified 2026-10-15
+  // — it hung the POST /schedules HTTP request for minutes).
+  const hang = () => new Promise(() => {});
   const down = () => {
     const err = new Error('connect ECONNREFUSED 127.0.0.1:6379 (fake scheduler down)');
     err.code = 'ECONNREFUSED';
     return err;
   };
   // A job reference with the subset of the real BullMQ Job API the code uses.
+// Faithful to BullMQ 6 (live-verified 2026-10-15): the Job Scheduler
+// materializes the NEXT fire of an enabled non-once scheduler as a
+// DELAYED job with id `repeat:<key>:<nextMs>` (job-scheduler.js
+// getSchedulerNextJobId). The reconciler's orphan sweep depends on this
+// exact shape — a future repeat job is LIVE, only a past one is a
+// crash leftover.
+const clearRepeatJobs = (key) => {
+  for (const [id, j] of jobs) {
+    if (j.name === 'schedule-fire' && id.startsWith(`repeat:${key}:`)) jobs.delete(id);
+  }
+};
+const seedRepeatJob = (key, slotMs, template) => {
+  const id = `repeat:${key}:${slotMs}`;
+  if (!jobs.has(id)) {
+    jobs.set(id, {
+      id,
+      name: template?.name ?? 'schedule-fire',
+      data: template?.data ?? {},
+      state: 'delayed',
+      opts: { delay: slotMs - Date.now() },
+    });
+  }
+  return id;
+};
+
   const wrapJob = (j) => ({
     id: j.id,
     name: j.name,
@@ -546,6 +576,7 @@ export function makeFakeQueue() {
     schedulers,
     __setSchedulerDown(flag = true) { schedulerDown = Boolean(flag); },
     __isSchedulerDown() { return schedulerDown; },
+    __setSchedulerHang(flag = true) { schedulerHang = Boolean(flag); },
     async add(name, data, opts = {}) {
       const id = opts.jobId ?? `job${enqueued.length + 1}`;
       // Faithful to BullMQ: custom job ids may NOT contain ':' (real BullMQ
@@ -583,6 +614,7 @@ export function makeFakeQueue() {
     },
     // ---- P4: BullMQ 6 Job Scheduler API (same validation as the real one) --
     async upsertJobScheduler(key, repeatOpts, template = {}) {
+      if (schedulerHang) return hang();
       if (schedulerDown) throw down();
       const { pattern, every } = repeatOpts ?? {};
       if (pattern && every) throw new Error('Both .pattern and .every options are defined for this repeatable job');
@@ -597,17 +629,32 @@ export function makeFakeQueue() {
         // Real BullMQ getJobSchedulers() shape (template holds name/data/opts).
         template: { data: template.data ?? {}, opts: template.opts ?? {} }, // real shape: template holds data+opts only; name is top-level
       });
+      // Materialize the next fire (replaces any pending one for this key).
+      clearRepeatJobs(key);
+      const nextMs = pattern
+        ? nextCronRun(pattern, repeatOpts.tz ?? 'UTC', new Date()).getTime()
+        : Date.now() + every;
+      seedRepeatJob(key, nextMs, template);
+    },
+    // Test seam: plant a repeat job for an arbitrary (e.g. past) slot —
+    // models what BullMQ's internal scheduler add would produce.
+    __seedRepeatJob(key, slotMs, data) {
+      return seedRepeatJob(key, slotMs, { name: 'schedule-fire', data });
     },
     async getJobSchedulers() {
+      if (schedulerHang) return hang();
       if (schedulerDown) throw down();
       return [...schedulers.values()].map((s) => ({ ...s }));
     },
     async getJobSchedulersCount() {
+      if (schedulerHang) return hang();
       if (schedulerDown) throw down();
       return schedulers.size;
     },
     async removeJobScheduler(key) {
+      if (schedulerHang) return hang();
       if (schedulerDown) throw down();
+      clearRepeatJobs(key);
       return schedulers.delete(key);
     },
     __markActive(id) { const j = jobs.get(id); if (j) j.state = 'active'; },

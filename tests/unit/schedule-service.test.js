@@ -15,6 +15,10 @@ import {
   SCHEDULE_FIRE_JOB_NAME,
 } from '@water-army/shared';
 
+// The fail-fast sync guard (schedule-service.js) reads this at factory time.
+// Keep it tiny in unit tests so a stuck sync can never slow the suite down.
+process.env.SCHEDULE_SYNC_TIMEOUT_MS = '50';
+
 // -------------------------------------------------------------------- setup
 async function mkEnv(overrides = {}) {
   const db = makeFakeDb({
@@ -512,4 +516,21 @@ test('createSkippedRun: born terminal skipped, explanatory event, no enqueue, id
     () => taskSvc.createSkippedRun({ ...input, reason: '', idempotencyKey: 'sched-other-slot-9-skip' }, USER),
     (err) => err.apiCode === 'VALIDATION_ERROR',
   );
+});
+
+// ------------------------------------------------- fail-fast sync guard (P4)
+test('sync guard: HUNG queue (redis offline-queue) fails fast -> sync_error, no hang', async () => {
+  const { db, queue, svc } = await mkEnv();
+  queue.__setSchedulerHang(true); // command accepted, never settles (real redis-down shape)
+  const t0 = Date.now();
+  const { schedule } = await svc.create(
+    { name: 'hung-sync', taskDefinitionId: DEF_ID, scheduleType: 'interval', intervalMs: 60_000 },
+    USER,
+  );
+  const elapsed = Date.now() - t0;
+  queue.__setSchedulerHang(false);
+  assert.equal(schedule.syncStatus, 'sync_error', 'row flagged sync_error (PG-first)');
+  assert.ok(elapsed < 5_000, `request returned fast (elapsed ${elapsed}ms), not hung in the offline queue`);
+  const row = await db.schedule.findUnique({ where: { id: schedule.id } });
+  assert.equal(row.syncStatus, 'sync_error');
 });

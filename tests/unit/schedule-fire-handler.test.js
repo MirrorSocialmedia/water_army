@@ -197,3 +197,26 @@ test('provider disabled at fire time → aborted, NO run, slot NOT consumed (nex
   assert.equal(row.isEnabled, true, 'schedule stays enabled — operator fixes the provider');
   assert.equal(new Date(row.nextRunAt).toISOString(), '2026-10-15T01:00:00.000Z', 'slot not consumed');
 });
+
+// Real BullMQ 6 shape (live-verified 2026-10-15): Job Scheduler fires carry
+// NO slot in data/opts — the slot is embedded in the job id as
+// `repeat:<schedulerId>:<nextMillis>` (job-scheduler.js getSchedulerNextJobId).
+test('real BullMQ 6 jobId (repeat:sched-<uuid>:<millis>) → slot parsed from job id, no prevMillis/scheduledAt', async () => {
+  const slotMs = new Date('2026-10-15T01:00:00.000Z').getTime();
+  const { db, handler, schedule, enqueued } = await mkEnv();
+  const job = {
+    id: `repeat:sched-${schedule.id}:${slotMs}`,
+    name: 'schedule-fire',
+    data: { scheduleId: schedule.id }, // no schedHash, no scheduledAt
+    opts: {},                          // no prevMillis
+  };
+  const result = await handler.handleFireJob(job);
+  assert.equal(result.outcome, 'fired');
+  assert.equal(enqueued.length, 1);
+  const runs = await db.taskRun.findMany({ where: { scheduleId: schedule.id } });
+  assert.equal(runs.length, 1);
+  assert.equal(runs[0].idempotencyKey, scheduleSlotKey(schedule.id, slotMs), 'deterministic slot key from job id');
+  const row = await db.schedule.findUnique({ where: { id: schedule.id } });
+  const wantNext = nextCronRun('0 9 * * *', 'Asia/Taipei', new Date(slotMs)).toISOString();
+  assert.equal(row.nextRunAt.toISOString(), wantNext, 'next slot derived from the parsed slot, not wall clock');
+});

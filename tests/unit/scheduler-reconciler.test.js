@@ -164,3 +164,61 @@ test('convergence: repeated passes from an empty index reach exactly {enabled} (
   await reconciler.reconcile();
   assert.equal(queue.schedulers.size, 3, 'index count == DB enabled count after repeated passes');
 });
+
+// --- Bug regression (live-verified 2026-10-15): the Job Scheduler
+// materializes each enabled non-once schedule's NEXT fire as a DELAYED job
+// `repeat:<sched-<uuid>>:<slotMs>`. The v1 sweep misclassified those as
+// orphans and removed them every pass (orphanJobs:3 in the live boot log).
+
+test('enabled non-once: the live next-fire job is NEVER swept (2nd pass regression)', async () => {
+  const db = makeFakeDb();
+  const row = await db.schedule.create({ data: CRON({ name: 'a' }) });
+  const queue = makeFakeQueue();
+  const reconciler = createSchedulerReconciler({ db, queue, log: silentLog });
+  const r1 = await reconciler.reconcile(); // creates index + seeds the next-fire job
+  assert.equal(r1.orphanJobs, 0);
+  const r2 = await reconciler.reconcile(); // 2nd pass SEES the seeded delayed job
+  assert.equal(r2.orphanJobs, 0, 'second pass must not sweep the live next-fire job');
+  const delayed = (await queue.getJobs(['delayed'])).filter((j) => j.name === SCHEDULE_FIRE_JOB_NAME);
+  assert.equal(delayed.length, 1, 'exactly one pending next-fire job remains');
+  assert.match(delayed[0].id, /^repeat:sched-[^:]+:\d+$/, 'BullMQ 6 scheduler job id shape');
+});
+
+test('enabled non-once: past-slot repeat job (crash leftover) removed, future job kept', async () => {
+  const db = makeFakeDb();
+  const row = await db.schedule.create({ data: CRON({ name: 'a' }) });
+  const queue = makeFakeQueue();
+  const reconciler = createSchedulerReconciler({ db, queue, log: silentLog });
+  await reconciler.reconcile(); // seeds the FUTURE next-fire job
+  const key = schedulerIdFor(row.id);
+  queue.__seedRepeatJob(key, Date.now() - 10 * 60_000, { scheduleId: row.id }); // 10-min-old leftover
+  const r2 = await reconciler.reconciler ? null : await reconciler.reconcile();
+  assert.equal(r2.orphanJobs, 1, 'only the past-slot job is removed');
+  const delayed = (await queue.getJobs(['delayed'])).filter((j) => j.name === SCHEDULE_FIRE_JOB_NAME);
+  assert.equal(delayed.length, 1, 'the future next-fire job survives the sweep');
+});
+
+test('once schedule with consumed slot (nextRunAt NULL): stranded job removed', async () => {
+  const db = makeFakeDb();
+  const row = await db.schedule.create({
+    data: {
+      name: 'once-consumed',
+      taskDefinitionId: '11111111-1111-4111-8111-111111111111',
+      scheduleType: 'once',
+      runAt: new Date('2026-10-16T01:00:00.000Z'),
+      timezone: 'Asia/Taipei',
+      overlapPolicy: 'skip_if_running',
+      isEnabled: true,
+      nextRunAt: null, // fire consumed the slot, disable step crashed before it
+      syncStatus: 'synced',
+    },
+  });
+  const queue = makeFakeQueue();
+  const oldJobId = `schedonce-${row.id}-1792150800000`;
+  await queue.add(SCHEDULE_FIRE_JOB_NAME, { scheduleId: row.id, once: true }, { jobId: oldJobId, delay: 60_000 });
+  const reconciler = createSchedulerReconciler({ db, queue, log: silentLog });
+  const r = await reconciler.reconcile();
+  assert.equal(r.orphanJobs, 1, 'stranded once job removed (slot already consumed)');
+  const delayed = (await queue.getJobs(['delayed'])).filter((j) => j.name === SCHEDULE_FIRE_JOB_NAME);
+  assert.equal(delayed.length, 0);
+});

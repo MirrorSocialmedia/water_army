@@ -205,11 +205,27 @@ export function createScheduleService({ db, queue, config = {}, log = console, t
    *  disabled → ensure NO scheduler exists (remove orphaned index)
    * Result: sync_status = synced | sync_error (DB row is never rolled back).
    */
+  // Live-verified 2026-10-15: with redis DOWN, ioredis's offline queue
+  // holds the upsert until a reconnect that never comes — the HTTP request
+  // hung for minutes while the PG row sat unflagged. The DB row is the
+  // source of truth and the worker reconciler converges the index, so the
+  // sync step must FAIL FAST: an honest, timely sync_error beats a hang.
+  const SYNC_TIMEOUT_MS = Math.max(1_000, Number(process.env.SCHEDULE_SYNC_TIMEOUT_MS ?? 10_000));
+
+  function withTimeout(promise, ms, label) {
+    let timer;
+    const t = new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms (redis likely down)`)), ms);
+      if (typeof timer.unref === 'function') timer.unref();
+    });
+    return Promise.race([promise, t]).finally(() => clearTimeout(timer));
+  }
+
   async function applySync(row, { syncReason = 'update' } = {}) {
     const target = row.isEnabled ? SCHEDULE_SYNC_STATUS.SYNCED : SCHEDULE_SYNC_STATUS.SYNCED;
     try {
-      if (row.isEnabled) await syncToQueue(row);
-      else await removeFromQueue(row);
+      if (row.isEnabled) await withTimeout(syncToQueue(row), SYNC_TIMEOUT_MS, 'schedule sync');
+      else await withTimeout(removeFromQueue(row), SYNC_TIMEOUT_MS, 'schedule desync');
       return setSyncStatus({ ...row }, target);
     } catch (err) {
       // PG-first invariant: the DB row stands; BullMQ is out of step.

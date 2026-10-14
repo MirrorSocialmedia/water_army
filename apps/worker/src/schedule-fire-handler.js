@@ -33,10 +33,15 @@ import {
   scheduleSkipKey,
   schedulerIdFor,
   nextCronRun,
+  SERVICE_USER_ID,
 } from '@water-army/shared';
 
-/** Caller identity for scheduler-created runs (no user involved). */
-const SYSTEM = Object.freeze({ id: 'system', username: 'scheduler' });
+/**
+ * Caller identity for scheduler-created runs (no user involved).
+ * requested_by is @db.Uuid → must use the fixed service UUID (P3),
+ * never a bare string.
+ */
+const SYSTEM = Object.freeze({ id: SERVICE_USER_ID, username: 'scheduler' });
 
 /**
  * @param {object} deps
@@ -82,10 +87,14 @@ export function createScheduleFireHandler({ db, taskSvc, queue, log = console } 
   }
 
   /**
-   * @param {object} job BullMQ Job — data {scheduleId, schedHash, scheduledAt?},
-   *   opts.prevMillis = the scheduled slot ms (set by the Job Scheduler for
-   *   cron/interval fires; absent on delayed once-jobs, which carry
-   *   data.scheduledAt instead).
+   * @param {object} job BullMQ Job — data {scheduleId, schedHash, scheduledAt?}.
+   *   Slot (ms) resolution order:
+   *     1. data.scheduledAt — delayed once-jobs carry it explicitly;
+   *     2. job.id — BullMQ 6 Job Scheduler fires carry the slot in the job id
+   *        (`repeat:<schedulerId>:<nextMillis>`; confirmed against the
+   *        installed bullmq source, job-scheduler.js getSchedulerNextJobId);
+   *     3. opts.prevMillis — kept for forward compatibility;
+   *     4. wall clock (logged) — last resort for malformed jobs.
    */
   async function handleFireJob(job) {
     const data = job?.data ?? {};
@@ -95,11 +104,13 @@ export function createScheduleFireHandler({ db, taskSvc, queue, log = console } 
       return { outcome: 'invalid' };
     }
 
-    // The scheduled slot (ms): scheduler fires carry opts.prevMillis;
-    // delayed once-jobs carry data.scheduledAt. Last resort: wall clock
-    // (logged — keeps the slot honest even for a malformed job).
-    let slotMs = Number.isFinite(job?.opts?.prevMillis) ? job.opts.prevMillis : null;
-    if (slotMs == null && data.scheduledAt) slotMs = new Date(data.scheduledAt).getTime();
+    // The scheduled slot (ms) — see resolution order in the doc above.
+    let slotMs = data.scheduledAt ? new Date(data.scheduledAt).getTime() : null;
+    if (slotMs == null) {
+      const m = /^repeat:[^:]+:(\d+)$/.exec(String(job?.id ?? ''));
+      if (m) slotMs = Number(m[1]);
+    }
+    if (slotMs == null && Number.isFinite(job?.opts?.prevMillis)) slotMs = job.opts.prevMillis;
     if (slotMs == null) {
       slotMs = Date.now();
       log.warn?.({ scheduleId, jobId: job?.id }, 'fire job carried no slot — falling back to wall clock');

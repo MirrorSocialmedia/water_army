@@ -22,7 +22,9 @@ RUN npx prisma generate \
  && node --check apps/worker/src/worker.js \
  && node --check apps/worker/src/task-engine.js \
  && node --check apps/worker/src/tool-helpers.js \
- && node --check apps/worker/src/provider-resolver.js
+ && node --check apps/worker/src/provider-resolver.js \
+ && node --check apps/worker/src/scheduler-reconciler.js \
+ && node --check apps/worker/src/schedule-fire-handler.js
 USER node
 EXPOSE 3001
 CMD ["node", "apps/worker/src/worker.js"]
