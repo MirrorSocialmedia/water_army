@@ -56,6 +56,18 @@ export {
 /** Secret scrubbing for persisted payloads (MD §13.3). */
 export { scrubObject } from './scrub.js';
 
+/** Provider credential encryption — AES-256-GCM (MD §11.7/§13.2). */
+export {
+  ProviderCryptoError,
+  resolveProviderKey,
+  encryptSecret,
+  decryptSecret,
+  maskSecret,
+} from './provider-crypto.js';
+
+/** Classified provider failure (MD §11.8). */
+export { ProviderError } from './provider-error.js';
+
 /**
  * Canonical API error codes (施工 MD §8 error envelope).
  * Every error response is: { error: { code, message, requestId } }
