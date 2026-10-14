@@ -142,6 +142,8 @@ export function makeFakeDockerClient({ mode = 'ok', containers = [], networks = 
       const payload = JSON.stringify({ Type: 'container', ...ev });
       eventsBus.emit('event', payload);
     },
+    // Push a raw (possibly malformed) frame line — torn-stream robustness tests.
+    __pushRawLine: (line) => eventsBus.emit('event', line),
 
     async listContainers(_opts) {
       guard();
@@ -274,18 +276,18 @@ export function makeFakeDockerClient({ mode = 'ok', containers = [], networks = 
     async getEvents(_opts) {
       guard();
       record('getEvents', null, _opts);
+      // Real dockerode getEvents returns a stream consumers attach to with
+      // .on('data') — so emit framed lines on 'data' (never 'event').
       const stream = new EventEmitter();
       stream.destroyed = false;
-      stream.on('newListener', (ev) => {
-        if (ev === 'event') {
-          const forward = (payload) => stream.emit('data', Buffer.from(`${payload}\n`));
-          eventsBus.on('event', forward);
-          stream._cleanup = () => eventsBus.off('event', forward);
-        }
-      });
+      const onBus = (payload) => {
+        if (!stream.destroyed) stream.emit('data', Buffer.from(`${payload}\n`));
+      };
+      eventsBus.on('event', onBus);
       stream.destroy = () => {
+        if (stream.destroyed) return;
         stream.destroyed = true;
-        stream._cleanup?.();
+        eventsBus.off('event', onBus);
         stream.removeAllListeners();
       };
       return stream;

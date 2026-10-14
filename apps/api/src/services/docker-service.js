@@ -1040,7 +1040,10 @@ export function createDockerService({ docker, db, config, log = { info() {}, war
     sseActive += 1;
     try {
       const stream = await call('events', () => c.getEvents({ filters: JSON.stringify({ type: ['container'] }), since: since || undefined }));
+      let released = false;
       const release = () => {
+        if (released) return; // idempotent — the route may call it from req and res close
+        released = true;
         sseActive = Math.max(0, sseActive - 1);
         try {
           stream.destroy?.();

@@ -178,11 +178,19 @@ export function containerRoutes(app) {
       req.log.info({ userId: req.user?.id, active: app.dockerService.sseStats().active }, 'sse client connected');
 
       // MD §9.4: 斷線時釋放 Docker event stream（+計數+log 證據）。
-      req.raw.on('close', () => {
+      // 兩邊（request close / response close）都會觸發 — inject 測試環境
+      // 下 req.raw close 唔一定到，所以 release 必須冪等。
+      let torn = false;
+      const teardown = () => {
+        if (torn) return;
+        torn = true;
         clearInterval(hb);
         opened.release();
         req.log.info({ userId: req.user?.id, active: app.dockerService.sseStats().active }, 'sse client disconnected — docker event stream released');
-      });
+      };
+      req.raw.on('close', teardown);
+      raw.on('close', teardown);
+      raw.on('finish', teardown);
     },
   );
 
