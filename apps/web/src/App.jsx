@@ -18,7 +18,7 @@ const PAGES = {
   'containers-detail': (props) => <ContainerDetail containerId={props.params.id} />,
   devices: Devices,
   tasks: Tasks,
-  'tasks-detail': (props) => <TaskDetail taskId={props.params.id} />,
+  'tasks-detail': (props) => <TaskDetail runId={props.params.id} />,
   schedules: Schedules,
   settings: Settings,
 };

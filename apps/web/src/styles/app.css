@@ -274,3 +274,23 @@ input:focus { outline: 1px solid var(--accent); }
 }
 .approval-item { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
 .approval-item:last-child { margin-bottom: 0; }
+
+/* --- P3: task-run badges + lifecycle tones ---------------------------- */
+.task-queued { color: var(--muted); border-color: var(--border); }
+.task-running { color: var(--accent); border-color: var(--accent); }
+.task-approval { color: var(--warn); border-color: var(--warn); }
+.task-cancelling { color: var(--warn); border-color: var(--warn); }
+.task-ok { color: var(--ok); border-color: var(--ok); }
+.task-err { color: var(--err); border-color: var(--err); }
+.task-warn { color: var(--warn); border-color: var(--warn); }
+.task-unknown { color: var(--muted); border-color: var(--border); }
+
+.flow-group { display: inline-flex; align-items: center; gap: 8px; }
+.flow-step.current.tone-ok { color: var(--ok); border-color: var(--ok); }
+.flow-step.current.tone-warn { color: var(--warn); border-color: var(--warn); }
+.flow-step.current.tone-err { color: var(--err); border-color: var(--err); }
+
+.approval-card { border-color: var(--warn); }
+.approval-card h2 { margin-top: 0; }
+.error-box.small { font-size: 11px; margin-top: 6px; }
+.confirm-grid textarea { width: 100%; margin-top: 4px; min-height: 56px; }

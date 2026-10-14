@@ -1,199 +1,36 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useApi } from '../hooks/useApi';
 import { api } from '../api/client';
 import { StateFrame } from '../components/StateFrame';
-import { navigate } from '../router';
+import { timeAgo } from '../components/container-utils';
 import {
-  TASK_RUN_STATUS,
-  taskStatusBadgeClass,
-  taskStatusLabel,
-  safetyClassLabel,
+  TASK_STATUSES,
+  canCancel,
+  canRetry,
   formatDuration,
+  isTerminalStatus,
+  taskBadgeClass,
 } from '../components/task-utils';
-import { timeAgo, formatDateTime } from '../components/container-utils';
 
-const PAGE_SIZE = 25;
-const STATUS_FILTERS = ['', ...TASK_RUN_STATUS];
+const PAGE_SIZE = 20;
 
-const EMPTY_FORM = {
-  prompt: '',
-  title: '',
-  provider: '',
-  tools: [],
-  timeoutSec: 300,
-  maxAttempts: 3,
-  mode: 'approved_tools',
-};
-
-// ------------------------------------------------------------------ create form
-
-function CreateRunCard({ onClose, onCreated, toolsData }) {
-  const [form, setForm] = useState(EMPTY_FORM);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState(null);
-
-  const tools = toolsData?.tools ?? [];
-  const set = (part) => setForm((f) => ({ ...f, ...part }));
-  const toggleTool = (name) =>
-    setForm((f) => ({
-      ...f,
-      tools: f.tools.includes(name) ? f.tools.filter((t) => t !== name) : [...f.tools, name],
-    }));
-
-  async function submit() {
-    if (busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const body = { prompt: form.prompt.trim() };
-      if (form.title.trim()) body.title = form.title.trim();
-      if (form.provider.trim()) body.provider = form.provider.trim();
-      if (form.tools.length) body.tools = form.tools;
-      const timeoutMs = Math.round(Number(form.timeoutSec) * 1000);
-      if (Number.isFinite(timeoutMs) && timeoutMs >= 1000) body.timeoutMs = timeoutMs;
-      const maxAttempts = Math.round(Number(form.maxAttempts));
-      if (Number.isFinite(maxAttempts) && maxAttempts >= 1 && maxAttempts <= 5) body.maxAttempts = maxAttempts;
-      body.mode = form.mode;
-      const res = await api.post('/api/tasks/runs', body);
-      onCreated(res.taskRun?.id);
-    } catch (err) {
-      setError(`${err.code ?? 'ERROR'} — ${err.message}`);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="card confirm-card" role="dialog" aria-label="Create task run">
-      <h2>New task run</h2>
-      <p className="muted">
-        Submits to the queue and returns immediately (202). The provider is resolved server-side —
-        leave blank to use the server default (<code>AI_PROVIDER</code> env).
-      </p>
-      <div className="confirm-grid">
-        <label>
-          Prompt <strong>*</strong>
-          <textarea
-            className="input"
-            rows={4}
-            value={form.prompt}
-            onChange={(e) => set({ prompt: e.target.value })}
-            placeholder="What should the AI do? (max 20 000 chars)"
-            maxLength={20000}
-            autoFocus
-          />
-        </label>
-        <label>
-          Title (optional)
-          <input
-            className="input"
-            value={form.title}
-            onChange={(e) => set({ title: e.target.value })}
-            placeholder="Short label for the list view"
-            maxLength={200}
-          />
-        </label>
-        <label>
-          Provider
-          <input
-            className="input"
-            list="provider-names"
-            value={form.provider}
-            onChange={(e) => set({ provider: e.target.value })}
-            placeholder="(blank = server default)"
-          />
-          <datalist id="provider-names">
-            <option value="mock" />
-          </datalist>
-        </label>
-        <label>
-          Timeout (seconds, max per system cap)
-          <input
-            className="input"
-            type="number"
-            min={1}
-            max={3600}
-            value={form.timeoutSec}
-            onChange={(e) => set({ timeoutSec: e.target.value })}
-          />
-        </label>
-        <label>
-          Max attempts (1–5)
-          <input
-            className="input"
-            type="number"
-            min={1}
-            max={5}
-            value={form.maxAttempts}
-            onChange={(e) => set({ maxAttempts: e.target.value })}
-          />
-        </label>
-        <label>
-          Mode
-          <select className="input" value={form.mode} onChange={(e) => set({ mode: e.target.value })}>
-            <option value="approved_tools">approved_tools — analysis + approval-gated tools</option>
-            <option value="analysis_only">analysis_only — no tools offered</option>
-          </select>
-        </label>
-        <div>
-          <span className="muted">Tools allowlist (blank = all enabled tools)</span>
-          <div className="toolbar-group" style={{ marginTop: 6 }}>
-            {tools.length ? (
-              tools.map((t) => (
-                <label key={t.name} className="check" title={t.description}>
-                  <input
-                    type="checkbox"
-                    checked={form.tools.includes(t.name)}
-                    onChange={() => toggleTool(t.name)}
-                  />
-                  <code>{t.name}</code>{' '}
-                  <span className="pill pill-disabled">{safetyClassLabel(t.safetyClass)}</span>
-                </label>
-              ))
-            ) : (
-              <span className="muted">loading tool registry…</span>
-            )}
-          </div>
-        </div>
-      </div>
-      {error ? <div className="error-box">{error}</div> : null}
-      <div className="toolbar-group">
-        <button className="btn btn-primary" disabled={busy || form.prompt.trim() === ''} onClick={submit}>
-          {busy ? 'Submitting…' : 'Create run'}
-        </button>
-        <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
-      </div>
-    </div>
-  );
-}
-
-// ----------------------------------------------------------------------- page
-
+/**
+ * P3 — AI task runs: list + create + pending approvals queue.
+ * RBAC (mirrors the API): viewer = read, operator = create/cancel/retry,
+ * admin = approvals review + provider management.
+ */
 export function Tasks() {
   const me = useApi(() => api.get('/api/auth/me'));
-  const tools = useApi(() => api.get('/api/tools'));
-  const [providerOptions, setProviderOptions] = useState([]);
+  const role = me.data?.user?.role ?? 'viewer';
+  const canAct = role === 'admin' || role === 'operator';
+
+  const [qInput, setQInput] = useState('');
   const [filters, setFilters] = useState({ status: '', provider: '', page: 1 });
-  const [showCreate, setShowCreate] = useState(false);
-
-  const user = me.data?.user;
-  const role = user?.role;
-  const canCreate = role === 'operator' || role === 'admin';
-
-  // Admins see configured provider names (names only — keys never leave the API).
-  useEffect(() => {
-    if (role !== 'admin') return undefined;
-    let cancelled = false;
-    api
-      .get('/api/providers')
-      .then((res) => {
-        if (!cancelled) setProviderOptions((res.providers ?? []).map((p) => p.name));
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [role]);
+  const [busy, setBusy] = useState({}); // { 'id:cancel': true, ... }
+  const [errors, setErrors] = useState({}); // { 'id:cancel': 'CODE — msg' }
+  const [newForm, setNewForm] = useState({ prompt: '', provider: 'mock', timeoutMs: '' });
+  const [newError, setNewError] = useState(null);
+  const [creating, setCreating] = useState(false);
 
   const query = useMemo(() => {
     const p = new URLSearchParams();
@@ -205,124 +42,210 @@ export function Tasks() {
   }, [filters]);
 
   const list = useApi(() => api.get(query), [query]);
+  const approvals = useApi(() => api.get('/api/approvals?status=pending'), [list.data?.page]);
   const items = list.data?.items ?? [];
   const total = list.data?.total ?? 0;
   const page = list.data?.page ?? 1;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const pending = approvals.data?.items ?? [];
 
   const patch = (part) => setFilters((f) => ({ ...f, ...part, page: part.page ?? 1 }));
 
+  async function runAction(item, action) {
+    const key = `${item.id}:${action}`;
+    setErrors((m) => ({ ...m, [key]: null }));
+    setBusy((m) => ({ ...m, [key]: true }));
+    try {
+      await api.post(`/api/tasks/runs/${encodeURIComponent(item.id)}/${action}`);
+      list.reload();
+      approvals.reload();
+    } catch (err) {
+      setErrors((m) => ({ ...m, [key]: `${err.code ?? 'ERROR'} — ${err.message}` }));
+    } finally {
+      setBusy((m) => ({ ...m, [key]: false }));
+    }
+  }
+
+  async function submitNew(e) {
+    e.preventDefault();
+    setNewError(null);
+    setCreating(true);
+    try {
+      const body = { prompt: newForm.prompt.trim(), provider: newForm.provider.trim() || 'mock' };
+      if (newForm.timeoutMs) body.timeoutMs = Number(newForm.timeoutMs);
+      const res = await api.post('/api/tasks/runs', body);
+      window.location.hash = `/tasks/${res.taskRun.id}`;
+    } catch (err) {
+      setNewError(`${err.code ?? 'ERROR'} — ${err.message}`);
+    } finally {
+      setCreating(false);
+    }
+  }
+
   return (
     <div className="stack">
-      <div className="detail-head">
-        <div>
-          <h1>AI task runs</h1>
-          <div className="muted">Queued AI work with tool calls, approvals, and full event history.</div>
+      <h1>AI task runs</h1>
+
+      {pending.length > 0 ? (
+        <div className="card approval-card" role="alert">
+          <h2>{pending.length} approval{pending.length > 1 ? 's' : ''} waiting</h2>
+          {pending.map((a) => (
+            <div className="approval-item" key={a.id}>
+              <div className="toolbar-group">
+                <span className={`pill task-approval`}>{a.toolName}</span>
+                <span className="muted">{JSON.stringify(a.arguments ?? {})}</span>
+                <span className="muted">· requested {timeAgo(a.requestedAt)}</span>
+                <a className="link" href={`#/tasks/${a.taskRunId}`}>view run</a>
+              </div>
+              {role === 'admin' ? (
+                <div className="toolbar-group">
+                  <button className="btn" onClick={() => approvals.reload()}>open detail to review</button>
+                </div>
+              ) : (
+                <p className="muted">Review requires an admin session.</p>
+              )}
+            </div>
+          ))}
         </div>
-        {canCreate ? (
+      ) : null}
+
+      {canAct ? (
+        <form className="card confirm-card" onSubmit={submitNew} aria-label="Create task run">
+          <h2>New task run</h2>
+          <div className="confirm-grid">
+            <label>
+              Prompt
+              <textarea
+                className="input"
+                rows={2}
+                value={newForm.prompt}
+                onChange={(e) => setNewForm((f) => ({ ...f, prompt: e.target.value }))}
+                placeholder="What should the AI do? (tools are registry-bound; sensitive tools need approval)"
+              />
+            </label>
+            <label>
+              Provider
+              <input
+                className="input"
+                value={newForm.provider}
+                onChange={(e) => setNewForm((f) => ({ ...f, provider: e.target.value }))}
+                placeholder="mock"
+              />
+            </label>
+            <label>
+              Timeout (ms, optional)
+              <input
+                className="input"
+                type="number"
+                min={1000}
+                step={1000}
+                value={newForm.timeoutMs}
+                onChange={(e) => setNewForm((f) => ({ ...f, timeoutMs: e.target.value }))}
+                placeholder="default"
+              />
+            </label>
+          </div>
+          {newError ? <div className="error-box">{newError}</div> : null}
           <div className="toolbar-group">
-            <button className="btn btn-primary" onClick={() => setShowCreate((v) => !v)}>
-              {showCreate ? 'Close' : '+ New task run'}
+            <button className="btn" type="submit" disabled={creating || !newForm.prompt.trim()}>
+              {creating ? 'Queuing…' : 'Queue run'}
             </button>
           </div>
-        ) : (
-          <span className="muted" title="Creating task runs requires the operator role">
-            read-only (viewer)
-          </span>
-        )}
-      </div>
-
-      {showCreate && canCreate ? (
-        <CreateRunCard
-          toolsData={tools.data}
-          onClose={() => setShowCreate(false)}
-          onCreated={(runId) => {
-            setShowCreate(false);
-            navigate(`/tasks/${encodeURIComponent(runId)}`);
-          }}
-        />
+        </form>
       ) : null}
 
       <div className="toolbar">
-        <div className="toolbar-group">
+        <form
+          className="toolbar-group"
+          onSubmit={(e) => { e.preventDefault(); patch({ page: 1 }); }}
+        >
           <select
             className="input"
             value={filters.status}
             onChange={(e) => patch({ status: e.target.value })}
             aria-label="Filter by status"
           >
-            {STATUS_FILTERS.map((s) => (
-              <option key={s || 'all'} value={s}>{s === '' ? 'All statuses' : s}</option>
-            ))}
+            <option value="">All statuses</option>
+            {TASK_STATUSES.map((s) => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
           </select>
           <input
             className="input"
-            type="search"
-            list="provider-filter-names"
-            placeholder="Filter provider (name)"
+            type="text"
+            placeholder="Provider…"
             value={filters.provider}
-            onChange={(e) => patch({ provider: e.target.value })}
+            onChange={(e) => setFilters((f) => ({ ...f, provider: e.target.value, page: 1 }))}
             aria-label="Filter by provider"
           />
-          <datalist id="provider-filter-names">
-            <option value="mock" />
-            {providerOptions.map((n) => (
-              <option key={n} value={n} />
-            ))}
-          </datalist>
           <button className="btn" onClick={list.reload} title="Re-fetch from the API">↻</button>
-        </div>
+        </form>
       </div>
 
       <StateFrame
         loading={list.loading}
         error={list.error}
         empty={!list.loading && !list.error && items.length === 0}
-        emptyTitle="No task runs match"
-        emptyHint={filters.status || filters.provider ? 'Adjust the filters.' : 'Create the first run with “New task run”.'}
+        emptyTitle="No task runs"
+        emptyHint={canAct ? 'Queue the first run above.' : 'Ask an operator to queue a run.'}
       >
         <div className="table-wrap">
           <table className="list-table">
             <thead>
               <tr>
-                <th>Task</th>
-                <th>Provider</th>
+                <th>Created</th>
+                <th>Prompt</th>
                 <th>Status</th>
+                <th>Provider</th>
                 <th>Attempt</th>
                 <th>Duration</th>
-                <th>Requested by</th>
-                <th>Created</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {items.map((r) => (
-                <tr key={r.id}>
-                  <td>
-                    <a className="link" href={`#/tasks/${encodeURIComponent(r.id)}`}>
-                      {r.title || r.promptPreview || '(untitled)'}
-                    </a>
-                    {r.title ? (
-                      <div className="muted cell-clip" title={r.promptPreview}>
-                        {r.promptPreview}
+              {items.map((item) => {
+                const errKey = Object.keys(errors).find((k) => k.startsWith(`${item.id}:`));
+                return (
+                  <tr key={item.id} className={errKey ? 'row-error' : null}>
+                    <td title={item.createdAt ? new Date(item.createdAt).toLocaleString() : ''}>{timeAgo(item.createdAt)}</td>
+                    <td>
+                      <a className="link" href={`#/tasks/${encodeURIComponent(item.id)}`}>
+                        {(item.promptPreview ?? '(no prompt)').slice(0, 80)}
+                      </a>
+                      <div className="muted mono">{item.id.slice(0, 8)}…</div>
+                    </td>
+                    <td>
+                      <span className={`pill state-badge ${taskBadgeClass(item.status)}`}>{item.status.replace('_', ' ')}</span>
+                      {item.errorCode ? <div className="muted cell-clip" title={item.errorMessage}>{item.errorCode}</div> : null}
+                    </td>
+                    <td className="mono">{item.provider ?? '—'}</td>
+                    <td>{item.attempt}</td>
+                    <td>{formatDuration(item.durationMs)}</td>
+                    <td>
+                      <div className="toolbar-group">
+                        <a className="btn btn-ghost" href={`#/tasks/${encodeURIComponent(item.id)}`}>Detail</a>
+                        {canAct && canCancel(item.status) ? (
+                          <button
+                            className="btn"
+                            disabled={busy[`${item.id}:cancel`]}
+                            onClick={() => runAction(item, 'cancel')}
+                          >
+                            {busy[`${item.id}:cancel`] ? 'Cancelling…' : 'Cancel'}
+                          </button>
+                        ) : null}
+                        {canAct && canRetry(item.status) ? (
+                          <button
+                            className="btn"
+                            disabled={busy[`${item.id}:retry`]}
+                            onClick={() => runAction(item, 'retry')}
+                          >
+                            {busy[`${item.id}:retry`] ? 'Retrying…' : 'Retry'}
+                          </button>
+                        ) : null}
                       </div>
-                    ) : null}
-                    <div className="muted mono">{r.id}</div>
-                  </td>
-                  <td className="mono">{r.provider ?? '—'}</td>
-                  <td>
-                    <span className={`pill state-badge ${taskStatusBadgeClass(r.status)}`}>{taskStatusLabel(r.status)}</span>
-                    {r.errorCode ? (
-                      <div className="muted cell-clip" title={r.errorMessage}>
-                        {r.errorCode}
-                      </div>
-                    ) : null}
-                  </td>
-                  <td>{r.attempt ?? 1}</td>
-                  <td>{formatDuration(r.durationMs)}</td>
-                  <td className="mono cell-clip">{r.requestedBy ?? '—'}</td>
-                  <td title={r.createdAt ? formatDateTime(r.createdAt) : ''}>{timeAgo(r.createdAt)}</td>
-                </tr>
-              ))}
+                      {errKey ? <div className="error-box small">{errors[errKey]}</div> : null}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

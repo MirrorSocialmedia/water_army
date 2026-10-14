@@ -1,144 +1,93 @@
 /**
- * Shared helpers for the AI task-run pages (P3 — MD §7/§8 tasks 段).
- * Pure functions only — no React, so they stay trivially testable.
- *
- * Status names mirror packages/shared/src/task-constants.js (TASK_RUN_STATUS)
- * — the API is the source of truth; these are presentation-only.
+ * Shared helpers for the P3 task-run pages. Pure functions only — no React,
+ * so they stay trivially testable (same convention as container-utils.js).
  */
 
-/** Task run lifecycle states (mirror of shared TASK_RUN_STATUS). */
-export const TASK_RUN_STATUS = [
-  'queued',
-  'running',
-  'needs_approval',
-  'succeeded',
-  'failed',
-  'cancel_requested',
-  'cancelled',
-  'timed_out',
-  'skipped',
-];
+/** Terminal run statuses (施工 MD §11.3 state machine). */
+export const TASK_TERMINAL = Object.freeze(['succeeded', 'failed', 'cancelled', 'timed_out']);
 
-/** Terminal states (mirror of shared TASK_RUN_TERMINAL). */
-export const TASK_TERMINAL = ['succeeded', 'failed', 'cancelled', 'timed_out', 'skipped'];
+/** All known run statuses (filter dropdown). */
+export const TASK_STATUSES = Object.freeze([
+  'queued', 'running', 'needs_approval', 'cancel_requested',
+  'succeeded', 'failed', 'cancelled', 'timed_out',
+]);
 
 export function isTerminalStatus(status) {
   return TASK_TERMINAL.includes(status);
 }
 
-/** Reuse the container badge palette: active→green, waiting→amber, terminal-fail→red. */
-const TASK_BADGE = {
-  queued: 'state-created',
-  running: 'state-running',
-  needs_approval: 'state-paused',
-  cancel_requested: 'state-paused',
-  succeeded: 'state-running',
-  failed: 'state-dead',
-  cancelled: 'state-exited',
-  timed_out: 'state-dead',
-  skipped: 'state-exited',
-};
-
-export function taskStatusBadgeClass(status) {
-  return TASK_BADGE[status] ?? 'state-unknown';
+/**
+ * Cancel is possible from any non-terminal state. From cancel_requested the
+ * request is already in flight (the API is idempotent) so the button idles.
+ */
+export function canCancel(status) {
+  return !isTerminalStatus(status) && status !== 'cancel_requested';
 }
 
-const TASK_STATUS_LABEL = {
-  queued: 'queued',
-  running: 'running',
-  needs_approval: 'needs approval',
-  cancel_requested: 'cancelling…',
-  succeeded: 'succeeded',
-  failed: 'failed',
-  cancelled: 'cancelled',
-  timed_out: 'timed out',
-  skipped: 'skipped',
-};
-
-export function taskStatusLabel(status) {
-  return TASK_STATUS_LABEL[status] ?? (status ?? '—');
+/** Manual retry is only legal from terminal failure states (MD §11.3). */
+export function canRetry(status) {
+  return ['failed', 'cancelled', 'timed_out'].includes(status);
 }
 
-const TERMINAL_LABEL = {
-  succeeded: 'Succeeded',
-  failed: 'Failed',
-  cancelled: 'Cancelled',
-  timed_out: 'Timed out',
-  skipped: 'Skipped',
-};
+/** Badge colour class per status (see app.css .task-* rules). */
+export function taskBadgeClass(status) {
+  switch (status) {
+    case 'queued': return 'task-queued';
+    case 'running': return 'task-running';
+    case 'needs_approval': return 'task-approval';
+    case 'cancel_requested': return 'task-cancelling';
+    case 'succeeded': return 'task-ok';
+    case 'failed': return 'task-err';
+    case 'cancelled': return 'task-err';
+    case 'timed_out': return 'task-warn';
+    default: return 'task-unknown';
+  }
+}
 
 /**
- * Steps for the state-machine visualisation (MD §11.3).
+ * Lifecycle strip for the detail page (state-machine visualisation).
  *
- * `needs_approval` and `cancel_requested` are branch states, not linear
- * steps — they render as a side badge (`branch`) instead. A cancel that
- * fires while still queued skips the Running step visually; the event
- * timeline always shows the true path.
+ *   queued → running → (needs_approval) → <terminal>
+ *
+ * @param {string} status current run status
+ * @param {boolean} sawApproval true when the run passed through the
+ *   approval gate (a waiting_approval / approval event exists)
+ * @returns {Array<{label:string, state:'done'|'current'|'todo', tone?:string}>}
  */
-export function flowSteps(status) {
-  const branch =
-    status === 'needs_approval' ? 'needs_approval'
-    : status === 'cancel_requested' ? 'cancel_requested'
-    : null;
-  const terminal = TASK_TERMINAL.includes(status);
-
-  let queuedState = 'pending';
-  let runningState = 'pending';
-  let terminalState = 'pending';
-  if (terminal) {
-    queuedState = 'done';
-    runningState = 'done';
-    terminalState = 'current';
-  } else if (status === 'queued') {
-    queuedState = 'current';
-  } else if (status === 'cancel_requested') {
-    // Cancel while queued: show Queued as the active (cancelling) step.
-    queuedState = 'current';
-  } else {
-    // running / needs_approval
-    queuedState = 'done';
-    runningState = 'current';
+export function flowSteps(status, sawApproval = false) {
+  const steps = [
+    { label: 'queued', state: 'todo' },
+    { label: 'running', state: 'todo' },
+  ];
+  if (sawApproval || status === 'needs_approval') {
+    steps.push({ label: 'needs approval', state: 'todo' });
   }
+  const mainIdx = { queued: 0, running: 1, needs_approval: 2, cancel_requested: 1 }[status] ?? -1;
 
-  return {
-    branch,
-    steps: [
-      { id: 'queued', label: 'Queued', state: queuedState },
-      { id: 'running', label: 'Running', state: runningState },
-      { id: 'terminal', label: terminal ? (TERMINAL_LABEL[status] ?? 'Finished') : 'Finished', state: terminalState },
-    ],
-  };
+  steps.forEach((s, i) => {
+    if (isTerminalStatus(status)) {
+      s.state = 'done';
+    } else if (i < mainIdx) {
+      s.state = 'done';
+    } else if (i === mainIdx) {
+      s.state = 'current';
+    }
+  });
+
+  if (isTerminalStatus(status)) {
+    const tone = status === 'succeeded' ? 'ok' : status === 'timed_out' ? 'warn' : 'err';
+    steps.push({ label: status.replace('_', ' '), state: 'current', tone });
+  }
+  return steps;
 }
 
-/** Human label for a tool safety class (MD §13). */
-export function safetyClassLabel(safetyClass) {
-  if (safetyClass === 'readonly') return 'readonly · auto';
-  if (safetyClass === 'approval_required') return 'approval required';
-  return `disabled (${safetyClass})`;
-}
-
-/** '1m 23s' style duration. */
+/** Human duration from ms (null → '—'). */
 export function formatDuration(ms) {
-  if (ms === null || ms === undefined || Number.isNaN(Number(ms))) return '—';
+  if (ms == null || Number.isNaN(Number(ms))) return '—';
   const n = Number(ms);
-  if (n < 1000) return `${Math.round(n)} ms`;
-  const secs = Math.floor(n / 1000);
-  if (secs < 60) return `${(n / 1000).toFixed(1)} s`;
-  const mins = Math.floor(secs / 60);
-  return `${mins}m ${secs % 60}s`;
-}
-
-/** HH:MM:SS local time for event timelines. */
-export function formatClock(iso) {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '—';
-  return d.toLocaleTimeString();
-}
-
-/** Truncate long text with an ellipsis marker (event payload previews). */
-export function truncateText(text, max = 400) {
-  if (typeof text !== 'string') return text;
-  if (text.length <= max) return text;
-  return `${text.slice(0, max)}…`;
+  if (n < 1000) return `${n} ms`;
+  const s = n / 1000;
+  if (s < 60) return `${s.toFixed(1)} s`;
+  const m = Math.floor(s / 60);
+  return `${m} m ${Math.round(s % 60)} s`;
 }

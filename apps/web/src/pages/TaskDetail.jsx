@@ -1,408 +1,242 @@
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useApi } from '../hooks/useApi';
 import { api } from '../api/client';
 import { StateFrame } from '../components/StateFrame';
-import {
-  flowSteps,
-  isTerminalStatus,
-  taskStatusBadgeClass,
-  taskStatusLabel,
-  formatClock,
-  formatDuration,
-} from '../components/task-utils';
 import { formatDateTime } from '../components/container-utils';
+import { useTaskEvents } from '../hooks/useTaskEvents';
+import {
+  canCancel,
+  canRetry,
+  flowSteps,
+  formatDuration,
+  isTerminalStatus,
+  taskBadgeClass,
+} from '../components/task-utils';
 
 /**
- * Task run detail (P3 — MD §8 tasks 段):
- *  - state-machine visualisation (queued → running → terminal, branch badges)
- *  - live SSE event stream (snapshot + replay + live, deduped by event id)
- *  - output / result display, prompt echo
- *  - cancel / retry (operator+), approvals approve/reject (admin only)
+ * P3 — task run detail: state-machine strip, live SSE event stream,
+ * approvals review (admin), cancel / retry (operator+).
  */
+export function TaskDetail({ runId }) {
+  const me = useApi(() => api.get('/api/auth/me'));
+  const role = me.data?.user?.role ?? 'viewer';
+  const canAct = role === 'admin' || role === 'operator';
+  const detail = useApi(() => api.get(`/api/tasks/runs/${encodeURIComponent(runId)}`), [runId]);
+  const run = detail.data?.run ?? null;
+  const terminal = run ? isTerminalStatus(run.status) : false;
 
-/** SSE event types the server may emit (mirrors shared TASK_EVENT + frame types). */
-const SSE_EVENT_TYPES = [
-  'queued', 'attempt_started', 'provider_request', 'provider_response', 'tool_call',
-  'tool_result', 'waiting_approval', 'approval_resolved', 'retry', 'retry_requested',
-  'status', 'succeeded', 'failed', 'cancel_requested', 'cancelled', 'timed_out', 'output',
-];
+  const { events, linkState } = useTaskEvents(runId, { enabled: true });
+  const sawApproval = useMemo(
+    () => events.some((e) => ['waiting_approval', 'approval_resolved'].includes(e.eventType)),
+    [events],
+  );
+  // The SSE stream is the live source of truth; merge with the detail fetch
+  // (deduped by event id) so the page shows history even before events land.
+  const allEvents = useMemo(() => {
+    const map = new Map();
+    for (const e of detail.data?.events ?? []) if (e?.id) map.set(e.id, e);
+    for (const e of events) if (e?.id) map.set(e.id, e);
+    return [...map.values()].sort((a, b) =>
+      a.createdAt === b.createdAt ? (a.id < b.id ? -1 : 1) : a.createdAt < b.createdAt ? -1 : 1,
+    );
+  }, [detail.data, events]);
 
-const RETRYABLE_STATUSES = ['failed', 'cancelled', 'timed_out'];
+  const [busy, setBusy] = useState({});
+  const [errors, setErrors] = useState({});
+  const [notes, setNotes] = useState({}); // approvalId -> note
 
-function byTime(a, b) {
-  if (a.createdAt === b.createdAt) return a.id < b.id ? -1 : 1;
-  return a.createdAt < b.createdAt ? -1 : 1;
-}
-
-function approvalBadgeClass(status) {
-  if (status === 'pending') return 'state-paused';
-  if (status === 'approved') return 'state-running';
-  if (status === 'rejected') return 'state-dead';
-  return 'state-exited'; // expired
-}
-
-// ------------------------------------------------------------------ SSE stream
-
-function useTaskEventStream(taskId) {
-  const [streamState, setStreamState] = useState('connecting');
-  const [events, setEvents] = useState([]);
-  const [liveRun, setLiveRun] = useState(null);
-  const seenIds = useRef(new Set());
-
-  const addEvents = (rows) => {
-    if (!Array.isArray(rows) || !rows.length) return;
-    const fresh = rows.filter((e) => e && e.id && !seenIds.current.has(e.id));
-    if (!fresh.length) return;
-    fresh.forEach((e) => seenIds.current.add(e.id));
-    setEvents((prev) => [...prev, ...fresh].sort(byTime));
-  };
-
-  useEffect(() => {
-    const es = new EventSource(`/api/tasks/runs/${encodeURIComponent(taskId)}/events`);
-    es.onopen = () => setStreamState('open');
-    es.onerror = () => setStreamState((s) => (s === 'closed' ? 'closed' : 'reconnecting'));
-
-    const onSnapshot = (e) => {
-      try { setLiveRun(JSON.parse(e.data)); } catch { /* ignore */ }
-    };
-    const onEvent = (e) => {
-      try { addEvents([JSON.parse(e.data)]); } catch { /* ignore */ }
-    };
-    const onDone = (e) => {
-      let status = null;
-      try { status = JSON.parse(e.data)?.status ?? null; } catch { /* ignore */ }
-      setStreamState('closed');
-      setLiveRun((r) => (r && status ? { ...r, status } : r));
-      es.close(); // terminal — never leave the stream open (MD §9.4)
-    };
-
-    es.addEventListener('run_snapshot', onSnapshot);
-    for (const t of SSE_EVENT_TYPES) es.addEventListener(t, onEvent);
-    es.addEventListener('done', onDone);
-    return () => {
-      es.close();
-      setStreamState('off');
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [taskId]);
-
-  return { streamState, events, addEvents, liveRun, setLiveRun };
-}
-
-// ----------------------------------------------------------------- event list
-
-function EventTimeline({ events }) {
   const listRef = useRef(null);
   const stickRef = useRef(true);
-
-  const onScroll = () => {
-    const el = listRef.current;
-    if (!el) return;
-    stickRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
-  };
-
   useEffect(() => {
     const el = listRef.current;
     if (el && stickRef.current) el.scrollTop = el.scrollHeight;
-  }, [events.length]);
+  }, [allEvents.length]);
 
-  if (!events.length) {
-    return <p className="muted">No events yet.</p>;
-  }
-  return (
-    <ul className="event-list" ref={listRef} onScroll={onScroll} aria-label="Task event timeline">
-      {events.map((e) => (
-        <li key={e.id} className="event-row">
-          <span className="event-time">{formatClock(e.createdAt)}</span>
-          <span className="event-type">{e.eventType}</span>
-          <div className="event-body">
-            {e.message ? <div className="event-msg">{e.message}</div> : null}
-            {e.payload !== null && e.payload !== undefined ? (
-              <details>
-                <summary className="muted">payload</summary>
-                <pre className="event-payload">{JSON.stringify(e.payload, null, 2)}</pre>
-              </details>
-            ) : null}
-          </div>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-// ------------------------------------------------------------------- page
-
-export function TaskDetail({ taskId }) {
-  const me = useApi(() => api.get('/api/auth/me'));
-  const detail = useApi(() => api.get(`/api/tasks/runs/${encodeURIComponent(taskId)}`), [taskId]);
-  const { streamState, events, addEvents, liveRun, setLiveRun } = useTaskEventStream(taskId);
-
-  const [busy, setBusy] = useState({});
-  const [actionError, setActionError] = useState(null);
-  const [approvalNotes, setApprovalNotes] = useState({});
-
-  const role = me.data?.user?.role;
-  const canOperate = role === 'operator' || role === 'admin';
-  const isAdmin = role === 'admin';
-
-  const restRun = detail.data?.run ?? null;
-  const run = liveRun ?? restRun;
-  const status = run?.status ?? null;
-  const terminal = isTerminalStatus(status);
-  const flow = flowSteps(status);
-  const approvals = detail.data?.approvals ?? [];
-  const pendingApprovals = approvals.filter((a) => a.status === 'pending');
-
-  // Seed the timeline from the REST fetch (SSE continues live on top).
-  useEffect(() => {
-    addEvents(detail.data?.events);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [detail.data]);
-
-  async function doAction(action) {
-    const key = `${taskId}:${action}`;
-    if (busy[key]) return;
+  async function runAction(action) {
+    const key = `${action}`;
+    setErrors((m) => ({ ...m, [key]: null }));
     setBusy((m) => ({ ...m, [key]: true }));
-    setActionError(null);
     try {
-      await api.post(`/api/tasks/runs/${encodeURIComponent(taskId)}/${action}`);
-      setLiveRun(null); // REST becomes source of truth again
+      await api.post(`/api/tasks/runs/${encodeURIComponent(runId)}/${action}`);
       detail.reload();
     } catch (err) {
-      setActionError(`${action}: ${err.code ?? 'ERROR'} — ${err.message}`);
+      setErrors((m) => ({ ...m, [key]: `${err.code ?? 'ERROR'} — ${err.message}` }));
     } finally {
       setBusy((m) => ({ ...m, [key]: false }));
     }
   }
 
-  async function reviewApproval(approval, decision) {
-    const key = `${approval.id}:${decision}`;
-    if (busy[key]) return;
+  async function review(approval, decision) {
+    const key = `approve:${approval.id}`;
+    setErrors((m) => ({ ...m, [key]: null }));
     setBusy((m) => ({ ...m, [key]: true }));
-    setActionError(null);
     try {
-      const note = (approvalNotes[approval.id] ?? '').trim();
-      await api.post(
-        `/api/approvals/${encodeURIComponent(approval.id)}/${decision === 'approved' ? 'approve' : 'reject'}`,
-        note ? { note } : {},
-      );
-      setLiveRun(null);
+      await api.post(`/api/approvals/${encodeURIComponent(approval.id)}/${decision}`, {
+        note: (notes[approval.id] ?? '').trim() || null,
+      });
       detail.reload();
     } catch (err) {
-      setActionError(`approval ${decision}: ${err.code ?? 'ERROR'} — ${err.message}`);
+      setErrors((m) => ({ ...m, [key]: `${err.code ?? 'ERROR'} — ${err.message}` }));
     } finally {
       setBusy((m) => ({ ...m, [key]: false }));
     }
   }
+
+  if (detail.error?.status === 404) {
+    return (
+      <StateFrame
+        error={{ code: 'NOT_FOUND', message: `Task run ${runId} not found.` }}
+      />
+    );
+  }
+
+  const pendingApprovals = (detail.data?.approvals ?? []).filter((a) => a.status === 'pending');
 
   return (
     <div className="stack">
-      <div className="detail-head">
-        <div>
-          <h1>
-            <a className="link back-link" href="#/tasks">←</a>{' '}
-            {run?.title || (run?.promptPreview ? run.promptPreview.slice(0, 60) : 'Task run')}
-          </h1>
-          <div className="muted mono">{taskId}</div>
-        </div>
-        <div className="toolbar-group">
-          {run ? (
-            <span className={`pill state-badge ${taskStatusBadgeClass(status)}`}>{taskStatusLabel(status)}</span>
-          ) : null}
-          {run ? <span className="muted">attempt {run.attempt ?? 1}{run.maxAttempts ? ` / ${run.maxAttempts}` : ''}</span> : null}
-        </div>
+      <div className="toolbar">
+        <a className="btn btn-ghost" href="#/tasks">← All runs</a>
+        <h1 style={{ margin: 0 }}>Task run</h1>
+        {run ? <span className={`pill state-badge ${taskBadgeClass(run.status)}`}>{run.status.replace('_', ' ')}</span> : null}
+        <span className="muted mono">{runId.slice(0, 8)}…</span>
+        <span className={`muted mono`}>
+          stream: {linkState === 'closed' ? (terminal ? 'closed (terminal)' : 'closed') : linkState}
+        </span>
       </div>
 
-      {actionError ? (
-        <div className="error-box" role="alert">
-          {actionError}{' '}
-          <button className="btn btn-ghost btn-sm" onClick={() => setActionError(null)}>dismiss</button>
-        </div>
-      ) : null}
-
-      <StateFrame
-        loading={detail.loading}
-        error={detail.error}
-        empty={!detail.loading && !detail.error && !run}
-        emptyTitle="Task run not found"
-        emptyHint="It may not exist on this instance."
-      >
+      <StateFrame loading={detail.loading} error={detail.error}>
         {run ? (
           <>
-            {/* -------------------------------------------- state machine */}
-            <section className="card">
-              <div className="card-head">
-                <h3>State machine</h3>
-                <span className={`pill ${streamState === 'open' ? 'pill-up' : streamState === 'off' ? '' : 'pill-disabled'}`}>
-                  stream: {streamState}
-                </span>
-              </div>
-              <div className="flow" role="img" aria-label={`status: ${status}`}>
-                {flow.steps.map((s, i) => (
-                  <Fragment key={s.id}>
-                    {i > 0 ? <span className="flow-arrow">→</span> : null}
-                    <span className={`flow-step ${s.state}`}>{s.label}</span>
-                  </Fragment>
+            {/* state-machine visualisation */}
+            <div className="card">
+              <div className="flow">
+                {flowSteps(run.status, sawApproval).map((s, i) => (
+                  <span key={s.label} className="flow-group">
+                    <span
+                      className={`flow-step${s.state === 'done' ? ' done' : ''}${s.state === 'current' ? ` current${s.tone ? ` tone-${s.tone}` : ''}` : ''}`}
+                    >
+                      {s.label}
+                    </span>
+                    {i < flowSteps(run.status, sawApproval).length - 1 ? <span className="flow-arrow">→</span> : null}
+                  </span>
                 ))}
-                {flow.branch === 'needs_approval' ? (
-                  <span className="pill state-paused">⏸ awaiting approval</span>
-                ) : null}
-                {flow.branch === 'cancel_requested' ? (
-                  <span className="pill state-paused">✕ cancelling…</span>
+              </div>
+              <div className="toolbar-group" style={{ marginTop: 10 }}>
+                <span className="muted">provider <code>{run.provider ?? '—'}</code></span>
+                <span className="muted">attempt {run.attempt}</span>
+                <span className="muted">timeout {formatDuration(run.timeoutMs)}</span>
+                <span className="muted">created {formatDateTime(run.createdAt)}</span>
+                <span className="muted">duration {formatDuration(run.durationMs)}</span>
+                {run.errorCode ? (
+                  <span className="pill task-err" title={run.errorMessage}>{run.errorCode}</span>
                 ) : null}
               </div>
-              {run.errorCode ? (
-                <div className="error-box">
-                  <strong>{run.errorCode}</strong> — {run.errorMessage || 'no message'}
+              {canAct ? (
+                <div className="toolbar-group" style={{ marginTop: 10 }}>
+                  {canCancel(run.status) ? (
+                    <button className="btn btn-danger" disabled={busy.cancel} onClick={() => runAction('cancel')}>
+                      {busy.cancel ? 'Cancelling…' : 'Cancel run'}
+                    </button>
+                  ) : null}
+                  {canRetry(run.status) ? (
+                    <button className="btn" disabled={busy.retry} onClick={() => runAction('retry')}>
+                      {busy.retry ? 'Retrying…' : 'Retry (new attempt)'}
+                    </button>
+                  ) : null}
                 </div>
               ) : null}
-            </section>
+              {Object.entries(errors).filter(([k]) => k === 'cancel' || k === 'retry').map(([k, v]) => (
+                <div className="error-box small" key={k}>{v}</div>
+              ))}
+            </div>
 
-            {/* -------------------------------------------------- actions */}
-            {canOperate ? (
-              <div className="row-actions">
-                <button
-                  className="btn"
-                  disabled={terminal || status === 'cancel_requested' || busy[`${taskId}:cancel`] === true}
-                  title={
-                    terminal
-                      ? 'Run already finished — cancel is a no-op'
-                      : status === 'cancel_requested'
-                        ? 'Cancel already requested (idempotent)'
-                        : 'Request cancellation (real stop: the worker stops emitting output)'
-                  }
-                  onClick={() => doAction('cancel')}
-                >
-                  {busy[`${taskId}:cancel`] ? 'Cancelling…' : 'Cancel'}
-                </button>
-                <button
-                  className="btn"
-                  disabled={!RETRYABLE_STATUSES.includes(status) || busy[`${taskId}:retry`] === true}
-                  title={
-                    RETRYABLE_STATUSES.includes(status)
-                      ? 'Start a new attempt (previous output is preserved in the event stream)'
-                      : `Retry is only available when failed / cancelled / timed out (now: ${status})`
-                  }
-                  onClick={() => doAction('retry')}
-                >
-                  {busy[`${taskId}:retry`] ? 'Retrying…' : 'Retry'}
-                </button>
-                <span className="muted">operator role required · actions are audited</span>
-              </div>
-            ) : null}
-
-            {/* -------------------------------------------------- approvals */}
-            <section className="card">
-              <div className="card-head">
-                <h3>Approvals</h3>
-                {pendingApprovals.length ? <span className="pill state-paused">{pendingApprovals.length} pending</span> : null}
-              </div>
-              {approvals.length ? (
-                approvals
-                  .slice()
-                  .sort((a, b) => (a.requestedAt < b.requestedAt ? 1 : -1))
-                  .map((a) => (
-                    <div key={a.id} className="approval-item">
-                      <div className="toolbar-group">
-                        <code>{a.toolName}</code>
-                        <span className={`pill state-badge ${approvalBadgeClass(a.status)}`}>{a.status}</span>
-                        <span className="muted">{formatDateTime(a.requestedAt)}</span>
-                      </div>
-                      {a.arguments ? (
-                        <pre className="event-payload">{JSON.stringify(a.arguments, null, 2)}</pre>
-                      ) : null}
-                      {a.reviewedBy ? (
-                        <p className="muted">
-                          {a.reviewedAt ? formatDateTime(a.reviewedAt) : ''} · by {a.reviewedBy}
-                          {a.reviewNote ? ` · “${a.reviewNote}”` : ''}
-                        </p>
-                      ) : null}
-                      {a.status === 'pending' && isAdmin ? (
-                        <div className="toolbar-group">
+            {/* approvals */}
+            {pendingApprovals.length > 0 ? (
+              <div className="card approval-card">
+                <h2>Pending approvals</h2>
+                {pendingApprovals.map((a) => (
+                  <div className="approval-item" key={a.id}>
+                    <div className="toolbar-group">
+                      <span className="pill task-approval">{a.toolName}</span>
+                      <code>{JSON.stringify(a.arguments ?? {})}</code>
+                      <span className="muted">requested {formatDateTime(a.requestedAt)}</span>
+                    </div>
+                    {role === 'admin' ? (
+                      <div className="confirm-grid" style={{ marginTop: 8 }}>
+                        <label>
+                          Review note (optional)
                           <input
                             className="input"
-                            placeholder="Review note (optional)"
-                            value={approvalNotes[a.id] ?? ''}
-                            onChange={(e) =>
-                              setApprovalNotes((m) => ({ ...m, [a.id]: e.target.value }))
-                            }
-                            maxLength={500}
+                            value={notes[a.id] ?? ''}
+                            onChange={(e) => setNotes((m) => ({ ...m, [a.id]: e.target.value }))}
                           />
+                        </label>
+                        <div className="toolbar-group">
                           <button
-                            className="btn btn-primary"
-                            disabled={busy[`${a.id}:approved`] === true}
-                            onClick={() => reviewApproval(a, 'approved')}
+                            className="btn"
+                            disabled={busy[`approve:${a.id}`]}
+                            onClick={() => review(a, 'approve')}
                           >
-                            {busy[`${a.id}:approved`] ? '…' : 'Approve'}
+                            Approve
                           </button>
                           <button
                             className="btn btn-danger"
-                            disabled={busy[`${a.id}:rejected`] === true}
-                            onClick={() => reviewApproval(a, 'rejected')}
+                            disabled={busy[`approve:${a.id}`]}
+                            onClick={() => review(a, 'reject')}
                           >
-                            {busy[`${a.id}:rejected`] ? '…' : 'Reject'}
+                            Reject
                           </button>
                         </div>
-                      ) : null}
-                      {a.status === 'pending' && !isAdmin ? (
-                        <p className="muted">Waiting for an admin to approve or reject.</p>
-                      ) : null}
-                    </div>
-                  ))
-              ) : (
-                <p className="muted">No approval requests for this run.</p>
-              )}
-            </section>
-
-            {/* ------------------------------------------------------ meta */}
-            <section className="card">
-              <h3>Run details</h3>
-              <dl className="kv">
-                <dt>Provider</dt><dd className="mono">{run.provider ?? '—'}</dd>
-                <dt>Mode</dt><dd>{run.mode ?? '—'}</dd>
-                <dt>Tools</dt><dd className="mono">{Array.isArray(run.tools) && run.tools.length ? run.tools.join(', ') : 'all enabled'}</dd>
-                <dt>Timeout</dt><dd>{run.timeoutMs ? `${run.timeoutMs} ms` : 'server default'}</dd>
-                <dt>Requested by</dt><dd className="mono">{run.requestedBy ?? '—'}</dd>
-                <dt>Queued</dt><dd>{formatDateTime(run.queuedAt)}</dd>
-                <dt>Started</dt><dd>{formatDateTime(run.startedAt)}</dd>
-                <dt>Finished</dt><dd>{formatDateTime(run.finishedAt)}</dd>
-                <dt>Duration</dt><dd>{formatDuration(run.durationMs)}</dd>
-                {run.idempotencyKey ? (
-                  <><dt>Idempotency key</dt><dd className="mono">{run.idempotencyKey}</dd></>
-                ) : null}
-              </dl>
-              {run.prompt ? (
-                <>
-                  <h3>Prompt</h3>
-                  <pre className="log-view">{run.prompt}</pre>
-                </>
-              ) : null}
-            </section>
-
-            {/* ---------------------------------------------------- output */}
-            <section className="card">
-              <h3>Output</h3>
-              {run.resultText ? (
-                <pre className="log-view">{run.resultText}</pre>
-              ) : (
-                !terminal ? <p className="muted">No output yet — the run is still in flight.</p> : <p className="muted">No output captured.</p>
-              )}
-              {run.resultJson !== null && run.resultJson !== undefined ? (
-                <>
-                  <h3>Result (structured)</h3>
-                  <pre className="event-payload">{JSON.stringify(run.resultJson, null, 2)}</pre>
-                </>
-              ) : null}
-            </section>
-
-            {/* ---------------------------------------------------- events */}
-            <section className="card">
-              <div className="card-head">
-                <h3>Event timeline</h3>
-                <span className="muted">{events.length} events · live via SSE</span>
+                      </div>
+                    ) : (
+                      <p className="muted">Reviewing requires an admin session.</p>
+                    )}
+                    {errors[`approve:${a.id}`] ? <div className="error-box small">{errors[`approve:${a.id}`]}</div> : null}
+                  </div>
+                ))}
               </div>
-              <EventTimeline events={events} />
-            </section>
+            ) : null}
+
+            {/* result / error */}
+            {run.resultText || run.errorCode ? (
+              <div className="card">
+                <h2>{run.resultText ? 'Result' : 'Error'}</h2>
+                {run.resultText ? <pre className="event-payload" style={{ whiteSpace: 'pre-wrap' }}>{run.resultText}</pre> : null}
+                {run.errorCode ? (
+                  <p className="error-box">{run.errorCode} — {run.errorMessage ?? ''}</p>
+                ) : null}
+              </div>
+            ) : null}
+
+            {/* live event stream */}
+            <div className="card">
+              <h2>Event stream {terminal ? '' : '(live)'}</h2>
+              <ul
+                className="event-list"
+                ref={listRef}
+                onScroll={(e) => {
+                  const el = e.currentTarget;
+                  stickRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+                }}
+              >
+                {allEvents.length === 0 ? (
+                  <li className="event-row"><span className="event-msg muted">no events yet</span></li>
+                ) : (
+                  allEvents.map((e) => (
+                    <li className="event-row" key={e.id}>
+                      <span className="event-time">{new Date(e.createdAt).toLocaleTimeString()}</span>
+                      <span className="event-type">{e.eventType}</span>
+                      <span className="event-body">
+                        <div className="event-msg">{e.message}</div>
+                        {e.payload && Object.keys(e.payload).length > 0 ? (
+                          <pre className="event-payload">{JSON.stringify(e.payload, null, 1)}</pre>
+                        ) : null}
+                      </span>
+                    </li>
+                  ))
+                )}
+              </ul>
+            </div>
           </>
         ) : null}
       </StateFrame>
