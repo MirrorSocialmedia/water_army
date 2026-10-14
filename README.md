@@ -62,11 +62,10 @@ sg docker -c 'docker compose up -d --build'
 # 3) 等 healthy（通常 10–30s；web depends_on api healthy）
 sg docker -c 'docker compose ps'
 
-# 4) 建第一個 admin（無公開註冊；只可建第一次）
+# 4) 建第一個 admin（無公開註冊；只可建第一次；輸入 3 行：username / password / 確認 password）
 sg docker -c 'docker compose exec api node apps/api/src/cli/setup-admin.js'
-# 按提示輸入 username / password（TTY 會掩密；非 TTY 用 pipe，見下）
-# 非互動示例：
-# printf 'admin\nMyS3cretPass!\n' | sg docker -c 'docker compose exec -T api node apps/api/src/cli/setup-admin.js'
+# 按提示輸入（TTY 會掩密）；非 TTY 用 pipe（3 行，`-T` 禁用 TTY）：
+# printf 'admin\nMyS3cretPass!\nMyS3cretPass!\n' | sg docker -c 'docker compose exec -T api node apps/api/src/cli/setup-admin.js'
 
 # 5) 登入 UI
 # 開 http://127.0.0.1:3012 → 用第 4 步嘅帳密
@@ -113,7 +112,7 @@ sg docker -c 'docker compose exec -T postgres psql -U app water_army' < wa-backu
 
 - 入口：`node apps/api/src/cli/setup-admin.js`（api 容器內或 host 本地 dev）。
 - **只可執行一次**（users 表非空即拒絕；無 reset 路徑 — 要重置就得 `down -v` 或手動改 DB）。
-- 密碼規則：≥ 8 位，混合字母數字（argon2id 儲存；任何 API/log 唔會傳回 hash）。
+- 密碼規則：≥ 12 位、混合字母數字（argon2id 儲存；任何 API/log 唔會傳回 hash）。
 - 之後無公開註冊；加人 = DB 層手動（P5 先有 Settings 頁面）。
 
 ## API（P1 範圍）

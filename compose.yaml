@@ -57,6 +57,9 @@ services:
     image: water-army/api:local
     # No host port: the web container proxies /api -> api:3000 (same-origin UI).
     # Binding 0.0.0.0 is container-internal only (compose network), never published.
+    # group_add: the container keeps USER node (non-root) but needs the host
+    # docker group gid to rw the socket (srw-rw---- root:docker).
+    group_add: ["${DOCKER_GROUP_ID:-125}"]
     environment:
       NODE_ENV: production
       APP_HOST: 0.0.0.0

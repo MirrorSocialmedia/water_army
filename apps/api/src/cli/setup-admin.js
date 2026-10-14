@@ -26,30 +26,62 @@ const USERNAME_RE = /^[a-zA-Z0-9_.-]{3,32}$/;
 const MIN_PASSWORD_LEN = 12;
 const MAX_ATTEMPTS = 3;
 
+// Piped-input state: all lines may arrive in ONE chunk, so the remainder
+// must survive across readLine() calls.
+let pipeBuffer = '';
+
+function readPipedLine() {
+  return new Promise((resolve, reject) => {
+    const stdin = process.stdin;
+    const takeLine = () => {
+      const idx = pipeBuffer.indexOf('\n');
+      if (idx === -1) return null;
+      const line = pipeBuffer.slice(0, idx);
+      pipeBuffer = pipeBuffer.slice(idx + 1);
+      return line;
+    };
+    const line = takeLine();
+    if (line !== null) return resolve(line);
+    if (stdin.ended) {
+      if (pipeBuffer.length > 0) {
+        const rest = pipeBuffer;
+        pipeBuffer = '';
+        return resolve(rest);
+      }
+      return reject(new Error('no input provided'));
+    }
+    const onData = (chunk) => {
+      pipeBuffer += chunk.toString('utf8');
+      const got = takeLine();
+      if (got !== null) {
+        stdin.off('data', onData);
+        stdin.off('end', onEnd);
+        resolve(got);
+      }
+    };
+    const onEnd = () => {
+      stdin.off('data', onData);
+      if (pipeBuffer.length > 0) {
+        const rest = pipeBuffer;
+        pipeBuffer = '';
+        resolve(rest);
+      } else {
+        reject(new Error('no input provided'));
+      }
+    };
+    stdin.on('data', onData);
+    stdin.on('end', onEnd);
+  });
+}
+
 function readLine(prompt, { echo = true } = {}) {
   return new Promise((resolve, reject) => {
     const stdin = process.stdin;
     process.stdout.write(prompt);
 
-    // Non-interactive (piped) path: read one line per call.
+    // Non-interactive (piped) path: one line per call, stateful across calls.
     if (!stdin.isTTY) {
-      let buffer = '';
-      const onData = (chunk) => {
-        buffer += chunk.toString('utf8');
-        const idx = buffer.indexOf('\n');
-        if (idx === -1) return;
-        const line = buffer.slice(0, idx);
-        stdin.off('data', onData);
-        stdin.off('end', onEnd);
-        resolve(line);
-      };
-      const onEnd = () => {
-        if (buffer.length > 0) resolve(buffer.replace(/\n+$/, ''));
-        else reject(new Error('no input provided'));
-      };
-      stdin.on('data', onData);
-      stdin.on('end', onEnd);
-      return;
+      return readPipedLine().then(resolve, reject);
     }
 
     // TTY path: raw mode, hidden input (optional echo as •).
