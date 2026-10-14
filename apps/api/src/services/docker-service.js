@@ -301,6 +301,12 @@ export function createDockerService({ docker, db, config, log = { info() {}, war
    * per-item partial errors (MD §9.4).
    */
   async function listContainers({ state, managed, q, page = 1, pageSize = 50, withStats = false } = {}) {
+    if (!Number.isInteger(page) || page < 1) {
+      throw new DockerServiceError({ code: 'VALIDATION_ERROR', status: 400, message: 'page must be a positive integer' });
+    }
+    if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 200) {
+      throw new DockerServiceError({ code: 'VALIDATION_ERROR', status: 400, message: 'pageSize must be an integer between 1 and 200' });
+    }
     const c = requireClient();
     const raw = await call('list', () => c.listContainers({ all: true }));
 

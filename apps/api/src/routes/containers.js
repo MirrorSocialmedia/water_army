@@ -19,9 +19,11 @@ const LIST_QUERY = {
       state: { type: 'string', maxLength: 64 },
       managed: { type: 'string', enum: ['true', 'false'] },
       q: { type: 'string', maxLength: 100 },
-      page: { type: 'integer', minimum: 1, default: 1 },
-      pageSize: { type: 'integer', minimum: 1, maximum: 200, default: 50 },
-      withStats: { type: 'boolean', default: false },
+      // querystring values arrive as strings (app ajv: coerceTypes false) —
+      // pattern here, range enforced by the service (single source of truth).
+      page: { type: 'string', pattern: '^[1-9][0-9]*$' },
+      pageSize: { type: 'string', pattern: '^[1-9][0-9]*$' },
+      withStats: { type: 'string', enum: ['true', 'false'] },
     },
   },
 };
@@ -30,7 +32,7 @@ const LOGS_QUERY = {
   type: 'object',
   additionalProperties: false,
   properties: {
-    tail: { type: 'integer', minimum: 1, maximum: 5000 },
+    tail: { type: 'string', pattern: '^[1-9][0-9]*$' },
     since: { type: 'string', maxLength: 64 },
   },
 };
@@ -116,7 +118,12 @@ export function containerRoutes(app) {
     '/api/containers',
     { preHandler: app.requireRole('viewer'), schema: LIST_QUERY },
     async (req) => {
-      return svc().listContainers(req.query);
+      const q = req.query;
+      const query = { state: q.state, managed: q.managed, q: q.q };
+      if (q.page) query.page = Number(q.page);
+      if (q.pageSize) query.pageSize = Number(q.pageSize);
+      if (q.withStats) query.withStats = q.withStats === 'true';
+      return svc().listContainers(query);
     },
   );
 
@@ -250,8 +257,8 @@ export function containerRoutes(app) {
     async (req) => {
       const summary = await svc().inspectSummary(req.params.id);
       const exceptions = await svc().listExceptions();
-      const managed = isManaged({ labels: summary.labels, containerId: summary.id, name: summary.name, exceptions });
-      return { ...summary, managed, managedByException: managed.byException };
+      const m = isManaged({ labels: summary.labels, containerId: summary.id, name: summary.name, exceptions });
+      return { ...summary, managed: m.managed, managedByException: m.byException };
     },
   );
 
@@ -259,7 +266,8 @@ export function containerRoutes(app) {
     '/api/containers/:id/logs',
     { preHandler: app.requireRole('viewer'), schema: { params: { type: 'object', additionalProperties: false, required: ['id'], properties: { id: CONTAINER_ID } }, querystring: LOGS_QUERY } },
     async (req) => {
-      return svc().getLogs(req.params.id, { tail: req.query.tail, since: req.query.since });
+      const { tail, since } = req.query;
+      return svc().getLogs(req.params.id, { tail: tail ? Number(tail) : undefined, since });
     },
   );
 
@@ -281,31 +289,33 @@ export function containerRoutes(app) {
       { preHandler: app.requireRole('operator'), schema: { params: { type: 'object', additionalProperties: false, required: ['id'], properties: { id: CONTAINER_ID } } } },
       async (req, reply) => {
         const { id } = req.params;
-        const before = await svc().inspectSummary(id); // 404/503/502 classified here
-        const exceptions = await svc().listExceptions();
-        const managed = isManaged({ labels: before.labels, containerId: before.id, name: before.name, exceptions });
-
+        // Audit EVERY failure mode of the attempt (daemon down at inspect time
+        // included) — resourceId falls back to the id-as-given until resolved.
         const auditBase = {
           actorUserId: req.user.id,
           action: `container.${action}`,
           resourceType: 'container',
-          resourceId: before.id,
+          resourceId: id,
           requestId: req.id,
           ip: req.ip,
         };
-
-        if (!managed.managed) {
-          await app.audit({ ...auditBase, status: 'failure', details: { name: before.name, reason: 'not_managed' } });
-          return reply.code(403).send({
-            error: {
-              code: 'NOT_MANAGED',
-              message: `Container '${before.name}' is not app-managed (no app.managed label) — modify it via the host, or grant an admin exception`,
-              requestId: req.id,
-            },
-          });
-        }
-
         try {
+          const before = await svc().inspectSummary(id); // 404/503/502 classified here
+          auditBase.resourceId = before.id;
+          const exceptions = await svc().listExceptions();
+          const managed = isManaged({ labels: before.labels, containerId: before.id, name: before.name, exceptions });
+
+          if (!managed.managed) {
+            await app.audit({ ...auditBase, status: 'failure', details: { name: before.name, reason: 'not_managed' } });
+            return reply.code(403).send({
+              error: {
+                code: 'NOT_MANAGED',
+                message: `Container '${before.name}' is not app-managed (no app.managed label) — modify it via the host, or grant an admin exception`,
+                requestId: req.id,
+              },
+            });
+          }
+
           const result = await svc().runAction(before.id, action);
           await app.audit({
             ...auditBase,
@@ -314,7 +324,7 @@ export function containerRoutes(app) {
           });
           return { ...result, byException: managed.byException };
         } catch (err) {
-          await app.audit({ ...auditBase, status: 'failure', details: { name: before.name, code: err.apiCode ?? 'UNKNOWN' } });
+          await app.audit({ ...auditBase, status: 'failure', details: { code: err.apiCode ?? 'UNKNOWN' } });
           throw err;
         }
       },
@@ -328,27 +338,27 @@ export function containerRoutes(app) {
     async (req, reply) => {
       const { id } = req.params;
       const { confirm, removeVolumes, force } = req.body;
-      const before = await svc().inspectSummary(id);
-      const exceptions = await svc().listExceptions();
-      const managed = isManaged({ labels: before.labels, containerId: before.id, name: before.name, exceptions });
-
       const auditBase = {
         actorUserId: req.user.id,
         action: 'container.delete',
         resourceType: 'container',
-        resourceId: before.id,
+        resourceId: id,
         requestId: req.id,
         ip: req.ip,
       };
-
-      if (!managed.managed) {
-        await app.audit({ ...auditBase, status: 'failure', details: { name: before.name, reason: 'not_managed' } });
-        return reply.code(403).send({
-          error: { code: 'NOT_MANAGED', message: `Container '${before.name}' is not app-managed — cannot delete via the app`, requestId: req.id },
-        });
-      }
-
       try {
+        const before = await svc().inspectSummary(id);
+        auditBase.resourceId = before.id;
+        const exceptions = await svc().listExceptions();
+        const managed = isManaged({ labels: before.labels, containerId: before.id, name: before.name, exceptions });
+
+        if (!managed.managed) {
+          await app.audit({ ...auditBase, status: 'failure', details: { name: before.name, reason: 'not_managed' } });
+          return reply.code(403).send({
+            error: { code: 'NOT_MANAGED', message: `Container '${before.name}' is not app-managed — cannot delete via the app`, requestId: req.id },
+          });
+        }
+
         const result = await svc().deleteContainer(before.id, { confirm, removeVolumes, force });
         await app.audit({
           ...auditBase,
@@ -357,7 +367,7 @@ export function containerRoutes(app) {
         });
         return { ...result, byException: managed.byException };
       } catch (err) {
-        await app.audit({ ...auditBase, status: 'failure', details: { name: before.name, code: err.apiCode ?? 'UNKNOWN' } });
+        await app.audit({ ...auditBase, status: 'failure', details: { code: err.apiCode ?? 'UNKNOWN' } });
         throw err;
       }
     },
