@@ -30,6 +30,20 @@ test('scrubObject: redacts sensitive keys at any depth, keeps shape', () => {
   assert.equal(input.headers.authorization, 'Bearer sk-supersecret');
 });
 
+test('scrubObject: numeric values under sensitive-looking keys are kept (usage counters)', () => {
+  // Regression (P3): OpenAI usage `{ promptTokens, completionTokens }` must
+  // survive scrubbing — the keys end in 'Tokens' (camel hump) which matches
+  // the sensitive pattern, but a number cannot be a secret.
+  const out = scrubObject({ usage: { promptTokens: 12, completionTokens: 34, cacheTokens: null }, ok: true });
+  assert.equal(out.usage.promptTokens, 12);
+  assert.equal(out.usage.completionTokens, 34);
+  assert.equal(out.usage.cacheTokens, null);
+  assert.equal(out.ok, true);
+  // but a STRING under the same key shape is still redacted
+  const out2 = scrubObject({ promptTokens: 'sk-string-secret' });
+  assert.equal(out2.promptTokens, '***redacted***');
+});
+
 test('scrubObject: truncates long strings; bounded depth/nodes (no DoS via hostile payload)', () => {
   const long = { text: 'x'.repeat(10_000) };
   assert.ok(scrubObject(long, 100).text.length < 200);

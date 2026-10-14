@@ -128,6 +128,13 @@ export function taskJobId(runId, attempt) {
   return `${runId}:${attempt}`;
 }
 
+/**
+ * Fixed non-human identity for service (worker→API) calls, MD §13.2.
+ * Operator-level by RBAC, but the API explicitly refuses to let it approve
+ * (AI can never self-approve) or otherwise act as a human.
+ */
+export const SERVICE_USER_ID = '00000000-0000-4000-8000-000000000001';
+
 /** Default + hard caps (MD 附錄 A; overridable per run within cap). */
 export const TASK_DEFAULTS = Object.freeze({
   MAX_PROMPT_CHARS: 20_000,

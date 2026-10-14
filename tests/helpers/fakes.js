@@ -2,6 +2,35 @@
  * Test fixtures — in-memory fakes for db/redis/docker + a standard test
  * config. Kept dependency-free so the suite runs anywhere Node ≥22 runs.
  */
+import { randomUUID } from 'node:crypto';
+
+/**
+ * Sort rows by a Prisma-style orderBy spec. Accepts BOTH forms Prisma allows:
+ *   object:  { createdAt: 'desc' }                       (single key)
+ *   array:   [{ createdAt: 'asc' }, { id: 'asc' }]       (multi-key, stable)
+ * The P3 API routes emit the object form; older tests used the array form.
+ * Supporting both keeps the fake honest against real Prisma.
+ * @param {object[]} rows
+ * @param {object|Array<object>} [orderBy]
+ */
+function applyOrderBy(rows, orderBy) {
+  if (!orderBy) return rows;
+  const specs = Array.isArray(orderBy)
+    ? orderBy
+    : Object.entries(orderBy).map(([k, dir]) => ({ [k]: dir }));
+  if (!specs.length) return rows;
+  return [...rows].sort((a, b) => {
+    for (const spec of specs) {
+      for (const [k, dir] of Object.entries(spec)) {
+        const av = a[k];
+        const bv = b[k];
+        const cmp = av < bv ? -1 : av > bv ? 1 : 0;
+        if (cmp !== 0) return dir === 'desc' ? -cmp : cmp;
+      }
+    }
+    return 0;
+  });
+}
 
 /**
  * @param {object} [opts]
@@ -122,6 +151,33 @@ export function makeFakeDb({ users = [] } = {}) {
         auditRows.push(row);
         return row;
       },
+      findMany: async ({ where = {}, orderBy, skip, take } = {}) => {
+        let rows = [...auditRows].filter((a) => {
+          if (where.action && a.action !== where.action) return false;
+          if (where.actorUserId && a.actorUserId !== where.actorUserId) return false;
+          if (where.resourceType && a.resourceType !== where.resourceType) return false;
+          if (where.createdAt) {
+            if (where.createdAt.gte && !(new Date(a.createdAt) >= new Date(where.createdAt.gte))) return false;
+            if (where.createdAt.lte && !(new Date(a.createdAt) <= new Date(where.createdAt.lte))) return false;
+          }
+          return true;
+        });
+        rows = applyOrderBy(rows, orderBy);
+        if (skip) rows = rows.slice(skip);
+        if (take !== undefined) rows = rows.slice(0, take);
+        return rows.map((r) => ({ ...r }));
+      },
+      count: async ({ where = {} } = {}) =>
+        [...auditRows].filter((a) => {
+          if (where.action && a.action !== where.action) return false;
+          if (where.actorUserId && a.actorUserId !== where.actorUserId) return false;
+          if (where.resourceType && a.resourceType !== where.resourceType) return false;
+          if (where.createdAt) {
+            if (where.createdAt.gte && !(new Date(a.createdAt) >= new Date(where.createdAt.gte))) return false;
+            if (where.createdAt.lte && !(new Date(a.createdAt) <= new Date(where.createdAt.lte))) return false;
+          }
+          return true;
+        }).length,
     },
     appSetting: {
       findUnique: async ({ where }) => settingRows.get(where.key) ?? null,
@@ -153,14 +209,7 @@ export function makeFakeDb({ users = [] } = {}) {
       },
       findMany: async ({ where, orderBy, skip, take } = {}) => {
         let rows = matchRunWhere(where);
-        if (orderBy) {
-          const [[k, dir]] = orderBy;
-          rows = [...rows].sort((a, b) => {
-            const av = a[k]; const bv = b[k];
-            const cmp = av < bv ? -1 : av > bv ? 1 : 0;
-            return dir === 'desc' ? -cmp : cmp;
-          });
-        }
+        rows = applyOrderBy(rows, orderBy);
         if (skip) rows = rows.slice(skip);
         if (take !== undefined) rows = rows.slice(0, take);
         return rows.map((r) => ({ ...r }));
@@ -170,7 +219,9 @@ export function makeFakeDb({ users = [] } = {}) {
         runSeq += 1;
         const ts = now();
         const row = {
-          id: data.id ?? `run${runSeq}`,
+          // UUID by default (matches the real @db.Uuid column + route param
+          // minLength) so API-route tests exercise the same id shape.
+          id: data.id ?? randomUUID(),
           taskDefinitionId: data.taskDefinitionId ?? null,
           scheduleId: data.scheduleId ?? null,
           status: data.status ?? 'queued',
@@ -219,9 +270,10 @@ export function makeFakeDb({ users = [] } = {}) {
         eventRows.push(row);
         return { ...row };
       },
-      findMany: async ({ where = {}, orderBy } = {}) => {
+      findMany: async ({ where = {}, orderBy, skip, take } = {}) => {
         let rows = eventRows.filter((e) => {
           if (where.taskRunId && e.taskRunId !== where.taskRunId) return false;
+          if (where.id && e.id !== where.id) return false;
           // SSE cursor: OR [createdAt > c, createdAt = c AND id > cid] (ISO strings compare correctly)
           if (where.OR) {
             const [gt, eq] = where.OR;
@@ -233,10 +285,9 @@ export function makeFakeDb({ users = [] } = {}) {
           }
           return true;
         });
-        if (orderBy) {
-          const [[k, dir]] = orderBy;
-          rows = [...rows].sort((a, b) => (a[k] < b[k] ? -1 : a[k] > b[k] ? 1 : 0) * (dir === 'desc' ? -1 : 1));
-        }
+        rows = applyOrderBy(rows, orderBy);
+        if (skip) rows = rows.slice(skip);
+        if (take !== undefined) rows = rows.slice(0, take);
         return rows.map(({ _seq, ...rest }) => rest);
       },
     },
@@ -252,7 +303,7 @@ export function makeFakeDb({ users = [] } = {}) {
       create: async ({ data }) => {
         approvalSeq += 1;
         const row = {
-          id: data.id ?? `appr${approvalSeq}`,
+          id: data.id ?? randomUUID(),
           taskRunId: data.taskRunId,
           toolName: data.toolName,
           argumentsJson: data.argumentsJson ?? null,
@@ -282,6 +333,10 @@ export function makeFakeDb({ users = [] } = {}) {
       findMany: async () => [...providerRows.values()].map((p) => ({ ...p })),
       create: async ({ data }) => {
         providerSeq += 1;
+        const dupName = [...providerRows.values()].find((p) => p.name === data.name);
+        if (dupName) {
+          throw Object.assign(new Error(`Unique constraint failed on the fields: (name)`), { code: 'P2002' });
+        }
         const ts = now();
         const row = {
           id: data.id ?? `prov${providerSeq}`,

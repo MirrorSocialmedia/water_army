@@ -29,6 +29,7 @@ export {
   TASK_QUEUE_NAME,
   TASK_JOB_NAME,
   taskJobId,
+  SERVICE_USER_ID,
   TASK_DEFAULTS,
 } from './task-constants.js';
 

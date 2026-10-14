@@ -73,11 +73,15 @@ services:
       REDIS_URL: redis://redis:6379
       DOCKER_SOCKET_PATH: /var/run/docker.sock
       DEFAULT_TIMEZONE: ${DEFAULT_TIMEZONE:-Asia/Taipei}
+      # P3: service identity for worker→API tool calls (same secret in both
+      # api + worker; the API mints the fixed non-human operator identity).
+      WORKER_API_TOKEN: ${WORKER_API_TOKEN:?WORKER_API_TOKEN missing — set it in .env}
+      # P3: default provider when POST /api/tasks/runs omits body.provider.
+      AI_PROVIDER: ${AI_PROVIDER:-mock}
       TASK_DEFAULT_TIMEOUT_MS: ${TASK_DEFAULT_TIMEOUT_MS:-120000}
       TASK_MAX_TIMEOUT_MS: ${TASK_MAX_TIMEOUT_MS:-900000}
       TASK_DEFAULT_ATTEMPTS: ${TASK_DEFAULT_ATTEMPTS:-3}
       TASK_MAX_CONCURRENCY: ${TASK_MAX_CONCURRENCY:-4}
-      AI_PROVIDER_DEFAULT: ${AI_PROVIDER_DEFAULT:-}
     volumes:
       # THE ONLY service with Docker socket access — read-only.
       - /var/run/docker.sock:/var/run/docker.sock:ro
@@ -113,8 +117,20 @@ services:
       NODE_ENV: production
       REDIS_URL: redis://redis:6379
       DATABASE_URL: postgresql://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD missing — set it in .env}@postgres:5432/${POSTGRES_DB:-water_army}
+      # Same APP_ENCRYPTION_KEY as the API: provider keys are decrypted
+      # locally in the worker (never sent over the queue).
+      APP_ENCRYPTION_KEY: ${APP_ENCRYPTION_KEY:?APP_ENCRYPTION_KEY missing — set it in .env}
+      # Tool execution goes to the API over HTTP with this service token.
+      WORKER_API_TOKEN: ${WORKER_API_TOKEN:?WORKER_API_TOKEN missing — set it in .env}
+      API_INTERNAL_URL: ${API_INTERNAL_URL:-http://api:3000}
+      # Mock provider script (built-in name | file | inline JSON) — orchestrates
+      # the demo/live lifecycle: tool calls, approval, retries, delays.
+      AI_MOCK_SCRIPT: ${AI_MOCK_SCRIPT:-default}
       WORKER_HEALTH_PORT: "3001"
       TASK_MAX_CONCURRENCY: ${TASK_MAX_CONCURRENCY:-4}
+      TASK_DEFAULT_TIMEOUT_MS: ${TASK_DEFAULT_TIMEOUT_MS:-120000}
+      TASK_MAX_TIMEOUT_MS: ${TASK_MAX_TIMEOUT_MS:-900000}
+      TASK_DEFAULT_ATTEMPTS: ${TASK_DEFAULT_ATTEMPTS:-3}
     depends_on:
       redis:
         condition: service_healthy

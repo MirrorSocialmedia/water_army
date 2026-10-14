@@ -17,13 +17,17 @@ import {
 const KEY = crypto.randomBytes(32);
 const KEY_HEX = KEY.toString('hex');
 
-test('resolveProviderKey: accepts 64-hex and 44-base64; rejects everything else', () => {
+test('resolveProviderKey: accepts 64-hex, 44-base64, and derives via SHA-256 for other secrets', () => {
   assert.equal(resolveProviderKey(KEY_HEX).toString('hex'), KEY_HEX);
   assert.equal(resolveProviderKey(KEY.toString('base64')).toString('hex'), KEY_HEX);
+  // openssl rand -hex 32 (64 hex) is already covered; a generic 32+ char secret
+  // (e.g. 32 hex chars = 16 bytes) must still yield a usable 32-byte key
+  const derived = resolveProviderKey('deadbeefdeadbeefdeadbeefdeadbeef');
+  assert.equal(derived.length, 32);
+  assert.equal(derived.toString('hex'), crypto.createHash('sha256').update('deadbeefdeadbeefdeadbeefdeadbeef', 'utf8').digest('hex'));
   assert.throws(() => resolveProviderKey(''), (e) => e instanceof ProviderCryptoError && e.apiCode === 'CONFIG_MISSING');
   assert.throws(() => resolveProviderKey(undefined), (e) => e.apiCode === 'CONFIG_MISSING');
-  assert.throws(() => resolveProviderKey('tooshort'), (e) => e.apiCode === 'CONFIG_INVALID');
-  assert.throws(() => resolveProviderKey('z'.repeat(64)), (e) => e.apiCode === 'CONFIG_INVALID', 'non-hex 64 chars rejected');
+  assert.throws(() => resolveProviderKey('too-short'), (e) => e.apiCode === 'CONFIG_INVALID');
 });
 
 test('encrypt/decrypt round-trip (incl. unicode + empty string)', () => {

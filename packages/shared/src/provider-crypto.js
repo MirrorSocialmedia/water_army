@@ -25,12 +25,15 @@ export class ProviderCryptoError extends Error {
 }
 
 /**
- * Resolve a 32-byte key from hex (64 chars) or base64 (44 chars) env value.
+ * Resolve a 32-byte key from env material.
+ * Accepts: 64 hex chars → direct; 44 base64 chars → direct; anything else →
+ * SHA-256 derivation (so an existing high-entropy secret like the
+ * openssl-rand-hex-32 APP_ENCRYPTION_KEY works as-is). Deterministic.
  * @param {string|Buffer|undefined} raw
  */
 export function resolveProviderKey(raw) {
   if (raw == null || raw === '') {
-    throw new ProviderCryptoError('PROVIDER_ENCRYPTION_KEY is not set', 'CONFIG_MISSING');
+    throw new ProviderCryptoError('APP_ENCRYPTION_KEY is not set', 'CONFIG_MISSING');
   }
   const text = String(raw).trim();
   let key;
@@ -38,14 +41,13 @@ export function resolveProviderKey(raw) {
     key = Buffer.from(text, 'hex');
   } else if (/^[A-Za-z0-9+/]{43}=$/.test(text)) {
     key = Buffer.from(text, 'base64');
+  } else if (text.length >= 16) {
+    key = crypto.createHash('sha256').update(text, 'utf8').digest();
   } else {
-    throw new ProviderCryptoError(
-      'PROVIDER_ENCRYPTION_KEY must be 64 hex chars (or 44 base64 chars)',
-      'CONFIG_INVALID',
-    );
+    throw new ProviderCryptoError('encryption key material must be at least 16 characters', 'CONFIG_INVALID');
   }
   if (key.length !== 32) {
-    throw new ProviderCryptoError('PROVIDER_ENCRYPTION_KEY must be 32 bytes', 'CONFIG_INVALID');
+    throw new ProviderCryptoError('derived encryption key must be 32 bytes', 'CONFIG_INVALID');
   }
   return key;
 }

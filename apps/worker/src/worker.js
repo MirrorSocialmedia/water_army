@@ -1,19 +1,23 @@
 /**
- * AI/job worker — P1 shell.
+ * AI/job worker — P3 (施工 MD §17 Phase 3).
  *
  * Hard boundary (施工 MD §4, threat model T1): this process has NO Docker
- * socket, NO host shell. It only talks to Redis (and, from P3, PostgreSQL)
- * plus configured provider endpoints.
+ * socket, NO host shell. It talks to Redis (BullMQ) + PostgreSQL (task
+ * source of truth) + the API over HTTP (tool execution, service token) +
+ * configured provider endpoints.
  *
- * P1 scope: BullMQ Worker shell on the `ai-tasks` queue + scheduler
- * reconciler placeholder + a localhost-only health endpoint (used by the
- * compose healthcheck). P3 registers real processors (TaskRunService).
+ * P3 scope:
+ *   - BullMQ Worker on `ai-tasks` (job name `task-run`, payload {runId, attempt}
+ *     — secret-free) driving the task engine (provider chat + tool loop +
+ *     approval wait + real-stop cancel + deadline timeout)
+ *   - boot-time stale-run reconciliation (MD §12.3: 唔可以靜默丟失任務)
+ *   - /health reports redis + QUEUE + db status (P1-fix iron rule: a dead
+ *     queue must never read "healthy")
  *
- * P1-fix (2026-10-14): the BullMQ `connection` must be the `{ url }` form
- * (see buildRedisConnection in @water-army/shared) and the health probe
- * connection uses bounded retry so one transient failure cannot kill it.
- * The constructors are injectable so the connection shape is covered by a
- * hermetic regression test.
+ * P1-fix (2026-10-14) invariants preserved: BullMQ connection is ALWAYS the
+ * `{ url }` form via buildRedisConnection(); every ioredis instance has an
+ * `error` listener (without one, the first connect failure crashes the
+ * process via unhandled EventEmitter 'error').
  */
 import http from 'node:http';
 import process from 'node:process';
@@ -21,30 +25,27 @@ import { pathToFileURL } from 'node:url';
 import { Worker as BullMQWorker } from 'bullmq';
 import Redis from 'ioredis';
 import pino from 'pino';
-import { PINO_REDACT_PATHS, buildRedisConnection } from '@water-army/shared';
+import { PINO_REDACT_PATHS, buildRedisConnection, createTaskRunService, TASK_QUEUE_NAME } from '@water-army/shared';
 
 import { loadWorkerConfig } from './config.js';
 import { createSchedulerReconciler } from './scheduler-reconciler.js';
+import { createDb, closeDb } from './db.js';
+import { resolveProviderForRun } from './provider-resolver.js';
+import { createApiClient, createToolHandlers } from './tool-helpers.js';
+import { createTaskEngine } from './task-engine.js';
 
 const log = pino({
   level: process.env.LOG_LEVEL ?? 'info',
   redact: { paths: [...PINO_REDACT_PATHS], censor: '***' },
 });
 
-/**
- * Dedicated connection for health probes (BullMQ keeps its own pool).
- *
- * Bounded retry (P1-fix 2026-10-14): the previous `retryStrategy: () => null`
- * permanently killed the probe after ONE transient failure (e.g. Redis
- * restarting) — "Connection is closed." forever, worker "unhealthy" for
- * hours until a manual restart. Linear backoff capped at 5s keeps the probe
- * alive; `maxRetriesPerRequest: 1` keeps each /health ping failing fast
- * instead of hanging the request.
- *
- * The 'error' listener is mandatory, not cosmetic: without it, the first
- * connect failure is an unhandled 'error' EventEmitter event and crashes the
- * whole worker process — which would defeat the retry entirely.
- */
+// Re-exported for tests/other modules (canonical values live in shared).
+export { TASK_QUEUE_NAME };
+
+// --------------------------------------------------------------------------
+// Health probe redis (P1, unchanged semantics)
+// --------------------------------------------------------------------------
+
 export function createHealthRedis(config, { Redis: RedisCtor = Redis } = {}) {
   const healthRedis = new RedisCtor(config.redisUrl, {
     maxRetriesPerRequest: 1,
@@ -57,7 +58,67 @@ export function createHealthRedis(config, { Redis: RedisCtor = Redis } = {}) {
   return healthRedis;
 }
 
-export function createHealthServer(healthRedis) {
+// --------------------------------------------------------------------------
+// Queue state — /health must reflect the BullMQ Worker lifecycle
+// --------------------------------------------------------------------------
+
+/**
+ * Live state derived from BullMQ Worker events (ready/closed/error + job
+ * counters). The /health endpoint reports this verbatim so "queue: dead"
+ * can never masquerade as healthy (P1 虛報 教訓).
+ */
+export function createQueueState() {
+  return {
+    status: 'starting', // starting | connected | error | closed
+    lastError: null,
+    active: 0,
+    waiting: 0,
+    delayed: 0,
+    completed: 0,
+    failed: 0,
+  };
+}
+
+export function bindQueueState(worker, state) {
+  worker.on('ready', () => {
+    state.status = 'connected';
+    state.lastError = null;
+  });
+  worker.on('error', (err) => {
+    state.status = 'error';
+    state.lastError = err?.message ?? 'unknown';
+  });
+  worker.on('closed', () => {
+    state.status = 'closed';
+  });
+  worker.on('active', () => {
+    state.active += 1;
+  });
+  worker.on('waiting', () => {
+    state.waiting += 1;
+  });
+  worker.on('delayed', () => {
+    state.delayed += 1;
+  });
+  worker.on('completed', () => {
+    state.active = Math.max(0, state.active - 1);
+    state.waiting = Math.max(0, state.waiting - 1);
+    state.delayed = Math.max(0, state.delayed - 1);
+    state.completed += 1;
+  });
+  worker.on('failed', () => {
+    state.active = Math.max(0, state.active - 1);
+    state.waiting = Math.max(0, state.waiting - 1);
+    state.delayed = Math.max(0, state.delayed - 1);
+    state.failed += 1;
+  });
+}
+
+// --------------------------------------------------------------------------
+// Health server (redis + queue + db)
+// --------------------------------------------------------------------------
+
+export function createHealthServer(healthRedis, getQueueState, getDbStatus) {
   return http.createServer(async (req, res) => {
     if (req.method !== 'GET' || req.url !== '/health') {
       res.writeHead(404, { 'content-type': 'application/json' });
@@ -72,37 +133,59 @@ export function createHealthServer(healthRedis) {
     } catch (err) {
       redisError = err.message;
     }
-    const ok = redisStatus === 'up';
+    let dbStatus = 'unknown';
+    let dbError;
+    try {
+      dbStatus = (await getDbStatus()) ? 'up' : 'down';
+    } catch (err) {
+      dbStatus = 'down';
+      dbError = err.message;
+    }
+    const queue = getQueueState();
+    const ok = redisStatus === 'up' && queue.status === 'connected' && dbStatus === 'up';
     res.writeHead(ok ? 200 : 503, { 'content-type': 'application/json' });
     res.end(
       JSON.stringify({
         status: ok ? 'ok' : 'degraded',
         dependencies: {
           redis: { status: redisStatus, ...(redisError ? { error: redisError } : {}) },
+          queue: {
+            status: queue.status,
+            ...(queue.lastError ? { lastError: queue.lastError } : {}),
+            active: queue.active,
+            waiting: queue.waiting,
+            delayed: queue.delayed,
+            completed: queue.completed,
+            failed: queue.failed,
+          },
+          db: { status: dbStatus, ...(dbError ? { error: dbError } : {}) },
         },
       }),
     );
   });
 }
 
+// --------------------------------------------------------------------------
+// BullMQ worker
+// --------------------------------------------------------------------------
+
 /**
- * Create the BullMQ Worker for the `ai-tasks` queue.
- *
- * The Worker constructor is injectable (`Worker`) so hermetic regression
- * tests can assert the connection is passed as `{ url }` — a regression to
- * a bare `redis://` string would silently fall back to 127.0.0.1:6379
- * (BullMQ 6 RedisConnection trap, P1-fix incident 2026-10-14).
+ * @param {object} config
+ * @param {object} [deps]
+ * @param {Function} [deps.Worker]  injectable ctor (tests assert { url } shape)
+ * @param {object}   [deps.log]
+ * @param {Function} [deps.processor]  job → result (defaults to a loud no-op)
+ * @param {object}   [deps.queueState] state object bound to worker events
  */
-export function createBullMqWorker(config, { Worker: WorkerCtor = BullMQWorker, log: workerLog = log } = {}) {
-  // P1 shell processor: fail loudly instead of silently "completing" work.
-  // Nothing enqueues yet (P3), so this path is unreachable in P1 — if it ever
-  // fires, the job must be visible as failed, not marked succeeded.
+export function createBullMqWorker(config, { Worker: WorkerCtor = BullMQWorker, log: workerLog = log, processor, queueState } = {}) {
+  const state = queueState ?? createQueueState();
   const worker = new WorkerCtor(
-    'ai-tasks',
-    async (job) => {
-      workerLog.warn({ jobId: job.id, name: job.name }, 'worker P1 shell: no real processors registered');
-      throw new Error('P1 worker shell: no processors registered (lands in P3)');
-    },
+    TASK_QUEUE_NAME,
+    processor ??
+      (async () => {
+        workerLog.error('worker: job received but no task engine wired — failing loudly');
+        throw new Error('worker: no task engine wired (P3 regression?)');
+      }),
     {
       // MUST be the { url } form — see buildRedisConnection (BullMQ 6 trap).
       connection: buildRedisConnection(config.redisUrl),
@@ -110,32 +193,148 @@ export function createBullMqWorker(config, { Worker: WorkerCtor = BullMQWorker, 
     },
   );
 
+  bindQueueState(worker, state);
   worker.on('ready', () => workerLog.info('worker ready (queue: ai-tasks)'));
+  worker.on('completed', (job) => {
+    workerLog.info?.({ jobId: job?.id, runId: job?.data?.runId }, 'job completed');
+  });
   worker.on('failed', (job, err) => {
-    workerLog.warn({ jobId: job?.id, error: err?.message }, 'job failed');
+    workerLog.warn({ jobId: job?.id, runId: job?.data?.runId, error: err?.message }, 'job failed');
   });
   worker.on('error', (err) => workerLog.error({ error: err.message }, 'worker error'));
+  Object.defineProperty(worker, 'queueState', { value: state });
   return worker;
 }
 
+// --------------------------------------------------------------------------
+// App wiring
+// --------------------------------------------------------------------------
+
 /**
- * Wire the full worker (health redis + health server + BullMQ worker +
- * scheduler reconciler) without starting anything. Returns `start()` and
- * `shutdown(signal)`; exported so tests can inspect the wiring.
+ * Wire the full worker (health redis + db + engine + BullMQ worker + health
+ * server + scheduler reconciler) without starting anything. Returns `start()`
+ * and `shutdown(signal)`; exported so tests can inspect the wiring.
+ *
+ * Injectables (hermetic tests): Worker, Redis, db, engine, taskSvc.
+ * When `engine` is not injected the REAL engine is built from config
+ * (DB-backed TaskRunService + API-over-HTTP tool handlers + provider resolver).
  */
 export function createWorkerApp({
   config = loadWorkerConfig(),
   Worker = BullMQWorker,
   Redis: RedisCtor = Redis,
+  db: injectedDb,
+  engine: injectedEngine,
+  taskSvc: injectedSvc,
 } = {}) {
   const healthRedis = createHealthRedis(config, { Redis: RedisCtor });
-  const healthServer = createHealthServer(healthRedis);
-  const worker = createBullMqWorker(config, { Worker });
+  const queueState = createQueueState();
+
+  // Mutable holders: in the real main run the DB (and therefore the
+  // TaskRunService + engine that need it) only exists after start(). Tests
+  // inject db/engine/taskSvc directly and the holders are filled at wiring.
+  const dbRef = { client: injectedDb ?? null };
+  const svcRef = { impl: injectedSvc ?? null };
+  const engineRef = { impl: injectedEngine ?? null };
+
+  const buildRealServices = () => {
+    if (!svcRef.impl) {
+      svcRef.impl = createTaskRunService({
+        db: dbRef.client,
+        config: {
+          taskDefaultTimeoutMs: config.taskDefaultTimeoutMs,
+          taskMaxTimeoutMs: config.taskMaxTimeoutMs,
+          taskDefaultAttempts: config.taskDefaultAttempts,
+        },
+        log,
+      });
+    }
+    if (!engineRef.impl) {
+      engineRef.impl = createTaskEngine({
+        db: dbRef.client,
+        taskSvc: svcRef.impl,
+        config: {
+          taskDefaultTimeoutMs: config.taskDefaultTimeoutMs,
+          taskMaxTimeoutMs: config.taskMaxTimeoutMs,
+          taskDefaultAttempts: config.taskDefaultAttempts,
+          approvalPollMs: config.approvalPollMs,
+          cancelPollMs: config.cancelPollMs,
+        },
+        log,
+        providerResolver: (args) => resolveProviderForRun({ ...args, env: process.env }),
+        toolHandlers: createToolHandlers({
+          api: createApiClient({ baseUrl: config.apiInternalUrl, serviceToken: config.workerApiToken }),
+          log,
+        }),
+      });
+    }
+  };
+  if (dbRef.client && !injectedEngine) buildRealServices();
+
+  const processor = async (job) => {
+    const engineImpl = engineRef.impl;
+    if (!engineImpl) {
+      log.error({ jobId: job?.id }, 'worker: job received but engine not built yet — failing loudly');
+      throw new Error('worker: engine not ready');
+    }
+    try {
+      return await engineImpl.handleJob(job);
+    } catch (err) {
+      // The engine owns every terminal transition; a throw here is a coding
+      // bug. Record it honestly (if the run is still live) and let the job
+      // complete — no BullMQ auto-retry (attempts:1): a half-executed run is
+      // never silently re-run; the user retries via the API (new attempt).
+      log.error({ err, runId: job?.data?.runId, attempt: job?.data?.attempt }, 'engine crashed outside its error handling');
+      const runId = job?.data?.runId;
+      const attempt = job?.data?.attempt;
+      if (runId && svcRef.impl) {
+        try {
+          await svcRef.impl.finishRun(runId, {
+            status: 'failed',
+            errorCode: 'ENGINE_CRASH',
+            errorMessage: `worker engine crash: ${err?.message}`.slice(0, 1000),
+            attempt,
+          });
+        } catch {
+          /* run already terminal — nothing to do */
+        }
+      }
+      return { outcome: 'crash' };
+    }
+  };
+
+  const worker = createBullMqWorker(config, { Worker, processor, queueState });
   const reconciler = createSchedulerReconciler({ log });
+  const healthServer = createHealthServer(
+    healthRedis,
+    () => queueState,
+    async () => {
+      if (!dbRef.client || !dbRef.client.$queryRaw) return false;
+      await dbRef.client.$queryRaw`SELECT 1`;
+      return true;
+    },
+  );
+
+  let dbOwned = false;
 
   const start = async () => {
+    if (!dbRef.client) {
+      if (!config.databaseUrl) {
+        throw new Error('worker: DATABASE_URL is required (task history is DB-backed, MD §11.2)');
+      }
+      dbRef.client = await createDb(config);
+      dbOwned = true;
+      log.info('worker: postgres connected (task source of truth)');
+    }
+    buildRealServices();
+
     await new Promise((resolve) => healthServer.listen(config.healthPort, config.healthHost, resolve));
     log.info({ port: config.healthPort, host: config.healthHost }, 'worker health endpoint listening');
+
+    // MD §12.3: boot-time reconciliation — non-terminal runs stranded by a
+    // worker crash/queue flush become honest terminal states (retryable).
+    const reconciled = await svcRef.impl.reconcileStaleRuns({ staleMs: 10 * 60_000 });
+    log.info({ reconciled }, 'boot reconciliation complete');
 
     // P1: one placeholder pass at boot; P4 schedules this on an interval.
     const result = await reconciler.reconcile();
@@ -153,11 +352,12 @@ export function createWorkerApp({
     try {
       await healthRedis.quit();
     } catch { /* best effort */ }
+    if (dbOwned && dbRef.client) await closeDb(dbRef.client);
     healthServer.close();
     process.exit(0);
   };
 
-  return { start, shutdown, healthServer, worker, reconciler, healthRedis };
+  return { start, shutdown, healthServer, worker, reconciler, healthRedis, queueState, dbRef, engineRef, svcRef };
 }
 
 const isMain = Boolean(process.argv[1]) && import.meta.url === pathToFileURL(process.argv[1]).href;

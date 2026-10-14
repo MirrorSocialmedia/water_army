@@ -303,6 +303,10 @@ export function createTaskRunService({ db, config = {}, enqueue, log = console }
     if (TASK_RUN_TERMINAL.includes(run.status)) {
       return { run, idempotent: true, requested: false };
     }
+    if (run.status === 'cancel_requested') {
+      // Already requested — the worker will (or is) performing the stop.
+      return { run, idempotent: true, requested: false };
+    }
     assertTransition(run.status, 'cancel_requested', run.id);
     const updated = await db.taskRun.update({ where: { id: run.id }, data: { status: 'cancel_requested' } });
     await recordEvent(run.id, TASK_EVENT.CANCEL_REQUESTED, {
@@ -398,6 +402,44 @@ export function createTaskRunService({ db, config = {}, enqueue, log = console }
         throw new TaskRunError('ENQUEUE_FAILED', 'Could not re-queue the retry (queue unavailable)', { status: 503 });
       }
     }
+    return { run: updated, attempt: nextAttempt };
+  }
+
+  // ------------------------------------------------------- auto-retry (engine)
+  /**
+   * Auto-retry bump (MD §11.8: transient provider error, attempt < maxAttempts).
+   * Unlike requestRetry this does NOT re-queue — the engine keeps the job and
+   * starts the next attempt in-process (the run stays 'running' throughout;
+   * the user sees attempt N → auto_retry → attempt N+1 in the event stream).
+   * Only legal from 'running' with run.attempt === expectedAttempt (stale guard).
+   */
+  async function bumpAttempt(runId, { expectedAttempt, code = null, delayMs = 0, reason = null } = {}) {
+    const run = await loadRun(runId);
+    if (run.status !== 'running') {
+      throw new TaskRunError('BUMP_NOT_ALLOWED', `attempt bump only from running (run is '${run.status}')`, { status: 409 });
+    }
+    if (expectedAttempt != null && run.attempt !== expectedAttempt) {
+      throw new TaskRunError('STALE_ATTEMPT', `run is at attempt ${run.attempt}, expected ${expectedAttempt}`, { status: 409 });
+    }
+    const nextAttempt = run.attempt + 1;
+    if (nextAttempt > 999) {
+      throw new TaskRunError('RETRY_LIMIT', 'Attempt limit reached for this run', { status: 409 });
+    }
+    const updated = await db.taskRun.update({
+      where: { id: run.id },
+      data: {
+        attempt: nextAttempt,
+        // previous attempt's partial output belongs to the event stream, not the row
+        resultText: null,
+        resultJson: null,
+        errorCode: null,
+        errorMessage: null,
+      },
+    });
+    await recordEvent(runId, TASK_EVENT.RETRY, {
+      message: `auto retry (transient ${code ?? 'error'}) → attempt ${nextAttempt}`,
+      payload: { code, delayMs, reason: reason ?? null, fromAttempt: run.attempt, toAttempt: nextAttempt },
+    });
     return { run: updated, attempt: nextAttempt };
   }
 
@@ -658,6 +700,7 @@ export function createTaskRunService({ db, config = {}, enqueue, log = console }
     resumeFromApproval,
     markCancelled,
     finishRun,
+    bumpAttempt,
     createApproval,
     listPendingApprovals,
     expirePendingApprovals,

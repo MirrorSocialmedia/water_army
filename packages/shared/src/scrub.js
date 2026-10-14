@@ -5,6 +5,9 @@
  * `scrubObject` before they hit the DB. Rules:
  *  - Any object key matching a sensitive pattern → value replaced with
  *    `***redacted***` (the key is kept so the shape stays readable).
+ *  - Exception: a sensitive key whose value is a plain number/boolean/null is
+ *    KEPT — numeric telemetry (e.g. OpenAI usage `promptTokens`) is not a
+ *    secret; strings/objects under sensitive keys are redacted.
  *  - Deep-walk bounded (depth 6, 500 nodes) — hostile/abusive payloads from
  *    the model or tools cannot DoS the writer.
  *  - Long strings are truncated to `maxChars` (event payloads stay small).
@@ -45,7 +48,14 @@ function walk(value, depth, maxChars, budget) {
     const out = {};
     for (const [k, v] of Object.entries(value)) {
       if (SENSITIVE_KEY.test(k)) {
-        out[k] = REDACTED;
+        // Strings/objects under a sensitive key are redacted; plain
+        // number/boolean/null values are kept (usage counters like
+        // `promptTokens` are not secrets).
+        if (typeof v === 'string' || (v !== null && typeof v === 'object')) {
+          out[k] = REDACTED;
+        } else {
+          out[k] = v;
+        }
         continue;
       }
       out[k] = walk(v, depth + 1, maxChars, budget);
