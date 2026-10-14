@@ -26,6 +26,7 @@ export function makeFakeDb({ users = [] } = {}) {
   }
 
   const sessionRows = new Map(); // by tokenHash
+  const settingRows = new Map(); // by key (P2: templates / managed exceptions)
   const auditRows = [];
   let sessionSeq = 0;
 
@@ -91,11 +92,30 @@ export function makeFakeDb({ users = [] } = {}) {
         return row;
       },
     },
+    appSetting: {
+      findUnique: async ({ where }) => settingRows.get(where.key) ?? null,
+      upsert: async ({ where, update, create }) => {
+        const existing = settingRows.get(where.key);
+        const row = existing
+          ? { ...existing, ...update, updatedAt: new Date() }
+          : { key: where.key, ...create, createdAt: new Date(), updatedAt: new Date() };
+        settingRows.set(where.key, row);
+        return row;
+      },
+      update: async ({ where, data }) => {
+        const row = settingRows.get(where.key);
+        if (row) {
+          settingRows.set(where.key, { ...row, ...data, updatedAt: new Date() });
+          return settingRows.get(where.key);
+        }
+        return null;
+      },
+    },
     // health/ready probe
     $queryRaw: async () => [{}],
     // teardown seam
     $disconnect: async () => {},
-    __state: { userRows, userById, sessionRows, auditRows },
+    __state: { userRows, userById, sessionRows, settingRows, auditRows },
   };
   return db;
 }
@@ -165,6 +185,15 @@ export const testConfig = {
   databaseUrl: 'postgresql://x:y@127.0.0.1:1/x',
   redisUrl: 'redis://127.0.0.1:1',
   dockerSocketPath: '/nonexistent',
+  // P2 docker service knobs (施工 MD §9.3/§9.4) — explicit in tests
+  dockerLogTailDefault: 500,
+  dockerLogTailMax: 5000,
+  dockerLogByteLimit: 1_048_576,
+  dockerStatsTimeoutMs: 3000,
+  dockerStopTimeoutSec: 10,
+  dockerSseMaxConcurrent: 10,
+  dockerSseHeartbeatMs: 25000,
+  dockerIdempotencyTtlMs: 600_000,
   defaultTimezone: 'Asia/Taipei',
   taskDefaultTimeoutMs: 120_000,
   taskMaxTimeoutMs: 900_000,

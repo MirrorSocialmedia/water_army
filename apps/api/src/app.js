@@ -27,7 +27,10 @@ import { requireRole } from './security/rbac.js';
 import { createRateLimiter } from './security/rate-limit.js';
 import { createAuditService } from './services/audit.js';
 import { createSessionService } from './services/session.js';
+import { createDockerService } from './services/docker-service.js';
 import { authRoutes } from './routes/auth.js';
+import { containerRoutes } from './routes/containers.js';
+import { templateRoutes } from './routes/templates.js';
 
 /** Public (unauthenticated) route prefixes — everything else may need a session. */
 const PUBLIC_PREFIXES = ['/api/health', '/api/auth/login'];
@@ -68,6 +71,7 @@ export async function buildApp(opts = {}) {
   const sessions = createSessionService({ db, config });
   const audit = createAuditService({ db, log: app.log });
   const rateLimiter = createRateLimiter({ limit: 5, windowMs: 60_000 });
+  const dockerService = createDockerService({ docker, db, config, log: app.log, audit });
 
   app.decorate('config', config);
   app.decorate('db', db);
@@ -77,6 +81,7 @@ export async function buildApp(opts = {}) {
   app.decorate('audit', audit);
   app.decorate('rateLimiter', rateLimiter);
   app.decorate('requireRole', requireRole);
+  app.decorate('dockerService', dockerService);
 
   // --- request id ----------------------------------------------------------
   app.addHook('onRequest', async (req) => {
@@ -134,7 +139,12 @@ export async function buildApp(opts = {}) {
     let code = API_ERROR.INTERNAL;
     let message = 'Internal server error';
 
-    if (err.validation) {
+    // Service-layer errors carry their own stable code + message (P2 docker
+    // domain codes — MD §9.1). Pass through untouched.
+    if (err.apiCode) {
+      code = err.apiCode;
+      message = err.message || code;
+    } else if (err.validation) {
       code = API_ERROR.VALIDATION_ERROR;
       const details = err.validation
         .slice(0, 5)
@@ -190,6 +200,8 @@ export async function buildApp(opts = {}) {
   authRoutes(app);
   const { healthRoutes } = await import('./routes/health.js');
   healthRoutes(app);
+  containerRoutes(app);
+  templateRoutes(app);
 
   // --- lifecycle ---------------------------------------------------------------
   app.addHook('onClose', async () => {

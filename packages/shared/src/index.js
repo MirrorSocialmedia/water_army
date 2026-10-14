@@ -98,6 +98,49 @@ export const PINO_REDACT_PATHS = Object.freeze([
 export const HEALTH_CHECK_TIMEOUT_MS = 2500;
 
 /**
+ * Docker API error codes (施工 MD §9.1 — 硬規：只有確定 404/no such container
+ * 才可判 not found；daemon down / permission / timeout 各獨立 code，唔好混同).
+ * Each code maps to a fixed HTTP status in DockerService.
+ */
+export const DOCKER_ERROR = Object.freeze({
+  /** Definitive 404 from the daemon (container/image/network not found). */
+  CONTAINER_NOT_FOUND: 'CONTAINER_NOT_FOUND',
+  /** Socket connect refused / missing / reset — daemon down or path wrong. */
+  DAEMON_UNAVAILABLE: 'DOCKER_DAEMON_UNAVAILABLE',
+  /** EACCES on the socket — api lacks docker group permission. */
+  PERMISSION_DENIED: 'DOCKER_PERMISSION_DENIED',
+  /** Request timed out (op timeout / stats timeout). */
+  TIMEOUT: 'DOCKER_TIMEOUT',
+  /** Docker disabled via config (DOCKER_SOCKET_PATH empty). */
+  DISABLED: 'DOCKER_DISABLED',
+  /** Op API succeeded but post-op inspect shows state unchanged. */
+  OPERATION_PENDING: 'OPERATION_PENDING',
+  /** Container not app-managed (no app.managed label + no admin exception). */
+  NOT_MANAGED: 'NOT_MANAGED',
+  /** Unknown/unclassified Docker failure — surfaced with original message. */
+  GENERIC: 'DOCKER_ERROR',
+});
+
+/** HTTP status per Docker error code (single source of truth). */
+export const DOCKER_ERROR_STATUS = Object.freeze({
+  [DOCKER_ERROR.CONTAINER_NOT_FOUND]: 404,
+  [DOCKER_ERROR.DAEMON_UNAVAILABLE]: 503,
+  [DOCKER_ERROR.PERMISSION_DENIED]: 502,
+  [DOCKER_ERROR.TIMEOUT]: 504,
+  [DOCKER_ERROR.DISABLED]: 503,
+  [DOCKER_ERROR.OPERATION_PENDING]: 500,
+  [DOCKER_ERROR.NOT_MANAGED]: 403,
+  [DOCKER_ERROR.GENERIC]: 502,
+});
+
+/**
+ * Env key pattern treated as sensitive (施工 MD §6.3 / §13.3): such values
+ * are masked server-side before any API response. Match on the full key or
+ * on `_`-separated segments so e.g. `DB_PASSWORD` / `API_KEY` hit.
+ */
+export const SENSITIVE_ENV_KEY = /(^|[_-])(password|passwd|pass|pwd|secret|token|api_?key|apikey|auth|authorization|credential|credentials|private_?key)([_-]|$)/i;
+
+/**
  * Build BullMQ `connection` options from a redis:// URL.
  *
  * Trap (P1-fix incident 2026-10-14): BullMQ 6's RedisConnection only honours

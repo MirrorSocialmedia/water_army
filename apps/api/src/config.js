@@ -37,6 +37,17 @@ function requireInt(env, name, fallback) {
   return value;
 }
 
+/** Optional positive int (P2 docker knobs) — absent → fallback, garbage → hard fail. */
+function optInt(env, name, fallback) {
+  const raw = env[name];
+  if (raw === undefined || raw === '') return fallback;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new Error(`config error: ${name} must be a positive integer (got ${String(raw)})`);
+  }
+  return value;
+}
+
 function requireSecret(env, name) {
   const value = env[name];
   if (!value || value.length < 32 || value.startsWith('REPLACE_WITH')) {
@@ -96,6 +107,15 @@ export function loadConfig(env = process.env, opts = {}) {
     redisUrl,
     // Empty string = Docker checks disabled (local dev without a daemon).
     dockerSocketPath: e.DOCKER_SOCKET_PATH ?? '/var/run/docker.sock',
+    // P2 docker service knobs (施工 MD §9.3/§9.4)
+    dockerLogTailDefault: optInt(e, 'DOCKER_LOG_TAIL_DEFAULT', 500),
+    dockerLogTailMax: optInt(e, 'DOCKER_LOG_TAIL_MAX', 5000),
+    dockerLogByteLimit: optInt(e, 'DOCKER_LOG_BYTE_LIMIT', 1_048_576),
+    dockerStatsTimeoutMs: optInt(e, 'DOCKER_STATS_TIMEOUT_MS', 3000),
+    dockerStopTimeoutSec: optInt(e, 'DOCKER_STOP_TIMEOUT_SEC', 10),
+    dockerSseMaxConcurrent: optInt(e, 'DOCKER_SSE_MAX_CONCURRENT', 10),
+    dockerSseHeartbeatMs: optInt(e, 'DOCKER_SSE_HEARTBEAT_MS', 25000),
+    dockerIdempotencyTtlMs: optInt(e, 'DOCKER_IDEMPOTENCY_TTL_MS', 600_000),
     defaultTimezone: e.DEFAULT_TIMEZONE ?? 'Asia/Taipei',
     taskDefaultTimeoutMs,
     taskMaxTimeoutMs,
