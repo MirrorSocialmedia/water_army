@@ -5,6 +5,7 @@ import { AppLayout } from './layouts/AppLayout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Containers from './pages/Containers';
+import ContainerDetail from './pages/ContainerDetail';
 import Devices from './pages/Devices';
 import Tasks from './pages/Tasks';
 import Schedules from './pages/Schedules';
@@ -13,6 +14,7 @@ import Settings from './pages/Settings';
 const PAGES = {
   dashboard: Dashboard,
   containers: Containers,
+  'containers-detail': (props) => <ContainerDetail containerId={props.params.id} />,
   devices: Devices,
   tasks: Tasks,
   schedules: Schedules,
@@ -20,7 +22,7 @@ const PAGES = {
 };
 
 export function App() {
-  const { page } = useHashRoute();
+  const { page, params } = useHashRoute();
   const [user, setUser] = useState(null);
   const [booting, setBooting] = useState(true);
 
@@ -75,7 +77,7 @@ export function App() {
   const Page = PAGES[page] ?? Dashboard;
   return (
     <AppLayout user={user} onLogout={handleLogout}>
-      <Page />
+      <Page params={params} />
     </AppLayout>
   );
 }

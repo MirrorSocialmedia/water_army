@@ -3,10 +3,13 @@ import { useEffect, useState } from 'react';
 /**
  * Minimal hash router (dependency-free — keeps the lockfile at the P0 ADR
  * version table; see docs/architecture-decisions.md §7 write-back).
+ *
+ * P2: supports `:param` segments (e.g. /containers/:id) via matchRoute().
  */
 const ROUTES = [
   { path: '/', page: 'dashboard' },
   { path: '/containers', page: 'containers' },
+  { path: '/containers/:id', page: 'containers-detail' },
   { path: '/devices', page: 'devices' },
   { path: '/tasks', page: 'tasks' },
   { path: '/schedules', page: 'schedules' },
@@ -18,6 +21,28 @@ function currentPath() {
   return hash || '/';
 }
 
+function matchRoute(pathName) {
+  const urlParts = pathName.split('/');
+  for (const route of ROUTES) {
+    const routeParts = route.path.split('/');
+    if (routeParts.length !== urlParts.length) continue;
+    const params = {};
+    let ok = true;
+    for (let i = 0; i < routeParts.length; i += 1) {
+      if (routeParts[i].startsWith(':')) {
+        const value = urlParts[i];
+        if (!value) { ok = false; break; }
+        params[routeParts[i].slice(1)] = decodeURIComponent(value);
+      } else if (routeParts[i] !== urlParts[i]) {
+        ok = false;
+        break;
+      }
+    }
+    if (ok) return { page: route.page, params };
+  }
+  return null;
+}
+
 export function useHashRoute() {
   const [pathName, setPathName] = useState(currentPath);
   useEffect(() => {
@@ -25,8 +50,8 @@ export function useHashRoute() {
     window.addEventListener('hashchange', onChange);
     return () => window.removeEventListener('hashchange', onChange);
   }, []);
-  const match = ROUTES.find((r) => r.path === pathName);
-  return { path: match ? match.path : pathName, page: match ? match.page : 'dashboard' };
+  const match = matchRoute(pathName);
+  return { path: pathName, page: match ? match.page : 'dashboard', params: match ? match.params : {} };
 }
 
 export function navigate(path) {
