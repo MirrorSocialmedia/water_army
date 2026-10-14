@@ -78,6 +78,10 @@ export function loadConfig(env = process.env, opts = {}) {
   const taskMaxTimeoutMs = requireInt(e, 'TASK_MAX_TIMEOUT_MS', 900_000);
   const taskDefaultAttempts = requireInt(e, 'TASK_DEFAULT_ATTEMPTS', 3);
   const taskMaxConcurrency = requireInt(e, 'TASK_MAX_CONCURRENCY', 4);
+  // P3 task SSE knobs (MD §8 SSE: heartbeat + 並行 cap).
+  const taskSseMaxConcurrent = optInt(e, 'TASK_SSE_MAX_CONCURRENT', 10);
+  const taskSsePollMs = optInt(e, 'TASK_SSE_POLL_MS', 1_000);
+  const taskSseHeartbeatMs = optInt(e, 'TASK_SSE_HEARTBEAT_MS', 25_000);
 
   const databaseUrl = e.DATABASE_URL ?? '';
   if (!databaseUrl.startsWith('postgresql://')) {
@@ -121,6 +125,13 @@ export function loadConfig(env = process.env, opts = {}) {
     taskMaxTimeoutMs,
     taskDefaultAttempts,
     taskMaxConcurrency,
+    taskSseMaxConcurrent,
+    taskSsePollMs,
+    taskSseHeartbeatMs,
+    // P3 service identity: worker→API token (empty = service auth disabled).
+    serviceToken: e.WORKER_API_TOKEN ?? '',
+    // P3 provider default when POST /api/tasks/runs omits body.provider.
+    aiProvider: e.AI_PROVIDER ?? '',
     logLevel: e.LOG_LEVEL ?? (nodeEnv === 'production' ? 'info' : 'debug'),
   };
 

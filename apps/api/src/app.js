@@ -24,13 +24,16 @@ import { createDockerClient } from './plugins/docker.js';
 import { parseCookies } from './security/cookie.js';
 import { originCheck } from './security/origin.js';
 import { requireRole } from './security/rbac.js';
+import { createServiceAuthHook } from './security/service-auth.js';
 import { createRateLimiter } from './security/rate-limit.js';
 import { createAuditService } from './services/audit.js';
 import { createSessionService } from './services/session.js';
 import { createDockerService } from './services/docker-service.js';
+import { createTaskQueue, closeTaskQueue } from './plugins/task-queue.js';
 import { authRoutes } from './routes/auth.js';
 import { containerRoutes } from './routes/containers.js';
 import { templateRoutes } from './routes/templates.js';
+import { taskRoutes } from './routes/tasks.js';
 
 /** Public (unauthenticated) route prefixes — everything else may need a session. */
 const PUBLIC_PREFIXES = ['/api/health', '/api/auth/login'];
@@ -67,6 +70,7 @@ export async function buildApp(opts = {}) {
   const db = opts.db ?? (await createDb(config));
   const redis = opts.redis ?? createRedisClient(config, app.log);
   const docker = opts.docker ?? createDockerClient(config);
+  const taskQueue = opts.taskQueue ?? createTaskQueue(config, app.log);
 
   const sessions = createSessionService({ db, config });
   const audit = createAuditService({ db, log: app.log });
@@ -82,6 +86,8 @@ export async function buildApp(opts = {}) {
   app.decorate('rateLimiter', rateLimiter);
   app.decorate('requireRole', requireRole);
   app.decorate('dockerService', dockerService);
+  app.decorate('taskQueue', taskQueue);
+  app.decorate('taskSseActive', 0); // P3 SSE concurrency cap counter
 
   // --- request id ----------------------------------------------------------
   app.addHook('onRequest', async (req) => {
@@ -94,6 +100,12 @@ export async function buildApp(opts = {}) {
 
   // --- session auth ---------------------------------------------------------
   app.addHook('onRequest', async (req, reply) => {
+    // Service identity (worker→API token) wins when the header is present:
+    // the hook below sets req.user = SERVICE_USER_ID on a valid token, or 401
+    // on an invalid one. Runs AFTER the session hook on purpose so a token
+    // always produces the deterministic non-human identity.
+    if (req.headers['x-wa-service-token'] !== undefined) return;
+
     req.user = null;
     req.session = null;
     const path = publicPath(req.raw.url);
@@ -121,6 +133,9 @@ export async function buildApp(opts = {}) {
       });
     }
   });
+
+  // --- service auth (worker→API tool calls, MD §13.2) ------------------------
+  app.addHook('onRequest', createServiceAuthHook(config));
 
   // --- response headers -----------------------------------------------------
   app.addHook('onSend', async (req, reply) => {
@@ -202,11 +217,13 @@ export async function buildApp(opts = {}) {
   healthRoutes(app);
   containerRoutes(app);
   templateRoutes(app);
+  taskRoutes(app, { taskQueue });
 
   // --- lifecycle ---------------------------------------------------------------
   app.addHook('onClose', async () => {
     await closeDb(db);
     await closeRedis(redis);
+    await closeTaskQueue(taskQueue);
   });
 
   // NOTE: no app.ready() here — callers (tests) may register extra routes
