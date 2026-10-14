@@ -1,0 +1,47 @@
+/**
+ * Secret scrubbing (施工 MD §13.3) — payload_json must never carry
+ * authorization headers, API keys, tokens, passwords.
+ */
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+
+import { scrubObject } from '../../packages/shared/src/scrub.js';
+
+test('scrubObject: redacts sensitive keys at any depth, keeps shape', () => {
+  const input = {
+    message: 'hello',
+    headers: { authorization: 'Bearer sk-supersecret', 'x-api-key': 'abc' },
+    nested: { config: { apiKey: 'sk-123', timeoutMs: 5000 } },
+    list: [{ password: 'p@ss', name: 'ok' }],
+    plain_token: 'tok-123',
+    'api_key': 'k',
+  };
+  const out = scrubObject(input);
+  assert.equal(out.headers.authorization, '***redacted***');
+  assert.equal(out.headers['x-api-key'], '***redacted***');
+  assert.equal(out.nested.config.apiKey, '***redacted***');
+  assert.equal(out.nested.config.timeoutMs, 5000, 'non-sensitive survives');
+  assert.equal(out.list[0].password, '***redacted***');
+  assert.equal(out.list[0].name, 'ok');
+  assert.equal(out.plain_token, '***redacted***');
+  assert.equal(out.api_key, '***redacted***');
+  assert.equal(out.message, 'hello');
+  // input untouched
+  assert.equal(input.headers.authorization, 'Bearer sk-supersecret');
+});
+
+test('scrubObject: truncates long strings; bounded depth/nodes (no DoS via hostile payload)', () => {
+  const long = { text: 'x'.repeat(10_000) };
+  assert.ok(scrubObject(long, 100).text.length < 200);
+
+  // hostile: 100k-level nesting
+  let hostile = 'leaf';
+  for (let i = 0; i < 100_000; i += 1) hostile = { a: hostile };
+  const out = scrubObject(hostile);
+  assert.ok(out, 'returns without hanging');
+
+  // arrays + scalars
+  assert.deepEqual(scrubObject([1, 'two', { secretKey: 's' }]), [1, 'two', { secretKey: '***redacted***' }]);
+  assert.equal(scrubObject(null), null);
+  assert.equal(scrubObject(42), 42);
+});

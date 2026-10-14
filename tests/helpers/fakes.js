@@ -30,6 +30,37 @@ export function makeFakeDb({ users = [] } = {}) {
   const auditRows = [];
   let sessionSeq = 0;
 
+  // ---- P3 models (in-memory, Prisma-shaped) --------------------------------
+  const runRows = new Map(); // by id
+  const eventRows = []; // append-only (createdAt ordered by push order)
+  const approvalRows = new Map(); // by id
+  const providerRows = new Map(); // by id
+  let runSeq = 0;
+  let eventSeq = 0;
+  let approvalSeq = 0;
+  let providerSeq = 0;
+  let eventClock = 0; // monotonic-ish ms clock so (createdAt, seq) ordering is deterministic
+
+  const now = () => new Date();
+
+  function matchRunWhere(where = {}) {
+    return [...runRows.values()].filter((r) => {
+      if (where.id && r.id !== where.id) return false;
+      if (where.idempotencyKey !== undefined && r.idempotencyKey !== where.idempotencyKey) return false;
+      if (where.status !== undefined) {
+        let statusOk = false;
+        if (Array.isArray(where.status)) statusOk = where.status.includes(r.status);
+        else if (where.status.in) statusOk = where.status.in.includes(r.status);
+        else statusOk = where.status === r.status;
+        if (!statusOk) return false;
+      }
+      if (where.updatedAt) {
+        if (where.updatedAt.lt && !(new Date(r.updatedAt) < new Date(where.updatedAt.lt))) return false;
+      }
+      return true;
+    });
+  }
+
   const db = {
     user: {
       findUnique: async ({ where }) =>
@@ -113,9 +144,174 @@ export function makeFakeDb({ users = [] } = {}) {
     },
     // health/ready probe
     $queryRaw: async () => [{}],
+    // ---- P3: task_run ----------------------------------------------------
+    taskRun: {
+      findUnique: async ({ where }) => {
+        if (where.id) return runRows.get(where.id) ?? null;
+        if (where.idempotencyKey) return [...runRows.values()].find((r) => r.idempotencyKey === where.idempotencyKey) ?? null;
+        return null;
+      },
+      findMany: async ({ where, orderBy, skip, take } = {}) => {
+        let rows = matchRunWhere(where);
+        if (orderBy) {
+          const [[k, dir]] = orderBy;
+          rows = [...rows].sort((a, b) => {
+            const av = a[k]; const bv = b[k];
+            const cmp = av < bv ? -1 : av > bv ? 1 : 0;
+            return dir === 'desc' ? -cmp : cmp;
+          });
+        }
+        if (skip) rows = rows.slice(skip);
+        if (take !== undefined) rows = rows.slice(0, take);
+        return rows.map((r) => ({ ...r }));
+      },
+      count: async ({ where } = {}) => matchRunWhere(where).length,
+      create: async ({ data }) => {
+        runSeq += 1;
+        const ts = now();
+        const row = {
+          id: data.id ?? `run${runSeq}`,
+          taskDefinitionId: data.taskDefinitionId ?? null,
+          scheduleId: data.scheduleId ?? null,
+          status: data.status ?? 'queued',
+          inputJson: data.inputJson ?? null,
+          resultJson: data.resultJson ?? null,
+          resultText: data.resultText ?? null,
+          errorCode: data.errorCode ?? null,
+          errorMessage: data.errorMessage ?? null,
+          attempt: data.attempt ?? 1,
+          queuedAt: data.queuedAt ?? null,
+          startedAt: data.startedAt ?? null,
+          finishedAt: data.finishedAt ?? null,
+          durationMs: data.durationMs ?? null,
+          requestedBy: data.requestedBy ?? null,
+          idempotencyKey: data.idempotencyKey ?? null,
+          createdAt: ts,
+          updatedAt: ts,
+        };
+        runRows.set(row.id, row);
+        return { ...row };
+      },
+      update: async ({ where, data }) => {
+        const row = runRows.get(where.id);
+        if (!row) throw Object.assign(new Error('run not found'), { code: 'P2025' });
+        // Honour an explicit updatedAt (tests age rows); otherwise bump like Prisma @updatedAt.
+        const { updatedAt: explicit, ...rest } = data;
+        Object.assign(row, rest, { updatedAt: explicit ?? now() });
+        runRows.set(row.id, row);
+        return { ...row };
+      },
+    },
+    // ---- P3: task_run_events ---------------------------------------------
+    taskRunEvent: {
+      create: async ({ data }) => {
+        eventSeq += 1;
+        eventClock += 1;
+        const row = {
+          id: data.id ?? `evt${eventSeq}`,
+          taskRunId: data.taskRunId,
+          eventType: data.eventType,
+          message: data.message ?? null,
+          payloadJson: data.payloadJson ?? null,
+          createdAt: new Date(Date.now() + eventClock), // strictly increasing
+          _seq: eventSeq,
+        };
+        eventRows.push(row);
+        return { ...row };
+      },
+      findMany: async ({ where = {}, orderBy } = {}) => {
+        let rows = eventRows.filter((e) => {
+          if (where.taskRunId && e.taskRunId !== where.taskRunId) return false;
+          // SSE cursor: OR [createdAt > c, createdAt = c AND id > cid] (ISO strings compare correctly)
+          if (where.OR) {
+            const [gt, eq] = where.OR;
+            const a = gt?.createdAt?.gt !== undefined ? e.createdAt > new Date(gt.createdAt.gt) : false;
+            const b = eq?.createdAt !== undefined && eq?.id?.gt !== undefined
+              ? e.createdAt.getTime() === new Date(eq.createdAt).getTime() && e.id > eq.id.gt
+              : false;
+            if (!(a || b)) return false;
+          }
+          return true;
+        });
+        if (orderBy) {
+          const [[k, dir]] = orderBy;
+          rows = [...rows].sort((a, b) => (a[k] < b[k] ? -1 : a[k] > b[k] ? 1 : 0) * (dir === 'desc' ? -1 : 1));
+        }
+        return rows.map(({ _seq, ...rest }) => rest);
+      },
+    },
+    // ---- P3: approval_requests -------------------------------------------
+    approvalRequest: {
+      findUnique: async ({ where }) => approvalRows.get(where.id) ?? null,
+      findMany: async ({ where = {} } = {}) =>
+        [...approvalRows.values()].filter((a) => {
+          if (where.status && a.status !== where.status) return false;
+          if (where.taskRunId && a.taskRunId !== where.taskRunId) return false;
+          return true;
+        }),
+      create: async ({ data }) => {
+        approvalSeq += 1;
+        const row = {
+          id: data.id ?? `appr${approvalSeq}`,
+          taskRunId: data.taskRunId,
+          toolName: data.toolName,
+          argumentsJson: data.argumentsJson ?? null,
+          status: data.status ?? 'pending',
+          requestedAt: now(),
+          reviewedBy: data.reviewedBy ?? null,
+          reviewedAt: data.reviewedAt ?? null,
+          reviewNote: data.reviewNote ?? null,
+        };
+        approvalRows.set(row.id, row);
+        return { ...row };
+      },
+      update: async ({ where, data }) => {
+        const row = approvalRows.get(where.id);
+        if (!row) throw Object.assign(new Error('approval not found'), { code: 'P2025' });
+        Object.assign(row, data);
+        return { ...row };
+      },
+    },
+    // ---- P3: provider_configs ---------------------------------------------
+    providerConfig: {
+      findUnique: async ({ where }) => {
+        if (where.id) return providerRows.get(where.id) ?? null;
+        if (where.name) return [...providerRows.values()].find((p) => p.name === where.name) ?? null;
+        return null;
+      },
+      findMany: async () => [...providerRows.values()].map((p) => ({ ...p })),
+      create: async ({ data }) => {
+        providerSeq += 1;
+        const ts = now();
+        const row = {
+          id: data.id ?? `prov${providerSeq}`,
+          name: data.name,
+          providerType: data.providerType,
+          baseUrl: data.baseUrl,
+          modelId: data.modelId ?? null,
+          encryptedApiKey: data.encryptedApiKey ?? null,
+          timeoutMs: data.timeoutMs ?? 120000,
+          isEnabled: data.isEnabled ?? true,
+          capabilitiesJson: data.capabilitiesJson ?? null,
+          createdAt: ts,
+          updatedAt: ts,
+        };
+        providerRows.set(row.id, row);
+        return { ...row };
+      },
+      update: async ({ where, data }) => {
+        const row = providerRows.get(where.id);
+        if (!row) throw Object.assign(new Error('provider not found'), { code: 'P2025' });
+        Object.assign(row, data, { updatedAt: now() });
+        return { ...row };
+      },
+    },
     // teardown seam
     $disconnect: async () => {},
-    __state: { userRows, userById, sessionRows, settingRows, auditRows },
+    __state: {
+      userRows, userById, sessionRows, settingRows, auditRows,
+      runRows, eventRows, approvalRows, providerRows,
+    },
   };
   return db;
 }
@@ -125,6 +321,50 @@ export const fakeRedisOk = () => ({
   on: () => {},
   quit: async () => {},
 });
+
+/**
+ * Fake BullMQ Queue — records enqueue/remove calls so hermetic tests can
+ * assert on queue traffic without Redis. add() mimics BullMQ's JobExistsError
+ * on duplicate jobId (idempotent enqueue relies on this).
+ */
+export function makeFakeQueue() {
+  const enqueued = [];
+  const removed = [];
+  const jobs = new Map(); // id -> {id, name, data, state}
+  return {
+    enqueued,
+    removed,
+    jobs,
+    async add(name, data, opts = {}) {
+      const id = opts.jobId ?? `job${enqueued.length + 1}`;
+      if (jobs.has(id)) {
+        const err = new Error(`Job with id '${id}' already exists`);
+        err.name = 'JobExistsError';
+        throw err;
+      }
+      const job = { id, name, data, state: 'waiting', opts };
+      jobs.set(id, job);
+      enqueued.push({ id, name, data });
+      return { id };
+    },
+    async getJob(id) {
+      const j = jobs.get(id);
+      return j ? { id: j.id, name: j.name, data: j.data, state: j.state, async remove() { return this.__fakeRemove(); }, __fakeRemove() { const jj = jobs.get(id); if (jj && (jj.state === 'waiting' || jj.state === 'delayed')) { jobs.delete(id); removed.push(id); return true; } return false; } } : null;
+    },
+    async removeJob(id) {
+      const j = jobs.get(id);
+      if (j && (j.state === 'waiting' || j.state === 'delayed')) {
+        jobs.delete(id);
+        removed.push(id);
+        return true;
+      }
+      return false;
+    },
+    __markActive(id) { const j = jobs.get(id); if (j) j.state = 'active'; },
+    async close() {},
+    on() {},
+  };
+}
 
 export const fakeRedisDown = () => ({
   ping: async () => {

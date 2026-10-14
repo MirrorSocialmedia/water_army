@@ -17,27 +17,44 @@ export const ROLE_LEVEL = Object.freeze({
   admin: 3,
 });
 
-/** Task run lifecycle (施工 MD §11.3). Centralised in TaskRunService from P3. */
-export const TASK_RUN_STATUS = Object.freeze([
-  'queued',
-  'running',
-  'needs_approval',
-  'succeeded',
-  'failed',
-  'cancel_requested',
-  'cancelled',
-  'timed_out',
-  'skipped',
-]);
+/** Task-run domain constants (施工 MD §11.3) — defined in task-constants.js (acyclic). */
+export {
+  TASK_RUN_STATUS,
+  TASK_RUN_TERMINAL,
+  TASK_RUN_TRANSITIONS,
+  TASK_EVENT,
+  TOOL_SAFETY_CLASS,
+  PROVIDER_ERROR,
+  RETRYABLE_PROVIDER_ERRORS,
+  TASK_QUEUE_NAME,
+  TASK_JOB_NAME,
+  taskJobId,
+  TASK_DEFAULTS,
+} from './task-constants.js';
 
-/** Terminal states — `finished_at` is only written for these. */
-export const TASK_RUN_TERMINAL = Object.freeze([
-  'succeeded',
-  'failed',
-  'cancelled',
-  'timed_out',
-  'skipped',
-]);
+/** Tool registry metadata + arg validation (MD §11.4/§11.5). */
+export {
+  TOOL_REGISTRY,
+  TOOL_BY_NAME,
+  P3_TOOL_NAMES,
+  findTool,
+  isToolClassEnabled,
+  validateToolArgs,
+  truncateText,
+  safeStringify,
+} from './tool-registry.js';
+
+/** TaskRunService — single owner of run state (MD §11.3). */
+export {
+  createTaskRunService,
+  TaskRunError,
+  backoffDelay,
+  providerErrorToRun,
+  describeRun,
+} from './task-run-service.js';
+
+/** Secret scrubbing for persisted payloads (MD §13.3). */
+export { scrubObject } from './scrub.js';
 
 /**
  * Canonical API error codes (施工 MD §8 error envelope).
