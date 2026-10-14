@@ -254,11 +254,17 @@ function ConfigTab({ info }) {
             <thead><tr><th>Name</th><th>Value</th></tr></thead>
             <tbody>
               {env.map((e) => {
-                const i = e.indexOf('=');
+                // API shape: { key, sensitive, value } — sensitive values are
+                // masked server-side and never reach the browser.
+                const key = typeof e === 'string' ? e.split('=')[0] : e.key;
+                const value = typeof e === 'string' ? (e.split('=').slice(1).join('=') || '(no value)') : e.value;
+                const sensitive = typeof e === 'string' ? false : Boolean(e.sensitive);
                 return (
-                  <tr key={e.slice(0, i === -1 ? undefined : i)}>
-                    <td className="mono">{i === -1 ? e : e.slice(0, i)}</td>
-                    <td className="mono">{i === -1 ? '(no value)' : e.slice(i + 1)}</td>
+                  <tr key={key}>
+                    <td className="mono">{key}</td>
+                    <td className={sensitive ? 'mono masked' : 'mono'} title={sensitive ? 'Masked server-side — plaintext never leaves the API' : undefined}>
+                      {sensitive ? <span className="pill pill-disabled">masked</span> : null} {value}
+                    </td>
                   </tr>
                 );
               })}

@@ -242,4 +242,63 @@ latest                   | updated 2025-06-29
 - ~~Prisma 8 stable 時點（V6）~~ → P1 重查：仍 RC，留 7.10.0（§8.1）。
 - ~~zod vs ajv（provider 回應/tool args）~~ → P1 決定：**ajv**（Fastify 內建，零新依賴）；P3 provider 回應/tool args 驗證用 ajv 直接 instantiate，唔引 zod。
 - Redis persistence 配置 → **AOF**（`redis-server --appendonly yes`，BullMQ 官方建議）— compose 已落。
-- SSE 並行上限 → 留 P2/P3 壓測（唔變）。
+- SSE 並行上限 → **P2 決定：50**（`SSE_MAX_CONCURRENT`，可 env 調；超 = 503 SSE_LIMIT，斷線/release 即時還 slot；單 owner 背景 pump 模式無洩漏風險 — 見 §10.5）。
+
+---
+
+## 10. P2 回寫（2026-10-14，真 daemon live 實測產生 — 全部實測可重現）
+
+### 10.1 dockerode 5.0.1 `createContainer` 回傳形（v3/v4 文檔全部失真）
+
+實測（host node + `sg docker`，docker 29.x daemon）：`createContainer(config)` 回傳 **`Container` 實例**（小寫 `.id`、`.name`），**唔係** 文檔常見嘅 `{Id, Warnings}` body。service 取 id 一律 `created.id` + 防呆（無有效 id → 當 create 失敗、冪等記錄清理）；fake adapter 已對齊同形（`createContainer` 回 `getContainer(id)`）。
+
+### 10.2 容器 Name 只收 query param（body `Name` 被 daemon 忽略 — 重大 live finding）
+
+- 實測鏈（curl 直接入 socket，控制實驗）：
+  - body `{"Name":"x"}`（純 URL）→ daemon 隨機名 `/serene_beaver`（**body Name 被忽略**）
+  - `?name=x`（**小寫**）→ daemon 尊重名 `p2-name-probe5` ✓
+  - `?Name=x`（大寫 N）→ 被忽略（Go `r.Form.Get("name")` case-sensitive）
+- docker-modem 陷阱：`buildQuerystring(opts._query || opts)` — 唔傳 `_query` 時會把**成個 config**（Env 陣列、HostConfig 物件）都 stringify 入 query string（body 亦有一樣）— 功能上 daemon 只讀 query，但 query 噪音大且 `Name`（大寫）唔生效。
+- **本系統規則**：create 一律 `c.createContainer({ _query: { name }, _body: configWithoutName })`。`_query` → 乾淨 querystring；`_body` → 乾淨 JSON body。daemon 行為對齊 Docker Engine API 文檔（name = query param；ContainerConfig body 無 Name 欄）。
+
+### 10.3 daemon remove 語義（DELETE 設計依據）
+
+- 運行中容器 `remove` 無 `force` → **409**（`container is running: stop the container before removing or force remove`）— 實測。UI/腳本正路 = 先 stop 再 delete；`force=true` 係例外路（API 支持，兩步確認照做）。
+- `removeVolumes=false`（默认）：daemon 只删容器，**bind mount 源文件/anonymous volume 保留**；`force` 對 exited 容器無副作用差異。審計記錄 `removeVolumes/bindsPreserved/byException`。
+
+### 10.4 敏感 env mask：過保守係安全方向（live finding）
+
+- Live api 容器 env 實查：`SESSION_SECRET` 舊正則命中，但 **`APP_ENCRYPTION_KEY` 同 `DATABASE_URL` 漏網** — `DATABASE_URL` 內嵌 `postgresql://user:pass@host` = DB 密碼直接洩。
+- 修：`SENSITIVE_ENV_KEY` 加 `key|url|dsn|uri|connection_?string` 分段 — 副作用係 `APP_PUBLIC_URL` 都會 mask（**接受嘅過保守**：過 mask 無害，漏 mask 洩密）。
+- 測試固化：`tests/unit/docker-service-core.test.js` 「live-daemon finding」subtest 用真 env 集驗證。
+
+### 10.5 SSE 架構決定（undici 實測陷阱 → 單 owner 背景 pump）
+
+- **陷阱（probe 實證）**：undici `fetch` 嘅 body `reader.read()` 若俾 `Promise.race` timeout 搶走（abandoned pending read）→ **stream 永久停擺**（之後任何 read 永遠冇 chunk）。故 SSE 測試/消費者一律：單一背景 pump 專有 reader；斷言/業務邏輯用共享 buffer + wakeup set 等待；release 冪等；route teardown 雙掛（req close + res close/finish）。
+- **`app.inject` 唔能測 hijacked SSE route**（light-my-request 永久 hang）→ SSE 集成測試全部真 HTTP（`app.listen({port:0})` + `fetch` + `AbortController`）。
+- 事件白名單（`start/stop/kill/die/pause/unpause/restart/rename/create/delete/update`）喺 service 層過濾（image/exec_create 等唔落 stream）；斷線偵測 = 寫失敗 / req close 雙重。
+
+### 10.6 其他實測收錄
+
+- **Node 22 `node --test`**：async 父 test 內嘅 `t.test()` 必須 `await`，否則父 finish 後 subtests 被 cancel（計入 cancelled）；`node --test <dir>` 唔得（目錄當 module path）→ npm script 用 shell glob。
+- **Fastify 重用 route sub-schema**：`querystring: X` 要求 X 係 inner JSON Schema（唔可以再包層）；`coerceTypes:false` 時 query 一律 string，service 自己 parse int/bool。
+- **daemon 404 判定**：只有「確定 404」（`statusCode===404` 或 no-such-container 訊息 + statusCode）先係 `CONTAINER_NOT_FOUND`；純 message 字樣唔夠（防 daemon-down 時嘅 5xx 被誤分 404）。
+- **冪等 op 語義（§9.3 live 驗證）**：start on running → 200 `idempotent:true`；stop on exited → 同；pause on running 外狀態 → 409。audit details 記錄 `from/to/idempotent`。
+- **displayName 驗證**：allow 內部空白（trim 後 1–60、唔准首尾空白）— live 實測發現 `/^\S{1,60}$/` 誤拒正常顯示名。
+
+---
+
+## 11. P2 live 實測摘要（2026-10-14，docker 29.x + compose stack）
+
+完整證據：`/home/kenneth/.openclaw/workspace/logs/waterarmy-p2-progress.md` §C6。
+
+- `GET /health/ready` → 200（postgres/redis/docker 全 up）
+- login/me → 200；container list（8 實容器 = daemon `docker ps -a` 逐名對上）；inspect/logs/stats 真數據
+- NOT_MANAGED gate：對 `water-army-api-1` stop → 403 `NOT_MANAGED`（audit 落 failure 行）；假 64-hex id → 404 `CONTAINER_NOT_FOUND`
+- 模板：upsert 200 → create **201**（name 正確、四 labels 齊、mem=64MiB/cpu=0.5 落 daemon 實查）→ 同 key 回放 **201 + `idempotent-replay: true`**（唔建第二個）
+- env mask live：`APP_TOKEN` → `••• (22 chars)`；api 容器 5 個敏感 key（SESSION_SECRET/APP_ENCRYPTION_KEY/DATABASE_URL/REDIS_URL/APP_PUBLIC_URL）全部 masked，PATH 等明文
+- SSE live：`event: container` frame 實收（create/kill/stop/start，filter 生效）
+- DELETE 兩步：錯 confirm → 400；stop → delete 200（`bindsPreserved` 記錄）；後 inspect → 404；audit 13 行全齊（create/ops/delete success+failure，details 只 envKeys 無 env 值）
+- Web UI headless（chromium-1217）：登入 → list 頁 8 行實數據 + live CPU/mem、detail 4 tabs、SSE pill = LIVE、config tab 5 masked pills、0 意外 console error（1 個預期中嘅 pre-login 401）
+
+**Dev admin 密碼已重置**：`P2LiveAdmin!2026x`（原密碼喺舊 log 已 mask 唔回；正式部署必改）。

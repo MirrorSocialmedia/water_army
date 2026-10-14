@@ -177,7 +177,9 @@ export function makeFakeDockerClient({ mode = 'ok', containers = [], networks = 
     getContainer(idOrName) {
       guard();
       // resolveId deferred to call-time (async parity with real client)
+      // `.id` mirrors the real dockerode Container instance property.
       return {
+        id: idOrName,
         async inspect() {
           record('inspect', idOrName);
           const rec = resolveId(idOrName);
@@ -302,7 +304,10 @@ export function makeFakeDockerClient({ mode = 'ok', containers = [], networks = 
     async createContainer(config) {
       guard();
       record('createContainer', null, config);
-      const name = String(config?.Name ?? '').replace(/^\//, '');
+      // Accept both call shapes: service uses {_query:{name}, _body:{...}}
+      // (daemon reads ?name= — body Name is ignored); legacy {Name} tolerated.
+      const body = config?._body ?? config ?? {};
+      const name = String(config?._query?.name ?? body.Name ?? '').replace(/^\//, '');
       if (!name) throw engineError(400, 'container name required');
       if (byName.has(name)) throw engineError(409, `Conflict. The container name "/${name}" is already in use by container`);
       const id = `created${String(++idSeq).padStart(61, '0')}`;
@@ -313,22 +318,24 @@ export function makeFakeDockerClient({ mode = 'ok', containers = [], networks = 
           State: { Status: 'created', Running: false, Paused: false, Restarting: false, Dead: false, StartedAt: '0001-01-01T00:00:00Z', FinishedAt: '0001-01-01T00:00:00Z', ExitCode: 0, RestartCount: 0, Health: null },
           Created: new Date().toISOString(),
           Image: 'sha256:fake',
-          Config: { Labels: config?.Labels ?? {}, Env: config?.Env ?? [], Cmd: config?.Cmd ?? null, Image: config?.Image ?? 'unknown' },
+          Config: { Labels: body.Labels ?? {}, Env: body.Env ?? [], Cmd: body.Cmd ?? null, Image: body.Image ?? 'unknown' },
           HostConfig: {
-            NetworkMode: config?.HostConfig?.NetworkMode ?? 'bridge',
-            Privileged: Boolean(config?.HostConfig?.Privileged),
-            NanoCpus: config?.HostConfig?.NanoCpus ?? 0,
-            Memory: config?.HostConfig?.Memory ?? 0,
-            PortBindings: config?.HostConfig?.PortBindings ?? null,
+            NetworkMode: body.HostConfig?.NetworkMode ?? 'bridge',
+            Privileged: Boolean(body.HostConfig?.Privileged),
+            NanoCpus: body.HostConfig?.NanoCpus ?? 0,
+            Memory: body.HostConfig?.Memory ?? 0,
+            PortBindings: body.HostConfig?.PortBindings ?? null,
           },
           NetworkSettings: { Ports: null },
-          Mounts: (config?.HostConfig?.Mounts ?? config?.Mounts ?? []).map((m) => ({ Type: m.Type, Source: m.Source ?? null, Destination: m.Target, RW: !m.ReadOnly })),
+          Mounts: (body.HostConfig?.Mounts ?? body.Mounts ?? []).map((m) => ({ Type: m.Type, Source: m.Source ?? null, Destination: m.Target, RW: !m.ReadOnly })),
         },
         restarts: 0,
       };
       byId.set(id, rec);
       byName.set(name, id);
-      return { Id: id, Warnings: [] };
+      // dockerode 5.x createContainer resolves with the Container instance
+      // (`.id` lowercase) — NOT the v3/v4 `{Id, Warnings}` body.
+      return client.getContainer(id);
     },
 
     /** Start a just-created container (createContainer leaves it 'created'). */

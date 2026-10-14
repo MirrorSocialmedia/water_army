@@ -130,7 +130,23 @@ Base：`http://127.0.0.1:3012/api`（web 同源性代理；API 本體唔 publish
 RBAC 角色階梯：`viewer < operator < admin`。401 = 未認證；403 = 角色不足。
 所有錯誤 = 統一 envelope：`{"error":{"code","message","requestId"}}` + `X-Request-Id` header。
 
-**P2–P5 將接**（skeleton 已喺 web 6 頁）：`/containers`、`/tasks`、`/schedules`、`/devices`、`/ai-providers`、`/settings` 等 — 見 `docs/architecture-decisions.md`。
+### P2 容器 API（已交付）
+
+| Method | Path | 說明 | Auth |
+|--------|------|------|------|
+| GET | `/containers` | list（`?withStats=true` 附逐容器 CPU/mem；`?state=`、`?managed=`、`?q=`、分頁 `page/pageSize`）。逐項 stats 失敗只嗰項 `—`，唔拖慢整頁 | viewer+ |
+| GET | `/containers/:id` | inspect 摘要（state/ports/mounts/labels/創始者 + env **server-side masked**：敏感 key 只留 `••• (N chars)`） | viewer+ |
+| GET | `/containers/:id/logs` | demux 後嘅容器 log（`?tail=` 行數上限、`?search=`） | viewer+ |
+| GET | `/containers/:id/stats` | 單次 CPU/mem 快照 | viewer+ |
+| GET | `/containers/events` | **SSE**：`container` 事件白名單（start/stop/kill/die/pause/unpause/restart/rename/create/delete/update）+ 斷線自動 release slot；並行上限（超 → 503 SSE_LIMIT） | viewer+ |
+| POST | `/containers/:id/{start,stop,restart,pause,unpause}` | 冪等狀態機（§9.3）：目標狀態已達 = 200 `idempotent:true`；op 後再 inspect 確認；卡住 → `OPERATION_PENDING` | operator+，只限 managed（例外表內除外） |
+| DELETE | `/containers/:id` | `{confirm, removeVolumes?, force?}` — `confirm` 必須逐字 repeat 容器 name/id（兩步確認）；默认保留 bind mount；`removeVolumes=true` 先删 volume | **admin**，只限 managed |
+| GET/POST | `/templates` | 模板 allowlist CRUD（image 必 pin digest/tag；port/env 白名单；`privileged` 要 reason） | 讀 viewer+；寫 admin |
+| POST | `/containers` | 由模板建容器：`{templateId, displayName, idempotencyKey, env}` — env 只准模板白名单 key（值任意）、無任意 Docker payload；冪等（同 key 回放 = 201 + `idempotent-replay: true`，唔建第二個）；container 帶 `app.managed/app.template/app.idempotency-key/app.created-by` labels | operator+ |
+
+錯誤分類（四類，見 `packages/shared` `DOCKER_ERROR`）：`CONTAINER_NOT_FOUND`(404)／`DOCKER_DAEMON_UNAVAILABLE`(503)／`DOCKER_PERMISSION_DENIED`(502)／`DOCKER_TIMEOUT`(504)／其餘 `DOCKER_ERROR`(502)。`NOT_MANAGED`(403) = managed gate；`NAME_TAKEN`/`FLOW_TOKEN_REUSED` 等 = 路由層 409/400。
+
+**P3–P5 將接**（skeleton 已喺 web）：`/tasks`、`/schedules`、`/devices`、`/ai-providers`、`/settings` 等 — 見 `docs/architecture-decisions.md`。
 
 ## 安全模型（T1 威脅）
 
@@ -175,7 +191,17 @@ P1 覆蓋（32 tests）：
 | `tests/unit/redaction.test.js` | pino redact 路徑覆蓋 + 實測 top-level/嵌套/header 脫敏 |
 | `tests/integration/health-ready.test.js` | ready 全組合（docker down=200 degraded、redis/db down=503、disabled、bounded、live 恆 200、無洩密） |
 
-測試全部 hermetic（fake db/redis/docker），`node --test`（Node 內建 runner，零 test 依賴）。
+P2 覆蓋（152 tests）：
+
+| 檔案 | 範圍 |
+|------|------|
+| `tests/unit/docker-error-classification.test.js` | 四類錯誤 + 優先級（404 先、再 permission/daemon-down/timeout）、message 唔帶 status code 唔當 404 |
+| `tests/unit/docker-service-core.test.js` | env masking（live finding：`*_URL`/`*_KEY` 過保守 mask）、log demux（8-byte header、撕裂 frame）、managed 規則、§9.3 冪等 op 協議（再 inspect 確認、OPERATION_PENDING）、dead 容器 guard、delete confirm 流 |
+| `tests/integration/docker-api.test.js` | 全 app + fakes：RBAC 矩陣、NOT_MANAGED gate、action 冪等、audit-on-daemon-down、list 分頁/過濾/withStats、錯誤 envelope 透傳 |
+| `tests/integration/docker-templates-create.test.js` | 模板 allowlist CRUD、image pin 驗證、privileged reason、create 冪等（同 key 回放）、env 白名单、任意 payload 拒絶、例外表 grant/revoke |
+| `tests/integration/docker-sse.test.js` | **真 HTTP**（`app.listen` + fetch，唔係 inject）：preamble/headers、事件白名單過濾、torn-frame 稳健、abort→release、並行上限 503、daemon-down 503 — 13 tests |
+
+總計 **184 tests**。測試全部 hermetic（fake db/redis/docker），`node --test`（Node 內建 runner，零 test 依賴）。
 
 ## 疑難排解
 
@@ -202,7 +228,7 @@ P1 覆蓋（32 tests）：
 |------|------|------|
 | P0 | Repo + docs + 版本鎖定 | ✅ |
 | **P1** | **Skeleton + Deployment（本 commit 系列）** | ✅ |
-| P2 | 容器 + 任務核心（api 掛 socket 嘅 CRUD、worker 執行） | 待開 |
+| P2 | 容器核心（DockerService 全套、API、模板 allowlist、Web UI 兩頁、SSE） | ✅（live daemon 實測過，2026-10-14） |
 | P3 | AI providers（AES-256-GCM 加密 API key、模型呼叫） | 待開 |
 | P4 | 排程（schedules → BullMQ repeatable）+ 通知 | 待開 |
 | P5 | Settings 頁面 + 用户管理 + audit 檢視 | 待開 |

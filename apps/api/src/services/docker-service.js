@@ -583,7 +583,10 @@ export function createDockerService({ docker, db, config, log = { info() {}, war
     if (!t || typeof t !== 'object') fail('template must be an object');
     const id = String(t?.id ?? '');
     if (!/^[a-z0-9][a-z0-9_-]{0,39}$/.test(id)) fail('id must be 1-40 chars, lowercase alnum/_/-, starting alnum');
-    if (!t?.displayName || !/^\S{1,60}$/.test(String(t.displayName))) fail('displayName must be 1-60 non-whitespace chars');
+    const displayName = String(t?.displayName ?? '');
+    if (!displayName.trim() || displayName.length > 60 || displayName !== displayName.trim()) {
+      fail('displayName must be 1-60 chars with no leading/trailing whitespace');
+    }
 
     const image = String(t?.image ?? '');
     if (!/^[a-z0-9][a-z0-9._/-]*(:[a-z0-9][a-z0-9._-]*)?(@sha256:[a-f0-9]{64})?$/.test(image)) {
@@ -938,7 +941,7 @@ export function createDockerService({ docker, db, config, log = { info() {}, war
     HostConfig.NetworkMode = template.network;
     if (template.privileged) HostConfig.Privileged = true;
 
-    const config = {
+    const dockerConfig = {
       Image: template.image,
       Name: name,
       Env: envEntries.map(([k, v]) => `${k}=${v}`),
@@ -952,14 +955,22 @@ export function createDockerService({ docker, db, config, log = { info() {}, war
       HostConfig,
     };
     if (template.network !== 'bridge') {
-      config.NetworkingConfig = { EndpointsConfig: { [template.network]: {} } };
+      dockerConfig.NetworkingConfig = { EndpointsConfig: { [template.network]: {} } };
     }
 
     // --- execute (idempotency window open) ---
+    // NOTE 1: dockerode 5.x `createContainer` resolves with a Container
+    //         INSTANCE (`.id` lowercase) — not the v3/v4 `{Id, Warnings}` body.
+    // NOTE 2: the Docker Engine reads the container NAME from the lowercase
+    //         query parameter (?name=...) — a body-level `Name` is IGNORED
+    //         by the daemon (verified live, docker 29.x, 2026-10-14).
+    //         docker-modem: `opts._query` → querystring, `opts._body` → JSON body.
+    const createBody = { ...dockerConfig };
+    delete createBody.Name;
     createIdempotency.set(idempotencyKey, { state: 'pending', at: now });
     let created;
     try {
-      created = await call('create', () => c.createContainer(config), name);
+      created = await call('create', () => c.createContainer({ _query: { name }, _body: createBody }), name);
     } catch (err) {
       createIdempotency.delete(idempotencyKey);
       if (err instanceof DockerServiceError) {
@@ -974,12 +985,24 @@ export function createDockerService({ docker, db, config, log = { info() {}, war
       throw err;
     }
 
+    if (!created || typeof created.id !== 'string' || created.id.length < 12) {
+      // Defensive: dockerode 5.x must resolve a Container instance with .id.
+      // Anything else = broken adapter/daemon response — never store a bad id.
+      createIdempotency.delete(idempotencyKey);
+      throw new DockerServiceError({
+        code: DOCKER_ERROR.GENERIC,
+        message: `Docker create returned no container id (got ${created === undefined ? 'undefined' : Object.keys(created)})`,
+      });
+    }
+
     // Start best-effort: creation is the contract; a failed start is
     // reported (container stays, user can start via the UI).
+    // A late failure must not leave the key stuck in 'pending' — the client
+    // may then retry honestly (name-conflict check answers 409 if needed).
     let state = 'created';
     let startError = null;
     try {
-      await call('start', () => c.getContainer(created.Id).start(), created.Id);
+      await call('start', () => c.getContainer(created.id).start(), created.id);
       state = 'running';
     } catch (err) {
       startError = { code: err.apiCode ?? 'DOCKER_ERROR', message: err.message };
@@ -987,20 +1010,20 @@ export function createDockerService({ docker, db, config, log = { info() {}, war
 
     let finalState = state;
     try {
-      const info = await c.getContainer(created.Id).inspect();
+      const info = await c.getContainer(created.id).inspect();
       finalState = info.State?.Status ?? state;
     } catch {
       /* keep best-effort state */
     }
 
-    const result = { id: created.Id, shortId: created.Id.slice(0, 12), name, templateId: template.id, state: finalState, startError };
+    const result = { id: created.id, shortId: created.id.slice(0, 12), name, templateId: template.id, state: finalState, startError };
     createIdempotency.set(idempotencyKey, { state: 'done', at: Date.now(), result });
 
     await audit({
       actorUserId: actorUserId ?? null,
       action: 'container.create',
       resourceType: 'container',
-      resourceId: created.Id,
+      resourceId: created.id,
       requestId: requestId ?? null,
       ip: ip ?? null,
       status: startError ? 'failure' : 'success',

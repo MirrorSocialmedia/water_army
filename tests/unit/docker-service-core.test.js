@@ -133,6 +133,30 @@ test('maskContainerEnv: sensitive keys masked, plain keys pass through', async (
     assert.equal(out[0].sensitive, true); // PASSWORD segment
     assert.equal(out[1].sensitive, false); // TOKENIZER has no _ segment match
   });
+
+  await t.test('live-daemon finding: connection strings + *KEY segments must be masked', () => {
+    // The real api container (docker 29.x, 2026-10-14) carried SESSION_SECRET,
+    // APP_ENCRYPTION_KEY, DATABASE_URL (embeds postgres user:pass@host) and
+    // REDIS_URL. Before the regex extension only SESSION_SECRET was masked.
+    const out = maskContainerEnv([
+      'SESSION_SECRET=32hex',
+      'APP_ENCRYPTION_KEY=32hex2',
+      'DATABASE_URL=postgresql://user:realpass@postgres:5432/db',
+      'REDIS_URL=redis://redis:6379',
+      'APP_PUBLIC_URL=https://example.com',
+      'PATH=/usr/local/sbin:/usr/local/bin',
+      'NODE_ENV=production',
+    ]);
+    const byKey = Object.fromEntries(out.map((e) => [e.key, e]));
+    for (const k of ['SESSION_SECRET', 'APP_ENCRYPTION_KEY', 'DATABASE_URL', 'REDIS_URL']) {
+      assert.equal(byKey[k].sensitive, true, `${k} must be sensitive`);
+      assert.ok(!byKey[k].value.includes('pass'), `${k} value must not survive`);
+      assert.ok(!byKey[k].value.includes('32hex'), `${k} value must not survive`);
+    }
+    assert.equal(byKey.APP_PUBLIC_URL.sensitive, true); // accepted over-mask
+    assert.equal(byKey.PATH.sensitive, false, 'PATH must stay visible');
+    assert.equal(byKey.NODE_ENV.value, 'production');
+  });
 });
 
 // ---------------------------------------------------------------- managed rules

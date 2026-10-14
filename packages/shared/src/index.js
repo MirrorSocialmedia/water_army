@@ -138,7 +138,18 @@ export const DOCKER_ERROR_STATUS = Object.freeze({
  * are masked server-side before any API response. Match on the full key or
  * on `_`-separated segments so e.g. `DB_PASSWORD` / `API_KEY` hit.
  */
-export const SENSITIVE_ENV_KEY = /(^|[_-])(password|passwd|pass|pwd|secret|token|api_?key|apikey|auth|authorization|credential|credentials|private_?key)([_-]|$)/i;
+/**
+ * Env-var keys whose VALUES are sensitive and must never be returned by the
+ * Docker API (施工 MD §10.5). Match on the full key or on `_`/`-`-separated
+ * segments so e.g. `DB_PASSWORD` / `API_KEY` / `DATABASE_URL` / 
+ * `APP_ENCRYPTION_KEY` hit.
+ *
+ * Deliberately over-approximating (live finding 2026-10-14): `*_URL` / `*_DSN`
+ * / `*_URI` connection strings embed credentials (user:pass@host) — a
+ * `DATABASE_URL` that slips through leaks the DB password. Over-masking an
+ * innocuous `APP_PUBLIC_URL` is acceptable; under-masking is not.
+ */
+export const SENSITIVE_ENV_KEY = /(^|[_-])(password|passwd|pass|pwd|secret|token|api_?key|apikey|auth|authorization|credential|credentials|private_?key|key|url|dsn|uri|connection_?string)([_-]|$)/i;
 
 /**
  * Build BullMQ `connection` options from a redis:// URL.

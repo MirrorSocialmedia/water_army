@@ -223,3 +223,5 @@ input:focus { outline: 1px solid var(--accent); }
 .confirm-card { border-color: var(--err); }
 .confirm-grid { display: grid; gap: 10px; margin: 12px 0; max-width: 560px; }
 .confirm-grid input[type='text'], .confirm-grid input:not([type]) { width: 100%; margin-top: 4px; }
+
+.masked { opacity: 0.85; }
