@@ -411,7 +411,7 @@ export function makeFakeDb({ users = [] } = {}) {
         }
         const ts = now();
         const row = {
-          id: data.id ?? `sched${scheduleSeq}`,
+          id: data.id ?? randomUUID(), // @db.Uuid in the real schema — keeps downstream uuid validation honest
           name: data.name,
           taskDefinitionId: data.taskDefinitionId,
           scheduleType: data.scheduleType,
@@ -522,6 +522,23 @@ export function makeFakeQueue() {
     err.code = 'ECONNREFUSED';
     return err;
   };
+  // A job reference with the subset of the real BullMQ Job API the code uses.
+  const wrapJob = (j) => ({
+    id: j.id,
+    name: j.name,
+    data: j.data,
+    state: j.state,
+    opts: j.opts,
+    async remove() {
+      const jj = jobs.get(j.id);
+      if (jj && (jj.state === 'waiting' || jj.state === 'delayed')) {
+        jobs.delete(j.id);
+        removed.push(j.id);
+        return true;
+      }
+      return false;
+    },
+  });
   return {
     enqueued,
     removed,
@@ -541,14 +558,19 @@ export function makeFakeQueue() {
         err.name = 'JobExistsError';
         throw err;
       }
-      const job = { id, name, data, state: 'waiting', opts };
+      const job = { id, name, data, state: opts.delay > 0 ? 'delayed' : 'waiting', opts };
       jobs.set(id, job);
       enqueued.push({ id, name, data });
       return { id };
     },
     async getJob(id) {
       const j = jobs.get(id);
-      return j ? { id: j.id, name: j.name, data: j.data, state: j.state, async remove() { return this.__fakeRemove(); }, __fakeRemove() { const jj = jobs.get(id); if (jj && (jj.state === 'waiting' || jj.state === 'delayed')) { jobs.delete(id); removed.push(id); return true; } return false; } } : null;
+      return j ? wrapJob(j) : null;
+    },
+    // Real BullMQ Queue.getJobs(states) — the reconciler's orphan sweep uses
+    // ['delayed'] to find stranded once-fire jobs.
+    async getJobs(states = ['waiting', 'delayed']) {
+      return [...jobs.values()].filter((j) => states.includes(j.state)).map(wrapJob);
     },
     async removeJob(id) {
       const j = jobs.get(id);
@@ -572,8 +594,8 @@ export function makeFakeQueue() {
         every: every ?? null,
         tz: repeatOpts.tz ?? null,
         limit: repeatOpts.limit ?? null,
-        data: template.data ?? {},
-        opts: template.opts ?? {},
+        // Real BullMQ getJobSchedulers() shape (template holds name/data/opts).
+        template: { name: template.name ?? key, data: template.data ?? {}, opts: template.opts ?? {} },
       });
     },
     async getJobSchedulers() {

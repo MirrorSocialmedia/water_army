@@ -5,7 +5,7 @@
  * are the execution index (MD §12.1). These constants keep the vocabulary in
  * one place for api + worker + tests.
  */
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 
 /** Schedule kinds (MD §1.4: 一次性 / 固定間隔 / cron). */
 export const SCHEDULE_TYPE = Object.freeze({
@@ -106,3 +106,42 @@ export const SCHEDULE_FIRE_JOB_TIMEOUT_MS = 30_000;
 /** Fire-job transport history bounds (DB holds the real history). */
 export const SCHEDULE_FIRE_REMOVE_ON_COMPLETE = { age: 86_400 };
 export const SCHEDULE_FIRE_REMOVE_ON_FAIL = { age: 7 * 86_400 };
+
+/**
+ * A fire whose scheduled slot is more than this far BEHIND the DB's current
+ * next_run_at is a stale redelivery of an already-consumed slot (crash/refire
+ * race). Such a fire is dropped (idempotency would have replayed it anyway,
+ * but a slot that has already ADVANCED past is a genuine no-op).
+ * Generous on purpose: legitimate cron/interval fires land within ms of the
+ * slot; only pathologically lagging workers exceed this, and even then the
+ * idempotency key keeps the run unique.
+ */
+export const SCHED_STALE_SLOT_TOLERANCE_MS = 60_000;
+
+/**
+ * Stable fingerprint of a schedule's execution parameters. The fire job
+ * carries the hash that was current when the BullMQ index entry was written;
+ * the fire handler recomputes it from the live DB row on fire. A mismatch means
+ * the schedule was modified (cron/interval/tz/overlap changed) but an OLD
+ * scheduler entry is still firing — a stale index the reconciler has not yet
+ * swept. The handler drops the fire + self-removes the stale entry instead of
+ * executing with the wrong cadence.
+ */
+export function schedulingHash(row) {
+  const basis = [
+    row.scheduleType ?? '',
+    row.cronExpression ?? '',
+    String(row.intervalMs ?? ''),
+    row.timezone ?? '',
+    row.overlapPolicy ?? '',
+  ].join('|');
+  return createHash('sha256').update(basis).digest('hex').slice(0, 16);
+}
+
+/** Fire-job payload (secret-free): identity + the generation hash. */
+export function fireJobData(row) {
+  return {
+    scheduleId: row.id,
+    schedHash: schedulingHash(row),
+  };
+}

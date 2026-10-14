@@ -25,10 +25,11 @@ import { pathToFileURL } from 'node:url';
 import { Worker as BullMQWorker } from 'bullmq';
 import Redis from 'ioredis';
 import pino from 'pino';
-import { PINO_REDACT_PATHS, buildRedisConnection, createTaskRunService, TASK_QUEUE_NAME } from '@water-army/shared';
+import { PINO_REDACT_PATHS, buildRedisConnection, createTaskRunService, TASK_QUEUE_NAME, createTaskQueue, enqueueTaskRun, closeTaskQueue, SCHEDULE_FIRE_JOB_NAME } from '@water-army/shared';
 
 import { loadWorkerConfig } from './config.js';
 import { createSchedulerReconciler } from './scheduler-reconciler.js';
+import { createScheduleFireHandler } from './schedule-fire-handler.js';
 import { createDb, closeDb } from './db.js';
 import { resolveProviderForRun } from './provider-resolver.js';
 import { createApiClient, createToolHandlers } from './tool-helpers.js';
@@ -230,12 +231,21 @@ export function createWorkerApp({
   const healthRedis = createHealthRedis(config, { Redis: RedisCtor });
   const queueState = createQueueState();
 
+  // P4: the worker is ALSO a producer — schedule fires enqueue task-run jobs
+  // through this queue (same queue, same job name; idempotent job ids make
+  // it safe). Same iron rules as the API's producer (buildRedisConnection +
+  // error listener, both enforced inside createTaskQueue).
+  const producerQueue = createTaskQueue(config, log);
+
   // Mutable holders: in the real main run the DB (and therefore the
   // TaskRunService + engine that need it) only exists after start(). Tests
   // inject db/engine/taskSvc directly and the holders are filled at wiring.
   const dbRef = { client: injectedDb ?? null };
   const svcRef = { impl: injectedSvc ?? null };
   const engineRef = { impl: injectedEngine ?? null };
+  // P4: built in start() once the DB exists (tests can read them off the app).
+  const reconcilerRef = { impl: null };
+  const fireHandlerRef = { impl: null };
 
   const buildRealServices = () => {
     if (!svcRef.impl) {
@@ -246,6 +256,20 @@ export function createWorkerApp({
           taskMaxTimeoutMs: config.taskMaxTimeoutMs,
           taskDefaultAttempts: config.taskDefaultAttempts,
         },
+        log,
+        // P4: schedule fire → createRun must reach the queue (the worker is
+        // the producer for schedule-originated runs).
+        enqueue: async ({ runId, attempt }) => {
+          const run = await dbRef.client.taskRun.findUnique({ where: { id: runId } });
+          await enqueueTaskRun(producerQueue, { runId, attempt, timeoutMs: run?.inputJson?.timeoutMs });
+        },
+      });
+    }
+    if (!fireHandlerRef.impl) {
+      fireHandlerRef.impl = createScheduleFireHandler({
+        db: dbRef.client,
+        taskSvc: svcRef.impl,
+        queue: producerQueue,
         log,
       });
     }
@@ -272,6 +296,15 @@ export function createWorkerApp({
   if (dbRef.client && !injectedEngine) buildRealServices();
 
   const processor = async (job) => {
+    // P4: schedule fire jobs share the queue — dispatch by name (fire jobs
+    // carry {scheduleId, ...}, never a runId).
+    if (job?.name === SCHEDULE_FIRE_JOB_NAME) {
+      if (!fireHandlerRef.impl) {
+        log.error?.({ jobId: job?.id }, 'worker: fire job received but fire handler not built — failing loudly');
+        throw new Error('worker: fire handler not ready');
+      }
+      return fireHandlerRef.impl.handleFireJob(job);
+    }
     const engineImpl = engineRef.impl;
     if (!engineImpl) {
       log.error({ jobId: job?.id }, 'worker: job received but engine not built yet — failing loudly');
@@ -304,7 +337,6 @@ export function createWorkerApp({
   };
 
   const worker = createBullMqWorker(config, { Worker, processor, queueState });
-  const reconciler = createSchedulerReconciler({ log });
   const healthServer = createHealthServer(
     healthRedis,
     () => queueState,
@@ -336,9 +368,14 @@ export function createWorkerApp({
     const reconciled = await svcRef.impl.reconcileStaleRuns({ staleMs: 10 * 60_000 });
     log.info({ reconciled }, 'boot reconciliation complete');
 
-    // P1: one placeholder pass at boot; P4 schedules this on an interval.
-    const result = await reconciler.reconcile();
-    log.info({ result }, 'scheduler reconciliation pass complete');
+    // P4 (MD §12.1): scheduler reconcile — boot pass + background cadence.
+    // DB is the source of truth; this pass converges the BullMQ index onto it
+    // (zero duplicates by same-key upsert; orphans swept).
+    if (!reconcilerRef.impl) {
+      reconcilerRef.impl = createSchedulerReconciler({ db: dbRef.client, queue: producerQueue, log });
+    }
+    reconcilerRef.impl.start({ intervalMs: config.scheduleReconcileIntervalMs });
+    log.info({ intervalMs: config.scheduleReconcileIntervalMs }, 'scheduler reconciler started (boot pass + background)');
   };
 
   let shuttingDown = false;
@@ -347,7 +384,13 @@ export function createWorkerApp({
     shuttingDown = true;
     log.info({ signal }, 'worker shutting down');
     try {
+      reconcilerRef.impl?.stop();
+    } catch { /* best effort */ }
+    try {
       await worker.close();
+    } catch { /* best effort */ }
+    try {
+      await closeTaskQueue(producerQueue);
     } catch { /* best effort */ }
     try {
       await healthRedis.quit();
@@ -357,7 +400,11 @@ export function createWorkerApp({
     process.exit(0);
   };
 
-  return { start, shutdown, healthServer, worker, reconciler, healthRedis, queueState, dbRef, engineRef, svcRef };
+  return {
+    start, shutdown, healthServer, worker, healthRedis, queueState, dbRef, engineRef, svcRef,
+    // P4 (test inspection): producer + reconciler + fire handler.
+    producerQueue, reconcilerRef, fireHandlerRef,
+  };
 }
 
 const isMain = Boolean(process.argv[1]) && import.meta.url === pathToFileURL(process.argv[1]).href;

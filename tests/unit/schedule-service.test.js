@@ -82,7 +82,7 @@ test('create cron: PG row + upsert with pattern+tz, next_run_at in schedule time
   assert.ok(entry, 'scheduler upserted with stable sched-<id> key');
   assert.equal(entry.pattern, '0 9 * * *');
   assert.equal(entry.tz, 'Asia/Taipei');
-  assert.equal(entry.data.scheduleId, schedule.id);
+  assert.equal(entry.template.data.scheduleId, schedule.id);
   assert.equal(entry.name, SCHEDULE_FIRE_JOB_NAME);
 
   // next_run_at must be 09:00 in Asia/Taipei (= 01:00 UTC) of the next day it applies.

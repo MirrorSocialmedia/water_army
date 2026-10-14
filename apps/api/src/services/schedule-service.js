@@ -25,6 +25,7 @@ import {
   SCHEDULE_FIRE_REMOVE_ON_FAIL,
   schedulerIdFor,
   onceFireJobId,
+  fireJobData,
   runNowKey,
   validateCronExpression,
   isIanaTimezone,
@@ -136,9 +137,9 @@ export function createScheduleService({ db, queue, config = {}, log = console, t
     return { every: row.intervalMs };
   }
 
-  const fireJobTemplate = (scheduleId) => ({
+  const fireJobTemplate = (row) => ({
     name: SCHEDULE_FIRE_JOB_NAME,
-    data: { scheduleId },
+    data: fireJobData(row),
     opts: {
       attempts: 1,
       timeout: SCHEDULE_FIRE_JOB_TIMEOUT_MS,
@@ -158,7 +159,7 @@ export function createScheduleService({ db, queue, config = {}, log = console, t
       const delay = Math.max(0, slotMs - Date.now());
       await queue.add(
         SCHEDULE_FIRE_JOB_NAME,
-        { scheduleId: row.id, scheduledAt: new Date(slotMs).toISOString(), once: true },
+        { ...fireJobData(row), scheduledAt: new Date(slotMs).toISOString(), once: true },
         {
           jobId: onceFireJobId(row.id, slotMs),
           delay,
@@ -170,7 +171,7 @@ export function createScheduleService({ db, queue, config = {}, log = console, t
       );
       return;
     }
-    await queue.upsertJobScheduler(schedulerIdFor(row.id), repeatOptsFor(row), fireJobTemplate(row.id));
+    await queue.upsertJobScheduler(schedulerIdFor(row.id), repeatOptsFor(row), fireJobTemplate(row));
   }
 
   /**

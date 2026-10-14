@@ -20,6 +20,8 @@ export function loadWorkerConfig(env = process.env) {
     /** Poll cadence for cancel + approval (job-internal). */
     cancelPollMs: Number(env.TASK_CANCEL_POLL_MS ?? 1_000),
     approvalPollMs: Number(env.TASK_APPROVAL_POLL_MS ?? 1_000),
+    /** P4: background scheduler reconcile cadence (boot pass is immediate). */
+    scheduleReconcileIntervalMs: Number(env.SCHEDULE_RECONCILE_INTERVAL_MS ?? 300_000),
   };
   if (!Number.isFinite(config.healthPort) || config.healthPort <= 0) {
     throw new Error(`invalid WORKER_HEALTH_PORT: ${env.WORKER_HEALTH_PORT}`);
@@ -35,6 +37,9 @@ export function loadWorkerConfig(env = process.env) {
   }
   if (!Number.isFinite(config.taskDefaultAttempts) || config.taskDefaultAttempts < 1) {
     throw new Error(`invalid TASK_DEFAULT_ATTEMPTS: ${env.TASK_DEFAULT_ATTEMPTS}`);
+  }
+  if (!Number.isFinite(config.scheduleReconcileIntervalMs) || config.scheduleReconcileIntervalMs < 1_000) {
+    throw new Error(`invalid SCHEDULE_RECONCILE_INTERVAL_MS: ${env.SCHEDULE_RECONCILE_INTERVAL_MS}`);
   }
   return config;
 }

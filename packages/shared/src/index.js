@@ -1,7 +1,11 @@
 /**
  * @water-army/shared — constants and contracts shared by api/worker/web.
- * Zero dependencies. JavaScript ESM only.
+ * Runtime deps: cron-parser (schedule math) + bullmq (queue producer utils) —
+ * both hoisted from the app workspaces. JavaScript ESM only.
  */
+
+import { buildRedisConnection } from './redis-connection.js';
+export { buildRedisConnection };
 
 /** RBAC roles (施工 MD §13.2). Ordered low → high. */
 export const ROLES = Object.freeze({
@@ -50,7 +54,18 @@ export {
   SCHEDULE_FIRE_JOB_TIMEOUT_MS,
   SCHEDULE_FIRE_REMOVE_ON_COMPLETE,
   SCHEDULE_FIRE_REMOVE_ON_FAIL,
+  SCHED_STALE_SLOT_TOLERANCE_MS,
+  schedulingHash,
+  fireJobData,
 } from './schedule-constants.js';
+
+/** Task queue producer utilities (canonical; API plugin re-exports). */
+export {
+  createTaskQueue,
+  enqueueTaskRun,
+  removeWaitingTaskRun,
+  closeTaskQueue,
+} from './task-queue.js';
 
 /** Schedule cron/timezone utilities (same cron-parser as BullMQ). */
 export {
@@ -209,24 +224,3 @@ export const DOCKER_ERROR_STATUS = Object.freeze({
  */
 export const SENSITIVE_ENV_KEY = /(^|[_-])(password|passwd|pass|pwd|secret|token|api_?key|apikey|auth|authorization|credential|credentials|private_?key|key|url|dsn|uri|connection_?string)([_-]|$)/i;
 
-/**
- * Build BullMQ `connection` options from a redis:// URL.
- *
- * Trap (P1-fix incident 2026-10-14): BullMQ 6's RedisConnection only honours
- * a `url` key. Passing a bare `redis://...` string gets `Object.assign`'d into
- * char-index keys ('0':'r', '1':'e', ...), so the connection silently falls
- * back to the 127.0.0.1:6379 default — the worker ECONNREFUSED-loops forever
- * even though REDIS_URL is correct. Always route Worker/Queue connections
- * through this helper (worker today, api-side Queue in P3).
- *
- * @param {string} redisUrl - redis:// or rediss:// connection string
- * @returns {{ url: string }} BullMQ connection options (url key form)
- */
-export function buildRedisConnection(redisUrl) {
-  if (typeof redisUrl !== 'string' || !/^rediss?:\/\//.test(redisUrl)) {
-    throw new TypeError(
-      `buildRedisConnection: expected a redis:// or rediss:// URL, got: ${String(redisUrl)}`,
-    );
-  }
-  return { url: redisUrl };
-}
