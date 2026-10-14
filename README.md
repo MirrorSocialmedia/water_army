@@ -244,7 +244,7 @@ P3 覆蓋（101 tests）：
 | `tests/integration/task-engine.test.js` | worker engine（fake provider/queue）：agentic loop、tool 執行、approval wait + expire、**cancel 真停（零後續事件）**、timeout `timed_out`、retry 新 attempt 舊輸出保留 |
 | `tests/integration/tasks-api.test.js` | 全 app + fakes：create/list/detail/cancel/retry/approvals/tools/providers、**RBAC 矩陣**（401/403/200 逐 cell）、service token 自批 403、**SSE 真 HTTP**（snapshot/cursor resume/done/非法 cursor 400） |
 
-總計 **285 tests**（P1 32 + P2 152 + P3 101）。測試全部 hermetic（fake db/redis/docker），`node --test`（Node 內建 runner，零 test 依賴）。
+總計 **286 tests**（P1 32 + P2 152 + P3 102）。測試全部 hermetic（fake db/redis/docker），`node --test`（Node 內建 runner，零 test 依賴）。
 
 ## 疑難排解
 
