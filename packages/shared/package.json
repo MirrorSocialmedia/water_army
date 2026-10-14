@@ -1,0 +1,11 @@
+{
+  "name": "@water-army/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared constants and API contracts (zero dependencies)",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  }
+}

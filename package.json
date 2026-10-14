@@ -1,0 +1,30 @@
+{
+  "name": "water-army",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Docker + AI task management platform (7-phase MVP, P1: skeleton + deployment)",
+  "engines": {
+    "node": ">=24"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "node scripts/dev.js",
+    "dev:api": "node --watch apps/api/src/server.js",
+    "dev:worker": "node --watch apps/worker/src/worker.js",
+    "dev:web": "npm run dev --workspace=@water-army/web",
+    "build": "npm run build --workspace=@water-army/web",
+    "start:api": "node apps/api/src/server.js",
+    "start:worker": "node apps/worker/src/worker.js",
+    "test": "node --test tests/unit tests/integration",
+    "test:unit": "node --test tests/unit",
+    "test:integration": "node --test tests/integration",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate deploy",
+    "db:migrate:dev": "prisma migrate dev",
+    "setup:admin": "node apps/api/src/cli/setup-admin.js"
+  }
+}

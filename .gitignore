@@ -1,0 +1,25 @@
+# --- env & secrets (NEVER commit real values) ---
+.env
+.env.*
+!.env.example
+
+# --- node ---
+node_modules/
+
+# --- build output ---
+dist/
+coverage/
+playwright-report/
+test-results/
+*.tsbuildinfo
+
+# --- logs ---
+logs/
+*.log
+
+# --- prisma generated client (regenerate: npm run db:generate) ---
+prisma/generated/
+
+# --- local scratch ---
+.dev/
+.DS_Store
