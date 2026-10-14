@@ -375,3 +375,88 @@ latest                   | updated 2025-06-29
 - **fake db `orderBy` 雙形狀**：Prisma `orderBy` 接受 object（`{createdAt:'desc'}`）同 array（`[{...}]`）— fake 必須兩種都支持（`applyOrderBy` helper），否則 P2 舊測試（array 形）同 P3 新路由（object 形）必有一邊炸。
 - **raw INSERT 冪等 seed**：e2e/seed 用固定 25 位 lowercase alnum id（cuid 形）— 短 id / hyphen id 會被 `normalizeRoute` 誤判（P2 已知陷阱，P3 seed 沿用）。
 - **web EventSource re-open**：browser `EventSource` 斷線重連會 resend `Last-Event-ID` **header**，而 API cursor 係 `?after=` **query** — client（`useTaskEvents`）自己持有 cursor，有 cursor 就 close + re-open 帶 `?after=`（零重複）；無 cursor 就俾 native retry 處理。
+
+## 13. P4 架構決定（排程系統，2026-10-15 — 全部經 live 實測驗證）
+
+### 13.1 PG-first，BullMQ 係 derived index（核心不變量）
+
+- 所有排程寫入 = **先 PG 落 row，後 BullMQ 同步**。BullMQ 寫失敗（redis down / 斷線）→ row 照存 + `sync_status='sync_error'`，HTTP 照 201（row 係事實），`POST /schedules/:id/sync` 重試。
+- BullMQ 索引可以隨時整份丟：worker **scheduler reconciler**（boot 時 + 每 5 分鐘）以 PG `schedules` 表做 desired-state，原地重建/修正。
+- 反方向禁止：BullMQ 側永不產生新排程（fire handler 只消費，guard 全部對住 DB row 重驗）。
+
+### 13.2 Stable scheduler key + 原地 upsert
+
+- key = `sched-<schedule uuid>`（`schedulerIdFor`）— 改參數 = 同 key `upsertJobScheduler`（原地覆蓋，**零重複**；唔係 remove+create）。
+- 漂移判斷 = pattern/every/tz + `schedulingHash`（參數摘要）；**兩邊都要 `?? null` 正規化** — 真 BullMQ entry 唔會存 absent 欄位（`undefined`），fake 用 `null` — v1 判斷 `entry.every !== (want.every ?? null)` 令每次 reconcile 都假陽漂移（live 實錚：每 5 分鐘 `driftFixed:2`）。
+
+### 13.3 once = delayed job，非 Job Scheduler
+
+- once 排程唔入 scheduler index：確定性 id `schedonce-<uuid>-<slotMs>` 嘅 delayed fire job（BullMQ 6 對 custom jobId 重複 `add` 會 `JobExistsError` — heal 邏輯要 tolerate）。
+- fire 後 = 自動停用 + `next_run_at=NULL`（terminal）。`task_runs.schedule_id` **無 FK**（屬設計：schedule 删除後 run lineage 要活埋）。
+
+### 13.4 Slot 權威 = job id（live 發現，BullMQ 6 形狀）
+
+- BullMQ 6 Job Scheduler fire 出嘅 job：**data/opts 都冇 slot**；slot 藏在 job id — `repeat:<schedulerId>:<nextMillis>`（`job-scheduler.js getSchedulerNextJobId` 實查）。once job 例外（自己 data 帶 `scheduledAt`）。
+- fire handler 解析次序：`data.scheduledAt` → jobId regex → `opts.prevMillis`（forward-compat）→ wall clock（log warn，最後手段）。
+- **重啟/漂移安全性**：handler 對 DB row 重驗（deleted/disabled/stale generation = `schedulingHash` 唔符/stale slot 過容忍窗 → drop）；slot 冪等 key `sched-<uuid>-<slotMs>`（重送 = replay 同一 run，**零重複**）；skip 行用 `sched-<uuid>-<slotMs>-skip`。
+
+### 13.5 Orphan sweep 規則（live 修正）
+
+- **真 BullMQ 會把每個 enabled 非-once 排程嘅 NEXT fire 實例化成 delayed job**（`repeat:<key>:<slotMs>`）— v1 sweep 當佢地 orphan 每 pass 都刪（live log `orphanJobs:3`，BullMQ 靜默重加）。
+- 修正後規則：once = 只准存在「當前 slot 嘅確定性 job」；非-once = **future job 永唔碰**（BullMQ 自己管），只刪 past-slot 殘骸（crash leftover）；無 enabled owner = 真 orphan。
+
+### 13.6 Overlap policy 語義
+
+- `skip_if_running`（預設）：slot fire 時排程有 active run → 建 **terminal `skipped` run**（`createSkippedRun`，`input_json.skipped.activeRunId` 實指嗰個 active run，slot 照消費唔重試）— 跳過有審計、lineage 可查。
+- `queue`：照建新 run（run 之間並行執行）。**`concurrency_key` 係 schema 欄但 P0–P3 冇任何執行邏輯**（grep 實證零引用）— 「queue = 串行」唔成立；若要 per-key 串行係 P5+ 範圍，ADR 此處記錄避免誤解。
+
+### 13.7 每排程獨立 timezone
+
+- `next_run_at` 用排程自己 IANA tz 計算（cron-parser 實算，shared `nextCronRun`），預設 `Asia/Taipei`；tz 入 `upsertJobScheduler` repeatOpts（BullMQ 按同一 tz 排下次 fire — 兩邊一致）。
+- `interval` 嘅 next = fired slot + `intervalMs`（BullMQ 內部同算法）— DB 同 index 行進同步，crash 分歧由 fire handler 嘅 stale-slot 容忍窗 + reconciler 兜底。
+
+### 13.8 一致性失敗路徑（live 實錚修正 ×2）
+
+- **ioredis offline queue hang**：redis down 時，已連線 client 嘅命令唔會即時 reject — 進入 offline queue 等一個永唔嚟嘅 reconnect（live 實錚：`POST /schedules` hang 咗幾分鐘）。修正：sync 步加 fail-fast timeout（`SCHEDULE_SYNC_TIMEOUT_MS`，預設 10s）→ 超時即 `sync_error`（誠實 + 即時；PG row 照存，reconciler 兜底）。
+- **/health 一嚙死**：BullMQ 6 `ready` 事件 **只發一次**（one-shot `waitUntilReady`；6.3.15 無 disabled/enabled 事件 — 實查 dist 源碼）。redis 中斷後 backend 自動復原、job 照常流，但 P3 嘅 `bindQueueState` 會永遠停喺 `error`（live：/health 503 + docker unhealthy 10+ 分鐘，log 顯示 job 照 complete）。修正：degraded 時每 15s 一次真 redis round-trip probe（`getJobCounts`），healthy 時零 load。
+- worker 存活鐵律照舊：ioredis `on('error')`（P3 既有）— redis 全停時 worker 照 healthy 存活（live 驗證）。
+
+### 13.9 RBAC（P4 端點）
+
+| 端點 | viewer | operator | admin | service token |
+|------|:---:|:---:|:---:|:---:|
+| GET schedules / :id / preview / task definitions | 200 | 200 | 200 | 403 |
+| POST/PATCH/DELETE schedules、pause/resume/run-now/sync | 403 | 200 | 200 | 403 |
+
+（mirror P3 task-resource 模式：寫入 operator+；service token 唔入排程路徑 — 排程係 operator 意圖，AI 唔可自建排程。）
+
+### 13.10 BullMQ 6.3.15 形狀收錄（實查 node_modules + live）
+
+- `getJobSchedulers()` entry = `{ key, name, pattern?, every?, tz?, limit?, template: { data, opts } }` — **冇 `id` 欄**（key 先係身份）、`name` 喺 top-level（唔喺 template 內）。
+- Job Scheduler fire job：name = scheduler 嘅 template name、id = `repeat:<key>:<nextMillis>`、data = template.data。
+- custom jobId 重複 `add` → `JobExistsError`（once heal 要 catch）。
+- Job id 唔得含 `:`（custom）— 但 scheduler 內部 `repeat:` job 唔經 `queue.add`，唔受限。
+
+### 13.11 Live 驗收證據（2026-10-15，compose stack，mock provider）
+
+| 硬驗收 | 證據 |
+|--------|------|
+| 1. cron 1 分鐘 2 次 fire | `tmp-p4-live/evidence/a3-cron-runs.txt`（2 個 `sched-<uuid>-<slot>` run，`next_run_at` 逐分鐘推進）+ worker log `schedule slot fired`（jobId `repeat:sched-...`） |
+| 2. interval + pause | `a4-interval-paused.txt`（4 fires → pause → 35s 靜音 4→4） |
+| 3. 重啟 reconcile 零重複 | `c1/c2-after-restart-index.json`（2 輪 restart：index=3=DB enabled non-once，`dup=0`，keys 同 baseline；boot pass 完全 no-op log） |
+| 4. skip_if_running + queue | `b2-skip-runs.txt`（skipped 行 activeRunId 實指、零 orphan、零重複 slot）+ `b3-queue-runs.txt`（6 slots → 6 runs、0 skipped） |
+| 5. sync_error → retry | `d1/d2/d3-*`（redis down：201+sync_error 10s 內返回、worker 照 healthy、/sync=503；redis up：/sync=200 synced、BullMQ key 存在） |
+| 6. run-now | `a2-run-now.json`（202 fresh + 200 replay 同 run id；key 唔撞 auto-fire key） |
+| 7. 全套綠 + secret scan + 無 socket | 343 tests（341 pass + 1 gated-skip）、secret scan 88d3248..HEAD 乾淨、worker `user=node` 零 mount、api socket read-only |
+
+（證據檔喺 `~/.openclaw/workspace/tmp-p4-live/evidence/` — scratch 目錄，交付時隨 progress log 引用。）
+
+### 13.12 Live catch 修正記錄（fakes 睇唔到嘅 5 個 bug → commit 4d70511）
+
+1. fire slot 唔喺 data/opts — 喺 job id（§13.4）。
+2. `requested_by` 係 `@db.Uuid` — SYSTEM caller 唔可用 `'system'` 字串（用 P3 `SERVICE_USER_ID`）。
+3. 漂移判斷 `undefined !== null` 假陽（§13.2）。
+4. sweep 誤刪 live next-fire job（§13.5）。
+5. /health 一嚙死 + sync hang（§13.8）。
+
+教訓：**fake queue 必須逐項對齊真 BullMQ 形狀**（P4 已補：next-fire 實例化、`:jobId` 驗證、template 形狀）— 但「形狀」之外嘅**行為**（offline queue、one-shot ready）仍只能靠 live 實錚 → 每個 phase 收尾必做 redis down/up + restart 實測。

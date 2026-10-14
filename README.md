@@ -179,6 +179,32 @@ curl -s -b /tmp/c.txt -X POST http://127.0.0.1:3012/api/tasks/runs \
 # 到 needs_approval 後，admin 喺 UI Tasks 頁或 API approve → run 繼續 → succeeded
 ```
 
+### P4 排程 API（已交付 — live 實測 2026-10-15）
+
+| Method | Path | 說明 | Auth |
+|--------|------|------|------|
+| POST | `/schedules` | 建立排程：`{name, taskDefinitionId, scheduleType: cron|interval|once, cronExpression?, timezone?, intervalMs?, runAt?, overlapPolicy?}` → 201 `{schedule}`。**PG 先行**：DB row 先落，BullMQ 後同步；同步失敗 = row 照存 + `syncStatus=sync_error`（可重試） | operator+ |
+| GET | `/schedules` | list（`?enabled=`、分頁）；含 `nextRunAt/lastRunAt/lastStatus/syncStatus/delay` | viewer+ |
+| GET | `/schedules/:id` | detail（同上 + lineage 用 `taskDefinition`） | viewer+ |
+| PATCH | `/schedules/:id` | 改參數：重新同步（stable key 原地 upsert，**零重複**）；once 改 `runAt` = 換 delayed job | operator+ |
+| POST | `/schedules/:id/pause` | 停用（移除 BullMQ 索引，DB row 保留）；冪等 | operator+ |
+| POST | `/schedules/:id/resume` | 啟用（重同步 + 重算 next_run_at）；冪等 | operator+ |
+| POST | `/schedules/:id/run-now` | 手動 fire（**繞過** overlap/scheduler）；client `Idempotency-Key` 冪等（無 key = `runnow-<uuid>` 每次新 run）→ 202 新 / 200 replay | operator+ |
+| POST | `/schedules/:id/sync` | 重試同步（`sync_error` → `synced`）；redis 未復 = 503（誠實，唔假成功） | operator+ |
+| DELETE | `/schedules/:id` | 删除（BullMQ 索引 + pending once job 先清；`task_runs` lineage 保留 — `schedule_id` 無 FK 屬設計） | operator+ |
+| GET | `/schedules/preview?cronExpression=&timezone=` | cron 預覽（next 5 次 run + 人類可讀描述，纯計算） | viewer+ |
+| GET | `/tasks/definitions` | task definition 只讀 list（Schedules UI 用；definition 的寫入唔喺 P4 範圍） | viewer+ |
+
+**排程執行拓撲**：PostgreSQL 係唯一 source of truth；BullMQ Job Scheduler 係 derived index（隨時可由 worker reconcile 重建）。worker boot 時 + 每 5 分鐘跑 **scheduler reconciler**（PG desired-state → 原地 upsert 漂移、清 orphan、自愈 `sync_status`）；fire job 由 **schedule fire handler** 處理：重讀 DB row → guard（已删/停用/stale generation/stale slot）→ 冪等建 run（`idempotencyKey = sched-<uuid>-<slotMs>`，重送 = replay 零重複）→ overlap policy → 推進 `next_run_at`。once 排程 = 确定性 id 嘅 delayed job（`schedonce-<uuid>-<slotMs>`），fire 後自動停用。
+
+**每排程獨立 timezone**：`next_run_at` 用排程自己嘅 IANA tz 計算（預設 `Asia/Taipei`）— cron 表達式按該 tz 解讀，`task_runs.input_json.scheduledSlotAt` 存實際 slot。
+
+**overlap policy**：`skip_if_running`（預設）= slot 撞 active run → 建 terminal `skipped` run（帶 `activeRunId` lineage，slot 照消費、唔重試）；`queue` = 照建新 run（執行並行 — `concurrency_key` 係 schema 欄但 P0–P3 未強制執行，見 ADR §13.6）。
+
+**web UI**：Schedules 頁（list + create/edit dialog + pause/resume/run-now/sync-retry/delete + next/last run 顯示 + `sync_error` 旗標），RBAC 按 role 啟停 action。
+
+**live 實測（2026-10-15，compose stack）**：cron 1 分鐘 2 次 fire ✓ / interval 30s + pause 後靜音 ✓ / once 自動停用 ✓ / 重啟 reconcile 2 輪 `getJobSchedulers` 數量 = DB enabled 且零重複 ✓ / skip_if_running 建 skipped run（activeRunId 實指）+ queue 建 run 唔 skip ✓ / redis down → `sync_error` → 503 → 復原後 `/sync` 200 ✓ / run-now 冪等（同 key 同 run）✓ — 詳情 ADR §13。
+
 ## 安全模型（T1 威脅）
 
 - **Docker socket 隔離**：只有 `api` 掛 `/var/run/docker.sock`（read-only）；worker/web 無。worker 執行容器經 api（P2）；P3 嘅 AI tool 同樣只經 api（service token，worker 零 socket）。
@@ -244,7 +270,19 @@ P3 覆蓋（101 tests）：
 | `tests/integration/task-engine.test.js` | worker engine（fake provider/queue）：agentic loop、tool 執行、approval wait + expire、**cancel 真停（零後續事件）**、timeout `timed_out`、retry 新 attempt 舊輸出保留 |
 | `tests/integration/tasks-api.test.js` | 全 app + fakes：create/list/detail/cancel/retry/approvals/tools/providers、**RBAC 矩陣**（401/403/200 逐 cell）、service token 自批 403、**SSE 真 HTTP**（snapshot/cursor resume/done/非法 cursor 400） |
 
-總計 **286 tests**（P1 32 + P2 152 + P3 102）。測試全部 hermetic（fake db/redis/docker），`node --test`（Node 內建 runner，零 test 依賴）。
+P4 覆蓋（57 tests）：
+
+| 檔案 | 範圍 |
+|------|------|
+| `tests/unit/schedule-cron.test.js` | IANA tz 驗證（拒壞 tz）、5-field cron 驗證、`nextCronRun` 各 tz 實值、cron 描述 |
+| `tests/unit/schedule-service.test.js` | PG-first + `sync_error`（queue down **同 hung** 兩形狀）、stable key upsert 零重複、timezone next_run、pause/resume/modify/delete、run-now 冪等、RBAC、preview、sync retry 503 語義 |
+| `tests/unit/scheduler-reconciler.test.js` | boot 建缺索引、漂移原地修（零重複）、orphan 清、**live next-fire job 唔會誤刪**（BullMQ 6 形狀）、past-slot leftover 清、`sync_status` 自愈、converge 冪等 |
+| `tests/unit/schedule-fire-handler.test.js` | slot 解析（**真 BullMQ 6 jobId 形狀** `repeat:<key>:<ms>`）、deleted/disabled/stale-generation/stale-slot guard、冪等重送 replay（零重複）、skip_if_running vs queue、once 自動停用、provider disabled = 唔消費 slot |
+| `tests/unit/worker-queue-state.test.js` | /health 狀態在 redis 復原後自愈（BullMQ 6 `ready` 只發一次嘅 live bug）、healthy 零 probe、stop 清 probe |
+| `tests/integration/schedules-api.test.js` | 真 HTTP 全路徑：RBAC 矩陣、create/list/get、run-now 冪等（HTTP 層 `Idempotency-Key`）、pause/resume、delete、**PG-first `sync_error` → `/sync` → `synced`**、provider disabled 409 |
+| `tests/integration/schedules-real-redis.test.js` | **gated**（`TEST_REAL_REDIS=1`）：真 BullMQ 6 Job Scheduler — upsert 原地零重複、tz round-trip、once deterministic job、remove converge |
+
+總計 **343 tests**（P1 32 + P2 152 + P3 102 + P4 57；另 1 gated-skip 需 `TEST_REAL_REDIS=1`）。測試全部 hermetic（fake db/redis/docker），`node --test`（Node 內建 runner，零 test 依賴）。
 
 ## 疑難排解
 
@@ -273,6 +311,6 @@ P3 覆蓋（101 tests）：
 | **P1** | **Skeleton + Deployment（本 commit 系列）** | ✅ |
 | P2 | 容器核心（DockerService 全套、API、模板 allowlist、Web UI 兩頁、SSE） | ✅（live daemon 實測過，2026-10-14） |
 | P3 | AI 任務引擎：providers（AES-256-GCM 加密 key）+ task queue + tool registry + approval gate + Web UI | ✅（live 實測 2026-10-15，全循環 DB+SSE 實證） |
-| P4 | 排程（schedules → BullMQ repeatable）+ 通知 | 待開 |
+| P4 | 排程（schedules → BullMQ 6 Job Scheduler，PG-first）+ Web UI | ✅（live 實測 2026-10-15，7 項硬驗收全過；通知留 P5+） |
 | P5 | Settings 頁面 + 用户管理 + audit 檢視 | 待開 |
 | P6 | 收尾：e2e、docs、security review | 待開 |
