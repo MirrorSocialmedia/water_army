@@ -186,10 +186,8 @@ export async function buildApp(opts = {}) {
 
   // --- routes ----------------------------------------------------------------
   authRoutes(app);
-  if (opts.registerHealth !== false) {
-    const { healthRoutes } = await import('./routes/health.js');
-    healthRoutes(app);
-  }
+  const { healthRoutes } = await import('./routes/health.js');
+  healthRoutes(app);
 
   // --- lifecycle ---------------------------------------------------------------
   app.addHook('onClose', async () => {
