@@ -25,6 +25,7 @@ import {
   safeStringify,
   truncateText,
   backoffDelay,
+  CONCURRENCY_ACTIVE_RUN_STATUSES,
 } from '@water-army/shared';
 
 import { toolGate } from './tool-helpers.js';
@@ -56,12 +57,82 @@ export function createTaskEngine({ db, taskSvc, config = {}, log = console, prov
   const approvalPollMs = config.approvalPollMs ?? 1_000;
   const cancelPollMs = config.cancelPollMs ?? 1_000;
 
+  // P6 flag #5: concurrency_key mutual exclusion knobs.
+  const concDeferMs = Math.max(1_000, Number(config.taskConcurrencyDeferMs ?? 15_000));
+  const concMaxDefers = Math.max(1, Number(config.taskConcurrencyMaxDefers ?? 10));
+
+  /**
+   * P6 flag #5 — concurrency_key gate (worker-side, before startAttempt).
+   *
+   * If another run of a SAME-KEY definition is actively in flight (running
+   * or needs_approval), this job is deferred (moveToDelayed, bounded by
+   * concMaxDefers × concDeferMs). When the hold expires, the run is marked
+   * `skipped` — visible, with the reason + the holding run id (MD §12.3
+   * honesty: a skipped run explains WHY). Definitions without a key, and
+   * ad-hoc runs (no definition), are never gated.
+   *
+   * Deliberately NOT blocking on a merely QUEUED sibling — two queued
+   * same-key runs would defer each other forever; the first one picked runs,
+   * the second defers while it is in flight (serial, not lost).
+   *
+   * @returns {Promise<{outcome:string, runId?:string}>} {outcome:'proceed'}
+   *   or a terminal outcome ({outcome:'concurrency-deferred'|'concurrency-skipped'})
+   */
+  async function gateConcurrency(runId, job) {
+    let run;
+    try {
+      run = await taskSvc.loadRun(runId, { mustExist: false });
+    } catch {
+      return { outcome: 'proceed' }; // startAttempt will surface the real error
+    }
+    if (!run || run.status !== 'queued' || !run.taskDefinitionId) return { outcome: 'proceed' };
+
+    const def = await db.taskDefinition.findUnique({ where: { id: run.taskDefinitionId }, select: { concurrencyKey: true } });
+    const key = def?.concurrencyKey;
+    if (!key) return { outcome: 'proceed' };
+
+    const siblings = await db.taskDefinition.findMany({ where: { concurrencyKey: key }, select: { id: true } });
+    if (!siblings.length) return { outcome: 'proceed' };
+
+    const active = await db.taskRun.findFirst({
+      where: {
+        taskDefinitionId: { in: siblings.map((s) => s.id) },
+        id: { not: runId },
+        status: { in: [...CONCURRENCY_ACTIVE_RUN_STATUSES] },
+      },
+      select: { id: true, status: true },
+    });
+    if (!active) return { outcome: 'proceed' };
+
+    const defers = Number(job?.data?.concDefers ?? 0);
+    if (defers >= concMaxDefers) {
+      const res = await taskSvc.skipByConcurrency(runId, {
+        key,
+        activeRunId: active.id,
+        reason: `concurrency_key '${key}': run ${active.id} is ${active.status} after ${defers} defers (${defers * concDeferMs}ms hold)`,
+      });
+      log.info?.({ runId, key, activeRunId: active.id, defers, skipped: res.skipped }, 'engine: concurrency_key hold expired');
+      return { outcome: res.skipped ? 'concurrency-skipped' : 'proceed', runId };
+    }
+
+    // Defer: bump the per-job counter, then re-queue to the delayed set.
+    await job.update({ ...job.data, concDefers: defers + 1 });
+    await job.moveToDelayed(concDeferMs);
+    log.info?.({ runId, key, activeRunId: active.id, deferMs: concDeferMs, defers: defers + 1, maxDefers: concMaxDefers }, 'engine: concurrency_key busy — deferring job');
+    return { outcome: 'concurrency-deferred', runId };
+  }
+
   /**
    * Process one BullMQ job { runId, attempt }. Returns an outcome descriptor
    * (for worker metrics/logging) — the DB is the source of truth either way.
    */
   async function handleJob(job) {
     const { runId, attempt } = job.data;
+
+    // P6 flag #5: concurrency_key gate — BEFORE the run starts.
+    const gate = await gateConcurrency(runId, job);
+    if (gate.outcome !== 'proceed') return gate;
+
     const started = await taskSvc.startAttempt(runId, attempt);
     if (started.status === 'stale') {
       log.info?.({ runId, jobAttempt: attempt, reason: started.reason }, 'engine: job stale, no-op');

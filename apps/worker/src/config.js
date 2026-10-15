@@ -22,6 +22,9 @@ export function loadWorkerConfig(env = process.env) {
     approvalPollMs: Number(env.TASK_APPROVAL_POLL_MS ?? 1_000),
     /** P4: background scheduler reconcile cadence (boot pass is immediate). */
     scheduleReconcileIntervalMs: Number(env.SCHEDULE_RECONCILE_INTERVAL_MS ?? 300_000),
+    /** P6 flag #5: concurrency_key mutual exclusion — defer window + cap. */
+    taskConcurrencyDeferMs: Number(env.TASK_CONCURRENCY_DEFER_MS ?? 15_000),
+    taskConcurrencyMaxDefers: Number(env.TASK_CONCURRENCY_MAX_DEFERS ?? 10),
   };
   if (!Number.isFinite(config.healthPort) || config.healthPort <= 0) {
     throw new Error(`invalid WORKER_HEALTH_PORT: ${env.WORKER_HEALTH_PORT}`);
@@ -40,6 +43,12 @@ export function loadWorkerConfig(env = process.env) {
   }
   if (!Number.isFinite(config.scheduleReconcileIntervalMs) || config.scheduleReconcileIntervalMs < 1_000) {
     throw new Error(`invalid SCHEDULE_RECONCILE_INTERVAL_MS: ${env.SCHEDULE_RECONCILE_INTERVAL_MS}`);
+  }
+  if (!Number.isFinite(config.taskConcurrencyDeferMs) || config.taskConcurrencyDeferMs < 1_000) {
+    throw new Error(`invalid TASK_CONCURRENCY_DEFER_MS: ${env.TASK_CONCURRENCY_DEFER_MS}`);
+  }
+  if (!Number.isFinite(config.taskConcurrencyMaxDefers) || config.taskConcurrencyMaxDefers < 1) {
+    throw new Error(`invalid TASK_CONCURRENCY_MAX_DEFERS: ${env.TASK_CONCURRENCY_MAX_DEFERS}`);
   }
   return config;
 }

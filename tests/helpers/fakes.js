@@ -85,7 +85,15 @@ export function makeFakeDb({ users = [] } = {}) {
 
   function matchRunWhere(where = {}) {
     return [...runRows.values()].filter((r) => {
-      if (where.id && r.id !== where.id) return false;
+      if (where.id !== undefined) {
+        if (where.id.not && r.id === where.id.not) return false; // P6 flag #5
+        if (!where.id.not && r.id !== where.id) return false;
+      }
+      if (where.taskDefinitionId !== undefined) { // P6 flag #5
+        if (where.taskDefinitionId.in) {
+          if (!where.taskDefinitionId.in.includes(r.taskDefinitionId)) return false;
+        } else if (r.taskDefinitionId !== where.taskDefinitionId) return false;
+      }
       if (where.idempotencyKey !== undefined && r.idempotencyKey !== where.idempotencyKey) return false;
       if (where.scheduleId !== undefined && where.scheduleId !== null) {
         if (Array.isArray(where.scheduleId) || where.scheduleId.in) {

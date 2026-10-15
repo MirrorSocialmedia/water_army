@@ -410,6 +410,41 @@ export function createTaskRunService({ db, config = {}, enqueue, log = console }
     return { run, replay: false };
   }
 
+  /**
+   * P6 flag #5: bounded concurrency_key hold expired → mark the QUEUED run
+   * skipped (visible + reason in inputJson.skipped, same spirit as P4 overlap
+   * skips). Called by the worker gate when a same-key run stayed active past
+   * the defer window.
+   *
+   * ONLY queued→skipped. If the run moved on while the gate was deciding
+   * (running/terminal), this is a no-op — the live run owns the key.
+   *
+   * @returns {Promise<{skipped:boolean, status:string|null}>}
+   */
+  async function skipByConcurrency(runId, { key = null, activeRunId = null, reason = null } = {}) {
+    const run = await loadRun(runId, { mustExist: false });
+    if (!run) return { skipped: false, status: null };
+    if (run.status !== 'queued') return { skipped: false, status: run.status };
+    const now = new Date();
+    await db.taskRun.update({
+      where: { id: run.id },
+      data: {
+        status: 'skipped',
+        finishedAt: now,
+        durationMs: 0,
+        inputJson: {
+          ...(run.inputJson ?? {}),
+          skipped: { reason: reason ?? 'concurrency_key hold expired', key: key ?? null, activeRunId: activeRunId ?? null, policy: 'concurrency_key' },
+        },
+      },
+    });
+    await recordEvent(run.id, TASK_EVENT.STATUS, {
+      message: (reason ?? 'concurrency_key hold expired').slice(0, 500),
+      payload: { from: 'queued', to: 'skipped', key: key ?? null, activeRunId: activeRunId ?? null },
+    });
+    return { skipped: true, status: 'skipped' };
+  }
+
   // ------------------------------------------------------------------ cancel
   /**
    * Idempotent cancel request (工單: 已 ended 嘅 cancel = no-op).
@@ -810,6 +845,7 @@ export function createTaskRunService({ db, config = {}, enqueue, log = console }
     // API side
     createRun,
     createSkippedRun,
+    skipByConcurrency,
     requestCancel,
     requestRetry,
     resolveApproval,

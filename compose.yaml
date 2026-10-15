@@ -91,6 +91,10 @@ services:
       TASK_MAX_TIMEOUT_MS: ${TASK_MAX_TIMEOUT_MS:-900000}
       TASK_DEFAULT_ATTEMPTS: ${TASK_DEFAULT_ATTEMPTS:-3}
       TASK_MAX_CONCURRENCY: ${TASK_MAX_CONCURRENCY:-4}
+      # P6 flag #5: concurrency_key mutual exclusion (worker gate: 15s defer
+      # × 10 = 2.5 min max hold, then a visible `skipped` run).
+      TASK_CONCURRENCY_DEFER_MS: ${TASK_CONCURRENCY_DEFER_MS:-15000}
+      TASK_CONCURRENCY_MAX_DEFERS: ${TASK_CONCURRENCY_MAX_DEFERS:-10}
     volumes:
       # THE ONLY service with Docker socket access — read-only.
       - /var/run/docker.sock:/var/run/docker.sock:ro
@@ -140,6 +144,10 @@ services:
       AI_MOCK_SCRIPT: ${AI_MOCK_SCRIPT:-default}
       WORKER_HEALTH_PORT: "3001"
       TASK_MAX_CONCURRENCY: ${TASK_MAX_CONCURRENCY:-4}
+      # P6 flag #5: concurrency_key mutual exclusion — the worker gate defers
+      # a same-key job (15s × 10) then records a visible `skipped` run.
+      TASK_CONCURRENCY_DEFER_MS: ${TASK_CONCURRENCY_DEFER_MS:-15000}
+      TASK_CONCURRENCY_MAX_DEFERS: ${TASK_CONCURRENCY_MAX_DEFERS:-10}
       TASK_DEFAULT_TIMEOUT_MS: ${TASK_DEFAULT_TIMEOUT_MS:-120000}
       TASK_MAX_TIMEOUT_MS: ${TASK_MAX_TIMEOUT_MS:-900000}
       TASK_DEFAULT_ATTEMPTS: ${TASK_DEFAULT_ATTEMPTS:-3}

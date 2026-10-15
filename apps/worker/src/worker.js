@@ -309,6 +309,8 @@ export function createWorkerApp({
           taskDefaultAttempts: config.taskDefaultAttempts,
           approvalPollMs: config.approvalPollMs,
           cancelPollMs: config.cancelPollMs,
+          taskConcurrencyDeferMs: config.taskConcurrencyDeferMs,
+          taskConcurrencyMaxDefers: config.taskConcurrencyMaxDefers,
         },
         log,
         providerResolver: (args) => resolveProviderForRun({ ...args, env: process.env }),

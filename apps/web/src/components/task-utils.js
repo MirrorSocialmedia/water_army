@@ -4,12 +4,12 @@
  */
 
 /** Terminal run statuses (施工 MD §11.3 state machine). */
-export const TASK_TERMINAL = Object.freeze(['succeeded', 'failed', 'cancelled', 'timed_out']);
+export const TASK_TERMINAL = Object.freeze(['succeeded', 'failed', 'cancelled', 'timed_out', 'skipped']);
 
 /** All known run statuses (filter dropdown). */
 export const TASK_STATUSES = Object.freeze([
   'queued', 'running', 'needs_approval', 'cancel_requested',
-  'succeeded', 'failed', 'cancelled', 'timed_out',
+  'succeeded', 'failed', 'cancelled', 'timed_out', 'skipped',
 ]);
 
 export function isTerminalStatus(status) {
@@ -40,6 +40,7 @@ export function taskBadgeClass(status) {
     case 'failed': return 'task-err';
     case 'cancelled': return 'task-err';
     case 'timed_out': return 'task-warn';
+    case 'skipped': return 'task-warn';
     default: return 'task-unknown';
   }
 }
@@ -75,7 +76,7 @@ export function flowSteps(status, sawApproval = false) {
   });
 
   if (isTerminalStatus(status)) {
-    const tone = status === 'succeeded' ? 'ok' : status === 'timed_out' ? 'warn' : 'err';
+    const tone = status === 'succeeded' ? 'ok' : status === 'timed_out' || status === 'skipped' ? 'warn' : 'err';
     steps.push({ label: status.replace('_', ' '), state: 'current', tone });
   }
   return steps;

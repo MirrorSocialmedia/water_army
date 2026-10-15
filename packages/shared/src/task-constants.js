@@ -34,12 +34,16 @@ export const TASK_RUN_TERMINAL = Object.freeze([
  * Notes:
  *  - terminal → queued = MANUAL RETRY only (new attempt; old output preserved
  *    in the event stream, never overwritten — MD §6.5 / 工單 P3).
- *  - `skipped` (P4 overlap policy) has no outgoing transitions.
+ *  - `skipped` (P4 overlap policy, P6 concurrency_key) has no outgoing
+ *    transitions.
+ *  - queued → skipped (P6 flag #5): a run can be declared skipped BEFORE it
+ *    starts when its concurrency_key is held past the bounded defer window —
+ *    the only pre-start terminal path (same spirit as P4 overlap skips).
  *  - `cancel_requested` is the ONLY path to `cancelled` (worker/reconciler
  *    confirms the stop — API never marks cancelled itself: 真停, not DB-only).
  */
 export const TASK_RUN_TRANSITIONS = Object.freeze({
-  queued: ['running', 'cancel_requested', 'failed'],
+  queued: ['running', 'cancel_requested', 'failed', 'skipped'],
   running: ['succeeded', 'failed', 'timed_out', 'cancel_requested', 'needs_approval'],
   needs_approval: ['running', 'failed', 'timed_out', 'cancel_requested'],
   cancel_requested: ['cancelled', 'failed'],
@@ -51,6 +55,19 @@ export const TASK_RUN_TRANSITIONS = Object.freeze({
   timed_out: ['queued'],
   skipped: [],
 });
+
+/**
+ * P6 flag #5: statuses that hold a task definition's concurrency_key.
+ * Deliberately EXCLUDES 'queued' (a merely queued sibling must not block —
+ * two queued same-key runs would defer each other forever) and
+ * 'cancel_requested' (winding down; the stop is near). 'needs_approval' IS
+ * held: the run is in flight, paused on a human, and the mutual-exclusion
+ * purpose (no parallel mutation) applies exactly then.
+ */
+export const CONCURRENCY_ACTIVE_RUN_STATUSES = Object.freeze([
+  'running',
+  'needs_approval',
+]);
 
 /** Task run event types (MD §7 task_run_events). */
 export const TASK_EVENT = Object.freeze({
