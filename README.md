@@ -1,13 +1,21 @@
 # water_army
 
-Docker 容器 + AI 任務自動化平台（7 階段 MVP 之中）。本地單一部署：一個 UI、一個 API、一個 worker、Postgres 17、Redis 7，全部跑喺同一部主機嘅 Docker 入面。
+Docker 容器 + AI 任務自動化平台（**7 階段 MVP 全部完成** — P0–P6；本 README 為 P6 最終版）。
+本地單一部署：一個 UI、一個 API、一個 worker、Postgres 17、Redis 7，全部跑喺同一部主機嘅 Docker 入面。
 
-- **api** — Fastify 5：auth（argon2id + session cookie）、RBAC、health、容器 API（P2）、AI 任務/批准/provider 管理 API（P3）
-- **worker** — BullMQ worker：容器任務（P2）＋ AI 任務執行引擎（P3：agentic tool loop、approval gate、timeout/cancel/retry）。**無 Docker socket** — 容器操作全部經 api service token
-- **web** — React 19 + Vite 8：Dashboard、Containers（P2）、AI task runs list/detail（P3：狀態機視覺化、SSE 事件流、cancel/retry、approve/deny）
+- **api** — Fastify 5：auth（argon2id + session cookie）、RBAC、health、容器 API（P2）、AI 任務/批准/provider 管理 API（P3）、排程 API（P4）、Redroid device API（P5）、dashboard + 排程通知（P6）
+- **worker** — BullMQ worker：容器任務（P2）＋ AI 任務執行引擎（P3：agentic tool loop、approval gate、timeout/cancel/retry、concurrency gate P6）＋ scheduler reconciler + 排程通知 writer（P4/P6）。**無 Docker socket** — 容器操作全部經 api service token
+- **web** — React 19 + Vite 8：Dashboard（實數據 counters，P6）、Containers（P2）、AI task runs list/detail（P3）、Schedules（P4）、Redroid devices（P5）、Settings（P5+）、notification bell（P6）、SSE reconnect backoff（P6）
 - **postgres / redis** — 只在 compose 內部網絡，**唔 publish host port**
 
-施工依據：`docs/repo-audit.md`、`docs/architecture-decisions.md`（版本鎖定表）、`docs/build-checklist.md`。P0 已交付，本 README 屬 P1（Skeleton + Deployment）。
+施工依據：`docs/repo-audit.md`、`docs/architecture-decisions.md`（P0–P6 全 ADR）、`docs/build-checklist.md`、`docs/threat-model.md`（P6 最終版）、`docs/api-reference.md`（全 endpoint 總表）、`docs/runbook.md`（運維）。
+
+**P6 交付摘要**（證據：`docs/evidence/p6-e2e/`、`docs/evidence/p6-security/`、`docs/evidence/p6-cleaninstall/`）：
+- 5 個 P3–P5 留底 flag 全部收結（managed exception 表 / compose label / 排程通知 / flaky 根因 / concurrency gate）
+- Playwright E2E 14/14（真 headless Chrome + 真 worker，捉到 5 個真 UI bug 全修）
+- 安全：npm audit ×3 = **0 高危**（override 修復 + 驗證鏈）、secret redaction 17/17 實打、審計抽驗、threat-model 最終版（T1–T7）
+- 測試：465（464 pass + 1 env-gated real-redis，已對真 redis 實跑綠）+ vite build clean
+- clean install 實跑（`down -v` → README 由零起 → 5/5 healthy → 首 admin → 登入 200）
 
 ---
 
@@ -90,16 +98,18 @@ curl -s http://127.0.0.1:3012/api/health/ready   # DB/Redis/Docker 逐項
 | 完全重置（**刪 DB + queue volume**） | `sg docker -c 'docker compose down -v'` |
 | 重建全部 | `sg docker -c 'docker compose down' && sg docker -c 'docker compose up -d --build'` |
 
-### 資料備份 / 還原
+### 資料備份 / 還原（2026-10-15 實測流程；詳細版 + 冷備份 + key 輪替見 `docs/runbook.md` §3）
 
 ```bash
-# 備份（pg + redis 皆在 volume）
-sg docker -c 'docker compose exec -T postgres pg_dump -U app water_army' > wa-backup-$(date +%F).sql
-sg docker -c 'docker compose cp water-army-postgres-1:/var/lib/postgresql/data -'   # 冷備（先 stop）
+# 備份（logical dump，運行中可做；含 provider 密文 + 密碼 hash — 備份檔要 chmod 600）
+sg docker -c 'docker compose exec -T postgres pg_dump -U app water_army' > wa-backup-$(date +%F-%H%M).sql
 
-# 還原
-sg docker -c 'docker compose exec -T postgres psql -U app water_army' < wa-backup.sql
+# 還原（目標 DB 應係空；實測：dump 732KB → 全新 DB → 14 表 row count 全對 + 密文 v1: 前綴 intact）
+sg docker -c 'docker compose exec -T postgres psql -U app -d water_army -v ON_ERROR_STOP=1' < wa-backup.sql
+sg docker -c 'docker compose restart api worker'   # entrypoint migrate 核對 + reconciler 重建 queue 索引
 ```
+- 還原入唔係空嘅 DB 會 PK 衝突（要 `pg_dump --clean` 或先清目標）。
+- 實測證據：2026-10-15 gen2 — 14 表逐表核對全對（users 3 / task_runs 260 / task_run_events 1600 / sessions 128 / audit 284 / …），scratch DB 還原後已 drop。
 
 ### 資料庫 migration
 
@@ -115,9 +125,10 @@ sg docker -c 'docker compose exec -T postgres psql -U app water_army' < wa-backu
 - 密碼規則：≥ 12 位、混合字母數字（argon2id 儲存；任何 API/log 唔會傳回 hash）。
 - 之後無公開註冊；加人 = DB 層手動（P5 先有 Settings 頁面）。
 
-## API（P1 範圍）
+## API
 
 Base：`http://127.0.0.1:3012/api`（web 同源性代理；API 本體唔 publish host port）。
+**全 endpoint 總表（method/path/role/參數/錯誤碼，68 條路由）：`docs/api-reference.md`** — 以下係分 phase 導讀。
 
 | Method | Path | 說明 | Auth |
 |--------|------|------|------|
@@ -141,7 +152,7 @@ RBAC 角色階梯：`viewer < operator < admin`。401 = 未認證；403 = 角色
 | GET | `/containers/events` | **SSE**：`container` 事件白名單（start/stop/kill/die/pause/unpause/restart/rename/create/delete/update）+ 斷線自動 release slot；並行上限（超 → 503 SSE_LIMIT） | viewer+ |
 | POST | `/containers/:id/{start,stop,restart,pause,unpause}` | 冪等狀態機（§9.3）：目標狀態已達 = 200 `idempotent:true`；op 後再 inspect 確認；卡住 → `OPERATION_PENDING` | operator+，只限 managed（例外表內除外） |
 | DELETE | `/containers/:id` | `{confirm, removeVolumes?, force?}` — `confirm` 必須逐字 repeat 容器 name/id（兩步確認）；默认保留 bind mount；`removeVolumes=true` 先删 volume | **admin**，只限 managed |
-| GET/POST | `/templates` | 模板 allowlist CRUD（image 必 pin digest/tag；port/env 白名单；`privileged` 要 reason） | 讀 viewer+；寫 admin |
+| GET | `/templates` | 容器 template allowlist（image 必 pin；P2–P6 無 template 修改/刪除端點 — 見已知限制 K5） | 讀 viewer+；寫 admin |
 | POST | `/containers` | 由模板建容器：`{templateId, displayName, idempotencyKey, env}` — env 只准模板白名单 key（值任意）、無任意 Docker payload；冪等（同 key 回放 = 201 + `idempotent-replay: true`，唔建第二個）；container 帶 `app.managed/app.template/app.idempotency-key/app.created-by` labels | operator+ |
 
 錯誤分類（四類，見 `packages/shared` `DOCKER_ERROR`）：`CONTAINER_NOT_FOUND`(404)／`DOCKER_DAEMON_UNAVAILABLE`(503)／`DOCKER_PERMISSION_DENIED`(502)／`DOCKER_TIMEOUT`(504)／其餘 `DOCKER_ERROR`(502)。`NOT_MANAGED`(403) = managed gate；`NAME_TAKEN`/`FLOW_TOKEN_REUSED` 等 = 路由層 409/400。
@@ -192,14 +203,14 @@ curl -s -b /tmp/c.txt -X POST http://127.0.0.1:3012/api/tasks/runs \
 | POST | `/schedules/:id/run-now` | 手動 fire（**繞過** overlap/scheduler）；client `Idempotency-Key` 冪等（無 key = `runnow-<uuid>` 每次新 run）→ 202 新 / 200 replay | operator+ |
 | POST | `/schedules/:id/sync` | 重試同步（`sync_error` → `synced`）；redis 未復 = 503（誠實，唔假成功） | operator+ |
 | DELETE | `/schedules/:id` | 删除（BullMQ 索引 + pending once job 先清；`task_runs` lineage 保留 — `schedule_id` 無 FK 屬設計） | operator+ |
-| GET | `/schedules/preview?cronExpression=&timezone=` | cron 預覽（next 5 次 run + 人類可讀描述，纯計算） | viewer+ |
+| GET | `/schedules/preview` — **實為 POST**（body `{cronExpression, timezone?}`） | cron 預覽（next 5 次 run + 人類可讀描述，纯計算） | viewer+ |
 | GET | `/tasks/definitions` | task definition 只讀 list（Schedules UI 用；definition 的寫入唔喺 P4 範圍） | viewer+ |
 
 **排程執行拓撲**：PostgreSQL 係唯一 source of truth；BullMQ Job Scheduler 係 derived index（隨時可由 worker reconcile 重建）。worker boot 時 + 每 5 分鐘跑 **scheduler reconciler**（PG desired-state → 原地 upsert 漂移、清 orphan、自愈 `sync_status`）；fire job 由 **schedule fire handler** 處理：重讀 DB row → guard（已删/停用/stale generation/stale slot）→ 冪等建 run（`idempotencyKey = sched-<uuid>-<slotMs>`，重送 = replay 零重複）→ overlap policy → 推進 `next_run_at`。once 排程 = 确定性 id 嘅 delayed job（`schedonce-<uuid>-<slotMs>`），fire 後自動停用。
 
 **每排程獨立 timezone**：`next_run_at` 用排程自己嘅 IANA tz 計算（預設 `Asia/Taipei`）— cron 表達式按該 tz 解讀，`task_runs.input_json.scheduledSlotAt` 存實際 slot。
 
-**overlap policy**：`skip_if_running`（預設）= slot 撞 active run → 建 terminal `skipped` run（帶 `activeRunId` lineage，slot 照消費、唔重試）；`queue` = 照建新 run（執行並行 — `concurrency_key` 係 schema 欄但 P0–P3 未強制執行，見 ADR §13.6）。
+**overlap policy**：`skip_if_running`（預設）= slot 撞 active run → 建 terminal `skipped` run（帶 `activeRunId` lineage，slot 照消費、唔重試）；`queue` = 照建新 run（執行並行 — `concurrency_key` 喺 P6 已有執行邏輯，見下面 P6 節）。
 
 **web UI**：Schedules 頁（list + create/edit dialog + pause/resume/run-now/sync-retry/delete + next/last run 顯示 + `sync_error` 旗標），RBAC 按 role 啟停 action。
 
@@ -238,6 +249,9 @@ npm run dev                 # 三端並行（api + worker + web；web 用 Vite �
 npm test                    # 全部（unit + integration；hermetic，唔需要 DB/Redis/Docker）
 npm run test:unit
 npm run test:integration
+# env-gated real-redis 測試（真 BullMQ Job Scheduler）— disposable redis 即起：
+sg docker -c 'docker run -d --rm --name wa-test-redis -p 127.0.0.1:16379:6379 redis:7.4.5'
+SCHEDULES_REDIS_URL=redis://127.0.0.1:16379 node --test tests/integration/schedules-real-redis.test.js
 ```
 
 P1 覆蓋（32 tests）：
@@ -280,9 +294,9 @@ P4 覆蓋（57 tests）：
 | `tests/unit/schedule-fire-handler.test.js` | slot 解析（**真 BullMQ 6 jobId 形狀** `repeat:<key>:<ms>`）、deleted/disabled/stale-generation/stale-slot guard、冪等重送 replay（零重複）、skip_if_running vs queue、once 自動停用、provider disabled = 唔消費 slot |
 | `tests/unit/worker-queue-state.test.js` | /health 狀態在 redis 復原後自愈（BullMQ 6 `ready` 只發一次嘅 live bug）、healthy 零 probe、stop 清 probe |
 | `tests/integration/schedules-api.test.js` | 真 HTTP 全路徑：RBAC 矩陣、create/list/get、run-now 冪等（HTTP 層 `Idempotency-Key`）、pause/resume、delete、**PG-first `sync_error` → `/sync` → `synced`**、provider disabled 409 |
-| `tests/integration/schedules-real-redis.test.js` | **gated**（`TEST_REAL_REDIS=1`）：真 BullMQ 6 Job Scheduler — upsert 原地零重複、tz round-trip、once deterministic job、remove converge |
+| `tests/integration/schedules-real-redis.test.js` | **gated**（`SCHEDULES_REDIS_URL`/`REDIS_URL` 指住 live redis）：真 BullMQ 6 Job Scheduler — upsert 原地零重複、tz round-trip、once deterministic job、remove converge |
 
-總計 **343 tests**（P1 32 + P2 152 + P3 102 + P4 57；另 1 gated-skip 需 `TEST_REAL_REDIS=1`）。測試全部 hermetic（fake db/redis/docker），`node --test`（Node 內建 runner，零 test 依賴）。
+總計 **343 tests**（P1 32 + P2 152 + P3 102 + P4 57；另 1 env-gated real-redis 測試，`SCHEDULES_REDIS_URL` 設定先跑）。測試全部 hermetic（fake db/redis/docker），`node --test`（Node 內建 runner，零 test 依賴）。
 
 ### P5 Redroid Devices API（已交付 — live 實測 2026-10-15，證據 `docs/p5-evidence/`）
 
@@ -315,13 +329,102 @@ P5 覆蓋（80 tests：unit 33 + integration 47）：
 | `tests/integration/redroid-lifecycle.test.js` | RBAC 401/403 矩陣、image pinning 拒、privileged reason、create 形狀斷言（錄到嘅 docker call：HostIP 127.0.0.1 / Cmd androidboot.* / Env 空 / `/data` bind / DeviceRequests 只 host）、0.0.0.0/privileged/hostConfig 注入 400、冪等、name 409、**真 127.0.0.1 碰撞 → next port + 用盡 503**、全生命週期 + audit、delete confirm + data dir 保留/清除、`/exec` 404、template in-use 409、disabled template 409、mock honesty 標籤 |
 | `tests/integration/redroid-diagnostics.test.js` | 4 區獨立性 + executed/status 矩陣、host→unverified、swiftshader→software、stopped→adb 未執行=未驗證、offline + 单次 connect、logcap default/explicit/**server-side clamp** + byte-cap 截斷、RBAC、boot-crash device 誠實 `created` |
 
-全套 **423 tests**（422 pass + 1 gated-skip，0 fail）。
+全套 **423 tests**（422 pass + 1 gated-skip，0 fail）— 截至 P5；P6 加 42 = **465**（見下面 P6 節）。
+
+### P6 覆蓋（42 tests：unit 19 + integration 23 — git diff 8eaa81d..HEAD 實計）
+
+| 檔案 | 範圍 |
+|------|------|
+| `tests/unit/docker-service-core.test.js`（+4） | flag#1：list/inspect 帶 granted exception → managed=true、filter totals flip（2/1→3/0）、label-only 保持 |
+| `tests/integration/docker-api.test.js`（+4） | flag#1 e2e：grant → list/inspect managed → revoke → 還原 |
+| `tests/unit/schedule-notifier.test.js`（+11，新檔） | flag#3：terminal run → 通知行（succeeded/failed/timed_out/skipped）、P2002 no-op、failure non-fatal、lastStatus 回填 |
+| `tests/integration/schedule-notifications-api.test.js`（+8，新檔） | flag#3 API：RBAC（401 全四路 / viewer 讀 ✓ / viewer mark-read 403 / operator read-one/read-all ✓）、flow、404、limit clamp |
+| `tests/integration/task-concurrency-gate.test.js`（+7，新檔） | flag#5：7 個 gate scenario（defer 15s / 超 cap 10 → 可視化 skip / holder 完續跑 / queued 唔 block / cancel_requested 唔 block / 非 queued no-op / 迟到 gate 唔復活 terminal） |
+| `tests/integration/dashboard-summary.test.js`（+4，新檔） | P6 dashboard：401、real shape 斷言、Docker down 降級唔 500 |
+| `tests/unit/task-utils.test.js`（+3） | flag#5 UI model：skipped = terminal、warn tone、唔可 cancel/retry |
+| `tests/unit/redaction.test.js`（+1） | service token header redact（P6 T7 defense-in-depth） |
+| `tests/unit/schedule-service.test.js`（修正） | flag#4：delay 斷言 deterministic（slot anchor 喺 createdAt）— flake 根因修復（ADR §15.3） |
+
+**P6 測試總數：465 tests**（464 pass + 1 env-gated real-redis skip，0 fail；gated 測試已對真 redis 實跑 1/1 綠 — 見上面 §測試 gate 命令）+ vite build clean。另：**Playwright E2E 14/14**（`e2e/p6-e2e.mjs`，見 P6 節）+ **secret redaction 17/17**（`e2e/secret-redaction-e2e.mjs`，證據 `docs/evidence/p6-security/`）。
 
 > **本機現實（誠實聲明）**：kernel 6.8.0-117-generic **無 binder_linux/ashmem_linux** →
 > 真 Redroid 容器喺本機起唔到。P5 = mock 驗證主路徑 + 真 preflight 對本機實測
 > （`overall: unsupported`，UI 如實顯示）。`REDROID_ADAPTER=mock` 只可喺非 production
 > 啟用（config 層強制 production = real）。真機 Redroid 未完成清單：
 > `docs/architecture-decisions.md` §14.7。
+
+### P6 收尾（已交付 — 2026-10-15，證據 `docs/evidence/p6-e2e/` + `p6-security/` + `p6-cleaninstall/`）
+
+**5 個 P3–P5 留底 flag 全部收結**（詳細決定：ADR §15）：
+
+| # | flag | 收結 |
+|---|------|------|
+| 1 | `?managed=true` 漏 exception 表 | **修**：`isManaged()`（label OR exception）成為 service 層單一事實源，list/inspect/dashboard/gate 同規則（9383498） |
+| 2 | managed 持久目標用 compose label | **做**：compose web/api/worker 加 `app.managed: "true"`（persistent 目標，rebuild 存活）（d0d2d33） |
+| 3 | 排程通知 | **做**：worker 喺 terminal scheduled run（含 overlap skip）寫通知行 → topbar bell（30s poll）+ 深鏈 + mark-read（98657de） |
+| 4 | P4 flaky test | **根因修復**：wall-clock drift 入斷言 → slot anchor 喺 createdAt，deterministic 恰 4200；修後連跑 3×450 全綠 |
+| 5 | `concurrency_key` 無執行邏輯 | **實裝**（唔 defer）：engine gate — 同 key active holder → 15s bounded defer（×10 ≈2.5min）→ 可視化 `skipped` run（帶 holder id）（51302ef） |
+
+**UX 收尾**：Dashboard 全部真 API counters（單一 `/api/dashboard/summary` 端點，零硬編碼，Docker down 降級唔 500）；notification bell（badge + panel + 深鏈）；SSE reconnect 3s bounded backoff + 狀態 pill；sidebar active 高亮修復（P0 遗留 bug）；防連點審計。
+
+**安全**（證據 `docs/evidence/p6-security/`）：
+- npm audit ×3（api/worker/web）= **0 vulnerabilities**（prisma 7.10.0 transitive 4 high 經 root overrides 修復 + 驗證鏈，ADR §15.7）
+- Secret redaction **17/17 實打**（`e2e/secret-redaction-e2e.mjs`）：provider key 全路徑零洩（GET 只 `hasApiKey`、DB `v1:` AES-256-GCM、audit details 零 key）+ approval 讀路徑 scrub gate（raw-insert legacy 行也 `***redacted***`）+ 審計 spot-check
+- threat-model.md 最終版（T1–T7，P3–P6 新面：service token / approval / redroid ADB / provider key 全部獨立覆蓋）
+
+**E2E**（`e2e/p6-e2e.mjs`，system Chrome headless + 真 worker）：**14/14 pass，0 意外 console error** — login → dashboard 實計數器 → containers → detail + SSE live → UI 建 run → live worker 行到 succeeded → interval schedule → run-now → 該 run 自己嘅 notification → bell 深鏈 + mark-read → viewer RBAC → logout。截圖 ×13 + summary.json。E2E 實捉到 5 個真 UI bug（全修，ADR §15.5/§15.6）。
+
+**clean install 實跑**（`docs/evidence/p6-cleaninstall/`）：`down -v` → 嚴格照本 README 由零起 → 5/5 healthy → 首 admin 建立 → 登入 200 → 還原 dev 狀態。
+
+## 功能清單（MD §18 三類分列 — 交付誠實項）
+
+### A. 實際可用（真環境實測過，非 mock）
+
+- Docker 容器運維全套：list/inspect/logs/stats、start/stop/restart/pause/unpause、template allowlist 建容器、delete 兩步確認 — **真 docker daemon**（P2 收貨 live 實測；P6 E2E 重驗）
+- Auth/RBAC/CSRF-Origin：argon2id、session、三角色 401/403 矩陣、Origin guard、login 限流 — 真 HTTP（P1 收貨 + P6 E2E viewer RBAC 403 實打）
+- AI 任務全循環：create → queue → agentic tool loop → approval gate → 結果/事件持久化 → SSE 實時 UI → cancel/retry — **mock provider 走完真 queue/worker/DB/SSE**（P3 收貨 live；P6 E2E 第 5–6 步重驗）
+- 排程全套：CRUD/cron+interval+once/每排程 tz/overlap policy/sync 自愈/重啟 reconcile 零重複 — **真 BullMQ Job Scheduler + 真 PG**（P4 收貨 7 項硬驗收 live；P6 E2E run-now + notification 重驗）
+- 排程通知（P6）：terminal run → 通知行 → bell badge → 深鏈 → mark-read（P6 E2E 第 7–9 步實打）
+- concurrency gate（P6）：同 key 互斥 bounded defer → 可視化 skip（hermetic 7 scenario + 狀態機測試；真 redis 環境下同 overlap 同路徑）
+- Dashboard 實數據（P6）：全部數字來自 `/api/dashboard/summary`（零硬編碼）— E2E 第 2 步斷言 fleet ≥3 running
+- 安全控制：provider key AES-256-GCM + 零回傳 + log redaction + service token 時序安全比較 + AI 唔自批 + 審計全寫入 — P6 17/17 實打證據
+- 部署/運維：clean install（P6 實跑）、backup/restore（P6 實跑 14 表全對）、health/ready 依賴分級
+
+### B. Mock 驗證（API/邏輯層全過，外部真體未接）
+
+- **AI provider 真模型對接**：OpenAI-compatible adapter 邏輯全測（classified error、redact、timeout），但 MVP 收貨只用 **mock provider** — 真 SGLang/OpenAI key 喺你嘅環境 5 分鐘可接（Settings → 建 provider → test 按鈕），**未喺本 MVP 收貨範圍內實打**
+- **Redroid 全棧**（ADR §14.6 邊界）：preflight 真跑本機（unsupported，誠實）、port 分配真 probe、docker create 形狀錄到斷言、DB/audit/RBAC 全路徑行晒 — 但 **device 容器/mock adapter 行嘅係 mock 生命週期**（`REDROID_ADAPTER=mock`，production 強制 real — 即 production 無真 Redroid 環境時 device 功能唔會假裝可用）
+- **E2E 截圖**：system Chrome（`channel:'chrome'`）— 無 Playwright 專屬 build 嘅 host 上可重現
+
+### C. 需特定硬體（明列未完成 — MD 要求，唔假裝驗證）
+
+Redroid 真機 6 項（ADR §14.7，本機 kernel 6.8.0-117-generic 無 binder_linux/ashmem_linux，起唔到）：
+1. 真 Redroid 容器 boot（任何映像）— 未驗證
+2. 真 ADB 連通（真 adb server ↔ 真 redroid 5555）— 未驗證（依賴 1）
+3. 真 logcat/getprop/dumpsys 輸出對接 — 未驗證（白名單引擎本身已 live 驗證 argv/cap/timeout）
+4. GPU 硬渲染驗證（`verified` 狀態嘅唯一來源）— 未啟用（by design：無 in-device render check，GPU 狀態最多 `software`/`unverified`）
+5. privileged template 真機必要性實測 — 未驗證（template 已按 MD 建好 + reason 標籤）
+6. redroid 映像 pull 策略（自動 pull/registry auth）— 未建（版本 pin 已有）
+
+**需有 binder 嘅 host**（kernel module `binder_linux` + `/dev/binder*`，或 Android 本機）先可以收貨 C 類；屆時 preflight 會自動轉 `supported`，UI 如實顯示。
+
+## 已知限制 + 修復建議（MD §18：唔得「基本完成」掩蓋）
+
+| # | 限制 | 影響 | 修復建議 |
+|---|------|------|----------|
+| K1 | **無真機 Redroid**（C 類 6 項） | device 功能只能 mock 驗證；production 無 binder host = device 頁不可用（誠實顯示，唔假裝） | 有 binder 嘅 host 上跑 `e2e` device 段 + 4 區診斷真對接（ADR §14.7 清單） |
+| K2 | **AI provider 只收貨到 mock**（B 類） | 真模型行為（長輸出/多輪 tool call/真實 token 耗費）未實打 | 接真 provider 後跑 `e2e/secret-redaction-e2e.mjs` 同長任務 timeout/cancel 實測 |
+| K3 | **無自動 encryption key 輪替工具** | `APP_ENCRYPTION_KEY` 輪替 = 所有 provider 要重傳 key（runbook §3.4 手動流程） | 加 `rotate-encryption.js` CLI（支持 legacy key fallback 重加密，一次性） |
+| K4 | **無 data retention/prune 策略** | `task_run_events` 長期增長（P6 實測 1600 行 = 0.7 MB dump；長線要留意） | 加 prune job（按 age/size）+ DB 大小儀表（runbook §8） |
+| K5 | **無 container template 修改/刪除 API** | template 改動要 DB 層手動（admin 判斷） | 加 `PUT/DELETE /api/templates/:id`（DELETE 要 IN_USE 檢查） |
+| K6 | **無 user 管理 API/UI** | 加人 = DB 層手動（argon2id hash）；無 deactivate 路徑（只有 session 登出） | P7：users CRUD + deactivate + 密碼重置流程（設 admin-only） |
+| K7 | **SSE 無 server-push 重連事件去重保證以外嘅多 tab 同步** | 多 tab 同一 run = 各開一條 SSE（有並行 cap 503） | 長線考慮 single-tab 設計或 Redis pub/sub fan-out |
+| K8 | **單機部署假設** | 無多 api 實例/水平擴展設計（SSE slot、rate limit 皆 per-process；DB advisory 未用） | 如要擴展：先移 rate limit + SSE slot 入 Redis（ADR 流程） |
+| K9 | **E2E 要 system Chrome** | 無 `channel:'chrome'` 嘅 CI 要 `npx playwright install chromium` | CI 配瀏覽器 cache（或 Docker 內 e2e） |
+| K10 | **dev 環境 `.env` 手動管理** | 秘密喺 `.env`（gitignored）— 無 secret manager 整合 | 生產化時接 env-secrets（docker secrets 或 vault），改 env 注入點唔變 |
+| K11 | **web 無 error boundary** | P6 修了根因（`useApi` pending 派生），但未加全局 error boundary — 未來任何新 render bug 仍可能白屏 | P7：加 React error boundary + fallback UI |
+
+**未完成項目總計**：C 類 6 項（硬體）+ K3/K5/K6/K9（小工單，P7 候選）+ K4/K7/K8/K10/K11（設計決策，非 bug）— 其餘 P0–P6 scope 全部收貨（證據鏈：每 phase ADR §13/§14/§15 + `docs/evidence/`）。
 
 ## 疑難排解
 
@@ -332,7 +435,7 @@ P5 覆蓋（80 tests：unit 33 + integration 47）：
 | api 一直 unhealthy | `sg docker -c 'docker compose logs api'`：多数係 DB/Redis 未 ready（等 `depends_on` 過）或 `.env` 秘密錯（api 會即刻 env 驗證失敗退出） |
 | `ready` 503 但 `live` 200 | 看 `ready` body 嘅 `dependencies.*.error`：db/redis 問題查 compose；docker down 唔係 503（degraded） |
 | `prisma migrate` 失敗 | 看 api log；migration 衝突 → 唔好手改已 apply 嘅 migration，新建 migration；`migrate status` 查漂離 |
-| 忘記 admin 密碼 | 無 reset 路徑（設計如此）：`down -v` 重置，或直接 DB 改 `users.password_hash`（先用 `node -e` 生成 argon2id hash） |
+| 忘記 admin 密碼 | 無 reset 路徑（設計如此）：`down -v` 重置，或直接 DB 改 `users.password_hash`（完整安全流程見 `docs/runbook.md` §6.4） |
 | web 開到但登入 404/502 | api 未 healthy（`compose ps`）；web 反代上游 `http://api:3000` 唔通 |
 | 重建後行为異常 | `down -v` 係唯一徹底法；`down`（唔帶 -v）會保留舊 volume |
 | 改咗 schema 但容器內未生效 | `prisma generate` 喺 **build 時** 跑（api.Dockerfile production stage），`migrate deploy` 喺 **每次啟動** 跑（entrypoint）。schema 改動要 `docker compose up -d --build api` 重建，唔係重啟 |
@@ -342,14 +445,14 @@ P5 覆蓋（80 tests：unit 33 + integration 47）：
 全部關鍵依賴版本鎖定表：`docs/architecture-decisions.md` §版本鎖定（P0 交付）。
 改版本 = 先過 ADR 流程，唔好直接 bump。
 
-## Roadmap（P0 已完成）
+## Roadmap（P0–P6 全部完成）
 
 | 階段 | 範圍 | 狀態 |
 |------|------|------|
 | P0 | Repo + docs + 版本鎖定 | ✅ |
-| **P1** | **Skeleton + Deployment（本 commit 系列）** | ✅ |
+| P1 | Skeleton + Deployment | ✅ |
 | P2 | 容器核心（DockerService 全套、API、模板 allowlist、Web UI 兩頁、SSE） | ✅（live daemon 實測過，2026-10-14） |
 | P3 | AI 任務引擎：providers（AES-256-GCM 加密 key）+ task queue + tool registry + approval gate + Web UI | ✅（live 實測 2026-10-15，全循環 DB+SSE 實證） |
-| P4 | 排程（schedules → BullMQ 6 Job Scheduler，PG-first）+ Web UI | ✅（live 實測 2026-10-15，7 項硬驗收全過；通知留 P5+） |
+| P4 | 排程（schedules → BullMQ 6 Job Scheduler，PG-first）+ Web UI | ✅（live 實測 2026-10-15，7 項硬驗收全過） |
 | P5 | Redroid Devices（template 受控建立 + localhost-only ADB + 白名單診斷 + GPU 誠實 + mock 驗證主路徑）| ✅（live 實測 2026-10-15，7 項硬驗收全過；真機 Redroid 未完成清單見 ADR §14.7） |
-| P6 | 收尾：Settings 頁 + 用户管理 + audit 檢視（原 P5 範圍）+ e2e、docs、security review + P3/P4 遺留 flag（`?managed=true` exception 表、concurrency_key/排程通知） | 待開 |
+| P6 | UX 收尾 + 安全（audit 清零/redaction 實打/threat-model 最終）+ E2E 14/14 + docs（README/runbook/API 總表/ADR §15）+ 5 flag 收結 + clean install 實跑 | ✅（2026-10-15；證據 `docs/evidence/p6-*/`） |
