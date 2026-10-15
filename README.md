@@ -146,7 +146,7 @@ RBAC 角色階梯：`viewer < operator < admin`。401 = 未認證；403 = 角色
 
 錯誤分類（四類，見 `packages/shared` `DOCKER_ERROR`）：`CONTAINER_NOT_FOUND`(404)／`DOCKER_DAEMON_UNAVAILABLE`(503)／`DOCKER_PERMISSION_DENIED`(502)／`DOCKER_TIMEOUT`(504)／其餘 `DOCKER_ERROR`(502)。`NOT_MANAGED`(403) = managed gate；`NAME_TAKEN`/`FLOW_TOKEN_REUSED` 等 = 路由層 409/400。
 
-**P3 起已接**：`/tasks`（list + detail）。**P4–P5 將接**：`/schedules`、`/devices`、`/ai-providers` 管理頁、`/settings` 等 — 見 `docs/architecture-decisions.md`。
+**P3 起已接**：`/tasks`（list + detail）。**P4 已接**：`/schedules`。**P5 已接**：`/devices`（Redroid devices list + detail 診斷頁）— 見 `docs/architecture-decisions.md`。
 
 ### P3 任務 API（已交付）
 
@@ -284,6 +284,45 @@ P4 覆蓋（57 tests）：
 
 總計 **343 tests**（P1 32 + P2 152 + P3 102 + P4 57；另 1 gated-skip 需 `TEST_REAL_REDIS=1`）。測試全部 hermetic（fake db/redis/docker），`node --test`（Node 內建 runner，零 test 依賴）。
 
+### P5 Redroid Devices API（已交付 — live 實測 2026-10-15，證據 `docs/p5-evidence/`）
+
+受控 Redroid Android 設備層：device 只可經 **Redroid template** 建立（client 傳唔到任何
+Docker HostConfig）；`androidboot.*` 做**容器啟動參數**（唔係 Env）；ADB 5555 只綁
+**127.0.0.1**；診斷 = 白名單 3+2 op（getprop/dumpsys/logcat + connect/get-state）固定命令、
+參數陣列、逾時、輸出 cap；GPU 狀態誠實（DeviceRequests ≠ verified — P5 無 in-device
+render check，host 模式 = `unverified`，swiftshader = `software`）。
+
+| Method | Path | 說明 | Auth |
+|--------|------|------|------|
+| GET | `/redroid/preflight` | 真主機檢查（kernel modules / device nodes / dmesg / docker / data root）；三態 `supported\|unsupported\|unknown` — 讀唔到 = unknown，嚴禁假報 | viewer+ |
+| GET/POST/PUT/DELETE | `/redroid/templates[/:id]` | Redroid template CRUD：image **pin 死**（latest/nightly 拒）、`privileged` 只可 admin 建 + reason 標籤 10–200 字 | 讀 viewer+；寫 admin |
+| POST | `/devices/redroid` | 由 template 建 device：`{name, templateName, idempotencyKey}` — body 冇任何 Docker 欄位（注入 = 400）；response 帶 preflight（warning，唔係 fail-closed） | operator+ |
+| GET | `/devices/redroid[/:id]` | list / detail（name/pinned image/Android 版本/`127.0.0.1:<port>`/容器狀態/ADB 狀態/解析度/DPI/FPS/GPU 健康/最後診斷時間） | viewer+ |
+| POST | `/devices/redroid/:id/start\|stop\|restart` | 生命週期（P2 action protocol：inspect→op→confirm；container 消失 = `missing` + 409，誠實唔假報） | operator+ |
+| POST | `/devices/redroid/:id/diagnostics` | **4 個獨立結果區**（kernel / container-logs / adb-connectivity / gpu-verification），每區 `executed` + `status` — 未執行 = `未驗證`，從無假 pass | operator+ |
+| GET | `/devices/redroid/:id/logcat?tail=` | 白名單 logcat（server 永遠加 `-d -t <n>`）；tail clamp 到 `REDROID_LOGCAT_TAIL_MAX`（5000）；`truncated`（byte cap）+ `mayHaveMore`（window 披露） | operator+ |
+| DELETE | `/devices/redroid/:id` | 兩步 confirm（type name）；`removeData=true` 先 rm `/data`（realpath-scoped）；container 先除、data 預設保留 | admin |
+
+**無 `POST /exec` 端點**（任意命令 = 404）；冇 `shell:true`；ADB binary 固定路徑。
+
+P5 覆蓋（80 tests：unit 33 + integration 47）：
+
+| 檔案 | 範圍 |
+|------|------|
+| `tests/unit/preflight.test.js` | 真三態邏輯（absent/present/unknown）、dmesg cap、hung subprocess timeout、GPU informational-only、port probe |
+| `tests/unit/adb-whitelist.test.js` | 精確 argv 構造、allowlist 拒絕、注入（`;`/`$(`/反引号/非 loopback target）、logcat 嚴格整數 + cap、固定 binary + 無 shell、非零 exit 透傳、byte 截斷 + truncated、timeout |
+| `tests/unit/redroid-seed.test.js` | seed 冪等 + template 形狀（pin、privileged reason） |
+| `tests/integration/redroid-lifecycle.test.js` | RBAC 401/403 矩陣、image pinning 拒、privileged reason、create 形狀斷言（錄到嘅 docker call：HostIP 127.0.0.1 / Cmd androidboot.* / Env 空 / `/data` bind / DeviceRequests 只 host）、0.0.0.0/privileged/hostConfig 注入 400、冪等、name 409、**真 127.0.0.1 碰撞 → next port + 用盡 503**、全生命週期 + audit、delete confirm + data dir 保留/清除、`/exec` 404、template in-use 409、disabled template 409、mock honesty 標籤 |
+| `tests/integration/redroid-diagnostics.test.js` | 4 區獨立性 + executed/status 矩陣、host→unverified、swiftshader→software、stopped→adb 未執行=未驗證、offline + 单次 connect、logcap default/explicit/**server-side clamp** + byte-cap 截斷、RBAC、boot-crash device 誠實 `created` |
+
+全套 **423 tests**（422 pass + 1 gated-skip，0 fail）。
+
+> **本機現實（誠實聲明）**：kernel 6.8.0-117-generic **無 binder_linux/ashmem_linux** →
+> 真 Redroid 容器喺本機起唔到。P5 = mock 驗證主路徑 + 真 preflight 對本機實測
+> （`overall: unsupported`，UI 如實顯示）。`REDROID_ADAPTER=mock` 只可喺非 production
+> 啟用（config 層強制 production = real）。真機 Redroid 未完成清單：
+> `docs/architecture-decisions.md` §14.7。
+
 ## 疑難排解
 
 | 症狀 | 診斷 / 處理 |
@@ -312,5 +351,5 @@ P4 覆蓋（57 tests）：
 | P2 | 容器核心（DockerService 全套、API、模板 allowlist、Web UI 兩頁、SSE） | ✅（live daemon 實測過，2026-10-14） |
 | P3 | AI 任務引擎：providers（AES-256-GCM 加密 key）+ task queue + tool registry + approval gate + Web UI | ✅（live 實測 2026-10-15，全循環 DB+SSE 實證） |
 | P4 | 排程（schedules → BullMQ 6 Job Scheduler，PG-first）+ Web UI | ✅（live 實測 2026-10-15，7 項硬驗收全過；通知留 P5+） |
-| P5 | Settings 頁面 + 用户管理 + audit 檢視 | 待開 |
-| P6 | 收尾：e2e、docs、security review | 待開 |
+| P5 | Redroid Devices（template 受控建立 + localhost-only ADB + 白名單診斷 + GPU 誠實 + mock 驗證主路徑）| ✅（live 實測 2026-10-15，7 項硬驗收全過；真機 Redroid 未完成清單見 ADR §14.7） |
+| P6 | 收尾：Settings 頁 + 用户管理 + audit 檢視（原 P5 範圍）+ e2e、docs、security review + P3/P4 遺留 flag（`?managed=true` exception 表、concurrency_key/排程通知） | 待開 |

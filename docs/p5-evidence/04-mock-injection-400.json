@@ -1,0 +1,4 @@
+== attempt 1: hostConfig 0.0.0.0 injection ==
+{"error":{"code":"VALIDATION_ERROR","message":"Request validation failed: must NOT have additional properties","requestId":"4389a8de-061b-4c27-99f8-d15a4075a03d"}}
+== attempt 2: privileged field injection ==
+{"error":{"code":"VALIDATION_ERROR","message":"Request validation failed: must NOT have additional properties","requestId":"92e33142-b945-4ad9-af3c-40f90f1ce355"}}

@@ -460,3 +460,130 @@ latest                   | updated 2025-06-29
 5. /health 一嚙死 + sync hang（§13.8）。
 
 教訓：**fake queue 必須逐項對齊真 BullMQ 形狀**（P4 已補：next-fire 實例化、`:jobId` 驗證、template 形狀）— 但「形狀」之外嘅**行為**（offline queue、one-shot ready）仍只能靠 live 實錚 → 每個 phase 收尾必做 redis down/up + restart 實測。
+
+## 14. P5 架構決定（Redroid Devices，2026-10-15 — 全部經 live 實測驗證）
+
+P5 = 受控 Redroid Android 設備層：template 受控建立、localhost-only ADB、白名單診斷、
+GPU 誠實語義、per-device 持久化。本機（無 binder_linux/ashmem_linux）起唔到真 Redroid，
+故 P5 驗證 = **mock 主路徑 + 真 preflight 對本機實測**（MD 允許；真機 Redroid 列 = 未完成，§14.7）。
+
+### 14.1 參數位置（MD §2.1 硬規則）— `androidboot.*` = 容器啟動參數，唔係 Env
+
+- `androidboot.redroid_width/height/dpi/fps/gpu_mode` 全部作為容器 **Cmd 啟動參數**
+  （redroid-doc 官方方式）傳入；**`Env: []` 明確空**。
+- 理由：redroid 映像嘅 init 由 kernel cmdline 讀 `androidboot.*`；塞 Env 要 redroid 內部
+  有 readenv 邏輯先生效（版本敏感、無文件保證）。啟動參數 = 映像層級保證。
+- `ro.xxx` property override 屬「實測先可用」範圍 — **MVP 唔用**（MD §2.1）。
+- 實測證據：mock dockerode 記錄到嘅 create call，`Config.Cmd` 含 5 個 androidboot 參數、
+  `Config.Env === []`（`tests/integration/redroid-lifecycle.test.js` 斷言）。
+
+### 14.2 ADB 只綁 127.0.0.1（MD §1.2 硬規則）
+
+- 容器 5555（redroid 映像固定）publish 到 host，**HostIP 係 server-side 常數
+  `REDROID_LOOPBACK_BIND = '127.0.0.1'`** — 創建 route schema 根本冇 bind/HostConfig
+  欄位（additionalProperties: false），client 連「試」都試唔到（實測 0.0.0.0 / privileged /
+  hostConfig 注入全 400）。
+- ADB port（15000 起）由 server 分配：DB unique 約束 + **真 127.0.0.1 bind probe**
+  （`checkPortAvailable`）+ 碰撞重試 + 用盡 503（實測 collision → next port）。
+- 診斷引擎 target 校驗：`^127\.0\.0\.1:([0-9]{1,5})$` + 1..65535 — localhost/::1/0.0.0.0/
+  公網/注入全拒（unit 14 case）。
+
+### 14.3 診斷白名單（MD §1.2/§7 硬規則）— 零任意 shell
+
+- 引擎（`services/adb-whitelist.js`）係平台同 ADB 對話嘅**唯一通道**：
+  - shell ops 只 3 類：`getprop`（property allowlist 23 個固定 key；無參 full-dump 另 cap）、
+    `dumpsys <service>`（service allowlist 15 個）、`logcat`（**server 側永遠加 `-d -t <n>`**，
+    n 嚴格整數 ≤ `redroidLogcatTailMax`（5000）— 永遠唔會 stream）。
+  - 固定非 shell ops：`connect` / `get-state`（連線診斷用，零 shell）。
+  - **固定二進制路徑**（`REDROID_ADB_BINARY`，預設 `/usr/bin/adb`，必須 absolute）、
+    **參數陣列 + `execFile`（`shell:true` 物理上唔存在）**、逾時、stdout/stderr byte cap
+    （256KB 預設，截斷 = flagged `truncated`）。
+  - **冇 `POST /exec` 端點**（實測 404）；op 白名單外（`shell`/`pm list`/…）= 400。
+  - 注入 defense-in-depth：target 正則、prop key 正則 + allowlist、service allowlist、
+    tail 嚴格整數 — 多層，任何一層都夠拒。
+- 輸出口徑（honesty flags）：`truncated`（byte cap 硬截斷）與 `mayHaveMore`（tail window
+  未必够 buffer 頭 — 真 adb 無法拉 report，UI 披露而唔係假裝完整）係兩個唔同信號。
+
+### 14.4 GPU 誠實語義（MD §2.4 硬規則）— 設定 ≠ 實測
+
+- `gpuStatus` 狀態機：`unknown | unverified | software | verified`。
+  - `host` 模式 = DeviceRequests 設定咗 GPU **→ 初始 `unverified`（未驗證）**。
+    **`verified` 只可由 in-device render check 產生 — P5 冇呢個 check，故 P5 永遠唔會
+    發 `verified`**（UI/API 雙層：service 唔發、UI badge 原樣顯示）。
+  - `swiftshader_indirect` = `software`（設定嘅軟體渲染 — 照實顯示「軟體/降級」）。
+  - nvidia-smi 成功 / DeviceRequests 存在 **≠ GPU 正常**（MD 逐字）— preflight 嘅 GPU
+    偵測只做 informational（`gpu.verified: false` 固定），kernel zone 顯示 driver 資訊但
+    gpuVerification zone 仍 `unverified`。
+- 實測證據：mock gpu device 4-zone 診斷 = `unverified` + note；UI badge「未驗證 (unverified)」；
+  swiftshader device = `software`。全套 test 斷言 mock 永遠唔發 `verified`。
+
+### 14.5 Preflight（MD §10.1）— 真執行、fail-open with explicit warning
+
+- `GET /api/redroid/preflight`（+ create 前自動跑，結果隨 response 返回）：kernel
+  modules（/proc/modules 讀 binder_linux/ashmem_linux）、device nodes、dmesg 相關行（cap）、
+  docker 可達性、data root、port。
+- 三態誠實：`supported | unsupported | unknown` — 讀唔到（權限/平台）= `unknown`，
+  **嚴禁假報**（dmesg EPERM 就話 dmesg 讀唔到 + 用 /proc/modules 判斷）。
+- **設計決定（工單要求寫清）：preflight 失敗 = warning，唔係 fail-closed**：
+  - create/start 可以照行（template 受控 + mock/managed 路徑），但 response 必帶
+    `preflight.warnings` + UI banner 獨立顯示；
+  - 4-zone 診斷嘅 kernel zone **獨立顯示**真 preflight 結果（MD §10.1 逐字）；
+  - 理由：host 層模組狀態可能喺 runtime 改變（root 後 modprobe）；fail-closed 會令
+    「預檢時 absent、之後 load 咗」嘅 host 永遠建唔到 device。誠實顯示 + 用戶決定 = 正確
+    分工；假報成功 = 打回（鐵律）。
+- 本機實測（真 adapter，生產 stack）：`overall: unsupported`，binder_linux/ashmem_linux
+  `absent`、device nodes 全 absent、dmesg EPERM（如實）、data root absent — 見 §14.8。
+
+### 14.6 Mock 驗證邊界（工單 scope 8）
+
+- `REDROID_ADAPTER=mock`（config 層）→ 全套 deterministic mock：dockerode-shaped client
+  （recording create call 供斷言）+ canned adb（每 whitelisted argv 固定輸出、記錄
+  (binary, argv) 供 zero-shell 斷言）+ mock preflight（**全部帶 `mock: true`**）。
+- **配置護欄：`NODE_ENV=production` 時 config 強制 `real`**（mock 永不跑生產 host）—
+  compose stack（production）因此天生跑真 adapter + 真 preflight。
+- mock 嘅誠實義務：GPU `verified` 永遠 false；preflight 帶 mock 標籤；dmesg/boots 輸出
+  明確「mock」。任何 UI 顯示 mock 結果必須可識別（badge/label）— 實測 UI 有
+  「⚠ mock preflight — deterministic simulation, not a real host check」。
+- **mock 唔覆蓋嘅**（真機未完成，§14.7）：真 redroid 映像 boot、真 kernel module 互動、
+  真 adb daemon 行為、GPU render check。
+
+### 14.7 真機 Redroid 未完成清單（MD 要求明列 — 交付誠實項）
+
+本機（kernel 6.8.0-117-generic）**無 binder_linux / ashmem_linux module、無 /dev/binder\* /
+/dev/ashmem**（CEO 實核 + P5 preflight 實測），故以下列**未完成**，留待有 binder 嘅 host：
+
+1. **真 Redroid 容器 boot**（任何映像）— 本機起唔到（`/dev/binder not found`）。
+2. **真 ADB 連通**（真 adb server ↔ 真 redroid 5555）— 依賴 1。
+3. **真 logcat / getprop / dumpsys 輸出對接**（白名單引擎本身已 live 驗證 argv/cap/timeout；
+   對真機 adb 嘅兼容 = 未驗證）。
+4. **GPU 硬渲染驗證**（in-device render check → `verified` 狀態嘅唯一來源）— P5 無此 check，
+   故 `verified` 狀態全平台未啟用（by design）。
+5. **privileged template 嘅真機必要性**（redroid 官方文檔：部分配置需 privileged + cgroup 調整）
+   — 本機無法實測；template 已按 MD 要求建好（`redroid-15-gpu-privileged`，reason 標籤）。
+6. **redroid 映像 pull 策略**（pin 死版本 = 有；自動 pull/registry auth = 未建）。
+
+**已完成嘅「真」部分**：真 preflight（本機實測 unsupported，§14.8）、真 port 分配（真
+127.0.0.1 probe + 碰撞）、真 docker create 形狀（mock recording + code review 斷言）、
+真 DB/audit/RBAC 全路徑（mock adapter 行晒）。
+
+### 14.8 Live 驗收證據（2026-10-15，本機 — 全部實測可重現）
+
+| 硬驗收 | 證據（`docs/p5-evidence/`） |
+|--------|------|
+| 1. Preflight 真跑本機 | `01-real-preflight.json`（生產 stack 真 adapter：kernel 6.8.0-117-generic、binder_linux/ashmem_linux absent、dmesg EPERM 如實、overall unsupported）+ `02-prod-ui-devices.png`（UI banner 顯示真結果 + 「本機起唔到真 Redroid」解釋，零假「已驗證」） |
+| 2. Mock 生命週期 | `03-mock-create-swiftshader.json` / `03b-mock-create-gpu.json`（create→running、adbPort 15000/15001、adbBind 127.0.0.1）+ `05-mock-diag-running.json`（stop→exited→restart→running 全程審計：audit_events 5 類 redroid 動作全入）+ integration 30/30（create/start/stop/restart/delete + 碰撞 + data dir volume 斷言） |
+| 3. 127.0.0.1 強制 | create response `adbBind:"127.0.0.1"`（兩 device）+ `04-mock-injection-400.json`（hostConfig 0.0.0.0 / privileged 注入 = 400 additional properties）+ unit/integration 斷言 HostIP 常數 |
+| 4. 零任意 shell | `POST /exec` = 404（integration）+ 白名單外 op 400（unit 14 case）+ 注入（`;`/`$(`/反引号）全拒（unit）+ 實測 `04-mock-injection-400.json` |
+| 5. 輸出 cap | `06-mock-logcat-cap.json`（tail=999999 → effective 5000 server-side clamp）+ `06b-mock-logcat-default.json`（200）+ byte cap 256KB 截斷 + truncated flagged（integration）+ `07-mock-ui-logcat.png`（UI 顯示 cap 披露） |
+| 6. GPU 誠實 | `05b-mock-diag-gpu.json`（host device gpuVerification = **unverified** + MD §2.4 note）+ `02/03` UI badge「未驗證 (unverified)」「software / 降級」+ mock 永遠唔發 verified（test 斷言） |
+| 7. 全套綠 + 其餘 | 423 tests（422 pass + 1 gated-skip，0 fail）；tsc：本 repo JS-only（P4  precedent §P4-progress — 等效 gate = `vite build` 綠，304KB bundle）；secret scan（P5 diff）零命中；worker **0 mounts**（無 socket）；api 只 socket ro；P0–P4 已收貨檔案零行為改動（diff：app.js/config.js 純 additive；`fakes.js` + `schedule-service.test.js` = 見 §14.9） |
+
+### 14.9 P4 test-harness 修復（P5 期間發現，product code 零改動 — 披露項）
+
+P4 嘅 `sync guard: HUNG queue fails fast` unit test 喺 **a59f4ee（P4 收貨基線）已
+deterministic-cancelled**（worktree 實測 3/3）：fail-fast timer 係 `unref()`（正確 —
+timer 唔應該 keep process alive），但 hermetic test 冇其他 event-loop handle → unref'd
+timer 獨力撐唔住 loop → node:test 喺 guard fire 前 cancel（「event loop has already
+resolved」）。真機 HTTP server 永遠有 socket 住住 loop，故生產行為冇問題。
+修法：test 內加 ref'd keep-alive interval（mirror 生產 socket），**零 product code 改動**
+（`tests/unit/schedule-service.test.js` +21 行）。修後 24/24 ×3 穩定。
