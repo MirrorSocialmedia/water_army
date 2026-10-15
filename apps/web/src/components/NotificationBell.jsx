@@ -87,17 +87,17 @@ export function NotificationBell({ canMarkRead }) {
               <span className="muted" title="viewer 只讀 — 需要 operator 以上權限">只讀</span>
             )}
           </div>
-          {list.loading ? (
+          {list.loading || !list.data ? (
             <p className="muted bell-hint">載入中…</p>
           ) : list.error ? (
             <p className="muted bell-hint">載入失敗 — 重開面板或重新整理頁面。</p>
-          ) : list.data?.items?.length === 0 ? (
+          ) : list.data.items.length === 0 ? (
             <p className="muted bell-hint">暫無通知 — 排程首次完成/失敗後會出現在這裡。</p>
           ) : (
             <ul className="bell-list">
               {list.data.items.map((n) => (
                 <li key={n.id} className={n.isRead ? 'bell-item' : 'bell-item unread'}>
-                  <a className="bell-title" href={`#tasks/${encodeURIComponent(n.runId)}`} onClick={() => setOpen(false)}>
+                  <a className="bell-title" href={`#/tasks/${encodeURIComponent(n.runId)}`} onClick={() => setOpen(false)}>
                     <span className={`pill ${STATUS_PILL[n.status] ?? 'pill-disabled'}`}>{n.status}</span>
                     <span className="bell-title-text">{n.title}</span>
                   </a>

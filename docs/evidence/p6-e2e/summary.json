@@ -1,0 +1,97 @@
+{
+  "at": "2026-10-15T05:19:41.505Z",
+  "base": "http://127.0.0.1:3012",
+  "steps": [
+    {
+      "step": "01 login page renders",
+      "ok": true,
+      "detail": "/home/kenneth/.openclaw/workspace/water_army/docs/evidence/p6-e2e/01-login-page.png"
+    },
+    {
+      "step": "02 dashboard real counters (fleet ≥3 running — flag #2 live)",
+      "ok": true,
+      "detail": "api: {\"available\":true,\"total\":3,\"running\":3,\"stopped\":0,\"attention\":0,\"partial\":false} /home/kenneth/.openclaw/workspace/water_army/docs/evidence/p6-e2e/02-dashboard-counters.png"
+    },
+    {
+      "step": "03 containers: platform trio listed as managed",
+      "ok": true,
+      "detail": "/home/kenneth/.openclaw/workspace/water_army/docs/evidence/p6-e2e/03-containers-managed.png"
+    },
+    {
+      "step": "04 container detail: logs + SSE pill live",
+      "ok": true,
+      "detail": "pill=live logLines=1 /home/kenneth/.openclaw/workspace/water_army/docs/evidence/p6-e2e/04-container-detail-logs.png"
+    },
+    {
+      "step": "05 task run created from UI",
+      "ok": true,
+      "detail": "runId=720ed74c-6ae1-4ba4-bf23-0440e5b16825 post=202 /home/kenneth/.openclaw/workspace/water_army/docs/evidence/p6-e2e/05-tasks-create-form.png"
+    },
+    {
+      "step": "06 task run reached terminal via live worker",
+      "ok": true,
+      "detail": "status=succeeded /home/kenneth/.openclaw/workspace/water_army/docs/evidence/p6-e2e/06-task-detail-terminal.png"
+    },
+    {
+      "step": "06b task detail renders the event stream",
+      "ok": true,
+      "detail": " Water ArmyDocker + AI controlDashboardContainersDevicesTasksSchedulesSettin"
+    },
+    {
+      "step": "07 schedule created from UI",
+      "ok": true,
+      "detail": "post=201 e2e-sched-1792041524541 /home/kenneth/.openclaw/workspace/water_army/docs/evidence/p6-e2e/07-schedule-create-form.png"
+    },
+    {
+      "step": "08 run-now fired + terminal + notification for THIS run",
+      "ok": true,
+      "detail": "run=2e6c132c status=succeeded notif=true unread=1 /home/kenneth/.openclaw/workspace/water_army/docs/evidence/p6-e2e/09-notification-unread.png"
+    },
+    {
+      "step": "09 bell item visible + deep-link href",
+      "ok": true,
+      "detail": "item=\"succeeded[e2e-sched-1792041524541] compl\" href=#/tasks/2e6c132c-6ad4-4ba7-b759-54851c6ee3e4 /home/kenneth/.openclaw/workspace/water_army/docs/evidence/p6-e2e/10-bell-open.png"
+    },
+    {
+      "step": "09b deep-link lands on run detail",
+      "ok": true,
+      "detail": "http://127.0.0.1:3012/#/tasks/2e6c132c-6ad4-4ba7-b759-54851c6ee3e4"
+    },
+    {
+      "step": "09c mark-all-read clears badge",
+      "ok": true,
+      "detail": "badge=0(—) /home/kenneth/.openclaw/workspace/water_army/docs/evidence/p6-e2e/11-bell-marked-read.png"
+    },
+    {
+      "step": "10 RBAC: viewer has no create form + direct POST 403",
+      "ok": true,
+      "detail": "form=0 api=403 /home/kenneth/.openclaw/workspace/water_army/docs/evidence/p6-e2e/12-rbac-viewer-no-write.png"
+    },
+    {
+      "step": "11 logout returns to login",
+      "ok": true,
+      "detail": "/home/kenneth/.openclaw/workspace/water_army/docs/evidence/p6-e2e/13-logout-back-to-login.png"
+    }
+  ],
+  "consoleIssues": [],
+  "screenshots": [
+    "/home/kenneth/.openclaw/workspace/water_army/docs/evidence/p6-e2e/01-login-page.png",
+    "/home/kenneth/.openclaw/workspace/water_army/docs/evidence/p6-e2e/02-dashboard-counters.png",
+    "/home/kenneth/.openclaw/workspace/water_army/docs/evidence/p6-e2e/03-containers-managed.png",
+    "/home/kenneth/.openclaw/workspace/water_army/docs/evidence/p6-e2e/04-container-detail-logs.png",
+    "/home/kenneth/.openclaw/workspace/water_army/docs/evidence/p6-e2e/05-tasks-create-form.png",
+    "/home/kenneth/.openclaw/workspace/water_army/docs/evidence/p6-e2e/06-task-detail-terminal.png",
+    "/home/kenneth/.openclaw/workspace/water_army/docs/evidence/p6-e2e/07-schedule-create-form.png",
+    "/home/kenneth/.openclaw/workspace/water_army/docs/evidence/p6-e2e/08-schedule-created.png",
+    "/home/kenneth/.openclaw/workspace/water_army/docs/evidence/p6-e2e/09-notification-unread.png",
+    "/home/kenneth/.openclaw/workspace/water_army/docs/evidence/p6-e2e/10-bell-open.png",
+    "/home/kenneth/.openclaw/workspace/water_army/docs/evidence/p6-e2e/11-bell-marked-read.png",
+    "/home/kenneth/.openclaw/workspace/water_army/docs/evidence/p6-e2e/12-rbac-viewer-no-write.png",
+    "/home/kenneth/.openclaw/workspace/water_army/docs/evidence/p6-e2e/13-logout-back-to-login.png"
+  ],
+  "unexpectedConsoleErrors": [],
+  "expectedConsoleWhitelist": [
+    "GET /api/auth/me 401 on login screen (session probe — app shell checks cookie state)"
+  ],
+  "passed": true
+}

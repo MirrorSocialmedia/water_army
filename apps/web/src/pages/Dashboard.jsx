@@ -112,7 +112,7 @@ export function Dashboard() {
           <ul className="recent-failed">
             {s.taskRuns.recentFailed.map((r) => (
               <li key={r.id}>
-                <a href={`#tasks/${encodeURIComponent(r.id)}`}>{r.id.slice(0, 8)}</a>
+                <a href={`#/tasks/${encodeURIComponent(r.id)}`}>{r.id.slice(0, 8)}</a>
                 <span className={`pill ${STATUS_PILL[r.status] ?? 'pill-disabled'}`}>{r.status}</span>
                 {r.errorCode ? <code className="muted">{r.errorCode}</code> : null}
                 <time className="muted">{r.finishedAt ? new Date(r.finishedAt).toLocaleString() : '—'}</time>

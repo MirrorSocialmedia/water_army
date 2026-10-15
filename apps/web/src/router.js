@@ -14,7 +14,6 @@ const ROUTES = [
   { path: '/devices/:id', page: 'devices-detail' },
   { path: '/tasks', page: 'tasks' },
   { path: '/tasks/:id', page: 'tasks-detail' },
-  { path: '/tasks/:id', page: 'tasks-detail' },
   { path: '/schedules', page: 'schedules' },
   { path: '/settings', page: 'settings' },
 ];

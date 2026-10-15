@@ -179,7 +179,7 @@ function ScheduleForm({ initial, defaults, defs, editing, onSubmit, onCancel, su
             <input
               className="input mono"
               type="number"
-              min={1}
+              min={1000}
               step={1000}
               required
               value={form.intervalMs}

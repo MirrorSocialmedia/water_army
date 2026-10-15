@@ -55,5 +55,10 @@ export function useApi(fetcher, deps = [], opts = {}) {
     setPoll(0); // a manual reload always counts as a real (loading) fetch
     setTick((t) => t + 1);
   }, []);
-  return { data, error, loading, reload };
+  // P6 fix: when `enabled` flips false→true the loading=true effect runs AFTER
+  // the first re-render — consumers saw {data:null, loading:false} for one
+  // frame and crashed (notification bell white-screened the app). Report
+  // "pending" until the first data/error lands.
+  const pending = loading || (enabled && data === null && error === null);
+  return { data, error, loading: pending, reload };
 }
