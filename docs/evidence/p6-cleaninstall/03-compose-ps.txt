@@ -1,0 +1,6 @@
+NAME                    STATUS
+water-army-api-1        Up 6 minutes (healthy)
+water-army-postgres-1   Up 6 minutes (healthy)
+water-army-redis-1      Up 6 minutes (healthy)
+water-army-web-1        Up 6 minutes (healthy)
+water-army-worker-1     Up 6 minutes (healthy)

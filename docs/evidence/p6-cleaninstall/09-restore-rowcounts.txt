@@ -1,0 +1,6 @@
+     3 |       264 |            1624 |      128 |   284 |        11 |         1 |        12 |     15 |           2 |          3
+
+
+--- restore note ---
+dump(14:33 HKT): task_runs=260, task_run_events=1600, schedule_notifications=11
+current = dump + runs fired by restored ACTIVE schedules after worker restart (all schedule_id NOT NULL, created_at post-restore) — PG-first scheduler self-heal working as designed.

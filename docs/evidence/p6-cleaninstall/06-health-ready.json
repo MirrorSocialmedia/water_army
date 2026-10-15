@@ -1,0 +1,1 @@
+{"status":"ok","dependencies":{"postgres":{"status":"up"},"redis":{"status":"up"},"docker":{"status":"up"}},"uptimeSeconds":437}

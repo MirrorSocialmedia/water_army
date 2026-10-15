@@ -1,5 +1,5 @@
 {
-  "at": "2026-10-15T05:19:41.505Z",
+  "at": "2026-10-15T07:12:32.707Z",
   "base": "http://127.0.0.1:3012",
   "steps": [
     {
@@ -25,7 +25,7 @@
     {
       "step": "05 task run created from UI",
       "ok": true,
-      "detail": "runId=720ed74c-6ae1-4ba4-bf23-0440e5b16825 post=202 /home/kenneth/.openclaw/workspace/water_army/docs/evidence/p6-e2e/05-tasks-create-form.png"
+      "detail": "runId=be0de6dc-6f29-49e6-b412-a4aaa573d3c6 post=202 /home/kenneth/.openclaw/workspace/water_army/docs/evidence/p6-e2e/05-tasks-create-form.png"
     },
     {
       "step": "06 task run reached terminal via live worker",
@@ -40,22 +40,22 @@
     {
       "step": "07 schedule created from UI",
       "ok": true,
-      "detail": "post=201 e2e-sched-1792041524541 /home/kenneth/.openclaw/workspace/water_army/docs/evidence/p6-e2e/07-schedule-create-form.png"
+      "detail": "post=201 e2e-sched-1792048295066 /home/kenneth/.openclaw/workspace/water_army/docs/evidence/p6-e2e/07-schedule-create-form.png"
     },
     {
       "step": "08 run-now fired + terminal + notification for THIS run",
       "ok": true,
-      "detail": "run=2e6c132c status=succeeded notif=true unread=1 /home/kenneth/.openclaw/workspace/water_army/docs/evidence/p6-e2e/09-notification-unread.png"
+      "detail": "run=6d1d5ed4 status=succeeded notif=true unread=1 /home/kenneth/.openclaw/workspace/water_army/docs/evidence/p6-e2e/09-notification-unread.png"
     },
     {
       "step": "09 bell item visible + deep-link href",
       "ok": true,
-      "detail": "item=\"succeeded[e2e-sched-1792041524541] compl\" href=#/tasks/2e6c132c-6ad4-4ba7-b759-54851c6ee3e4 /home/kenneth/.openclaw/workspace/water_army/docs/evidence/p6-e2e/10-bell-open.png"
+      "detail": "item=\"succeeded[e2e-sched-1792048295066] compl\" href=#/tasks/6d1d5ed4-c712-461e-99d8-a9d46ce91d77 /home/kenneth/.openclaw/workspace/water_army/docs/evidence/p6-e2e/10-bell-open.png"
     },
     {
       "step": "09b deep-link lands on run detail",
       "ok": true,
-      "detail": "http://127.0.0.1:3012/#/tasks/2e6c132c-6ad4-4ba7-b759-54851c6ee3e4"
+      "detail": "http://127.0.0.1:3012/#/tasks/6d1d5ed4-c712-461e-99d8-a9d46ce91d77"
     },
     {
       "step": "09c mark-all-read clears badge",
