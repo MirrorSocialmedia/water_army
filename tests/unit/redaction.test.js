@@ -16,6 +16,7 @@ const SECRETS = {
   password: 'hunter2password',
   apiKey: 'sk-live-top',
   token: 'raw-token-xyz',
+  serviceToken: 'wa-service-token-9f8e7d6c5b4a',
 };
 
 function collectLogger() {
@@ -35,6 +36,7 @@ test('PINO_REDACT_PATHS covers the known secret fields', () => {
     'req.headers.authorization',
     'req.headers.cookie',
     'req.headers.x-api-key',
+    'req.headers.x-wa-service-token', // P6 T7: worker→API service token
   ]) {
     assert.ok(PINO_REDACT_PATHS.includes(key), `missing redact path: ${key}`);
   }
@@ -71,6 +73,17 @@ test('request headers are redacted (authorization / cookie / x-api-key)', () => 
   assert.ok(!out.includes(SECRETS.authorization));
   assert.ok(!out.includes(SECRETS.cookie));
   assert.ok(!out.includes(SECRETS['x-api-key']));
+  assert.ok(out.includes('***'));
+});
+
+test('worker→API service token header is redacted (P6 T7)', () => {
+  const { logger, lines } = collectLogger();
+  logger.info(
+    { req: { method: 'POST', url: '/api/containers/c1/restart', headers: { 'x-wa-service-token': SECRETS.serviceToken } } },
+    'service call',
+  );
+  const out = lines.join('');
+  assert.ok(!out.includes(SECRETS.serviceToken));
   assert.ok(out.includes('***'));
 });
 

@@ -148,6 +148,9 @@ export const PINO_REDACT_PATHS = Object.freeze([
   'req.headers.cookie',
   'req.headers.api-key',
   'req.headers.x-api-key',
+  // P6: worker→API service token (threat-model T7) — never log it, even if a
+  // future code path serializes req.headers.
+  'req.headers.x-wa-service-token',
   'password',
   'pass',
   'passwd',

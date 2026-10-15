@@ -163,6 +163,28 @@ ADB 無內建鑑權。場景：
 
 ---
 
+## T7. Worker→API Service Token（P2–P3 新增面）
+
+**風險描述**
+Worker 執行 tool 時經 HTTP 打回 API（`x-wa-service-token` = `WORKER_API_TOKEN`）。場景：
+1. Token 洩露（worker env / compose / log / 截圖）→ 攻擊者冒用 service-worker（operator 角色）調用 tool 端點（restart 容器、建 run 等）。
+2. Token 比較唔係 constant-time → 理論 timing side-channel。
+3. Service identity 被當真人 → AI 經自己嘅 service 身份批准自己嘅 approval（自批）。
+4. Token 落入 request log（headers 序列化）→ 任何有 log 讀取權嘅人拿到 operator 通行證。
+5. Token 無 TTL / 輪替機制 → 長生命周期暴露面。
+
+**緩解措施**
+1. **Constant-time 比較 + fail-closed**：`timingSafeEqual`；token presented 但 server 未配置（`WORKER_API_TOKEN` 缺失或 <32 字符）→ 401 + warn log（唔靜默）；mismatch → 401 + warn（`service-auth.js`）。
+2. **固定非人類身份**：valid token → `SERVICE_USER_ID` + role=operator + `isService=true`（唔係 admin）；audit row 帶 service flag — 人 vs 機行為可分辨、可回溯。
+3. **AI 唔可以自批**：approval 端點用 `requireHuman` 明確拒絕 service identity（就算 RBAC 上 operator 夠格都係 403）— MD §11.5 嘅控制唔依賴 RBAC 配置（`service-auth.js` requireHuman）。
+4. **Token 唔入 log**：Pino redact list 明確包含 `req.headers.x-wa-service-token`（P6 加入，`PINO_REDACT_PATHS`）+ Fastify 預設 request serializer 唔含 headers；request/response log 縮略 prompt/result。
+5. **爆炸半徑限制**：Worker 容器唔掛 Docker socket（T1 邊界）— token 洩露只係 operator 級 API 權限（唔係 host root），再受 managed gate + RBAC 限制；token 只存喺 api/worker 兩個 container 嘅 env，web/postgres/redis 無。
+6. **審計**：service 身份嘅每個操作寫 audit_events（actor=service-worker、isService 可查）；P6 redaction 實打證據（`docs/evidence/p6-security/secret-redaction.json`）確認審計 details 無 key material。
+
+**殘留風險**：Token 係長生命周期 static secret（無自動輪替）→ 靠 runbook 嘅輪替程序（改 env + 重啟 api/worker）+ 單機部署縮小暴露面；接受（MVP 範圍）。
+
+---
+
 ## 風險摘要
 
 | # | 風險 | 嚴重度 | 主要控制 | 殘留 |
@@ -173,3 +195,4 @@ ADB 無內建鑑權。場景：
 | T4 | ADB 暴露 / 任意 shell | High | 127.0.0.1-only、診斷白名單、execFile 參數陣列、無任意 shell | host 本地 loopback 可連（接受，runbook 記錄） |
 | T5 | 權限越界 | High | 雙層授權、RBAC、CLI admin bootstrap、Argon2id、CSRF/Origin、審計 | 邏輯 bug（測試紀律控管） |
 | T6 | 排程重複/遺失 | Medium-High | PG source of truth、upsertJobScheduler 冪等、reconciliation、TTL 鎖、sync_error 可見 | 佇列繁忙致延遲（設計上 best-effort，UI 顯示） |
+| T7 | Service token 洩露 → 冒用 operator | Medium-High | timingSafeEqual、fail-closed、固定非人類身份、requireHuman 拒自批、redact list、worker 無 socket | 長生命周期 static token（runbook 輪替） |
