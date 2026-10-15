@@ -587,3 +587,105 @@ timer 獨力撐唔住 loop → node:test 喺 guard fire 前 cancel（「event lo
 resolved」）。真機 HTTP server 永遠有 socket 住住 loop，故生產行為冇問題。
 修法：test 內加 ref'd keep-alive interval（mirror 生產 socket），**零 product code 改動**
 （`tests/unit/schedule-service.test.js` +21 行）。修後 24/24 ×3 穩定。
+## 15. P6 架構決定（UX 收尾 + 安全 + 測試 + 文檔，2026-10-15 — 全部實測驗證）
+
+### 15.1 flag#1 收結：managed 判定單一事實源（label OR exception）
+P3 遗留：`GET /api/containers?managed=true` 只睇 label，但 mutation gate（start/stop/delete）
+honors `app_settings` 嘅 admin exception 表 → 已授權但無 label 嘅容器「改到但 list 唔到」。
+修法（commit 9383498）：`docker-service` 層 `isManaged()` = label **OR** exception，
+`listContainers` + `inspectSummary`（`managedSummary` helper）同用 — service 係唯一事實源，
+route 層唔再各自 fetch exception。dashboard summary（§15.5）同規則。**唔加** label 同步寫入
+exception（兩軌獨立：label = compose 持久目標，exception = 一次性行政授權，審計可分辨）。
+Unit（filter totals 2/1→3/0 flip）+ integration（grant→list/inspect→revoke）全綠。
+
+### 15.2 flag#3 收結：排程通知 = worker 寫、API 只讀
+通知行由 **worker**（`schedule-notifier.js`）喺 terminal scheduled run 寫入 — 因為
+terminal 語義（succeeded/failed/timed_out/**skipped**）只有 worker 知道（fire handler
+overlap-skip 嘅 notification = 該 slot 唯一記錄，MD §12.3「無痕缺跑唔被允許」）。
+API（`/api/schedule-notifications`）只做 list/unread-count/read/mark-read。
+**RBAC**：讀 = viewer+（通知內容唔係敏感 — run 標題 + 狀態）；**mark-read = operator+**
+（`is_read` flip 係寫操作 — 嚴格 viewer=read-only 矩陣）。failure non-fatal（通知寫失敗
+唔 block run 終態，log + 審計缺行可查）。UI = topbar bell 30s 靜默 poll（便宜、唔加 SSE 面）。
+
+### 15.3 flag#4 收結：flaky test 根因 = wall-clock drift（唔係 race）
+`schedules-api 'list: …(delay computed)'` 斷言 `delayMs === 4200`，slot 相対 `Date.now()`
+設 → delay = createdAt − slot 會加多 runNow→update 之間嘅 wall-clock drift，跨 ms boundary
+即紅（實測 1/4 runs）。**修法 = 斷言改 deterministic**：slot anchor 喺 run 自己 `createdAt`
+（恰 4200，零 drift）。修後連跑 3×450 tests 全綠。**結論**：hermetic 斷言唔可以含
+wall-clock 差值；要「精確 X ms」就得自同一 timestamp 算。
+
+### 15.4 flag#5 收結：concurrency_key = bounded defer → 可視化 skip（唔係無期限鎖）
+ADR §13.6 話明 MVP 未強制執行 → P6 實裝（唔 defer）：
+- **holder 定義**：同 key 嘅 `running`/`needs_approval`（`queued` sibling 唔計 — 兩個 queued
+  互相等 = deadlock；`cancel_requested` 唔計 — 快 stop 了）。
+- **gate**（engine `gateConcurrency`，startAttempt 前）：holder 存在 → `moveToDelayed(15s)`
+  （`TASK_CONCURRENCY_DEFER_MS`）+ 計數；超過 `TASK_CONCURRENCY_MAX_DEFERS=10`（≈2.5min）
+  → **可視化 skip**（新 `queued→skipped` 轉換 + `inputJson.skipped{reason,key,activeRunId,policy}`
+  + status event + notification bell）— MD §12.3 誠實：唔永久掛、唔雙開、skip 有痕。
+- 唔用 DB advisory lock（BullMQ delayed-retry 已提供「鎖會死」：delayed job 冇 TTL 問題 —
+  job 永遠存在直到被 pickup；lock 语义 = in-flight holder 查詢，crash 後 holder 自然消失）。
+- ad-hoc run（無 definition）/ 無 key 嘅 definition 永遠唔 gate（唔影響既有行為）。
+7 hermetic gate scenarios（defer/holder 完=續跑/超 cap skip/queued 唔 block/cancel_requested
+唔 block/非 queued no-op/迟到 gate 唔復活 terminal）全綠。
+
+### 15.5 UX 收尾：Dashboard = 單一 real-data 端點 + bell + SSE backoff
+- `GET /api/dashboard/summary`（viewer+）：全部 dashboard 數字（fleet 計數 = 同 list/gate 同一
+  label-OR-exception 規則 / active + 24h task windows + 5 recent failures / schedules / unread）
+  一個端點 — **零硬編碼**（MD §6.1）。Docker down = 200 + `{available:false}` 降級（唔 500 —
+  同 health/ready 語義）。
+- 深鏈修正（E2E 捉到）：`#tasks/:id` → `#/tasks/:id`（hash router 要 leading slash — 舊值
+  靜默 fallback 去 dashboard，用戶以為深鏈壞咗其實 router 匹配唔到）。
+- SSE backoff：`useTaskEvents` cursor-reopen 冇 backoff → downed server 時 bypass 咗
+  EventSource 原生 3s retry 變緊密循環 → 3s bounded backoff + `reconnecting` 顯示。
+- `useApi` enabled flip 第一幀 bug（bell 首開 = uncaught TypeError → 全 app 白屏）：
+  `enabled && data===null && !error` 時 `loading=true`（pending 派生）— P6 最大單點修復
+  （冇 error boundary 前，任何 uncaught render error = 白屏；P6 修根因，error boundary
+  入已知限制）。
+
+### 15.6 E2E harness：system Chrome + 冪等 fixture + 真 worker
+- 無 Playwright 瀏覽器 build（host 限制）→ `channel: 'chrome'`（system Chrome 13x）—
+  可重現性：e2e 要喺有 Chrome 嘅 host 行（runbook/CI 註明）。
+- Fixture（`e2e/seed-e2e.mjs`）冪等：3 users（argon2id, `E2ePass12345`）+ provider **`mock`**
+  name row（fire-handler join 需要；worker resolver 特判 'mock' = built-in，永不撥出）+ 固定
+  UUID task definition。**教訓**（入測試紀律）：e2e provider 名會經 fire path join 真
+  provider_configs — 名唔對 = PROVIDER_NOT_CONFIGURED 假紅。
+- 14 步全流程（`e2e/p6-e2e.mjs`）：login → dashboard 實計數器（flag#2 live 驗證：
+  fleet ≥3 running）→ containers → detail + **SSE pill=live** → UI 建 run → **live worker 行到
+  succeeded** → interval schedule → run-now → **該 run 自己嘅 notification row**（flag#3 e2e）
+  → bell 深鏈 → viewer RBAC（403 + 無 form）→ logout。截圖 ×13 + summary.json（console 計數
+  whitelist）。**E2E 捉到 5 個真 UI bug**（§15.5 + interval input step 值 — 所有整千 ms
+  `stepMismatch` → 瀏覽器靜默 block submit，headless 零提示）。
+
+### 15.7 安全收結：scrub-on-read + service token redact + audit 清零
+- **Approval scrub-on-read**（`publicApproval`）：寫路徑（createApproval/recordEvent）早已
+  scrub；P6 補讀路徑（同審計 API 同一姿勢）— 就算 legacy import / 手動 SQL 寫入未清理行，
+  API 都唔會洩。Live 實打：raw-insert 含 `api_key`/`Authorization` 嘅 pending approval →
+  API 回 `***redacted***` 零明文（`e2e/secret-redaction-e2e.mjs` B1–B3）。
+- **Service token redact**（threat-model T7）：`req.headers.x-wa-service-token` 入
+  `PINO_REDACT_PATHS`（defense-in-depth — 今天無 code path log 整個 headers，但未來任何
+  序列化都唔會洩）+ 回歸測試。
+- **npm audit 清零**（api/worker/web = 0）：prisma 7.10.0（最新 7.x）transitive 4 high
+  （deepmerge-ts <8 堆疊耗盡；mysql2 <=3.23.0 auth-downgrade + zlib bomb）。上游無 in-line
+  fix → **root overrides**（`deepmerge-ts ^8.0.2`、`mysql2 ^3.24.6`）。驗證鏈：prisma
+  validate+generate（config-load = deepmerge path 真行過）+ 全測 465/464 + vite build +
+  `npm ci --dry-run`（Docker build 用新 lockfile 唔會 fail）。
+  **實曝面評估**：兩庫都係 prisma CLI（build/ops tool）transitive、PG 項目 mysql2 code path
+  唔會行、deepmerge 輸入 = 本地 config 文件 — 即使未修都係低實曝面；但 overrides 係一線
+  修復，做咗就唔好留已知限制。
+- **Secret redaction 17/17**（`docs/evidence/p6-security/secret-redaction.json`）：provider key
+  全路徑（create → GET 零 key 材料只 `hasApiKey` → DB `v1:` AES-256-GCM 無明文 → audit
+  details 零 key）+ approval 讀 gate + audit spot-check（actor + action 齊、零 key）。
+
+### 15.8 驗收方法學（P6 定下嘅鐵律，後續 project 沿用）
+1. **宣稱 = 證據**：每個安全/功能宣稱要有可重現證據檔（JSON/log/截圖）入 `docs/evidence/`。
+2. **Clean install 先收貨**：README 必須過一次 `down -v` → 由零起 → 全 healthy → 首 admin
+   → 登入 200 嘅實跑（證據：`docs/evidence/p6-cleaninstall/`）— 因為 dev 環境嘅「能行」
+   永遠唔等於新環境能行（volume 殘留/手動 DB 改動/env 漂移）。
+3. **零 skip 假綠**：hermetic suite 嘅 gated skip（real-redis test）要 **實跑一次** 對住真
+   redis 驗證（`SCHEDULES_REDIS_URL` disposable container）先可以當「覆蓋到」— skip
+   唔好當覆蓋。
+4. **E2E 一定要走真 worker**（唔係純 API）：5 個真 UI bug 全部係「API 綠但 UI 紅」嘅形狀 —
+   真 headless 瀏覽器 + 真后台 worker 先捉到。
+5. **gen 交接**（P6 實際經歷：gen1 死喺 threat-model 編集中）：接手第一步 = 核舊 session
+   mtime（防鬼活）→ `git status` → 全測 → commit WIP → **push**（relay 保命：未 push = 冇）
+   → 先繼續新工作。

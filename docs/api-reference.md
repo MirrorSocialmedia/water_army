@@ -1,0 +1,127 @@
+# water_army API Reference（P6 最終版 — 全 endpoint 總表）
+
+Base：`http://127.0.0.1:3012/api`（web 同源反代；api 本體唔 publish host port）。
+本文檔為全 endpoint 嘅單一事實源（P1–P6 全部）；README 嘅分 phase 表係導讀。
+
+## 全局約定
+
+- **Auth**：session cookie（HttpOnly, SameSite=Lax；DB 只存 SHA-256）。401 = 無/壞 session；403 = 角色不足。
+- **RBAC 角色階梯**：`viewer < operator < admin`（MD §13.2）。service identity（worker，`x-wa-service-token`）= operator 級、audit 可辨、**approval 端點明確拒絕**（`requireHuman`）。
+- **錯誤 envelope**：所有錯誤 = `{"error":{"code","message","requestId"}}` + `X-Request-Id` header；HTTP 狀態碼見每端點列。
+- **Body 驗證**：JSON Schema（`additionalProperties: false` — 未知欄位 400，防 mass-assignment）。
+- **Idempotency**：建容器 / run-now / task run 支持 `idempotencyKey`（body 或 `Idempotency-Key` header）；回放 = 同結果 + `idempotent-replay: true` header（建容器）或 200（run-now）。
+- **SSE 端點**：`text/event-stream`；斷線重連由 client 處理（web UI 有 backoff）；`?after=<uuid>` cursor resume（task events）。
+- **Docker 錯誤分類**（`DOCKER_ERROR`）：`CONTAINER_NOT_FOUND`→404／`DOCKER_DAEMON_UNAVAILABLE`→503／`DOCKER_PERMISSION_DENIED`→502／`DOCKER_TIMEOUT`→504／`DOCKER_DISABLED`→503／`OPERATION_PENDING`→503／其餘 `DOCKER_ERROR`→502。
+- **通用錯誤碼**：`VALIDATION_ERROR` 400／`NOT_FOUND` 404／`NOT_MANAGED` 403（managed gate）／`NAME_TAKEN` 409／`IN_USE` 409（template 使用中）／`RATE_LIMITED` 429／`INTERNAL` 500。
+
+## Health（無 auth）
+
+| Method | Path | 參數 | 錯誤碼 / 備註 |
+|--------|------|------|--------------|
+| GET | `/health/live` | — | 恒 200（process 存活） |
+| GET | `/health/ready` | — | 200（db/redis 都活）；docker down = 200 degraded（`dependencies.docker.available:false`）；db 或 redis down = **503** + `dependencies.*.error` |
+
+## Auth
+
+| Method | Path | Role | 參數 | 錯誤碼 / 備註 |
+|--------|------|------|------|--------------|
+| POST | `/auth/login` | — | body `{username (3–32, `[a-zA-Z0-9_.-]`), password}` | 200 + `Set-Cookie`；401 `INVALID_CREDENTIALS`（未知用户同一 message — timing 對齊防枚舉）；429 `RATE_LIMITED`（5 失敗/60s/IP，限流中連正確密碼都 429）；400 驗證 |
+| POST | `/auth/logout` | 任何 | — | 204；session 即刻失效 |
+| GET | `/auth/me` | 任何 | — | 200 `{user:{id,username,role,lastLoginAt}}`；401 |
+
+## Containers（P2）+ managed exceptions（P3）
+
+| Method | Path | Role | 參數 | 錯誤碼 / 備註 |
+|--------|------|------|------|--------------|
+| GET | `/containers` | viewer+ | query `state`（docker state 過濾）、`managed`（`true` = label **OR** admin exception — P6 flag#1 統一口徑）、`q`（name 子串）、`withStats`（逐容器 CPU/mem；單項失敗 = `—` 唔拖慢整頁）、`page`/`pageSize` | 200 `{items,total,...}`；daemon down → 503 `DOCKER_DAEMON_UNAVAILABLE` |
+| GET | `/containers/:id` | viewer+ | `:id` = name 或 id | 200 inspect 摘要（state/ports/mounts/labels/env **server-side masked** + `managed`/`managedByException`）；404 `CONTAINER_NOT_FOUND` |
+| GET | `/containers/:id/logs` | viewer+ | query `tail`（行數）、`since`（epoch ms） | 200 demux 後 log；404 |
+| GET | `/containers/:id/stats` | viewer+ | — | 200 單次快照；404 |
+| GET | `/containers/events` | viewer+ | SSE（無 query） | `container` 事件白名單（start/stop/kill/die/pause/unpause/restart/rename/create/delete/update）；斷線自動 release slot；並行上限 → 503 `SSE_LIMIT`；daemon down → 503 |
+| POST | `/containers/:id/start` `<stop>` `<restart>` `<pause>` `<unpause>` | operator+ | `:id` | 冪等狀態機（MD §9.3）：目標態已達 = 200 `idempotent:true`；op 後再 inspect 確認；卡住 = 503 `OPERATION_PENDING`；403 `NOT_MANAGED`（gate = label OR exception）；404；502/504 Docker 錯誤 |
+| DELETE | `/containers/:id` | **admin** | body `{confirm（逐字 repeat name/id）, removeVolumes?, force?}` | 204；confirm 唔匹配 = 400；403 `NOT_MANAGED`；404；默认保留 bind mount |
+| GET | `/containers/exceptions` | **admin** | — | 200 `{exceptions:[{key, containerId?, name?, note, grantedAt, grantedBy}]}` |
+| POST | `/containers/exceptions` | **admin** | body `{containerId?, name?, note?}`（至少一個） | 201；兩者皆無 = 400；name 對唔到 daemon = 純 name grant（audit 註明）；404（containerId 唔存在） |
+| DELETE | `/containers/exceptions/:key` | **admin** | `:key` | 204；404（key 唔存在） |
+| GET | `/templates` | viewer+ | — | 200 容器 template allowlist（`{templates}`） |
+| POST | `/templates` | **admin** | body `{name, image（必 pin tag/digest）, ports?, envWhitelist?, privileged?, privilegedReason?}` | 201；409 `NAME_TAKEN`；privileged 要 reason（10–200 字）；400。P2–P6 無 template 修改/刪除端點（改 = DB 層手動 + audit 紀律，見已知限制） |
+| POST | `/containers`（由 template 建） | operator+ | body `{templateId, displayName, idempotencyKey, env}` — env 只准 whitelist key；**唔接收任何 Docker payload** | 201（回放 = 201 + `idempotent-replay: true`）；400（env key 唔喺 whitelist / 未知欄位）；404 template；409 `NAME_TAKEN` |
+
+## AI Tasks / Approvals / Tools / Providers（P3）
+
+| Method | Path | Role | 參數 | 錯誤碼 / 備註 |
+|--------|------|------|------|--------------|
+| POST | `/tasks/runs` | operator+ | body `{prompt, provider?, title?, tools?, timeoutMs?, maxAttempts?, idempotencyKey?}` | 202 `{taskRun}`；provider 預設 = env `AI_PROVIDER`（`mock` = 內置可編排 mock）；400 驗證；409 冪等回放（同 key 不同 body） |
+| GET | `/tasks/runs` | viewer+ | query `status`、`provider`、`page`/`pageSize` | 200 `{items,total}` |
+| GET | `/tasks/runs/:runId` | viewer+ | `:runId` | 200 run + 全事件流 + approvals（**arguments 讀時 scrub** — P6：任何 legacy 行都唔會洩）；404 |
+| GET | `/tasks/runs/:runId/events` | viewer+ | SSE；`?after=<eventUuid>` cursor resume；heartbeat 25s；terminal 後 `done` 再 close | 400 非法 cursor（唔係 500）；404 |
+| POST | `/tasks/runs/:runId/cancel` | operator+ | — | 200；真停（`cancel_requested` + 移除 waiting job；in-flight 靠 DB poll + AbortSignal；cancel 後零 output/零事件）；冪等；404 |
+| POST | `/tasks/runs/:runId/retry` | operator+ | — | 202 新 attempt（**terminal-only**：`failed/timed_out/cancelled/skipped` 之外 409）；舊輸出/事件保留 |
+| GET | `/tasks/definitions` | viewer+ | — | 200 task definition 只讀 list（Schedules UI 用） |
+| GET | `/approvals` | viewer+ | query `status=pending\|approved\|rejected\|expired\|all`、`runId` | 200 `{items}`（arguments 已 scrub） |
+| POST | `/approvals/:id/approve` | **admin 真人** | body `{note?}` | 200；**service identity = 403**（AI 唔可能自批）；404；409（已終態） |
+| POST | `/approvals/:id/reject` | **admin 真人** | body `{note?}` | 同上 |
+| GET | `/tools` | viewer+ | — | 200 registry 元數據（name/description/safetyClass/args schema） |
+| GET | `/providers` | **admin** | — | 200 列表（**零 key 材料** — 只 `hasApiKey:boolean`；P6 實打證據 `docs/evidence/p6-security/`） |
+| POST | `/providers` | **admin** | body `{name, providerType, baseUrl, modelId, apiKey?, timeoutMs?, isEnabled?}` | 201（key AES-256-GCM 加密落庫；key 永不傳回） |
+| PATCH | `/providers/:name` | **admin** | body（部分更新；`apiKey` 再傳 = 重新加密輪替） | 200；404 |
+| POST | `/providers/:name/test` | **admin** | — | 200/502 classified provider error 詞彙（timeout/auth/network/model 分類，message 已 redact） |
+| GET | `/audit-events` | **admin** | query `from`/`to`（ISO 日期）、`action`、`actor`（user id）、`page`/`pageSize`（≤100） | 200 `{items（details scrub 過）,page,pageSize,total}` |
+
+## Schedules（P4）
+
+| Method | Path | Role | 參數 | 錯誤碼 / 備註 |
+|--------|------|------|------|--------------|
+| POST | `/schedules` | operator+ | body `{name, taskDefinitionId, scheduleType: cron\|interval\|once, cronExpression?, timezone?, intervalMs?, runAt?, overlapPolicy?: skip_if_running\|queue, concurrencyKey?}` | 201 `{schedule}`；**PG 先行**（DB row 先落，BullMQ 後同步；同步失敗 = row 照存 + `syncStatus=sync_error`）；400 壞 cron/tz；404 definition |
+| GET | `/schedules` | viewer+ | query `enabled`、`page`/`pageSize` | 200（含 `nextRunAt/lastRunAt/lastStatus/syncStatus/delay`） |
+| GET | `/schedules/:id` | viewer+ | — | 200；404 |
+| PATCH | `/schedules/:id` | operator+ | body（同 create 部分欄位） | 200（stable key 原地 upsert，零重複；once 改 `runAt` = 換 delayed job）；400/404 |
+| POST | `/schedules/:id/pause` | operator+ | — | 200（移除 BullMQ 索引；DB row 保留）；冪等；404 |
+| POST | `/schedules/:id/resume` | operator+ | — | 200（重同步 + 重算 next_run_at）；冪等；404 |
+| POST | `/schedules/:id/run-now` | operator+ | header `Idempotency-Key?` | 202 新 run / 200 replay（無 key = 每次新 run）；404 |
+| POST | `/schedules/:id/sync` | operator+ | — | 200（`sync_error`→`synced`）；503 redis 未復（誠實，唔假成功）；404 |
+| DELETE | `/schedules/:id` | operator+ | — | 204（BullMQ 索引 + pending once job 先清；`task_runs` lineage 保留 — `schedule_id` 無 FK 屬設計）；404 |
+| POST | `/schedules/preview` | viewer+ | body `{cronExpression, timezone?}` | 200 next 5 次 + 人類描述（cron-parser 純計算，同 BullMQ 同庫）；400 |
+
+**執行拓撲**：PostgreSQL = 唯一 source of truth；BullMQ Job Scheduler = derived index（worker boot + 每 5 分鐘 reconcile）。fire = 重讀 DB → guard（deleted/disabled/stale）→ 冪等建 run（`sched-<uuid>-<slotMs>`）→ overlap policy → 推進 `next_run_at`。
+
+## Schedule Notifications（P6 flag#3）
+
+worker 喺 terminal scheduled run（succeeded/failed/timed_out/skipped，**包括 overlap skip**）寫入一行通知。
+
+| Method | Path | Role | 參數 | 錯誤碼 / 備註 |
+|--------|------|------|------|--------------|
+| GET | `/schedule-notifications/unread-count` | viewer+ | — | 200 `{count}`（topbar bell poll 呢個，30s） |
+| GET | `/schedule-notifications` | viewer+ | query `unreadOnly=true\|false`、`limit`（1–100，default 20） | 200 `{items}`（newest first；`scheduleId/runId/title/message/createdAt/isRead`） |
+| POST | `/schedule-notifications/read-all` | operator+ | — | 200 `{marked}`（mark-read 係寫 → viewer 唔可以） |
+| POST | `/schedule-notifications/:id/read` | operator+ | `:id`（≤64 字） | 200 `{id,isRead:true}`；404 |
+
+## Redroid Devices / Templates / Preflight（P5）
+
+| Method | Path | Role | 參數 | 錯誤碼 / 備註 |
+|--------|------|------|------|--------------|
+| GET | `/redroid/preflight` | viewer+ | — | 200 真主機檢查（kernel modules/device nodes/dmesg/docker/data root）；三態 `supported\|unsupported\|unknown`（讀唔到 = unknown，嚴禁假報） |
+| GET | `/redroid/templates` | viewer+ | — | 200（image 必 pin；`privileged` 行帶 reason）；無 `:id` 只讀端點（list 已含全欄位） |
+| POST | `/redroid/templates` | **admin** | body `{name, image, privileged?, privilegedReason?, androidBoot?{...}}` | 201；image `latest`/`nightly` 拒（400）；privileged 要 reason；409 name |
+| PUT | `/redroid/templates/:id` | **admin** | 同上（patch） | 200/404/400/409 `IN_USE` |
+| DELETE | `/redroid/templates/:id` | **admin** | — | 204；409 `IN_USE`；404 |
+| POST | `/devices/redroid` | operator+ | body `{name, templateName, idempotencyKey}` — **body 冇任何 Docker 欄位**（注入 = 400） | 201 `{device, replay, startError?, preflight?}`（回放 = 200）；404 template/disabled；409 name；port 用盡 = 503 |
+| GET | `/devices/redroid` | viewer+ | query `template`（過濾） | 200 `{devices}` |
+| GET | `/devices/redroid/:id` | viewer+ | — | 200 `{device}`（pinned image/`127.0.0.1:<port>`/容器狀態/ADB 狀態/解析度/GPU 健康）；404 |
+| POST | `/devices/redroid/:id/start` `<stop>` `<restart>` | operator+ | — | 200 `{device, idempotent, action}`（P2 action protocol；container 消失 = `missing` + 409 誠實）；404 |
+| POST | `/devices/redroid/:id/refresh` | operator+ | — | 200 `{device, adbNote}`（重查 daemon + ADB 狀態，唔重跑全套診斷） |
+| POST | `/devices/redroid/:id/diagnostics` | operator+ | — | 200 **4 個獨立結果區**（kernel / container-logs / adb-connectivity / gpu-verification），每區 `executed` + `status`（未執行 = `未驗證`，從無假 pass） |
+| GET | `/devices/redroid/:id/logcat` | operator+ | query `tail`（正整數字串；server clamp 到 `REDROID_LOGCAT_TAIL_MAX`） | 200（server 永遠加 `-d -t <n>`；`truncated`（byte cap）+ `mayHaveMore`）；404 |
+| DELETE | `/devices/redroid/:id` | **admin** | body `{confirm（type name）, removeData?}` | 204；confirm 唔匹配 = 400；`removeData=true` 先 rm `/data`（realpath-scoped）；container 先除、data 預設保留；404 |
+
+**安全鐵律**：無 `POST /exec` 端點（任意命令 = 404）；冇 `shell: true`；ADB binary 固定路徑；ADB 5555 只綁 `127.0.0.1`（PortBindings host IP 硬編 + server 端 port 範圍驗證）。
+
+## Dashboard（P6）
+
+| Method | Path | Role | 參數 | 錯誤碼 / 備註 |
+|--------|------|------|------|--------------|
+| GET | `/dashboard/summary` | viewer+ | — | 200：`containers`（managed fleet 計數 — 同 list/gate 同一條 label-OR-exception 規則；Docker down = `{available:false}` 降級，**唔會 500**）/ `taskRuns`（active 現況、24h failed/succeeded、5 條最近失敗）/ `schedules`（total+enabled）/ `notifications`（unread）。Dashboard 所有數字來自呢個端點（MD §6.1：零硬編碼） |
+
+## 端點總計
+
+**68 條路由**（逐檔案計，實核 2026-10-15 gen2）：health 2 + auth 3 + containers 15（含 5 個 action + exceptions 3 條 + create-from-template）+ container templates 2 + dashboard 1 + tasks 15（runs 6 + approvals 3 + tools 1 + providers 4 + audit 1）+ task definitions 1 + schedules 10（含 POST preview）+ schedule notifications 4 + redroid templates/preflight 5 + redroid devices 10（含 3 個 action）。所有寫操作（POST/PATCH/PUT/DELETE，`/auth/login` 除外）：RBAC + audit row（actor、request_id、IP、status、details scrub）+ Origin 檢查（browser mutating 請求）。
