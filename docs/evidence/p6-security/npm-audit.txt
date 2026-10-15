@@ -1,0 +1,13 @@
+npm audit — water_army (2026-10-15 gen2)
+prisma 7.10.0 transitive vulns (deepmerge-ts <8.0.0 stack exhaustion; mysql2 <=3.23.0 auth-downgrade/zlib-bomb)
+fixed via root overrides: deepmerge-ts ^8.0.2, mysql2 ^3.24.6 (latest prisma 7.10.0 has no in-line fix)
+verified: prisma validate+generate OK, full suite 465/464pass/0fail, vite build clean
+
+===== @water-army/api =====
+found 0 vulnerabilities
+
+===== @water-army/worker =====
+found 0 vulnerabilities
+
+===== @water-army/web =====
+found 0 vulnerabilities
