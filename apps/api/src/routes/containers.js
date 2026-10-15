@@ -264,9 +264,9 @@ export function containerRoutes(app) {
     { preHandler: app.requireRole('viewer'), schema: { params: { type: 'object', additionalProperties: false, required: ['id'], properties: { id: CONTAINER_ID } } } },
     async (req) => {
       const summary = await svc().inspectSummary(req.params.id);
-      const exceptions = await svc().listExceptions();
-      const m = isManaged({ labels: summary.labels, containerId: summary.id, name: summary.name, exceptions });
-      return { ...summary, managed: m.managed, managedByException: m.byException };
+      // P6 (flag #1): managed/managedByException come from the service (label
+      // OR admin exception — same rule as list + mutation gate).
+      return summary;
     },
   );
 

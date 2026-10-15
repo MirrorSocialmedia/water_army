@@ -422,6 +422,68 @@ test('list: filters, pagination, q, withStats partial errors (MD §9.4)', async 
   });
 });
 
+test('P6 flag#1: managed list + inspect honour admin exceptions (MD §11.2)', async (t) => {
+  const seed = [
+    { id: 'a'.repeat(64), name: 'alpha', state: 'running', image: 'web:1', labels: { 'app.managed': 'true', 'app.template': 't1' } },
+    { id: 'b'.repeat(64), name: 'legacy-app', state: 'running', image: 'old:1', labels: {} }, // label-less
+    { id: 'c'.repeat(64), name: 'gamma-cache', state: 'paused', image: 'cache:2', labels: { 'app.managed': 'true' } },
+  ];
+  const exceptions = {
+    version: 1,
+    entries: {
+      'legacy-app': {
+        containerId: 'b'.repeat(64),
+        name: 'legacy-app',
+        note: 'p6 flag#1 test grant',
+        grantedBy: 'u1',
+        grantedAt: new Date().toISOString(),
+      },
+    },
+  };
+
+  async function svcWithExceptions() {
+    const db = makeFakeDb({});
+    await db.appSetting.upsert({
+      where: { key: 'docker.managed_exceptions' },
+      update: { valueJson: exceptions },
+      create: { key: 'docker.managed_exceptions', valueJson: exceptions, updatedBy: null },
+    });
+    return createDockerService({ docker: makeFakeDockerWrapper({ containers: seed }), db, config: testConfig, log: SILENT_LOG, audit: NO_AUDIT });
+  }
+
+  await t.test('label-less container with exception → managed + managedByException', async () => {
+    const svc = await svcWithExceptions();
+    const res = await svc.listContainers({});
+    const legacy = res.items.find((i) => i.name === 'legacy-app');
+    assert.equal(legacy.managed, true);
+    assert.equal(legacy.managedByException, true);
+    const alpha = res.items.find((i) => i.name === 'alpha');
+    assert.equal(alpha.managed, true);
+    assert.equal(alpha.managedByException, false);
+  });
+
+  await t.test('managed=true filter includes the exception container (gate consistency)', async () => {
+    const svc = await svcWithExceptions();
+    assert.equal((await svc.listContainers({})).total, 3);
+    assert.equal((await svc.listContainers({ managed: 'true' })).total, 3);
+    assert.equal((await svc.listContainers({ managed: 'false' })).total, 0);
+    // no exceptions seeded → label-only behaviour preserved
+    const db = makeFakeDb({});
+    const svcNoExc = createDockerService({ docker: makeFakeDockerWrapper({ containers: seed }), db, config: testConfig, log: SILENT_LOG, audit: NO_AUDIT });
+    assert.equal((await svcNoExc.listContainers({ managed: 'true' })).total, 2);
+  });
+
+  await t.test('inspectSummary: exception container reports managed=true + managedByException', async () => {
+    const svc = await svcWithExceptions();
+    const legacy = await svc.inspectSummary('legacy-app');
+    assert.equal(legacy.managed, true);
+    assert.equal(legacy.managedByException, true);
+    const alpha = await svc.inspectSummary('alpha');
+    assert.equal(alpha.managed, true);
+    assert.equal(alpha.managedByException, false);
+  });
+});
+
 test('logs: tail bounding, byte cap truncation, since validation', async (t) => {
   const logText = Array.from({ length: 100 }, (_, i) => `line-${i}`).join('\n') + '\n';
   const big = Array.from({ length: 1200 }, (_, i) => `L${i}`).join('\n') + '\n';

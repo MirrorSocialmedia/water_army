@@ -310,7 +310,17 @@ export function createDockerService({ docker, db, config, log = { info() {}, war
     const c = requireClient();
     const raw = await call('list', () => c.listContainers({ all: true }));
 
-    let items = raw.map((r) => summarizeListItem(r));
+    // P6 (flag #1): managed = label OR admin exception (MD §11.2) — the SAME
+    // rule the mutation gate applies. The managed=true/false filter must use
+    // this computed value, or the list contradicts the gate (P3 carry-over:
+    // the list filtered label-only while start/stop/delete honored
+    // exceptions).
+    const entries = await listExceptions();
+    let items = raw.map((r) => {
+      const base = summarizeListItem(r);
+      const m = isManaged({ labels: r.Labels ?? {}, containerId: base.id, name: base.name, exceptions: entries });
+      return { ...base, managed: m.managed, managedByException: m.byException };
+    });
 
     if (state) {
       const states = String(state).split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
@@ -395,7 +405,9 @@ export function createDockerService({ docker, db, config, log = { info() {}, war
       created: info?.Created ?? null,
       command: info?.Config?.Cmd ?? null,
       restartCount: state.RestartCount ?? 0,
-      managed: String(labels[APP_LABELS.MANAGED]) === 'true',
+      // P6 (flag #1): service-level managed = label OR exception (same rule
+      // as list + mutation gate) — the route no longer re-derives it.
+      ...managedSummary(labels, String(info?.Id ?? idOrName), String(info?.Name ?? '').replace(/^\//, ''), await listExceptions()),
       template: labels[APP_LABELS.TEMPLATE] ?? null,
       createdBy: labels[APP_LABELS.CREATED_BY] ?? null,
       ports: summarizePorts(info?.NetworkSettings?.Ports),
@@ -1128,6 +1140,16 @@ function pendingError(name, action, actual) {
     code: DOCKER_ERROR.OPERATION_PENDING,
     message: `Docker accepted '${action}' for '${name}' but state is now '${actual}' — the operation may still be settling; re-check before retrying`,
   });
+}
+
+/**
+ * P6 (flag #1): managed flag that honours admin exceptions — the single
+ * computation used by list + inspect (the mutation gate applies isManaged
+ * directly on the freshly-fetched labels).
+ */
+function managedSummary(labels, containerId, name, exceptions) {
+  const m = isManaged({ labels, containerId, name, exceptions });
+  return { managed: m.managed, managedByException: m.byException };
 }
 
 /** Flatten a docker listContainers row (MD §6.2 columns). */

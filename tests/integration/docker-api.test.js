@@ -157,6 +157,49 @@ test('container API: viewer = read-only', async (t) => {
   });
 });
 
+test('P6 flag#1: exception grant makes unlabelled container managed in list + inspect (gate consistency)', async (t) => {
+  const { app } = await makeApp();
+  t.after(() => app.close());
+  const adminCookie = await login(app, 'admin');
+  const A = { cookie: adminCookie };
+
+  await t.test('baseline: legacy (no label) unmanaged — list filter + inspect agree', async () => {
+    assert.equal((await app.inject({ method: 'GET', url: '/api/containers?managed=true', headers: A })).json().total, 2);
+    assert.equal((await app.inject({ method: 'GET', url: '/api/containers?managed=false', headers: A })).json().total, 1);
+    assert.equal((await app.inject({ method: 'GET', url: '/api/containers/legacy', headers: A })).json().managed, false);
+  });
+
+  await t.test('admin grants exception by name → list + inspect show managed (by exception)', async () => {
+    const grant = await app.inject({ method: 'POST', url: '/api/containers/exceptions', headers: A, payload: { name: 'legacy', note: 'p6 flag#1 e2e' } });
+    assert.equal(grant.statusCode, 201, grant.body);
+
+    // list: legacy is now managed + managedByException; filter totals flip 3/0
+    const list = (await app.inject({ method: 'GET', url: '/api/containers', headers: A })).json();
+    const legacy = list.items.find((i) => i.name === 'legacy');
+    assert.equal(legacy.managed, true);
+    assert.equal(legacy.managedByException, true);
+    assert.equal((await app.inject({ method: 'GET', url: '/api/containers?managed=true', headers: A })).json().total, 3);
+    assert.equal((await app.inject({ method: 'GET', url: '/api/containers?managed=false', headers: A })).json().total, 0);
+
+    // inspect agrees with the list (single source of truth, flag #1)
+    const ins = (await app.inject({ method: 'GET', url: '/api/containers/legacy', headers: A })).json();
+    assert.equal(ins.managed, true);
+    assert.equal(ins.managedByException, true);
+  });
+
+  await t.test('revoke → back to label-only behaviour', async () => {
+    // grantException keys by daemon container id (resolved at grant time) —
+    // find the actual key, don't assume the name.
+    const listRes = await app.inject({ method: 'GET', url: '/api/containers/exceptions', headers: A });
+    const entry = listRes.json().exceptions.find((e) => e.name === 'legacy');
+    assert.ok(entry, 'granted exception must be listed');
+    const del = await app.inject({ method: 'DELETE', url: `/api/containers/exceptions/${encodeURIComponent(entry.key)}`, headers: A });
+    assert.equal(del.statusCode, 204, del.body);
+    assert.equal((await app.inject({ method: 'GET', url: '/api/containers?managed=true', headers: A })).json().total, 2);
+    assert.equal((await app.inject({ method: 'GET', url: '/api/containers/legacy', headers: A })).json().managed, false);
+  });
+});
+
 test('container API: operator mutations + managed gate + idempotency', async (t) => {
   const { app, db } = await makeApp();
   t.after(() => app.close());
