@@ -111,6 +111,9 @@ export function makeFakeDb({ users = [] } = {}) {
       if (where.updatedAt) {
         if (where.updatedAt.lt && !(new Date(r.updatedAt) < new Date(where.updatedAt.lt))) return false;
       }
+      if (where.finishedAt) { // P6 dashboard: 24h windows
+        if (where.finishedAt.gte && !(r.finishedAt && new Date(r.finishedAt) >= new Date(where.finishedAt.gte))) return false;
+      }
       return true;
     });
   }

@@ -8,6 +8,7 @@ import {
   Workflow,
 } from 'lucide-react';
 import { NAV_ITEMS, useHashRoute } from '../router';
+import { NotificationBell } from '../components/NotificationBell';
 
 const ICONS = {
   dashboard: LayoutDashboard,
@@ -18,8 +19,29 @@ const ICONS = {
   settings: Settings,
 };
 
+// Detail pages report their parent's title in the topbar.
+const PAGE_TITLES = {
+  dashboard: 'Dashboard',
+  containers: 'Containers',
+  'containers-detail': 'Container',
+  devices: 'Devices',
+  'devices-detail': 'Device',
+  tasks: 'Tasks',
+  'tasks-detail': 'Task',
+  schedules: 'Schedules',
+  settings: 'Settings',
+};
+
 export function AppLayout({ user, onLogout, children }) {
-  const { page } = useHashRoute();
+  const { page, path } = useHashRoute();
+  const canMarkRead = user?.role === 'admin' || user?.role === 'operator';
+  // P6 fix: NAV_ITEMS 原本冇 page 欄 — active 高亮從來唔亮。由 path 推 base page
+  // （detail 頁跟母項高亮）。
+  const basePage = (p) => (p === '/' ? 'dashboard' : p.slice(1));
+  const isActive = (item) => {
+    const base = basePage(item.path);
+    return page === base || page === `${base}-detail` || (item.path !== '/' && path === item.path);
+  };
   return (
     <div className="layout">
       <aside className="sidebar">
@@ -30,7 +52,7 @@ export function AppLayout({ user, onLogout, children }) {
         <nav>
           {NAV_ITEMS.map((item) => {
             const Icon = ICONS[item.icon];
-            const active = item.page === page;
+            const active = isActive(item);
             return (
               <a key={item.path} href={`#${item.path}`} className={active ? 'nav-link active' : 'nav-link'}>
                 <Icon size={16} />
@@ -50,7 +72,15 @@ export function AppLayout({ user, onLogout, children }) {
           </button>
         </div>
       </aside>
-      <main className="main">{children}</main>
+      <div className="main-col">
+        <header className="topbar">
+          <span className="topbar-title">{PAGE_TITLES[page] ?? 'Dashboard'}</span>
+          <NotificationBell canMarkRead={canMarkRead} />
+        </header>
+        <main className="main">{children}</main>
+      </div>
     </div>
   );
 }
+
+export default AppLayout;

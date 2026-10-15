@@ -43,6 +43,7 @@ import { taskRoutes } from './routes/tasks.js';
 import { scheduleRoutes } from './routes/schedules.js';
 import { scheduleNotificationRoutes } from './routes/schedule-notifications.js';
 import { taskDefinitionRoutes } from './routes/task-definitions.js';
+import { dashboardRoutes } from './routes/dashboard.js';
 
 /** Public (unauthenticated) route prefixes — everything else may need a session. */
 const PUBLIC_PREFIXES = ['/api/health', '/api/auth/login'];
@@ -268,6 +269,7 @@ export async function buildApp(opts = {}) {
   scheduleRoutes(app);
   scheduleNotificationRoutes(app);
   taskDefinitionRoutes(app);
+  dashboardRoutes(app);
 
   // --- lifecycle ---------------------------------------------------------------
   app.addHook('onClose', async () => {

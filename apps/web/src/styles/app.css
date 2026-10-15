@@ -319,3 +319,58 @@ input:focus { outline: 1px solid var(--accent); }
 }
 .danger-zone { margin-top: 18px; }
 .danger-zone h2 { margin-top: 0; }
+
+/* ---------------------------------------------------------------- P6 UX: topbar + notification bell */
+.main-col { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 28px; border-bottom: 1px solid var(--border);
+  background: var(--bg-panel); position: sticky; top: 0; z-index: 10;
+}
+.topbar-title { font-size: 15px; font-weight: 600; letter-spacing: 0.2px; }
+
+.bell { position: relative; }
+.bell-btn {
+  position: relative; background: transparent; border: 1px solid var(--border);
+  border-radius: 8px; padding: 6px 9px; color: var(--text); cursor: pointer; display: inline-flex;
+}
+.bell-btn:hover { border-color: var(--accent); }
+.bell-badge {
+  position: absolute; top: -7px; right: -7px; min-width: 17px; height: 17px;
+  background: var(--err); color: #fff; font-size: 10.5px; font-weight: 700;
+  border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; padding: 0 4px;
+}
+.bell-panel {
+  position: absolute; right: 0; top: calc(100% + 8px); width: 360px; max-width: 80vw;
+  z-index: 20; margin: 0; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+.bell-hint { margin: 4px 0 8px; }
+.bell-list { list-style: none; margin: 4px 0 0; padding: 0; max-height: 340px; overflow: auto; }
+.bell-item { padding: 8px 4px; border-bottom: 1px solid var(--border); }
+.bell-item:last-child { border-bottom: none; }
+.bell-item.unread { background: rgba(77, 163, 255, 0.06); }
+.bell-title { display: flex; align-items: center; gap: 8px; text-decoration: none; color: var(--text); }
+.bell-title:hover { color: var(--accent); }
+.bell-title-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bell-msg { margin-top: 3px; font-size: 12px; word-break: break-word; }
+.bell-time { display: block; margin-top: 3px; font-size: 11px; }
+
+/* ---------------------------------------------------------------- P6 UX: dashboard stats */
+.section-title { font-size: 13px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); margin: 20px 0 8px; }
+.stat-card { padding: 12px 14px; }
+.stat-value { font-size: 26px; font-weight: 700; margin-top: 2px; }
+.stat-ok { color: var(--ok); }
+.stat-err { color: var(--err); }
+.stat-warn { color: var(--warn); }
+.stat-hint { margin: 4px 0 0; font-size: 12px; }
+.warn-banner { border-color: var(--warn); padding: 12px 14px; }
+.warn-banner a { color: var(--accent); }
+.recent-failed { list-style: none; margin: 0; padding: 0; }
+.recent-failed li {
+  display: flex; align-items: center; gap: 10px; padding: 6px 2px;
+  border-bottom: 1px solid var(--border); font-size: 13px;
+}
+.recent-failed li:last-child { border-bottom: none; }
+.recent-failed a { color: var(--text); text-decoration: none; font-family: ui-monospace, monospace; }
+.recent-failed a:hover { color: var(--accent); }
+.recent-failed time { margin-left: auto; font-size: 12px; }

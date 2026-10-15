@@ -27,6 +27,7 @@ export function useTaskEvents(runId, { enabled = true } = {}) {
   useEffect(() => {
     if (!enabled || !runId) return undefined;
     let es = null;
+    let reopenTimer = null;
     let disposed = false;
 
     function append(data) {
@@ -44,7 +45,14 @@ export function useTaskEvents(runId, { enabled = true } = {}) {
           // Cursor held → reopen with ?after= (server resumes cleanly).
           es.close();
           es = null;
-          if (!disposed) connect(lastIdRef.current);
+          if (disposed) return;
+          setLinkState('reconnecting');
+          // P6: bounded backoff before the cursor reopen. Without it a downed
+          // server spins a tight reopen loop (no native retry delay on this
+          // manual path). 3s matches the browser's default reconnect interval.
+          reopenTimer = setTimeout(() => {
+            if (!disposed) connect(lastIdRef.current);
+          }, 3000);
         } else {
           // No cursor yet — let EventSource's native retry take over.
           setLinkState('reconnecting');
@@ -77,6 +85,7 @@ export function useTaskEvents(runId, { enabled = true } = {}) {
     connect(undefined);
     return () => {
       disposed = true;
+      if (reopenTimer) clearTimeout(reopenTimer);
       es?.close();
     };
   }, [runId, enabled]);

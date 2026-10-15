@@ -3,9 +3,10 @@ import { api } from '../api/client';
 import { StateFrame } from '../components/StateFrame';
 
 /**
- * Settings — current identity from the real /api/auth/me endpoint.
- * Provider / system-settings APIs land in P3/P6; until then the request is
- * real and the 404 is shown honestly (no fake settings data).
+ * Settings — identity from the real /api/auth/me + AI providers from the
+ * real /api/providers (P3: writes are secret-write-only; the list always
+ * shows masked keys, never the raw value). The 401/404 empty states are
+ * kept for honest degradation (expired session / route unavailable).
  */
 export function Settings() {
   const me = useApi(() => api.get('/api/auth/me'));
@@ -44,7 +45,7 @@ export function Settings() {
           error={providers.error && providers.error.status !== 404 && providers.error.status !== 401 ? providers.error : null}
           empty={!providers.loading && providers.error && (providers.error.status === 404 || providers.error.status === 401)}
           emptyTitle="Provider management"
-          emptyHint="Provider configuration (base URL, model, masked API key) is delivered in P3. Endpoint /api/providers answers 404 until then."
+          emptyHint="Provider endpoint unavailable (404/401) — check the API status or sign in again."
         >
           {Array.isArray(providers.data) && providers.data.length === 0 ? (
             <p className="muted">No providers configured yet.</p>
