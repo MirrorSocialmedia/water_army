@@ -25,6 +25,12 @@ services:
       context: .
       dockerfile: docker/web.Dockerfile
     image: water-army/web:local
+    # P6 (flag #2): the platform's own stateless services are the persistent
+    # app-managed targets — label-based management survives container
+    # recreation (ID-keyed exceptions orphan on rebuild; labels re-apply).
+    labels:
+      app.managed: "true"
+      app.created-by: "compose"
     ports:
       - "127.0.0.1:${WEB_PORT:-3012}:3012"
     environment:
@@ -55,6 +61,9 @@ services:
       context: .
       dockerfile: docker/api.Dockerfile
     image: water-army/api:local
+    labels:
+      app.managed: "true"
+      app.created-by: "compose"
     # No host port: the web container proxies /api -> api:3000 (same-origin UI).
     # Binding 0.0.0.0 is container-internal only (compose network), never published.
     # group_add: the container keeps USER node (non-root) but needs the host
@@ -112,6 +121,9 @@ services:
       context: .
       dockerfile: docker/worker.Dockerfile
     image: water-army/worker:local
+    labels:
+      app.managed: "true"
+      app.created-by: "compose"
     # NO Docker socket here — hard boundary (MD §4 / threat T1).
     environment:
       NODE_ENV: production
