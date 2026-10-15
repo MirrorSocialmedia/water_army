@@ -7,6 +7,7 @@ import Dashboard from './pages/Dashboard';
 import Containers from './pages/Containers';
 import ContainerDetail from './pages/ContainerDetail';
 import Devices from './pages/Devices';
+import DeviceDetail from './pages/DeviceDetail';
 import Tasks from './pages/Tasks';
 import TaskDetail from './pages/TaskDetail';
 import Schedules from './pages/Schedules';
@@ -17,6 +18,7 @@ const PAGES = {
   containers: Containers,
   'containers-detail': (props) => <ContainerDetail containerId={props.params.id} />,
   devices: Devices,
+  'devices-detail': (props) => <DeviceDetail deviceId={props.params.id} />,
   tasks: Tasks,
   'tasks-detail': (props) => <TaskDetail runId={props.params.id} />,
   schedules: Schedules,

@@ -294,3 +294,28 @@ input:focus { outline: 1px solid var(--accent); }
 .approval-card h2 { margin-top: 0; }
 .error-box.small { font-size: 11px; margin-top: 6px; }
 .confirm-grid textarea { width: 100%; margin-top: 4px; min-height: 56px; }
+
+/* --- P5: redroid devices (preflight banner, diagnostics zones, logcat) --- */
+.pf-banner { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; margin-bottom: 12px; }
+.pf-banner p { margin: 6px 0 0; width: 100%; }
+.pf-ok { border-color: var(--ok); }
+.pf-bad { border-color: var(--err); }
+.pf-warn { border-color: var(--warn); }
+.pf-warn { color: var(--warn); margin: 2px 0; }
+.zone-card { min-width: 280px; }
+.zone-card h3 { margin: 0; font-size: 13px; }
+.zone-supported, .zone-ok, .zone-online { border-color: var(--ok); }
+.zone-unsupported, .zone-error, .zone-offline { border-color: var(--err); }
+.zone-software, .zone-unknown, .zone-not-executed { border-color: var(--warn); }
+.zone-card .muted { font-size: 12px; }
+.suggestions { margin: 6px 0 0; padding-left: 18px; }
+.suggestions li { font-size: 12px; color: var(--muted); }
+.log-viewer {
+  background: #0b0e13; border: 1px solid var(--border); border-radius: 6px;
+  padding: 10px; max-height: 320px; overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11.5px; line-height: 1.5; white-space: pre-wrap; word-break: break-word;
+  margin: 8px 0 0;
+}
+.danger-zone { margin-top: 18px; }
+.danger-zone h2 { margin-top: 0; }

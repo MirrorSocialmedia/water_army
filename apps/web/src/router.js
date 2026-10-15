@@ -11,6 +11,7 @@ const ROUTES = [
   { path: '/containers', page: 'containers' },
   { path: '/containers/:id', page: 'containers-detail' },
   { path: '/devices', page: 'devices' },
+  { path: '/devices/:id', page: 'devices-detail' },
   { path: '/tasks', page: 'tasks' },
   { path: '/tasks/:id', page: 'tasks-detail' },
   { path: '/tasks/:id', page: 'tasks-detail' },
