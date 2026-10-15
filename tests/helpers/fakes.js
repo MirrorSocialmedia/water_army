@@ -106,6 +106,17 @@ export function makeFakeDb({ users = [] } = {}) {
     });
   }
 
+  // P5 device where-matching (closure over this db's deviceRows).
+  function matchDeviceWhere(where = {}) {
+    return [...deviceRows.values()].filter((d) => {
+      if (where.id && d.id !== where.id) return false;
+      if (where.templateId && d.templateId !== where.templateId) return false;
+      if (where.containerState !== undefined && d.containerState !== where.containerState) return false;
+      if (where.adbPort !== undefined && d.adbPort !== where.adbPort) return false;
+      return true;
+    });
+  }
+
   const db = {
     user: {
       findUnique: async ({ where }) =>
@@ -626,16 +637,6 @@ export function makeFakeDb({ users = [] } = {}) {
     },
   };
   return db;
-}
-
-function matchDeviceWhere(where = {}) {
-  return [...deviceRows.values()].filter((d) => {
-    if (where.id && d.id !== where.id) return false;
-    if (where.templateId && d.templateId !== where.templateId) return false;
-    if (where.containerState !== undefined && d.containerState !== where.containerState) return false;
-    if (where.adbPort !== undefined && d.adbPort !== where.adbPort) return false;
-    return true;
-  });
 }
 
 export const fakeRedisOk = () => ({

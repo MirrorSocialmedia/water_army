@@ -85,6 +85,19 @@ export function loadConfig(env = process.env, opts = {}) {
   // P4 schedule knobs (MD §12.2: 過高頻率 400 — configurable minimum interval).
   const scheduleMinIntervalMs = optInt(e, 'SCHEDULE_MIN_INTERVAL_MS', 10_000);
   const scheduleMaxIntervalMs = optInt(e, 'SCHEDULE_MAX_INTERVAL_MS', 7 * 24 * 3_600_000);
+  // P5 redroid knobs (工單 P5 / 施工 MD §10).
+  const redroidAdbRangeStart = optInt(e, 'REDROID_ADB_RANGE_START', 15000);
+  const redroidAdbRangeEnd = optInt(e, 'REDROID_ADB_RANGE_END', 15999);
+  if (redroidAdbRangeStart > redroidAdbRangeEnd) {
+    throw new Error('config error: REDROID_ADB_RANGE_START must be <= REDROID_ADB_RANGE_END');
+  }
+  let redroidAdapter = (e.REDROID_ADAPTER ?? 'real').toLowerCase();
+  if (!['real', 'mock'].includes(redroidAdapter)) {
+    throw new Error("config error: REDROID_ADAPTER must be 'real' or 'mock'");
+  }
+  if (nodeEnv === 'production' && redroidAdapter === 'mock') {
+    redroidAdapter = 'real'; // the mock must never run a production host
+  }
 
   const databaseUrl = e.DATABASE_URL ?? '';
   if (!databaseUrl.startsWith('postgresql://')) {
@@ -133,6 +146,19 @@ export function loadConfig(env = process.env, opts = {}) {
     taskSseHeartbeatMs,
     scheduleMinIntervalMs,
     scheduleMaxIntervalMs,
+    // P5 redroid (工單: 127.0.0.1-only ADB, pinned images, 診斷白名單).
+    redroidAdapter,
+    redroidDataRoot: e.REDROID_DATA_ROOT ?? '/var/lib/water-army/redroid',
+    redroidAdbRangeStart,
+    redroidAdbRangeEnd,
+    redroidAdbBinary: e.REDROID_ADB_BINARY ?? '/usr/bin/adb',
+    redroidAdbTimeoutMs: optInt(e, 'REDROID_ADB_TIMEOUT_MS', 20_000),
+    redroidAdbMaxOutput: optInt(e, 'REDROID_ADB_MAX_OUTPUT', 262_144),
+    redroidLogcatTailDefault: optInt(e, 'REDROID_LOGCAT_TAIL_DEFAULT', 200),
+    redroidLogcatTailMax: optInt(e, 'REDROID_LOGCAT_TAIL_MAX', 5000),
+    redroidPreflightTimeoutMs: optInt(e, 'REDROID_PREFLIGHT_TIMEOUT_MS', 5000),
+    redroidPreflightMaxOutput: optInt(e, 'REDROID_PREFLIGHT_MAX_OUTPUT', 65_536),
+    redroidIdempotencyTtlMs: optInt(e, 'REDROID_IDEMPOTENCY_TTL_MS', 600_000),
     // P3 service identity: worker→API token (empty = service auth disabled).
     serviceToken: e.WORKER_API_TOKEN ?? '',
     // P3 provider default when POST /api/tasks/runs omits body.provider.

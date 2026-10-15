@@ -29,10 +29,16 @@ import { createRateLimiter } from './security/rate-limit.js';
 import { createAuditService } from './services/audit.js';
 import { createSessionService } from './services/session.js';
 import { createDockerService } from './services/docker-service.js';
+import { runRedroidPreflight } from './services/preflight.js';
+import { createRedroidService } from './services/redroid-service.js';
+import { createAdbWhitelist } from './services/adb-whitelist.js';
+import { createMockRedroidEnvironment } from './services/redroid-mock.js';
 import { createTaskQueue, closeTaskQueue } from './plugins/task-queue.js';
 import { authRoutes } from './routes/auth.js';
 import { containerRoutes } from './routes/containers.js';
 import { templateRoutes } from './routes/templates.js';
+import { redroidTemplateRoutes } from './routes/redroid-templates.js';
+import { redroidDeviceRoutes } from './routes/devices.js';
 import { taskRoutes } from './routes/tasks.js';
 import { scheduleRoutes } from './routes/schedules.js';
 import { taskDefinitionRoutes } from './routes/task-definitions.js';
@@ -79,6 +85,41 @@ export async function buildApp(opts = {}) {
   const rateLimiter = createRateLimiter({ limit: 5, windowMs: 60_000 });
   const dockerService = createDockerService({ docker, db, config, log: app.log, audit });
 
+  // P5 redroid (工單: device 操作全部 API 側同步 — worker 唔涉及).
+  // REDROID_ADAPTER=mock → deterministic mock docker+adb+preflight (never in
+  // production — config forces 'real' when NODE_ENV=production).
+  const redroidEnv = config.redroidAdapter === 'mock' ? createMockRedroidEnvironment(opts.redroidMockOpts ?? {}) : null;
+  if (config.redroidAdapter === 'mock') {
+    app.log.warn('REDROID_ADAPTER=mock — deterministic mock redroid environment (NOT a real host; results are labelled mock)');
+  }
+  const redroidDocker = redroidEnv?.docker ?? docker;
+  const redroidDockerService = redroidEnv
+    ? createDockerService({ docker: redroidEnv.docker, db, config, log: app.log, audit })
+    : dockerService;
+  const redroidService = createRedroidService({
+    db,
+    docker: redroidDocker,
+    dockerService: redroidDockerService,
+    config,
+    log: app.log,
+    audit,
+    // Mock mode: the adb engine runs through the canned mock executor (calls
+    // are recorded on redroidMockEnv.adb.calls for zero-shell assertions).
+    adb: redroidEnv
+      ? createAdbWhitelist({
+          adbBinary: config.redroidAdbBinary ?? '/usr/bin/adb',
+          timeoutMs: config.redroidAdbTimeoutMs ?? 20_000,
+          maxOutputBytes: config.redroidAdbMaxOutput ?? 262_144,
+          logcatTailMax: config.redroidLogcatTailMax ?? 5000,
+          logcatTailDefault: config.redroidLogcatTailDefault ?? 200,
+          execFile: redroidEnv.adb.exec,
+          log: app.log,
+        })
+      : undefined,
+    preflight: redroidEnv?.preflight ?? ((params) => runRedroidPreflight({ config, docker: { ping: () => docker.ping() }, log: app.log, ...params })),
+  });
+  if (redroidEnv) app.decorate('redroidMockEnv', redroidEnv); // test seam — exists ONLY in mock mode
+
   app.decorate('config', config);
   app.decorate('db', db);
   app.decorate('redis', redis);
@@ -88,6 +129,7 @@ export async function buildApp(opts = {}) {
   app.decorate('rateLimiter', rateLimiter);
   app.decorate('requireRole', requireRole);
   app.decorate('dockerService', dockerService);
+  app.decorate('redroidService', redroidService);
   app.decorate('taskQueue', taskQueue);
   app.decorate('taskSseActive', 0); // P3 SSE concurrency cap counter
 
@@ -219,6 +261,8 @@ export async function buildApp(opts = {}) {
   healthRoutes(app);
   containerRoutes(app);
   templateRoutes(app);
+  redroidTemplateRoutes(app);
+  redroidDeviceRoutes(app);
   taskRoutes(app, { taskQueue });
   scheduleRoutes(app);
   taskDefinitionRoutes(app);
