@@ -79,12 +79,13 @@ Provider API key（本地 SGLang 或外部 OpenAI-compatible）係高價值目�
 
 **緩解措施**
 1. **加密存儲**：`provider_configs.encrypted_api_key` 用應用層 AES-256-GCM，key = 環境注入嘅 `APP_ENCRYPTION_KEY`（MD §13.3）；encryption key 唔入 repo、唔入 DB、唔跟密文同一位置；.env.example 只有 placeholder（MD §14）。
-2. **只寫入/輪替、唔回傳**：Provider secret API 只可寫入或輪替；GET 一律回「已設定」狀態 + 遮蔽尾碼（MD §8、§6.7）。
+2. **只寫入/輪替、唔回傳**：Provider secret API 只可寫入或輪替；GET 一律回「已設定」狀態（`hasApiKey: boolean` — 實裝比 MD §8/§6.7 嘅「遮蔽尾碼」更嚴：零 key 材料離開後端）（MD §8、§6.7）。
 3. **queue 隔離**：BullMQ job payload 只含 `provider_config_id`（DB id）+ 非敏感參數；worker 執行時先由 DB 解密取用，用完即丟（MD §11.2 step 4）。
 4. **Log redaction**：Pino redaction 覆蓋 `authorization`、api key、password、cookie、session、proxy credentials 及敏感 env（MD §13.3）；request/response log 預設縮略 prompt/result。
 5. **前端零 key**：模型呼叫全部經 API → worker → provider adapter；前端只揀 provider/model（MD §6.7 配置列表）。
 6. **版本控制紀律**：`.env`、logs、build output、coverage、Playwright output 入 `.gitignore`（MD §14）；commit 前檢查；P6 加 secret 掃描（`npm audit` 之外另做 secret 掃描）。
 7. **審計**：Provider 配置變更（建立/修改/輪替/停用）寫審計事件（MD §7 audit_events 要求）。
+8. **P6 實打證據**（`docs/evidence/p6-security/secret-redaction.json`，17/17 pass）：probe key 經真實 API 建立 → GET 響應零 key 材料（只 `hasApiKey`）→ DB 行係 `v1:` AES-256-GCM 密文無明文 → `provider.create` 審計行 details 零 key 材料。另外 P6 補咗 approval 讀路徑 scrub-on-read（`publicApproval` 同審計 API 同一姿勢）— 就算行被 legacy import / 手動 SQL 寫入未清理數據，API 都唔會洩。
 
 **殘留風險**：DB dump + encryption key 同時被取得（需同時 compromise DB volume 同 api/worker env）→ runbook 提供 key 輪替程序 + DB 備份加密建議（P6 runbook）。
 
@@ -153,7 +154,7 @@ ADB 無內建鑑權。場景：
 4. **sync_error 狀態**：DB 成功但 queue 同步失敗 → 標記 `sync_error`、UI 顯示錯誤 + 可重試操作，唔靜默（MD §6.6、§12.1）。
 5. **run 級唯一性**：每個 scheduler-generated run 有唯一 `task_runs.id`；API 重複提交用 `idempotency_key`（作用範圍內 unique）防雙擊（MD §7、§12.3）。
 6. **重疊策略顯式化**：`skip_if_running`（預設）/ `queue`；**唔做**隱含「取消舊任務並取代」（MD §1.4）。`skip_if_running` 觸發時必須記錄一筆 `skipped` run/event 並寫明略過原因（MD §12.3）— 無痕缺跑唔被允許。
-7. **互斥鎖要能死**：`concurrency_key` 鎖具 TTL/續租（或 DB advisory lock 類可靠機制），工作結束釋放；**process crash 唔可以令鎖永久存在**（TTL 到期自動釋放）（MD §12.3）。
+7. **互斥要能死、要可視**：P6 已實裝 engine gate（`gateConcurrency`，MD §12.3）— 同 key 有 `running`/`needs_approval` holder 時，後到 run 以 15s 間隔延遲重試（`TASK_CONCURRENCY_DEFER_MS`，上限 `TASK_CONCURRENCY_MAX_DEFERS=10` ≈ 2.5 min），超過上限 → **可視化 `skipped` run**（`inputJson.skipped{reason, key, activeRunId, policy}` + status event + 通知 bell）— 唔會永久掛住、唔會雙開；`queued` sibling 唔計作 holder（防 deadlock 一對），`cancel_requested` 唔計作 holder（快 stop）。
 8. **重試紀律**：預設 3 attempts、指數退避 + 上限、系統最大值；**唔重試** 使用者輸入錯誤、認證失敗、schema validation failure（MD §12.3、§11.1：只對明確 transient error 重試）。
 9. **故障恢復**：Redis 短暫中斷 / DB 短暫不可用 → 唔靜默丟任務；記錄不一致狀態，恢復後 reconciliation（MD §12.3）。
 10. **如實顯示延遲**：排程係盡力執行，唔宣稱即時硬性定時；UI 顯示實際執行時間 vs 預定時間（延遲可見）（MD §1.4、§6.6）。

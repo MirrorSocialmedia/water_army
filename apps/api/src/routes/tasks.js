@@ -84,7 +84,11 @@ function publicApproval(a) {
     id: a.id,
     taskRunId: a.taskRunId,
     toolName: a.toolName,
-    arguments: a.argumentsJson ?? null,
+    // P6 hardening: arguments are scrubbed at write time (createApproval);
+    // scrub on read too (same posture as the audit API) so a row that ever
+    // reached the DB un-scrubbed (legacy import, manual SQL) can never leak
+    // through the API.
+    arguments: scrubObject(a.argumentsJson ?? null, 2_000),
     status: a.status,
     requestedAt: a.requestedAt ?? null,
     reviewedBy: a.reviewedBy ?? null,
