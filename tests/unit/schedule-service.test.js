@@ -422,9 +422,13 @@ test('list: returns schedules with definition summary + lastRun (delay computed)
   );
   const fired = await svc.runNow(schedule.id, USER, { idempotencyKey: 'runnow-list-test-1' });
   // Give the run a scheduledSlotAt in the past so delay is measurable.
+  // ANCHORED TO createdAt (flag #4 flake fix): delay = createdAt − slot must
+  // be exactly 4200; anchoring to Date.now() made it 4200 + wall-clock drift
+  // between runNow() and this update, which failed whenever the test crossed
+  // a millisecond boundary (observed ~1 in 4 runs).
   await db.taskRun.update({
     where: { id: fired.run.id },
-    data: { inputJson: { ...fired.run.inputJson, scheduledSlotAt: new Date(Date.now() - 4200).toISOString() } },
+    data: { inputJson: { ...fired.run.inputJson, scheduledSlotAt: new Date(new Date(fired.run.createdAt).getTime() - 4200).toISOString() } },
   });
 
   const { items, total } = await svc.list({ page: 1, pageSize: 20 });

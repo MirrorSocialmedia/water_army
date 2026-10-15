@@ -49,9 +49,12 @@ const SYSTEM = Object.freeze({ id: SERVICE_USER_ID, username: 'scheduler' });
  * @param {object} deps.taskSvc TaskRunService (worker instance: createRun +
  *   createSkippedRun; enqueue callback already wired to the producer queue)
  * @param {object} [deps.queue] BullMQ Queue — self-removal of stale schedulers
+ * @param {object} [deps.notifier] P6 flag #3 — schedule notification writer
+ *   (overlap-skipped slots notify too: for a once-schedule the skip IS the
+ *   only record of the consumed slot)
  * @param {object} [deps.log]
  */
-export function createScheduleFireHandler({ db, taskSvc, queue, log = console } = {}) {
+export function createScheduleFireHandler({ db, taskSvc, queue, notifier, log = console } = {}) {
   /**
    * Consume the slot after the run is durably recorded/enqueued.
    * Non-once: next_run_at → the slot AFTER this one (computed from the slot,
@@ -190,6 +193,14 @@ export function createScheduleFireHandler({ db, taskSvc, queue, log = console } 
         SYSTEM,
       );
       await consumeSlot(row, slotMs); // the slot is consumed either way
+      // P6 flag #3: a skipped slot is a user-visible outcome (a once- schedule
+      // self-disables right after — the notification is the only record).
+      // Non-fatal inside the notifier.
+      if (notifier) {
+        try {
+          await notifier.notifyTerminal(skipRun);
+        } catch { /* never fail the fire over a notification */ }
+      }
       log.info?.({ scheduleId, slotMs, activeRunId: activeRun.id, skipRunId: skipRun.id }, 'schedule slot skipped (skip_if_running)');
       return { outcome: 'skipped-overlap', runId: skipRun.id };
     }

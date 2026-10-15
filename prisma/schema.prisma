@@ -285,6 +285,24 @@ model Device {
   @@map("devices")
 }
 
+// ---------------------------------------------------------------- P6: schedule notifications
+// One row per terminal scheduled run (flag #3 — MD 尾段: 排程執行完成/失敗 → UI 通知).
+// Unique on run_id (a run notifies at most once, terminal is one-way).
+model ScheduleNotification {
+  id         String   @id @default(cuid()) @db.Text
+  scheduleId String   @map("schedule_id") @db.Text
+  runId      String   @unique @map("run_id") @db.Text
+  status     String // terminal run status: succeeded|failed|timed_out|cancelled|skipped
+  title      String
+  message    String? // error code/summary, scrubbed
+  isRead     Boolean  @default(false) @map("is_read")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([scheduleId])
+  @@index([isRead, createdAt])
+  @@map("schedule_notifications")
+}
+
 // ---------------------------------------------------------------- app_settings
 // Non-sensitive system settings only; sensitive keys via app-layer encryption or env secrets.
 model AppSetting {

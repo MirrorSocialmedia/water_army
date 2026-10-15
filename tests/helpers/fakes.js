@@ -63,6 +63,7 @@ export function makeFakeDb({ users = [] } = {}) {
   // ---- P4 models (in-memory, Prisma-shaped) --------------------------------
   const scheduleRows = new Map(); // by id
   const definitionRows = new Map(); // by id
+  const notificationRows = new Map(); // by id (P6 flag #3)
   let scheduleSeq = 0;
 
   // ---- P5 models (in-memory, Prisma-shaped) --------------------------------
@@ -460,6 +461,70 @@ export function makeFakeDb({ users = [] } = {}) {
         if (!scheduleRows.has(where.id)) throw Object.assign(new Error('schedule not found'), { code: 'P2025' });
         scheduleRows.delete(where.id);
         return {};
+      },
+    },
+    // ---- P6 flag #3: schedule_notifications (unique runId, isRead flag) ----
+    scheduleNotification: {
+      findUnique: async ({ where }) => {
+        if (where.id && notificationRows.has(where.id)) return { ...notificationRows.get(where.id) };
+        if (where.runId) {
+          const found = [...notificationRows.values()].find((n) => n.runId === where.runId);
+          return found ? { ...found } : null;
+        }
+        return null;
+      },
+      findMany: async ({ where = {}, orderBy, take } = {}) => {
+        let rows = [...notificationRows.values()].filter((n) => {
+          if (where.isRead !== undefined && n.isRead !== where.isRead) return false;
+          if (where.scheduleId !== undefined && n.scheduleId !== where.scheduleId) return false;
+          return true;
+        });
+        // newest-first default match: orderBy [{createdAt:'desc'},{id:'asc'}]
+        const specs = Array.isArray(orderBy) ? orderBy : orderBy ? [orderBy] : [{ createdAt: 'desc' }, { id: 'asc' }];
+        rows = applyOrderBy(rows, specs);
+        if (Number.isInteger(take)) rows = rows.slice(0, take);
+        return rows.map((n) => ({ ...n }));
+      },
+      count: async ({ where = {} } = {}) =>
+        [...notificationRows.values()].filter((n) => {
+          if (where.isRead !== undefined && n.isRead !== where.isRead) return false;
+          return true;
+        }).length,
+      create: async ({ data }) => {
+        if (data.runId && [...notificationRows.values()].some((n) => n.runId === data.runId)) {
+          throw Object.assign(new Error(`Unique constraint failed on the fields: (runId)`), { code: 'P2002' });
+        }
+        const row = {
+          id: data.id ?? `notif${notificationRows.size + 1}`,
+          scheduleId: data.scheduleId,
+          runId: data.runId,
+          status: data.status,
+          title: data.title,
+          message: data.message ?? null,
+          isRead: data.isRead ?? false,
+          createdAt: data.createdAt ?? now(),
+        };
+        notificationRows.set(row.id, row);
+        return { ...row };
+      },
+      update: async ({ where, data }) => {
+        const row = notificationRows.get(where.id);
+        if (!row) throw Object.assign(new Error('notification not found'), { code: 'P2025' });
+        Object.assign(row, data);
+        return { ...row };
+      },
+      updateMany: async ({ where = {}, data }) => {
+        let count = 0;
+        for (const n of notificationRows.values()) {
+          const matches =
+            (where.isRead === undefined || n.isRead === where.isRead) &&
+            (where.id === undefined || n.id === where.id);
+          if (matches) {
+            Object.assign(n, data);
+            count += 1;
+          }
+        }
+        return { count };
       },
     },
     // ---- P4: task_definitions (read path for schedules UI + run-now) --------

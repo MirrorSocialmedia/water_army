@@ -41,6 +41,7 @@ import { redroidTemplateRoutes } from './routes/redroid-templates.js';
 import { redroidDeviceRoutes } from './routes/devices.js';
 import { taskRoutes } from './routes/tasks.js';
 import { scheduleRoutes } from './routes/schedules.js';
+import { scheduleNotificationRoutes } from './routes/schedule-notifications.js';
 import { taskDefinitionRoutes } from './routes/task-definitions.js';
 
 /** Public (unauthenticated) route prefixes — everything else may need a session. */
@@ -265,6 +266,7 @@ export async function buildApp(opts = {}) {
   redroidDeviceRoutes(app);
   taskRoutes(app, { taskQueue });
   scheduleRoutes(app);
+  scheduleNotificationRoutes(app);
   taskDefinitionRoutes(app);
 
   // --- lifecycle ---------------------------------------------------------------

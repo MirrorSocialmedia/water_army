@@ -34,6 +34,7 @@ import { createDb, closeDb } from './db.js';
 import { resolveProviderForRun } from './provider-resolver.js';
 import { createApiClient, createToolHandlers } from './tool-helpers.js';
 import { createTaskEngine } from './task-engine.js';
+import { createScheduleNotifier } from './schedule-notifier.js';
 
 const log = pino({
   level: process.env.LOG_LEVEL ?? 'info',
@@ -265,6 +266,8 @@ export function createWorkerApp({
   // P4: built in start() once the DB exists (tests can read them off the app).
   const reconcilerRef = { impl: null };
   const fireHandlerRef = { impl: null };
+  // P6 flag #3: schedule notification writer (terminal scheduled runs → UI badge).
+  const notifierRef = { impl: null };
 
   const buildRealServices = () => {
     if (!svcRef.impl) {
@@ -284,11 +287,15 @@ export function createWorkerApp({
         },
       });
     }
+    if (!notifierRef.impl) {
+      notifierRef.impl = createScheduleNotifier({ db: dbRef.client, log });
+    }
     if (!fireHandlerRef.impl) {
       fireHandlerRef.impl = createScheduleFireHandler({
         db: dbRef.client,
         taskSvc: svcRef.impl,
         queue: producerQueue,
+        notifier: notifierRef.impl,
         log,
       });
     }
@@ -329,8 +336,20 @@ export function createWorkerApp({
       log.error({ jobId: job?.id }, 'worker: job received but engine not built yet — failing loudly');
       throw new Error('worker: engine not ready');
     }
+    const notifyScheduledTerminal = async (runId) => {
+      // P6 flag #3: non-fatal UI notification for terminal scheduled runs
+      // (all terminal paths converge here — engine success/timeout/cancel/
+      // retry-exhaustion inside handleJob, crash path below).
+      if (!runId || !svcRef.impl || !notifierRef.impl) return;
+      try {
+        const run = await svcRef.impl.loadRun(runId, { mustExist: false });
+        if (run) await notifierRef.impl.notifyTerminal(run);
+      } catch { /* presentation only — never fail the job */ }
+    };
     try {
-      return await engineImpl.handleJob(job);
+      const outcome = await engineImpl.handleJob(job);
+      await notifyScheduledTerminal(job?.data?.runId);
+      return outcome;
     } catch (err) {
       // The engine owns every terminal transition; a throw here is a coding
       // bug. Record it honestly (if the run is still live) and let the job
@@ -351,6 +370,7 @@ export function createWorkerApp({
           /* run already terminal — nothing to do */
         }
       }
+      await notifyScheduledTerminal(runId);
       return { outcome: 'crash' };
     }
   };
