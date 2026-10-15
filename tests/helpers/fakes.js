@@ -65,6 +65,10 @@ export function makeFakeDb({ users = [] } = {}) {
   const definitionRows = new Map(); // by id
   let scheduleSeq = 0;
 
+  // ---- P5 models (in-memory, Prisma-shaped) --------------------------------
+  const templateRows = new Map(); // redroid_templates, by id
+  const deviceRows = new Map(); // devices, by id
+
   // ---- P3 models (in-memory, Prisma-shaped) --------------------------------
   const runRows = new Map(); // by id
   const eventRows = []; // append-only (createdAt ordered by push order)
@@ -485,15 +489,153 @@ export function makeFakeDb({ users = [] } = {}) {
         return { ...row };
       },
     },
+    // ---- P5: redroid_templates (DB-backed, unlike P2's app_settings templates) --
+    redroidTemplate: {
+      findUnique: async ({ where } = {}) => {
+        const row = templateRows.get(where?.id) ?? [...templateRows.values()].find((t) => t.name === where?.name) ?? null;
+        return row ? { ...row } : null;
+      },
+      findMany: async () => [...templateRows.values()].map((t) => ({ ...t })),
+      create: async ({ data }) => {
+        if (data.id !== undefined && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(data.id))) {
+          throw Object.assign(new Error(`invalid input syntax for type uuid: "${data.id}"`), { code: 'P2007' });
+        }
+        if (data.name && [...templateRows.values()].some((t) => t.name === data.name)) {
+          throw Object.assign(new Error(`Unique constraint failed on the fields: (name)`), { code: 'P2002' });
+        }
+        const ts = now();
+        const row = {
+          id: data.id ?? randomUUID(), // @db.Uuid — seed rows carry fixed cuid-shape ids
+          name: data.name,
+          image: data.image,
+          androidVersion: data.androidVersion,
+          width: data.width ?? 1080,
+          height: data.height ?? 1920,
+          dpi: data.dpi ?? 440,
+          fps: data.fps ?? 30,
+          gpuMode: data.gpuMode ?? 'swiftshader_indirect',
+          privileged: data.privileged ?? false,
+          privilegedReason: data.privilegedReason ?? null,
+          isEnabled: data.isEnabled ?? true,
+          createdAt: ts,
+          updatedAt: ts,
+        };
+        templateRows.set(row.id, row);
+        return { ...row };
+      },
+      update: async ({ where, data }) => {
+        const row = templateRows.get(where.id);
+        if (!row) throw Object.assign(new Error('redroid template not found'), { code: 'P2025' });
+        if (data.name && data.name !== row.name && [...templateRows.values()].some((t) => t.id !== row.id && t.name === data.name)) {
+          throw Object.assign(new Error(`Unique constraint failed on the fields: (name)`), { code: 'P2002' });
+        }
+        // Prisma semantics: `undefined` fields are absent (skipped) — a naive
+        // Object.assign would clobber real values with undefined.
+        const clean = Object.fromEntries(Object.entries(data).filter(([, v]) => v !== undefined));
+        Object.assign(row, clean, { updatedAt: now() });
+        return { ...row };
+      },
+      delete: async ({ where }) => {
+        if (!templateRows.has(where.id)) throw Object.assign(new Error('redroid template not found'), { code: 'P2025' });
+        templateRows.delete(where.id);
+        return {};
+      },
+    },
+    // ---- P5: devices -----------------------------------------------------
+    device: {
+      findUnique: async ({ where, include } = {}) => {
+        const row = deviceRows.get(where?.id) ?? [...deviceRows.values()].find((d) => d.name === where?.name) ?? null;
+        if (!row) return null;
+        const out = { ...row };
+        if (include?.template) out.template = templateRows.get(row.templateId) ? { ...templateRows.get(row.templateId) } : null;
+        return out;
+      },
+      findFirst: async ({ where = {} } = {}) => {
+        const row = matchDeviceWhere(where)[0];
+        return row ? { ...row } : null;
+      },
+      findMany: async ({ where = {}, include, select } = {}) => {
+        let rows = matchDeviceWhere(where);
+        rows = rows.map((d) => {
+          const out = {};
+          for (const k of Object.keys(select ?? d)) out[k] = d[k];
+          if (include?.template) out.template = templateRows.get(d.templateId) ? { ...templateRows.get(d.templateId) } : null;
+          return out;
+        });
+        return rows;
+      },
+      count: async ({ where = {} } = {}) => matchDeviceWhere(where).length,
+      create: async ({ data }) => {
+        if (data.id !== undefined && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(data.id))) {
+          throw Object.assign(new Error(`invalid input syntax for type uuid: "${data.id}"`), { code: 'P2007' });
+        }
+        if (data.name && [...deviceRows.values()].some((d) => d.name === data.name)) {
+          throw Object.assign(new Error(`Unique constraint failed on the fields: (name)`), { code: 'P2002' });
+        }
+        if (data.adbPort !== undefined && data.adbPort !== null && [...deviceRows.values()].some((d) => d.adbPort === data.adbPort)) {
+          throw Object.assign(new Error(`Unique constraint failed on the fields: (adbPort)`), { code: 'P2002' });
+        }
+        const ts = now();
+        const row = {
+          id: data.id ?? randomUUID(),
+          name: data.name,
+          templateId: data.templateId,
+          adbPort: data.adbPort,
+          dataDir: data.dataDir,
+          containerName: data.containerName,
+          containerId: data.containerId ?? null,
+          image: data.image,
+          androidVersion: data.androidVersion,
+          width: data.width,
+          height: data.height,
+          dpi: data.dpi,
+          fps: data.fps,
+          gpuMode: data.gpuMode,
+          containerState: data.containerState ?? 'unknown',
+          adbState: data.adbState ?? 'unknown',
+          gpuStatus: data.gpuStatus ?? 'unknown',
+          lastDiagnosedAt: data.lastDiagnosedAt ?? null,
+          createdAt: ts,
+          updatedAt: ts,
+        };
+        deviceRows.set(row.id, row);
+        return { ...row };
+      },
+      update: async ({ where, data }) => {
+        const row = deviceRows.get(where.id);
+        if (!row) throw Object.assign(new Error('device not found'), { code: 'P2025' });
+        if (data.adbPort !== undefined && data.adbPort !== null && [...deviceRows.values()].some((d) => d.id !== row.id && d.adbPort === data.adbPort)) {
+          throw Object.assign(new Error(`Unique constraint failed on the fields: (adbPort)`), { code: 'P2002' });
+        }
+        const clean = Object.fromEntries(Object.entries(data).filter(([, v]) => v !== undefined));
+        Object.assign(row, clean, { updatedAt: now() });
+        return { ...row };
+      },
+      delete: async ({ where }) => {
+        if (!deviceRows.has(where.id)) throw Object.assign(new Error('device not found'), { code: 'P2025' });
+        deviceRows.delete(where.id);
+        return {};
+      },
+    },
     // teardown seam
     $disconnect: async () => {},
     __state: {
       userRows, userById, sessionRows, settingRows, auditRows,
       runRows, eventRows, approvalRows, providerRows,
-      scheduleRows, definitionRows,
+      scheduleRows, definitionRows, templateRows, deviceRows,
     },
   };
   return db;
+}
+
+function matchDeviceWhere(where = {}) {
+  return [...deviceRows.values()].filter((d) => {
+    if (where.id && d.id !== where.id) return false;
+    if (where.templateId && d.templateId !== where.templateId) return false;
+    if (where.containerState !== undefined && d.containerState !== where.containerState) return false;
+    if (where.adbPort !== undefined && d.adbPort !== where.adbPort) return false;
+    return true;
+  });
 }
 
 export const fakeRedisOk = () => ({

@@ -226,6 +226,65 @@ model AuditEvent {
   @@map("audit_events")
 }
 
+// ---------------------------------------------------------------- redroid_templates (P5, MD §7/§10)
+// Dedicated, admin-curated Redroid templates. Privileged exists ONLY here
+// (MD §9.2/§13.4 — a general app container can never be privileged).
+// Image must be a pinned version — latest/nightly are rejected (MD §2.2).
+model RedroidTemplate {
+  id               String   @id @default(uuid()) @db.Uuid
+  name             String   @unique
+  image            String // pinned, e.g. redroid/redroid:15.0.0 (validated: explicit tag/digest, no latest/nightly)
+  androidVersion   String   @map("android_version") // e.g. "15", "14"
+  width            Int      @default(1080)
+  height           Int      @default(1920)
+  dpi              Int      @default(440)
+  fps              Int      @default(30)
+  gpuMode          String   @default("swiftshader_indirect") @map("gpu_mode") // swiftshader_indirect | host
+  privileged       Boolean  @default(false)
+  privilegedReason String?  @map("privileged_reason") // required when privileged=true — the explicit label (MD §9.2)
+  isEnabled        Boolean  @default(true) @map("is_enabled")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  devices Device[]
+
+  @@map("redroid_templates")
+}
+
+// ---------------------------------------------------------------- devices (P5)
+// A Redroid Android test device. ADB port is unique on 127.0.0.1 (DB unique
+// constraint; the bind address is fixed to 127.0.0.1 server-side, MD §2.3).
+// width/height/dpi/fps/gpuMode/image are SNAPSHOTED from the template at
+// creation — template edits never mutate a running device's contract.
+model Device {
+  id              String    @id @default(uuid()) @db.Uuid
+  name            String    @unique
+  templateId      String    @map("template_id") @db.Uuid
+  adbPort         Int       @unique @map("adb_port") // published on 127.0.0.1 only
+  dataDir         String    @map("data_dir") // dedicated host dir for /data (MD §10.2)
+  containerName   String    @map("container_name")
+  containerId     String?   @map("container_id") // docker id after create; null = provisioning failed
+  image           String // snapshot of the template image at creation (deployment record, MD §10.2)
+  androidVersion  String    @map("android_version")
+  width           Int
+  height          Int
+  dpi             Int
+  fps             Int
+  gpuMode         String    @map("gpu_mode")
+  containerState  String    @default("unknown") @map("container_state") // created|running|exited|paused|dead|missing|unknown
+  adbState        String    @default("unknown") @map("adb_state") // online|offline|unknown
+  gpuStatus       String    @default("unknown") @map("gpu_status") // unknown|unverified|software|verified — 未驗證 = 誠信核心
+  lastDiagnosedAt DateTime? @map("last_diagnosed_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  template RedroidTemplate @relation(fields: [templateId], references: [id])
+
+  @@index([templateId])
+  @@index([containerState])
+  @@map("devices")
+}
+
 // ---------------------------------------------------------------- app_settings
 // Non-sensitive system settings only; sensitive keys via app-layer encryption or env secrets.
 model AppSetting {
