@@ -712,24 +712,182 @@ export function createRedroidService({
     return { device: deviceView(fresh), adbNote };
   }
 
-  // ---- diagnostics (commit 4 builds on this seam) ----------------------------
+  // ---- diagnostics (工單: 4 個獨立結果區，任一項未執行 = 未驗證) ----------
 
-  /** Run one whitelisted adb op against a device's loopback target (route commit 4). */
-  async function runWhitelistedOp(idOrName, params, { actorUserId, requestId, ip } = {}) {
+  /**
+   * POST /diagnostics — the four independent result zones (施工 MD §6.4):
+   *   kernel            — real host preflight (or mock-labelled)
+   *   containerLogs     — bounded docker logs
+   *   adbConnectivity   — whitelist get-state (+ one connect attempt)
+   *   gpuVerification   — honest configuration-level assessment
+   * Each zone reports `executed` + its own status; a zone that was NOT
+   * executed is 'unverified' — never a silent pass (未驗證 語義).
+   */
+  async function diagnoseDevice(idOrName, { actorUserId, requestId, ip } = {}) {
     const row = await findDevice(idOrName);
     if (!row) throw fail('REDROID_DEVICE_NOT_FOUND', 404, `Device '${idOrName}' not found`);
-    const target = `127.0.0.1:${row.adbPort}`;
-    try {
-      const result = await adbEngine.run({ target, ...params });
-      await db.device.update({ where: { id: row.id }, data: { lastDiagnosedAt: new Date() } }).catch(() => {});
-      return { device: row.name, target, ...result };
-    } catch (err) {
-      if (err?.name === 'AdbWhitelistError') {
-        const e = fail('VALIDATION_ERROR', 400, err.message);
-        throw e;
+
+    // -- zone 1: kernel (MD §10.1 — real host check, independent display) --
+    let kernel;
+    if (!preflight) {
+      kernel = { executed: true, status: 'unknown', note: 'preflight not configured on this service' };
+    } else {
+      try {
+        const pf = await preflight({ gpuMode: row.gpuMode === 'host', port: null });
+        kernel = {
+          executed: true,
+          status: pf.overall ?? 'unknown', // supported | unsupported | unknown
+          mock: pf.mock === true ? true : undefined,
+          summary: pf.warnings ?? [],
+          details: pf,
+        };
+      } catch (err) {
+        kernel = { executed: true, status: 'unknown', note: `preflight failed: ${String(err?.message ?? err).slice(0, 200)}` };
       }
+    }
+
+    // -- zone 2: container logs (bounded) --
+    let containerLogs;
+    if (!row.containerId) {
+      containerLogs = { executed: false, status: 'unverified', note: 'device not provisioned (no container) — not executed' };
+    } else {
+      try {
+        const logs = await dockerService.getLogs(row.containerId, { tail: config?.dockerLogTailDefault ?? 500 });
+        containerLogs = { executed: true, status: 'ok', lines: logs.lines, truncated: logs.truncated, tail: logs.lines.length };
+      } catch (err) {
+        if (err instanceof DockerServiceError && err.apiCode === DOCKER_ERROR.CONTAINER_NOT_FOUND) {
+          containerLogs = { executed: false, status: 'unverified', note: 'container no longer exists in the daemon — not executed' };
+        } else {
+          containerLogs = { executed: true, status: 'error', note: String(err?.message ?? err).slice(0, 200) };
+        }
+      }
+    }
+
+    // -- zone 3: ADB connectivity (whitelist get-state; loopback only) --
+    let adbConnectivity;
+    const running = row.containerState === 'running';
+    if (!running) {
+      adbConnectivity = { executed: false, status: 'unverified', note: `container state '${row.containerState}' — adb not checked (not executed = 未驗證)` };
+    } else {
+      const target = `127.0.0.1:${row.adbPort}`;
+      const parseState = (res) => {
+        const out = `${res.stdout}\n${res.stderr}`.toLowerCase();
+        if (/device online/.test(out) && !/offline/.test(out)) return true;
+        if (/offline|no devices|cannot connect/.test(out)) return false;
+        return res.exitCode === 0 ? true : false; // unknown wording — exit code is the last resort
+      };
+      try {
+        let res = await adbEngine.run({ op: 'get-state', target });
+        let online = parseState(res);
+        let connectAttempted = false;
+        if (!online) {
+          // one connect attempt, then re-check (still whitelist ops only)
+          await adbEngine.run({ op: 'connect', target });
+          connectAttempted = true;
+          res = await adbEngine.run({ op: 'get-state', target });
+          online = parseState(res);
+        }
+        adbConnectivity = {
+          executed: true,
+          status: online ? 'online' : 'offline',
+          target,
+          connectAttempted,
+          timedOut: res.timedOut || undefined,
+          truncated: res.truncated || undefined,
+          evidence: (res.stdout ?? '').slice(0, 500),
+        };
+      } catch (err) {
+        adbConnectivity = { executed: true, status: 'offline', note: err?.apiCode ? err.message : 'adb unavailable on this host' };
+      }
+    }
+
+    // -- zone 4: GPU verification (MD §2.4 — 設定 + 實測) --
+    let gpuVerification;
+    if (row.gpuMode === 'host') {
+      gpuVerification = {
+        executed: true, // the configuration assessment was executed
+        status: 'unverified', // P5 has NO in-device render check — 未驗證 is the truth
+        gpuStatus: row.gpuStatus,
+        note: 'Docker DeviceRequests are configured (host GPU mode) but no in-device render check exists in P5 — status stays 未驗證 until one does (MD §2.4). nvidia-smi success alone is NOT verification (see kernel zone gpu detail).',
+      };
+    } else {
+      gpuVerification = {
+        executed: true,
+        status: 'software',
+        gpuStatus: row.gpuStatus,
+        note: 'swiftshader_indirect configured — software rendering (no host GPU). This is the configured mode, reported as 軟體/降級模式 (MD §2.4).',
+      };
+    }
+
+    await db.device.update({ where: { id: row.id }, data: { lastDiagnosedAt: new Date() } }).catch(() => {});
+    await audit({
+      actorUserId: actorUserId ?? null,
+      action: 'redroid.device.diagnostics',
+      resourceType: 'redroid_device',
+      resourceId: row.id,
+      requestId: requestId ?? null,
+      ip: ip ?? null,
+      status: 'success',
+      details: {
+        name: row.name,
+        zones: {
+          kernel: kernel.status,
+          containerLogs: containerLogs.status,
+          adbConnectivity: adbConnectivity.status,
+          gpuVerification: gpuVerification.status,
+        },
+      },
+    });
+
+    return {
+      device: deviceView(row),
+      checkedAt: new Date().toISOString(),
+      diagnostics: { kernel, containerLogs, adbConnectivity, gpuVerification },
+    };
+  }
+
+  /**
+   * GET /logcat?tail= — whitelist logcat op with the tail CAP enforced
+   * server-side (MD §1.2/§7: logcat 限量 -t <n>，n 有 cap).
+   */
+  async function getLogcat(idOrName, { tail, actorUserId, requestId, ip } = {}) {
+    const row = await findDevice(idOrName);
+    if (!row) throw fail('REDROID_DEVICE_NOT_FOUND', 404, `Device '${idOrName}' not found`);
+    const max = config?.redroidLogcatTailMax ?? 5000;
+    const def = config?.redroidLogcatTailDefault ?? 200;
+    let requested = tail === undefined ? null : tail;
+    if (requested !== null) {
+      if (!Number.isInteger(requested) || requested < 1) throw fail('VALIDATION_ERROR', 400, 'tail must be a positive integer');
+    }
+    const effective = Math.min(requested ?? def, max); // cap is SERVER-side, always
+    const target = `127.0.0.1:${row.adbPort}`;
+    let result;
+    try {
+      result = await adbEngine.run({ op: 'logcat', target, tail: effective });
+    } catch (err) {
+      if (err?.name === 'AdbWhitelistError') throw fail('VALIDATION_ERROR', 400, err.message);
       throw err;
     }
+    await db.device.update({ where: { id: row.id }, data: { lastDiagnosedAt: new Date() } }).catch(() => {});
+    await audit({
+      actorUserId: actorUserId ?? null,
+      action: 'redroid.device.logcat',
+      resourceType: 'redroid_device',
+      resourceId: row.id,
+      requestId: requestId ?? null,
+      ip: ip ?? null,
+      status: 'success',
+      details: { name: row.name, tail: effective, truncated: result.truncated },
+    });
+    return {
+      device: row.name,
+      target,
+      tail: effective,
+      tailCap: max,
+      truncated: result.truncated,
+      timedOut: result.timedOut || undefined,
+      lines: result.stdout.split('\n').filter((l) => l.length > 0),
+    };
   }
 
   // ---- preflight (real host check, MD §10.1) ---------------------------------
@@ -755,7 +913,8 @@ export function createRedroidService({
     runDeviceAction,
     deleteDevice,
     refreshDevice,
-    runWhitelistedOp,
+    diagnoseDevice,
+    getLogcat,
     getPreflight,
     // test/ops seams
     __allocateAdbPort: allocateAdbPort,

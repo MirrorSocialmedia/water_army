@@ -110,6 +110,40 @@ export function redroidDeviceRoutes(app) {
     },
   );
 
+  app.post(
+    '/api/devices/redroid/:id/diagnostics',
+    { preHandler: app.requireRole('operator'), schema: { params: { type: 'object', additionalProperties: false, required: ['id'], properties: { id: DEVICE_ID } } } },
+    async (req) => {
+      return app.redroidService.diagnoseDevice(req.params.id, {
+        actorUserId: req.user.id,
+        requestId: req.id,
+        ip: req.ip,
+      });
+    },
+  );
+
+  app.get(
+    '/api/devices/redroid/:id/logcat',
+    {
+      preHandler: app.requireRole('operator'),
+      schema: {
+        params: { type: 'object', additionalProperties: false, required: ['id'], properties: { id: DEVICE_ID } },
+        // querystring values arrive as strings (app ajv: coerceTypes false);
+        // the numeric cap is enforced server-side in the service (single source).
+        querystring: { type: 'object', additionalProperties: false, properties: { tail: { type: 'string', pattern: '^[1-9][0-9]*$' } } },
+      },
+    },
+    async (req) => {
+      const tail = req.query.tail !== undefined ? Number(req.query.tail) : undefined;
+      return app.redroidService.getLogcat(req.params.id, {
+        tail,
+        actorUserId: req.user.id,
+        requestId: req.id,
+        ip: req.ip,
+      });
+    },
+  );
+
   app.delete(
     '/api/devices/redroid/:id',
     { preHandler: app.requireRole('admin'), schema: { params: { type: 'object', additionalProperties: false, required: ['id'], properties: { id: DEVICE_ID } }, body: DELETE_BODY } },

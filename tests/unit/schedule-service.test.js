@@ -522,11 +522,24 @@ test('createSkippedRun: born terminal skipped, explanatory event, no enqueue, id
 test('sync guard: HUNG queue (redis offline-queue) fails fast -> sync_error, no hang', async () => {
   const { db, queue, svc } = await mkEnv();
   queue.__setSchedulerHang(true); // command accepted, never settles (real redis-down shape)
+  // The fail-fast guard's timer is unref()'d (correct: it must never keep the
+  // process alive). In the real world an HTTP server socket always holds the
+  // event loop; a hermetic unit test has nothing else pending, so an unref'd
+  // timer alone lets the loop DRAIN before the guard fires and node:test
+  // cancels the test ("event loop has already resolved"). Keep the loop alive
+  // for the duration of the guard — this mirrors production and touches no
+  // product code. (Found 2026-10-15 during P5: deterministic at a59f4ee.)
+  const keepAlive = setInterval(() => {}, 50);
   const t0 = Date.now();
-  const { schedule } = await svc.create(
-    { name: 'hung-sync', taskDefinitionId: DEF_ID, scheduleType: 'interval', intervalMs: 60_000 },
-    USER,
-  );
+  let schedule;
+  try {
+    ({ schedule } = await svc.create(
+      { name: 'hung-sync', taskDefinitionId: DEF_ID, scheduleType: 'interval', intervalMs: 60_000 },
+      USER,
+    ));
+  } finally {
+    clearInterval(keepAlive);
+  }
   const elapsed = Date.now() - t0;
   queue.__setSchedulerHang(false);
   assert.equal(schedule.syncStatus, 'sync_error', 'row flagged sync_error (PG-first)');
