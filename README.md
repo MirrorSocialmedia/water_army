@@ -1,6 +1,6 @@
 # water_army
 
-Docker 容器 + AI 任務自動化平台（**7 階段 MVP 全部完成** — P0–P6；本 README 為 P6 最終版）。
+Docker 容器 + AI 任務自動化平台（**7 階段 MVP 全部完成** — P0–P6 ＋ security patch ＋ Redroid 實機矩陣 Stage A/B；本 README = P6 最終版 + 2026-10-19 更新）。
 本地單一部署：一個 UI、一個 API、一個 worker、Postgres 17、Redis 7，全部跑喺同一部主機嘅 Docker 入面。
 
 - **api** — Fastify 5：auth（argon2id + session cookie）、RBAC、health、容器 API（P2）、AI 任務/批准/provider 管理 API（P3）、排程 API（P4）、Redroid device API（P5）、dashboard + 排程通知（P6）
@@ -8,7 +8,7 @@ Docker 容器 + AI 任務自動化平台（**7 階段 MVP 全部完成** — P0�
 - **web** — React 19 + Vite 8：Dashboard（實數據 counters，P6）、Containers（P2）、AI task runs list/detail（P3）、Schedules（P4）、Redroid devices（P5）、Settings（P5+）、notification bell（P6）、SSE reconnect backoff（P6）
 - **postgres / redis** — 只在 compose 內部網絡，**唔 publish host port**
 
-施工依據：`docs/repo-audit.md`、`docs/architecture-decisions.md`（P0–P6 全 ADR）、`docs/build-checklist.md`、`docs/threat-model.md`（P6 最終版）、`docs/api-reference.md`（全 endpoint 總表）、`docs/runbook.md`（運維）。
+施工依據：`docs/repo-audit.md`、`docs/architecture-decisions.md`（P0–P6 全 ADR）、`docs/build-checklist.md`、`docs/threat-model.md`（P6 最終版）、`docs/api-reference.md`（全 endpoint 總表）、`docs/runbook.md`（運維；§9.5 = Redroid Stage A 已知行為、§10 = Stage B 出口代理運維）。
 
 **P6 交付摘要**（證據：`docs/evidence/p6-e2e/`、`docs/evidence/p6-security/`、`docs/evidence/p6-cleaninstall/`）：
 - 5 個 P3–P5 留底 flag 全部收結（managed exception 表 / compose label / 排程通知 / flaky 根因 / concurrency gate）
@@ -16,6 +16,12 @@ Docker 容器 + AI 任務自動化平台（**7 階段 MVP 全部完成** — P0�
 - 安全：npm audit ×3 = **0 高危**（override 修復 + 驗證鏈）、secret redaction 17/17 實打、審計抽驗、threat-model 最終版（T1–T7）
 - 測試：465（464 pass + 1 env-gated real-redis，已對真 redis 實跑綠）+ vite build clean
 - clean install 實跑（`down -v` → README 由零起 → 5/5 healthy → 首 admin → 登入 200）
+
+**P6 之後更新（2026-10-19）**（本 README 已反映以下三批合併）：
+- **Security patch**（`27cc558`）：SSRF guard（provider baseUrl → 400 `BLOCKED_URL`）＋ per-account 登入限流（rate key = 客戶端 IP × 帳號）＋ proxy anti-spoof ＋ `trustProxy` — 見 §安全模型
+- **Stage A Redroid 實機矩陣**（`f8e2986`/`cf6b2d9`）：本機真 host boot（kernel 6.8 + RTX 3090，redroid 14.0.0-240527 → `boot_completed=1`／ADB `device`／SDK 34／boot 後 18+ 分鐘零 crash）、preflight memfd 語義 + containerized vantage、容器內 binderfs wrapper image（`docker/redroid-matrix/`）、root host setup script（`scripts/redroid-host-setup.sh`）— 見 §Redroid 實機矩陣
+- **Stage B per-device egress proxy**（`18f8139`/`ffe800f`/`bd88571`/`351983a`）：per-device gost container（digest pin）＋ tun2socks v2.7.0 bake 入 wrapper image、port 段 20080–20179、`proxyUrl` 加密 data model — 見 §Per-device egress proxy
+- 測試套：465 → **492**（491 pass + 1 env-gated skip，0 fail）
 
 ---
 
@@ -134,7 +140,7 @@ Base：`http://127.0.0.1:3012/api`（web 同源性代理；API 本體唔 publish
 |--------|------|------|------|
 | GET | `/health/live` | process 存活（200；唔查依賴） | 無 |
 | GET | `/health/ready` | DB/Redis/Docker 逐項。docker down → **200 degraded**（worker 可稍後重啟 api）；db/redis down → **503** | 無 |
-| POST | `/auth/login` | `{username,password}` → 200 + `Set-Cookie: session=…`（HttpOnly, SameSite=Lax）。失敗 401 INVALID_CREDENTIALS（唔洩露用户存在）；限流 429 RATE_LIMITED（5 次失敗/60s/IP，只計失敗） | 無 |
+| POST | `/auth/login` | `{username,password}` → 200 + `Set-Cookie: session=…`（HttpOnly, SameSite=Lax）。失敗 401 INVALID_CREDENTIALS（唔洩露用户存在）；限流 429 RATE_LIMITED（5 次失敗/60s/**客戶端 IP × 帳號**，只計失敗 — per-account，2026-10-19 security patch） | 無 |
 | POST | `/auth/logout` | 204；session 即刻失效 + cookie 清除 | 任何角色 |
 | GET | `/auth/me` | 200 `{user:{id,username,role,lastLoginAt}}`；401 無 session | 任何角色 |
 
@@ -222,7 +228,9 @@ curl -s -b /tmp/c.txt -X POST http://127.0.0.1:3012/api/tasks/runs \
 - **Service token**：`WORKER_API_TOKEN`（api + worker 同值 env）— worker→API 嘅機器身份，operator 權限、固定 UUID、audit 可辨（`actor: service:worker`）。**批准流永遠排除 service token**（`requireHuman` guard）— AI 唔可能自批自己嘅 tool call。
 - **網絡**：postgres/redis 零 host port；web 只綁 `127.0.0.1:3012`；api 零 host port（只經 web 反代）。
 - **容器硬化**：所有服務 `read_only: true`（必要目錄 tmpfs）+ `no-new-privileges` + `cap_drop: ALL` + log rotation（10m × 3）。
-- **Auth**：argon2id；session token 唔落 log、DB 只存 SHA-256；HttpOnly + SameSite=Lax cookie；未知 username 用 dummy hash 對齊 timing（防用户枚舉）；login 限流（失敗計數）。
+- **Auth**：argon2id；session token 唔落 log、DB 只存 SHA-256；HttpOnly + SameSite=Lax cookie；未知 username 用 dummy hash 對齊 timing（防用户枚舉）；login 限流（失敗計數，**per-account** = 客戶端 IP × username — 單一帳號被 flood 唔會 lock out 其他帳號，2026-10-19 security patch）。
+- **Proxy anti-spoof + trustProxy**（2026-10-19 security patch）：web 反代**覆寫** `X-Forwarded-For`/`X-Real-IP`/`Forwarded` 為真 socket peer（client 送嘅全數 discard）→ api `trustProxy`（預設開；api 直接暴露無 proxy 先設 `TRUST_PROXY=false`）→ `req.ip` = 真客戶端 IP → per-client 限流先有效（否則所有請求都似由 proxy IP 嚟，一個 flooder 可以 lock out 成個 deployment）。
+- **SSRF guard — provider baseUrl**（2026-10-19 security patch）：`POST/PATCH /providers` 寫入時 ＋ `/providers/:name/test` fetch 時雙重檢查（defense in depth）— 拒非 http(s) protocol；block loopback／private（10/8、172.16/12、192.168/16、fc00::/7）／link-local（169.254/16，含 169.254.169.254 雲 metadata）／CGNAT（100.64/10）／benchmarking 等保留段；拒保留 host 名（`localhost`/`*.localhost`/`*.internal`/`*.local`）；DNS 名會 resolve 並對每個解出地址做 range check（無 outbound DNS 嘅環境可以 `PROVIDER_URL_DNS_CHECK=false` opt-out — literal + host-suffix 檢查照樣生效）→ 400 `BLOCKED_URL`。效果：admin session 即使被攞走，都唔可以再 API/worker 打向內部服務或雲 metadata endpoint。
 - **CSRF 基線**：mutating 請求帶 `Origin` 時必須喺 allowlist（`APP_PUBLIC_URL` + api loopback）；無 Origin = 非 browser client（curl/測試）放行；SameSite=Lax 兜底。
 - **Log 脫敏**：pino `redact`（`PINO_REDACT_PATHS`：authorization/cookie/x-api-key/password/passwd/apiKey/token/session…，含 `*.field` 嵌套）。
 - **Secrets**：全部經 env（`.env`，gitignored）；`.env.example` 入 repo；任何程式碼/commit 唔得有秘密。
@@ -308,10 +316,10 @@ render check，host 模式 = `unverified`，swiftshader = `software`）。
 
 | Method | Path | 說明 | Auth |
 |--------|------|------|------|
-| GET | `/redroid/preflight` | 真主機檢查（kernel modules / device nodes / dmesg / docker / data root）；三態 `supported\|unsupported\|unknown` — 讀唔到 = unknown，嚴禁假報 | viewer+ |
-| GET/POST/PUT/DELETE | `/redroid/templates[/:id]` | Redroid template CRUD：image **pin 死**（latest/nightly 拒）、`privileged` 只可 admin 建 + reason 標籤 10–200 字 | 讀 viewer+；寫 admin |
-| POST | `/devices/redroid` | 由 template 建 device：`{name, templateName, idempotencyKey}` — body 冇任何 Docker 欄位（注入 = 400）；response 帶 preflight（warning，唔係 fail-closed） | operator+ |
-| GET | `/devices/redroid[/:id]` | list / detail（name/pinned image/Android 版本/`127.0.0.1:<port>`/容器狀態/ADB 狀態/解析度/DPI/FPS/GPU 健康/最後診斷時間） | viewer+ |
+| GET | `/redroid/preflight` | 真主機檢查（kernel modules / device nodes / dmesg / docker / data root）；三態 `supported\|unsupported\|unknown` — 讀唔到 = unknown，嚴禁假報。**api 容器視角**：host `/dev` 狀態報 `unknown`（永唔假報 absent）— **host-level preflight 係權威**（見 §Redroid 實機矩陣） | viewer+ |
+| GET/POST/PUT/DELETE | `/redroid/templates[/:id]` | Redroid template CRUD：image **pin 死**（latest/nightly 拒）、`privileged` 只可 admin 建 + reason 標籤 10–200 字、Stage B：`proxyUrl`（fleet 出口，socks5 only，加密落庫、view 永不回傳） | 讀 viewer+；寫 admin |
+| POST | `/devices/redroid` | 由 template 建 device：`{name, templateName, idempotencyKey, proxyUrl?}` — body 冇任何 Docker 欄位（注入 = 400）；`proxyUrl` = device 級出口 override（省略 = 跟 template）；response 帶 preflight（warning，唔係 fail-closed） | operator+ |
+| GET | `/devices/redroid[/:id]` | list / detail（name/pinned image/Android 版本/`127.0.0.1:<port>`/容器狀態/ADB 狀態/解析度/DPI/FPS/GPU 健康/`proxy`（configured/gostPort/state/hasUrl — URL 永不回傳）/最後診斷時間） | viewer+ |
 | POST | `/devices/redroid/:id/start\|stop\|restart` | 生命週期（P2 action protocol：inspect→op→confirm；container 消失 = `missing` + 409，誠實唔假報） | operator+ |
 | POST | `/devices/redroid/:id/diagnostics` | **4 個獨立結果區**（kernel / container-logs / adb-connectivity / gpu-verification），每區 `executed` + `status` — 未執行 = `未驗證`，從無假 pass | operator+ |
 | GET | `/devices/redroid/:id/logcat?tail=` | 白名單 logcat（server 永遠加 `-d -t <n>`）；tail clamp 到 `REDROID_LOGCAT_TAIL_MAX`（5000）；`truncated`（byte cap）+ `mayHaveMore`（window 披露） | operator+ |
@@ -329,7 +337,39 @@ P5 覆蓋（80 tests：unit 33 + integration 47）：
 | `tests/integration/redroid-lifecycle.test.js` | RBAC 401/403 矩陣、image pinning 拒、privileged reason、create 形狀斷言（錄到嘅 docker call：HostIP 127.0.0.1 / Cmd androidboot.* / Env 空 / `/data` bind / DeviceRequests 只 host）、0.0.0.0/privileged/hostConfig 注入 400、冪等、name 409、**真 127.0.0.1 碰撞 → next port + 用盡 503**、全生命週期 + audit、delete confirm + data dir 保留/清除、`/exec` 404、template in-use 409、disabled template 409、mock honesty 標籤 |
 | `tests/integration/redroid-diagnostics.test.js` | 4 區獨立性 + executed/status 矩陣、host→unverified、swiftshader→software、stopped→adb 未執行=未驗證、offline + 单次 connect、logcap default/explicit/**server-side clamp** + byte-cap 截斷、RBAC、boot-crash device 誠實 `created` |
 
-全套 **423 tests**（422 pass + 1 gated-skip，0 fail）— 截至 P5；P6 加 42 = **465**（見下面 P6 節）。
+全套 **423 tests**（422 pass + 1 gated-skip，0 fail）— 截至 P5；P6 加 42 = 465；2026-10-19 security patch +11、Stage A +4、Stage B +12 = **492**（見 §2026-10-19 更新覆蓋）。
+
+### Redroid 實機矩陣（Stage A — live 實測 2026-10-19，`f8e2986`/`cf6b2d9`）
+
+P5「mock 驗證主路徑」升級為**真機 boot**：本機（kernel 6.8.0-117-generic + RTX 3090）`redroid/redroid:14.0.0-240527`（dated pin）boot 到 `sys.boot_completed=1`、ADB `device`、SDK 34、3 條 shell 實測、**boot 後 18+ 分鐘零 crash**（boot 頭 13 秒有 5 個一次性 service crash，自癒 — runbook §9.5，唔好當新 bug）。
+
+- **容器內 binderfs wrapper**（`docker/redroid-matrix/`，image `water-army/redroid:14.0.0-240527-matrixa`）：靜態 C entrypoint（`redroid-binder-init`）— 容器內 mount **private** binderfs → `BINDER_CTL_ADD` 建 binder/hwbinder/vndbinder → `chmod 0666`（6.8 control 建嘅節點預設 0600，Android uid 1000/1002 service 打唔到 → 必改）→ bind mount → 照原 exec `/init`。**host 完全唔郁、完全可逆**（binderfs 每個 mount 有獨立 device set — 容器內建嘅節點唔會 propagate 返 host）。冇 wrapper 嘅原版映像喺呢部機 ~1 秒 abort（host `/dev/binder` 係 binderfs 目錄，Android libbinder 當 character device 開）。
+- **host 前置**（root、一次性、**冪等**、undo 命令喺 script header）：`sudo bash scripts/redroid-host-setup.sh` — ① `modprobe binder_linux` + `/etc/modules`（每次 boot 自動載入）② binderfs mount 上 `/dev/binder` + `/etc/fstab`（`x-systemd.requires=binder_linux.module` 保證 module 先 mount）③ `mkdir /var/lib/water-army` + `chown 1000:1000`（api 容器用戶）。**次序重要：先跑 script 先 `compose up`** — 否則 docker root:root 自動建 → device create 永遠 500 `REDROID_DATA_DIR_ERROR`（Stage A 實測）。重啟 host 後乜都唔使做（module/fstab 已持久化，runbook §9.4）。
+- **kernel 6.x 唔使 ashmem**：`ashmem_linux` 上游已移除、`memfd_create` 取代；preflight 改做「binder present +（kernel <3.17 → 要 ashmem present｜≥3.17 → memfd 可用）」= supported（redroid 14 無 ashmem boot — 真 boot 驗證）。
+- **GPU host mode**：本機實 boot 行 `gpuMode: 'host'`（DeviceRequests / RTX 3090；consumer card 風險係 MD §2.4 預期，記錄喺 runbook §9.5）。template `gpuMode` = `host` | `swiftshader_indirect`（預設）；GPU 狀態誠實唔變：host = `unverified`（無 in-device render check）、swiftshader = `software`。
+- **preflight 視角**：`GET /api/redroid/preflight`（viewer+）係 **api 容器視角** — 容器睇唔到 host `/dev`，嗰啲節點狀態報 `unknown`（**永唔假報 absent**）；**host-level preflight（host 上直接 call preflight module）係權威**（Stage A 實測 `overall: supported`）。
+- **ADB port 段**：`15000–15999`（`REDROID_ADB_RANGE_START/END` 可覆寫）；DB unique + 真 127.0.0.1 bind probe + 碰撞重試 + 用盡 503（P5 機制；Stage A 實機分配喺段內）。
+- **已知缺口 — removeData 後 root-owned 殘留**：per-device `/data` 內容由 redroid 容器**以 root** 寫入（容器內 root，bind mount 無 uid remap）→ api service（uid 1000，非 root）`removeData=true` 清唔到 root-owned 檔案 → `dataRemoved: false` + `dataRemoveError`，data 目錄 skeleton 留喺 host（要 root 層清理，backlog 項 — 見已知限制 K13）。
+
+### Per-device egress proxy（Stage B — live 實測 2026-10-19，`18f8139`/`ffe800f`/`bd88571`/`351983a`）
+
+**架構（per-device 隔離）**：
+- 每部有 proxy 嘅 device 配一個 **per-device gost container** `redroid-matrix-b-gost-<devName>`：image = `gogost/gost@sha256:f7a958c451928fbe1b99046d25bd0c9bf42019d4c60a82200f50dc8e617b7580`（digest pin），bind **`172.17.0.1:<gostPort>`**（唔係 127.0.0.1、都唔係公網），`Cmd: [start, -L, socks5://:1080, -F, <proxyUrl>]` + `Env: []`（credentials 只喺 Cmd — docker host 係 trust boundary）。
+- port 段 **20080–20179**（DB unique；碰撞 = 重試重分配）。
+- device 內 **tun2socks v2.7.0**（linux-amd64 static ELF，sha256 `98d545a6…c031`，bake 入 wrapper image `/data/local/tmp/tun2socks`）起 `tun0`（10.8.0.1 ↔ 10.8.0.2）→ 全部出域流量（DNS UDP + TCP + UDP）經 tun0 → SOCKS5 → gost → 上游 proxy；DNS 明指向 tun peer（10.8.0.2）。
+- 路由：table 100 = `default via 10.8.0.2 onlink` + **gateway exception** `172.17.0.1 dev eth0 scope link`（**唔可以省** — 缺咗佢 gVisor→gost handshake hairpin 返 tun0 → RST，**proxy 零流量但 routing 睇落「正常」** — runbook §10.5 #2）+ rule 5000（netd 唔認 ioctl 建嘅 TUN，script 有 EEXIST-safe 兜底）。
+- provisioning：gost **同步**（create 時起；失敗 = 連 device 一齊 rollback）；tunnel **背景**（等 `sys.boot_completed`，5s poll，10min timeout）；netd-safe 序列（netd 間中 block RTM_NEWLINK → tun0 由 tun2socks 自己經 ioctl 建 — 兩路都實錚過）。
+
+**API / data model**：
+- template `proxyUrl`（fleet 出口，可選，只收 `socks5://[user:pass@]host:port`）＋ device 級 `proxyUrl` override（create body；省略 = 跟 template）。
+- 加密落庫（`proxyUrlEncrypted`，AES-256-GCM `v1:` 前綴 — 同 provider key 同一模式）；**明文永不入 DB / API response / audit** — view 只出 `proxy: {configured, hasUrl, gostPort, gostBind, state}`（`state` = `off|provisioning|running|stopped|error`）。
+
+**實錚狀態 + 誠實披露（2026-10-19，2 device 2 路）**：
+- ✅ **DNS 100% 經 proxy**：dev1→mock1（20082）/ dev2→mock2（20084）獨立路 — canary `canary.example` NOERROR + A 記錄、`other.example` NXDOMAIN 負例、每個 mock 只見到自己嗰部 device 嘅源 IP（路由隔離成立）。
+- ⚠️ **TCP payload 唔過 gVisor**（平台限制，另跟進）：tun2socks v2.7.0 內置 gVisor — SYN 過、payload 唔過（mock sink 實證）→ **「TCP 全經 proxy」喺呢個 stack（kernel 6.8 + redroid + tun2socks v2.7.0/gVisor）目前唔成立**；DNS/UDP 路徑成立。升級路：rebuild tun2socks 唔用 gVisor 或換 TUN 方案（iptables REDIRECT）— 另開單（ADR 流程）。
+- ⚠️ **tunnel 死 = fail-open 直連恢復**（唔係 fail-closed，monitor 另跟進）：實測 kill tun2socks → tun0 消失 → 路由影消失 → 流量**靜默返落直連 egress**（`ip route get` 返 eth0、DNS 收到真 root server 回應）。直連阻斷只喺 tunnel 健康時有效；fail-closed monitor（iptables 兜底）= 未完成項。
+
+**運維指針**：正常狀態驗證 / 故障排檢 / teardown / 已知環境行為 → `docs/runbook.md` §10。
 
 ### P6 覆蓋（42 tests：unit 19 + integration 23 — git diff 8eaa81d..HEAD 實計）
 
@@ -347,11 +387,24 @@ P5 覆蓋（80 tests：unit 33 + integration 47）：
 
 **P6 測試總數：465 tests**（464 pass + 1 env-gated real-redis skip，0 fail；gated 測試已對真 redis 實跑 1/1 綠 — 見上面 §測試 gate 命令）+ vite build clean。另：**Playwright E2E 14/14**（`e2e/p6-e2e.mjs`，見 P6 節）+ **secret redaction 17/17**（`e2e/secret-redaction-e2e.mjs`，證據 `docs/evidence/p6-security/`）。
 
-> **本機現實（誠實聲明）**：kernel 6.8.0-117-generic **無 binder_linux/ashmem_linux** →
-> 真 Redroid 容器喺本機起唔到。P5 = mock 驗證主路徑 + 真 preflight 對本機實測
-> （`overall: unsupported`，UI 如實顯示）。`REDROID_ADAPTER=mock` 只可喺非 production
-> 啟用（config 層強制 production = real）。真機 Redroid 未完成清單：
-> `docs/architecture-decisions.md` §14.7。
+### 2026-10-19 更新覆蓋（27 tests：security patch 11 ＋ Stage A 4 ＋ Stage B 12）
+
+| 檔案 | 範圍 |
+|------|------|
+| `tests/unit/url-guard.test.js`（8，新檔） | SSRF guard：protocol 白名單（http/https only）、block ranges（loopback/private/link-local/CGNAT/169.254.169.254 metadata/benchmarking/IPv6）、保留 host 名（`localhost`/`*.localhost`/`*.internal`/`*.local`）、DNS resolve + 逐地址 range check、IPv4-mapped IPv6 正規化、`skipDns` opt-out |
+| `tests/unit/login-flow.test.js`（+2） | per-account rate key：同 IP 唔同帳號互唔 lock out；單帳號 flood 只限自己（其他帳號照登入） |
+| `tests/integration/tasks-api.test.js`（+1） | provider create/patch 400 `BLOCKED_URL`（SSRF guard 路由層整合） |
+| `tests/unit/preflight.test.js`（+4） | memfd 取代 ashmem（kernel ≥3.17 無 ashmem = supported）、kernel <3.17 仍要 ashmem、containerized vantage 嘅 /dev 狀態 = unknown（永唔假 absent）、unparseable kernel = unknown |
+| `tests/integration/redroid-proxy.test.js`（12，新檔） | pure builders（socks5-only URL parse / gost body：digest pin + 172.17.0.1 bind + 空 Env + port range 強制 / tunnel script exact match + state machine frozen）＋ template CRUD（`v1:` ciphertext 落庫 / view masked / patch 換與清 / malformed 400）＋ device（繼承 template proxy / device override 贏過 template / no-proxy = 零 gost 零 exec / **兩 device 兩個唔同 gostPort** / delete = gost 真 remove / stop→stopped（teardown）/ start→running（gost 重用唔 recreate））＋ **LEAK GUARD**（每個 response body 斷言零 credentials / proxy host 洩露） |
+
+**現行全套總數：492 tests**（491 pass + 1 env-gated real-redis skip，0 fail；= P6 基線 465 + security patch 11 + Stage A 4 + Stage B 12；gated 測試已對真 redis 實跑 1/1 綠 — 見上面 §測試 gate 命令）。實跑核對：2026-10-19 `npm test`。
+
+> **本機現實（誠實聲明，2026-10-19 更新）**：本機（kernel 6.8.0-117-generic + RTX 3090）喺跑完
+> `scripts/redroid-host-setup.sh` 之後係**已實機驗證嘅 Redroid host**（Stage A：真 boot／真 ADB／
+> 4 區診斷真對接，詳見上面 §Redroid 實機矩陣）。未跑 script 前本機 preflight = `overall: unsupported`
+> （binder 未載入，如實顯示、永唔假報）。`REDROID_ADAPTER=mock` 只可喺非 production
+> 啟用（config 層強制 production = real）。ADR §14.7「真機 Redroid 未完成清單」（2026-10-15 寫）
+> 已隨 Stage A 實證逐項收結；唯一例外 = GPU `verified` 狀態仍 by design 未啟用（無 in-device render check）。
 
 ### P6 收尾（已交付 — 2026-10-15，證據 `docs/evidence/p6-e2e/` + `p6-security/` + `p6-cleaninstall/`）
 
@@ -381,38 +434,38 @@ P5 覆蓋（80 tests：unit 33 + integration 47）：
 ### A. 實際可用（真環境實測過，非 mock）
 
 - Docker 容器運維全套：list/inspect/logs/stats、start/stop/restart/pause/unpause、template allowlist 建容器、delete 兩步確認 — **真 docker daemon**（P2 收貨 live 實測；P6 E2E 重驗）
-- Auth/RBAC/CSRF-Origin：argon2id、session、三角色 401/403 矩陣、Origin guard、login 限流 — 真 HTTP（P1 收貨 + P6 E2E viewer RBAC 403 實打）
+- Auth/RBAC/CSRF-Origin：argon2id、session、三角色 401/403 矩陣、Origin guard、login 限流（**per-account**）— 真 HTTP（P1 收貨 + P6 E2E viewer RBAC 403 實打；per-account 鍵 2026-10-19 patch）
 - AI 任務全循環：create → queue → agentic tool loop → approval gate → 結果/事件持久化 → SSE 實時 UI → cancel/retry — **mock provider 走完真 queue/worker/DB/SSE**（P3 收貨 live；P6 E2E 第 5–6 步重驗）
 - 排程全套：CRUD/cron+interval+once/每排程 tz/overlap policy/sync 自愈/重啟 reconcile 零重複 — **真 BullMQ Job Scheduler + 真 PG**（P4 收貨 7 項硬驗收 live；P6 E2E run-now + notification 重驗）
 - 排程通知（P6）：terminal run → 通知行 → bell badge → 深鏈 → mark-read（P6 E2E 第 7–9 步實打）
 - concurrency gate（P6）：同 key 互斥 bounded defer → 可視化 skip（hermetic 7 scenario + 狀態機測試；真 redis 環境下同 overlap 同路徑）
 - Dashboard 實數據（P6）：全部數字來自 `/api/dashboard/summary`（零硬編碼）— E2E 第 2 步斷言 fleet ≥3 running
-- 安全控制：provider key AES-256-GCM + 零回傳 + log redaction + service token 時序安全比較 + AI 唔自批 + 審計全寫入 — P6 17/17 實打證據
-- 部署/運維：clean install（P6 實跑）、backup/restore（P6 實跑 14 表全對）、health/ready 依賴分級
+- 安全控制：provider key AES-256-GCM + 零回傳 + log redaction + service token 時序安全比較 + AI 唔自批 + 審計全寫入 — P6 17/17 實打證據；＋ SSRF guard（provider baseUrl → 400 `BLOCKED_URL`，寫入 + fetch 雙重）＋ proxy anti-spoof / trustProxy（per-client 限流先有效）— 2026-10-19 security patch（hermetic 11 tests）
+- **Redroid 實機矩陣 Stage A（2026-10-19）**：真 redroid 容器 boot（redroid 14.0.0-240527 + binderfs wrapper image，本機 kernel 6.8 + RTX 3090，GPU host mode）→ `boot_completed=1`／ADB `device`／SDK 34／3 條 shell 實測／boot 後 18+ 分鐘零 crash；真 ADB 連通 + 真 logcat/getprop 對接；4 區診斷對真 device 實跑（host 視角 / offline 誠實披露）
+- **Per-device egress proxy DNS 隔離（Stage B，2026-10-19）**：2 device 走 2 條獨立 proxy 路，**DNS 100% 經 proxy**（canary NOERROR + NXDOMAIN 負例實錚），每個 proxy 只見到自己嗰部 device 嘅源 IP（路由隔離成立）— TCP 路徑係明列限制（見 C 類第 1 項）
+- 部署/運維：clean install（P6 實跑）、backup/restore（P6 實跑 14 表全對）、health/ready 依賴分級、Redroid host 一次性 setup（Stage A，冪等 script + undo）
 
 ### B. Mock 驗證（API/邏輯層全過，外部真體未接）
 
 - **AI provider 真模型對接**：OpenAI-compatible adapter 邏輯全測（classified error、redact、timeout），但 MVP 收貨只用 **mock provider** — 真 SGLang/OpenAI key 喺你嘅環境 5 分鐘可接（Settings → 建 provider → test 按鈕），**未喺本 MVP 收貨範圍內實打**
-- **Redroid 全棧**（ADR §14.6 邊界）：preflight 真跑本機（unsupported，誠實）、port 分配真 probe、docker create 形狀錄到斷言、DB/audit/RBAC 全路徑行晒 — 但 **device 容器/mock adapter 行嘅係 mock 生命週期**（`REDROID_ADAPTER=mock`，production 強制 real — 即 production 無真 Redroid 環境時 device 功能唔會假裝可用）
+- **Redroid device 層（mock adapter 路徑）**：preflight 三態 / port 分配真 probe / docker create 形狀錄到斷言 / DB/audit/RBAC 全路徑 — mock 生命週期全驗證（`REDROID_ADAPTER=mock`，production 強制 real）。真機行為已升級去 A 類（Stage A 實 boot ＋ Stage B DNS 隔離）— 兩向都有實證
 - **E2E 截圖**：system Chrome（`channel:'chrome'`）— 無 Playwright 專屬 build 嘅 host 上可重現
 
-### C. 需特定硬體（明列未完成 — MD 要求，唔假裝驗證）
+### C. 明列未完成（MD 要求，唔假裝驗證 — 2026-10-19 按 Stage A/B 實證重分）
 
-Redroid 真機 6 項（ADR §14.7，本機 kernel 6.8.0-117-generic 無 binder_linux/ashmem_linux，起唔到）：
-1. 真 Redroid 容器 boot（任何映像）— 未驗證
-2. 真 ADB 連通（真 adb server ↔ 真 redroid 5555）— 未驗證（依賴 1）
-3. 真 logcat/getprop/dumpsys 輸出對接 — 未驗證（白名單引擎本身已 live 驗證 argv/cap/timeout）
-4. GPU 硬渲染驗證（`verified` 狀態嘅唯一來源）— 未啟用（by design：無 in-device render check，GPU 狀態最多 `software`/`unverified`）
-5. privileged template 真機必要性實測 — 未驗證（template 已按 MD 建好 + reason 標籤）
-6. redroid 映像 pull 策略（自動 pull/registry auth）— 未建（版本 pin 已有）
+原 ADR §14.7「Redroid 真機 6 項」中嘅真 boot／真 ADB 連通／真 logcat+getprop／privileged 真機 boot／真 preflight `supported` 已喺 Stage A 實錚收結（轉 A 類）；餘下明列限制：
 
-**需有 binder 嘅 host**（kernel module `binder_linux` + `/dev/binder*`，或 Android 本機）先可以收貨 C 類；屆時 preflight 會自動轉 `supported`，UI 如實顯示。
+1. **TCP 全經 proxy** — 唔成立：tun2socks v2.7.0 內置 gVisor，SYN 過、payload 唔過（mock sink 實證）；DNS/UDP 路徑成立。升級 = rebuild tun2socks 唔用 gVisor 或換 TUN 方案（iptables REDIRECT）— 另開單（ADR 流程）
+2. **fail-closed 出口 monitor** — 未建：tunnel 死 = fail-open 直連恢復（實錚：kill tun2socks → 路由返 eth0、DNS 收到真 root server 回應，靜默）；fail-closed（iptables 兜底 + `proxyState` 警報）另開單
+3. **GPU `verified` 狀態** — by design 未啟用：無 in-device render check（MD §2.4）；nvidia-smi OK ≠ Android EGL OK，GPU 狀態最多 `software`/`unverified`
+4. **redroid 映像 pull 策略**（自動 pull/registry auth）— 未建（版本 pin 已有）
+5. **removeData 清唔到 root-owned 殘留**（2026-10-19 新）：實 boot 後 per-device `/data` 內容 root-owned（容器 root 寫入、bind mount 無 uid remap）；api（uid 1000 非 root）刪除報 `dataRemoved:false` + error，目錄 skeleton 留喺 host — 要 root 層定期清理（見已知限制 K13）
 
 ## 已知限制 + 修復建議（MD §18：唔得「基本完成」掩蓋）
 
 | # | 限制 | 影響 | 修復建議 |
 |---|------|------|----------|
-| K1 | **無真機 Redroid**（C 類 6 項） | device 功能只能 mock 驗證；production 無 binder host = device 頁不可用（誠實顯示，唔假裝） | 有 binder 嘅 host 上跑 `e2e` device 段 + 4 區診斷真對接（ADR §14.7 清單） |
+| K1 | **出口代理 TCP 路徑唔成立**（Stage B；tun2socks v2.7.0 內置 gVisor） | device TCP 出域唔經 proxy（SYN 被截、payload 直漏）— 出口隔離保證只對 DNS/UDP 成立（DNS 路徑已實錚） | rebuild tun2socks 唔用 gVisor 或換 TUN 方案（iptables REDIRECT）— 另開單，ADR 流程 |
 | K2 | **AI provider 只收貨到 mock**（B 類） | 真模型行為（長輸出/多輪 tool call/真實 token 耗費）未實打 | 接真 provider 後跑 `e2e/secret-redaction-e2e.mjs` 同長任務 timeout/cancel 實測 |
 | K3 | **無自動 encryption key 輪替工具** | `APP_ENCRYPTION_KEY` 輪替 = 所有 provider 要重傳 key（runbook §3.4 手動流程） | 加 `rotate-encryption.js` CLI（支持 legacy key fallback 重加密，一次性） |
 | K4 | **無 data retention/prune 策略** | `task_run_events` 長期增長（P6 實測 1600 行 = 0.7 MB dump；長線要留意） | 加 prune job（按 age/size）+ DB 大小儀表（runbook §8） |
@@ -423,8 +476,10 @@ Redroid 真機 6 項（ADR §14.7，本機 kernel 6.8.0-117-generic 無 binder_l
 | K9 | **E2E 要 system Chrome** | 無 `channel:'chrome'` 嘅 CI 要 `npx playwright install chromium` | CI 配瀏覽器 cache（或 Docker 內 e2e） |
 | K10 | **dev 環境 `.env` 手動管理** | 秘密喺 `.env`（gitignored）— 無 secret manager 整合 | 生產化時接 env-secrets（docker secrets 或 vault），改 env 注入點唔變 |
 | K11 | **web 無 error boundary** | P6 修了根因（`useApi` pending 派生），但未加全局 error boundary — 未來任何新 render bug 仍可能白屏 | P7：加 React error boundary + fallback UI |
+| K12 | **tunnel 死 = fail-open 直連恢復**（Stage B） | proxy tunnel 死咗 device 靜默返直連 egress（實錚），無阻斷、無警報 | fail-closed monitor（iptables 兜底 + `proxyState` 警報）— 另開單 |
+| K13 | **removeData 清唔到 root-owned data 目錄殘留**（Stage A） | 實 boot 後 per-device `/data` 內容 root-owned（容器 root 寫入、無 uid remap）；api（uid 1000 非 root）刪除失敗報 `dataRemoved:false`，目錄 skeleton 留喺 host | root 層定期清理 job 或 privileged cleanup sidecar（backlog 項） |
 
-**未完成項目總計**：C 類 6 項（硬體）+ K3/K5/K6/K9（小工單，P7 候選）+ K4/K7/K8/K10/K11（設計決策，非 bug）— 其餘 P0–P6 scope 全部收貨（證據鏈：每 phase ADR §13/§14/§15 + `docs/evidence/`）。
+**未完成項目總計**：C 類 5 項（TCP 經 proxy／fail-closed monitor／GPU `verified`／映像自動 pull／removeData root 殘留）+ K3/K5/K6/K9（小工單，P7 候選）+ K4/K7/K8/K10/K11（設計決策，非 bug）— 其餘 P0–P6 + 2026-10-19 security patch + Stage A/B scope 全部收貨（證據鏈：每 phase ADR §13/§14/§15 + `docs/evidence/` + runbook §9.5/§10）。
 
 ## 疑難排解
 
@@ -454,5 +509,6 @@ Redroid 真機 6 項（ADR §14.7，本機 kernel 6.8.0-117-generic 無 binder_l
 | P2 | 容器核心（DockerService 全套、API、模板 allowlist、Web UI 兩頁、SSE） | ✅（live daemon 實測過，2026-10-14） |
 | P3 | AI 任務引擎：providers（AES-256-GCM 加密 key）+ task queue + tool registry + approval gate + Web UI | ✅（live 實測 2026-10-15，全循環 DB+SSE 實證） |
 | P4 | 排程（schedules → BullMQ 6 Job Scheduler，PG-first）+ Web UI | ✅（live 實測 2026-10-15，7 項硬驗收全過） |
-| P5 | Redroid Devices（template 受控建立 + localhost-only ADB + 白名單診斷 + GPU 誠實 + mock 驗證主路徑）| ✅（live 實測 2026-10-15，7 項硬驗收全過；真機 Redroid 未完成清單見 ADR §14.7） |
+| P5 | Redroid Devices（template 受控建立 + localhost-only ADB + 白名單診斷 + GPU 誠實 + mock 驗證主路徑）| ✅（live 實測 2026-10-15，7 項硬驗收全過；真機部分由 2026-10-19 Stage A 收結，ADR §14.7） |
 | P6 | UX 收尾 + 安全（audit 清零/redaction 實打/threat-model 最終）+ E2E 14/14 + docs（README/runbook/API 總表/ADR §15）+ 5 flag 收結 + clean install 實跑 | ✅（2026-10-15；證據 `docs/evidence/p6-*/`） |
+| 2026-10-19 | Security patch（SSRF guard / per-account 登入限流 / proxy anti-spoof + trustProxy）+ Redroid 實機矩陣：Stage A（real-host boot + binderfs wrapper + host setup script）+ Stage B（per-device egress proxy：gost + tun2socks，runbook §10） | ✅（27cc558；f8e2986/cf6b2d9；18f8139/ffe800f/bd88571/351983a；實機證據 2026-10-19） |

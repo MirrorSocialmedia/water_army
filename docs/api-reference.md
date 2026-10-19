@@ -25,7 +25,7 @@ Base：`http://127.0.0.1:3012/api`（web 同源反代；api 本體唔 publish ho
 
 | Method | Path | Role | 參數 | 錯誤碼 / 備註 |
 |--------|------|------|------|--------------|
-| POST | `/auth/login` | — | body `{username (3–32, `[a-zA-Z0-9_.-]`), password}` | 200 + `Set-Cookie`；401 `INVALID_CREDENTIALS`（未知用户同一 message — timing 對齊防枚舉）；429 `RATE_LIMITED`（5 失敗/60s/IP，限流中連正確密碼都 429）；400 驗證 |
+| POST | `/auth/login` | — | body `{username (3–32, `[a-zA-Z0-9_.-]`), password}` | 200 + `Set-Cookie`；401 `INVALID_CREDENTIALS`（未知用户同一 message — timing 對齊防枚舉）；429 `RATE_LIMITED`（5 失敗/60s/**客戶端 IP × 帳號**，per-account，限流中連正確密碼都 429）；400 驗證 |
 | POST | `/auth/logout` | 任何 | — | 204；session 即刻失效 |
 | GET | `/auth/me` | 任何 | — | 200 `{user:{id,username,role,lastLoginAt}}`；401 |
 
@@ -63,8 +63,8 @@ Base：`http://127.0.0.1:3012/api`（web 同源反代；api 本體唔 publish ho
 | POST | `/approvals/:id/reject` | **admin 真人** | body `{note?}` | 同上 |
 | GET | `/tools` | viewer+ | — | 200 registry 元數據（name/description/safetyClass/args schema） |
 | GET | `/providers` | **admin** | — | 200 列表（**零 key 材料** — 只 `hasApiKey:boolean`；P6 實打證據 `docs/evidence/p6-security/`） |
-| POST | `/providers` | **admin** | body `{name, providerType, baseUrl, modelId, apiKey?, timeoutMs?, isEnabled?}` | 201（key AES-256-GCM 加密落庫；key 永不傳回） |
-| PATCH | `/providers/:name` | **admin** | body（部分更新；`apiKey` 再傳 = 重新加密輪替） | 200；404 |
+| POST | `/providers` | **admin** | body `{name, providerType, baseUrl, modelId, apiKey?, timeoutMs?, isEnabled?}` | 201（key AES-256-GCM 加密落庫；key 永不傳回）；400 `BLOCKED_URL`（SSRF guard：private/loopback/link-local/169.254.169.254 metadata/CGNAT/保留 host 名/DNS 解出私有地址） |
+| PATCH | `/providers/:name` | **admin** | body（部分更新；`apiKey` 再傳 = 重新加密輪替） | 200；400 `BLOCKED_URL`（改 baseUrl 時同 POST 同 guard）；404 |
 | POST | `/providers/:name/test` | **admin** | — | 200/502 classified provider error 詞彙（timeout/auth/network/model 分類，message 已 redact） |
 | GET | `/audit-events` | **admin** | query `from`/`to`（ISO 日期）、`action`、`actor`（user id）、`page`/`pageSize`（≤100） | 200 `{items（details scrub 過）,page,pageSize,total}` |
 
@@ -100,14 +100,14 @@ worker 喺 terminal scheduled run（succeeded/failed/timed_out/skipped，**包�
 
 | Method | Path | Role | 參數 | 錯誤碼 / 備註 |
 |--------|------|------|------|--------------|
-| GET | `/redroid/preflight` | viewer+ | — | 200 真主機檢查（kernel modules/device nodes/dmesg/docker/data root）；三態 `supported\|unsupported\|unknown`（讀唔到 = unknown，嚴禁假報） |
+| GET | `/redroid/preflight` | viewer+ | — | 200 真主機檢查（kernel modules/device nodes/dmesg/docker/data root）；三態 `supported\|unsupported\|unknown`（讀唔到 = unknown，嚴禁假報）。**api 容器視角**：host `/dev` 狀態 = `unknown`（永唔假報 absent）；**host-level preflight 係權威**（runbook §9.3） |
 | GET | `/redroid/templates` | viewer+ | — | 200（image 必 pin；`privileged` 行帶 reason）；無 `:id` 只讀端點（list 已含全欄位） |
-| POST | `/redroid/templates` | **admin** | body `{name, image, privileged?, privilegedReason?, androidBoot?{...}}` | 201；image `latest`/`nightly` 拒（400）；privileged 要 reason；409 name |
+| POST | `/redroid/templates` | **admin** | body `{name, image, privileged?, privilegedReason?, androidBoot?{...}, proxyUrl?}` | 201；image `latest`/`nightly` 拒（400）；privileged 要 reason；409 name；`proxyUrl` = fleet 出口（`socks5://[user:pass@]host:port` only，加密落庫，view 永不回傳 URL，只出 `proxy.configured/hasUrl`） |
 | PUT | `/redroid/templates/:id` | **admin** | 同上（patch） | 200/404/400/409 `IN_USE` |
 | DELETE | `/redroid/templates/:id` | **admin** | — | 204；409 `IN_USE`；404 |
-| POST | `/devices/redroid` | operator+ | body `{name, templateName, idempotencyKey}` — **body 冇任何 Docker 欄位**（注入 = 400） | 201 `{device, replay, startError?, preflight?}`（回放 = 200）；404 template/disabled；409 name；port 用盡 = 503 |
+| POST | `/devices/redroid` | operator+ | body `{name, templateName, idempotencyKey, proxyUrl?}` — **body 冇任何 Docker 欄位**（注入 = 400） | 201 `{device, replay, startError?, preflight?}`（回放 = 200）；404 template/disabled；409 name；port 用盡 = 503；`proxyUrl` = device 級出口 override（省略 = 跟 template；加密落庫，view 只出 `hasUrl/gostPort/proxyState`，永不回傳 URL） |
 | GET | `/devices/redroid` | viewer+ | query `template`（過濾） | 200 `{devices}` |
-| GET | `/devices/redroid/:id` | viewer+ | — | 200 `{device}`（pinned image/`127.0.0.1:<port>`/容器狀態/ADB 狀態/解析度/GPU 健康）；404 |
+| GET | `/devices/redroid/:id` | viewer+ | — | 200 `{device}`（pinned image/`127.0.0.1:<port>`/容器狀態/ADB 狀態/解析度/GPU 健康/`proxy`（`configured/gostPort/gostBind/state/hasUrl` — URL 永不回傳））；404 |
 | POST | `/devices/redroid/:id/start` `<stop>` `<restart>` | operator+ | — | 200 `{device, idempotent, action}`（P2 action protocol；container 消失 = `missing` + 409 誠實）；404 |
 | POST | `/devices/redroid/:id/refresh` | operator+ | — | 200 `{device, adbNote}`（重查 daemon + ADB 狀態，唔重跑全套診斷） |
 | POST | `/devices/redroid/:id/diagnostics` | operator+ | — | 200 **4 個獨立結果區**（kernel / container-logs / adb-connectivity / gpu-verification），每區 `executed` + `status`（未執行 = `未驗證`，從無假 pass） |
