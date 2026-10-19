@@ -14,6 +14,16 @@
  *
  * A failed preflight is a WARNING, not the sole verdict (MD §2.3): device
  * create/start still proceed and the honest state (未驗證) is displayed.
+ *
+ * Stage A (redroid-matrix-A-20261019) — two vantage/semantics fixes found by
+ * real-host testing on a 6.8 kernel host:
+ *  - ashmem_linux is only REQUIRED when the kernel lacks memfd_create (< 3.17).
+ *    Kernels 6.x removed the ashmem module entirely; Android uses memfd, and
+ *    redroid boots without it (verified by real boot on 6.8.0-117).
+ *  - a containerized api service cannot see host /dev nodes (limited mount
+ *    namespace). The host binderfs state is then UNKNOWN from this vantage —
+ *    never FALSE. A privileged redroid container gets the host /dev, so the
+ *    host-level (direct module) preflight is the authoritative check.
  */
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -118,6 +128,7 @@ async function runBounded({ bin, args, timeoutMs, maxBytes, exec = execFileAsync
  * @param {Function} [deps.readProcModules] test seam — () => string|null
  * @param {Function} [deps.statfs] test seam — async (path) => {bavail, bsize}
  * @param {string} [deps.gpuBin] test seam — fixed nvidia-smi path override
+ * @param {Function} [deps.detectContainerized] test seam — () => boolean (is this process in a container?)
  */
 export async function runRedroidPreflight({
   config,
@@ -130,6 +141,7 @@ export async function runRedroidPreflight({
   readProcModules = readProcModulesImpl,
   statfs = fs.promises.statfs,
   gpuBin,
+  detectContainerized = detectContainerizedImpl,
 } = {}) {
   const timeoutMs = config?.redroidPreflightTimeoutMs ?? 5000;
   const maxBytes = config?.redroidPreflightMaxOutput ?? 65_536;
@@ -195,11 +207,41 @@ export async function runRedroidPreflight({
     }
   }
 
+  // memfd_create (kernel ≥ 3.17) supersedes the ashmem_linux module — kernels
+  // 6.x removed the module entirely; Android (and redroid) use memfd instead.
+  const kernelVersion = parseKernelVersion(kernel);
+  const memfd =
+    kernelVersion === null
+      ? { available: 'unknown', kernel: null, note: 'kernel version unparseable — memfd availability unknown' }
+      : kernelAtLeast(kernelVersion, 3, 17)
+        ? { available: true, kernel: `${kernelVersion.major}.${kernelVersion.minor}`, note: 'memfd_create available (kernel ≥ 3.17) — ashmem_linux module not required' }
+        : { available: false, kernel: `${kernelVersion.major}.${kernelVersion.minor}`, note: 'kernel < 3.17 — ashmem_linux module required' };
+
+  // Vantage honesty: a containerized api service sees a LIMITED /dev (its own
+  // mount namespace), so "host /dev/binder missing" from here is an artifact of
+  // the vantage, not the host state. A privileged redroid container gets the
+  // host /dev — so from a container the host node state is UNKNOWN, never false.
+  const containerized = detectContainerized();
+  const deviceVisibility = containerized ? 'containerized' : 'direct';
+
   // Honest tri-state: every input must positively confirm before 'true'.
-  const binderUnknown = !isLinux || moduleStates.binder_linux === 'unknown' || moduleStates.ashmem_linux === 'unknown';
-  const binderOk =
-    moduleStates.binder_linux === 'present' && moduleStates.ashmem_linux === 'present' && devices['/dev/binder'] === true;
-  const binderSupported = binderUnknown ? 'unknown' : binderOk ? true : false;
+  // Shared-memory backing = ashmem module OR memfd (kernel ≥ 3.17).
+  const smBacking =
+    moduleStates.ashmem_linux === 'present' || memfd.available === true
+      ? true
+      : moduleStates.ashmem_linux === 'unknown' || memfd.available === 'unknown'
+        ? 'unknown'
+        : false;
+  const binderDevice = deviceVisibility === 'direct' ? devices['/dev/binder'] === true : 'unknown';
+  const binderSupported =
+    !isLinux ||
+    moduleStates.binder_linux === 'unknown' ||
+    smBacking === 'unknown' ||
+    binderDevice === 'unknown'
+      ? 'unknown'
+      : moduleStates.binder_linux === 'present' && smBacking === true && binderDevice === true
+        ? true
+        : false;
 
   const supported = !isLinux
     ? 'unsupported'
@@ -219,12 +261,18 @@ export async function runRedroidPreflight({
       'Load the binder module (requires root): modprobe binder_linux devices="binder,hwbinder,vndbinder"',
     );
   }
-  if (moduleStates.ashmem_linux !== 'present') {
+  if (moduleStates.ashmem_linux !== 'present' && memfd.available !== true) {
     suggestions.push(
       'Load ashmem if this kernel provides it (requires root; newer kernels may use memfd instead): modprobe ashmem_linux',
     );
   }
-  if (!devices['/dev/binder']) {
+  if (containerized) {
+    if (!devices['/dev/binder']) {
+      suggestions.push(
+        'api service runs in a container and cannot see host /dev — verify the binderfs mount FROM THE HOST (ls /dev/binder there). A privileged redroid container gets the host /dev, so the host-level preflight is the authoritative check for this node.',
+      );
+    }
+  } else if (!devices['/dev/binder']) {
     suggestions.push('Ensure /dev/binder (and /dev/binder_hwbinder) exist and are accessible by the api service.');
   }
   suggestions.push('Official docs: https://github.com/remote-android/redroid-doc — verify the exact procedure for this kernel before booting Redroid.');
@@ -262,7 +310,12 @@ export async function runRedroidPreflight({
   if (!isLinux) warnings.push('Host is not Linux — Redroid containers cannot run on this platform.');
   if (dockerState.available === false) warnings.push(`Docker daemon unavailable: ${dockerState.error}`);
   if (moduleStates.binder_linux === 'absent') warnings.push('Kernel module binder_linux is NOT loaded — Redroid boot will fail on this host.');
-  if (moduleStates.ashmem_linux === 'absent') warnings.push('Kernel module ashmem_linux is NOT loaded (may be built-in/memfd on newer kernels — check dmesg).');
+  if (moduleStates.ashmem_linux === 'absent' && memfd.available !== true) {
+    warnings.push('Kernel module ashmem_linux is NOT loaded and the kernel has no memfd (kernel < 3.17) — check dmesg.');
+  }
+  if (containerized && !devices['/dev/binder']) {
+    warnings.push('api service is containerized — host /dev nodes are not visible from here; run the host-level preflight to confirm /dev/binder (a privileged redroid container gets the host /dev).');
+  }
   if (disk.freeBytes !== null && disk.freeBytes < 4 * 1024 * 1024 * 1024) warnings.push(`Less than 4 GiB free under ${dataRoot} — device /data persistence will exhaust quickly.`);
   if (gpu && !gpu.verified) warnings.push('GPU is NOT verified for Redroid rendering — nvidia-smi success does not prove Android EGL/WebGL works (MD §2.4).');
 
@@ -273,6 +326,8 @@ export async function runRedroidPreflight({
     binder: {
       modules: moduleStates,
       devices,
+      deviceVisibility,
+      memfd,
       dmesg,
       supported: binderSupported,
       suggestions,
@@ -291,6 +346,31 @@ function readProcModulesImpl() {
   } catch {
     return null; // honest: unreadable ≠ absent
   }
+}
+
+/**
+ * Detect whether THIS process runs inside a container (/.dockerenv or a
+ * cgroup controller path). Determines the /dev vantage for the binder device
+ * check — see the module header (Stage A fix). Read-only, never throws.
+ */
+function detectContainerizedImpl() {
+  try {
+    if (fs.existsSync('/.dockerenv')) return true;
+    const cg = fs.readFileSync('/proc/1/cgroup', 'utf8');
+    return /docker|kubepods|containerd|lxc/i.test(cg);
+  } catch {
+    return false; // undecidable — treat as direct vantage (device check applies)
+  }
+}
+
+/** "6.8.0-117-generic" → {major:6, minor:8} | null (unparseable). */
+function parseKernelVersion(kernel) {
+  const m = /^(\d+)\.(\d+)/.exec(String(kernel ?? ''));
+  return m ? { major: Number(m[1]), minor: Number(m[2]) } : null;
+}
+
+function kernelAtLeast(v, major, minor) {
+  return v.major > major || (v.major === major && v.minor >= minor);
 }
 
 /**

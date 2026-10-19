@@ -27,6 +27,7 @@ function makeDeps({
   nvidia = 'ok',
   dataRootOk = true,
   hangUname = false,
+  detectContainerized = undefined,
 } = {}) {
   const accessible = new Set(['/usr/bin/uname', '/usr/bin/dmesg', '/usr/local/bin/nvidia-smi', '/dev/binder', '/dev/ashmem']);
   if (dataRootOk) accessible.add(DATA_ROOT);
@@ -92,6 +93,7 @@ function makeDeps({
     statfs,
     readProcModules: () => modules,
     gpuBin: '/usr/local/bin/nvidia-smi',
+    ...(detectContainerized !== undefined ? { detectContainerized } : {}),
   };
 }
 
@@ -115,9 +117,60 @@ test('missing modules → unsupported + concrete modprobe suggestions + official
   assert.equal(r.binder.supported, false);
   assert.equal(r.binder.modules.binder_linux, 'absent');
   assert.ok(r.binder.suggestions.some((s) => s.includes('modprobe binder_linux devices="binder,hwbinder,vndbinder"')));
-  assert.ok(r.binder.suggestions.some((s) => s.includes('modprobe ashmem_linux')));
+  // kernel 6.8 has memfd — the ashmem modprobe suggestion is NOT required
+  assert.ok(!r.binder.suggestions.some((s) => s.includes('modprobe ashmem_linux')));
+  assert.equal(r.binder.memfd.available, true);
   assert.ok(r.binder.suggestions.some((s) => s.includes('https://github.com/remote-android/redroid-doc')));
   assert.ok(r.warnings.some((w) => w.includes('binder_linux is NOT loaded')));
+});
+
+test('ashmem absent on kernel ≥3.17 (6.x) + /dev/binder present → supported (memfd supersedes ashmem)', async () => {
+  const r = await runRedroidPreflight(makeDeps({ modules: 'binder_linux 16384 0 - Live 0x0000000000000000 (O)\novl 16384 0 - Live 0x0000000000000000', kernel: '6.8.0-117-generic' }));
+  assert.equal(r.binder.modules.binder_linux, 'present');
+  assert.equal(r.binder.modules.ashmem_linux, 'absent');
+  assert.equal(r.binder.memfd.available, true);
+  assert.equal(r.binder.memfd.kernel, '6.8');
+  assert.equal(r.binder.supported, true);
+  assert.equal(r.overall, 'supported');
+  assert.ok(!r.binder.suggestions.some((s) => s.includes('modprobe ashmem_linux')));
+  assert.ok(!r.warnings.some((w) => /ashmem/.test(w)), `no ashmem warning expected with memfd: ${r.warnings.join(' | ')}`);
+});
+
+test('ashmem absent on kernel <3.17 → unsupported + ashmem modprobe suggestion (memfd unavailable)', async () => {
+  const r = await runRedroidPreflight(makeDeps({ modules: 'binder_linux 16384 0 - Live 0x0000000000000000 (O)', kernel: '2.6.32-431.el6.x86_64' }));
+  assert.equal(r.binder.memfd.available, false);
+  assert.equal(r.binder.supported, false);
+  assert.equal(r.overall, 'unsupported');
+  assert.ok(r.binder.suggestions.some((s) => s.includes('modprobe ashmem_linux')));
+  assert.ok(r.warnings.some((w) => /ashmem_linux is NOT loaded/.test(w)));
+});
+
+test('containerized vantage: host /dev not visible → unknown, never false-unsupported (honest tri-state)', async () => {
+  const deps = makeDeps({ detectContainerized: () => true });
+  const origAccess = deps.accessSync;
+  deps.accessSync = (p, m) => {
+    if (p.startsWith('/dev/')) {
+      const e = new Error('ENOENT: limited container /dev');
+      e.code = 'ENOENT';
+      throw e;
+    }
+    return origAccess(p, m);
+  };
+  const r = await runRedroidPreflight(deps);
+  assert.equal(r.binder.deviceVisibility, 'containerized');
+  // all host inputs are OK — but the /dev vantage is limited, so it must be 'unknown'
+  assert.equal(r.binder.supported, 'unknown');
+  assert.equal(r.overall, 'unknown');
+  assert.ok(r.warnings.some((w) => /containerized/.test(w)), `expected containerized warning: ${r.warnings.join(' | ')}`);
+  assert.ok(!r.warnings.some((w) => /binder_linux is NOT loaded/.test(w)), 'module IS loaded — must not claim it missing');
+});
+
+test('unparseable kernel + ashmem absent → unknown (memfd indeterminate, never claimed)', async () => {
+  const r = await runRedroidPreflight(makeDeps({ modules: 'binder_linux 16384 0 - Live 0x0000000000000000 (O)', kernel: 'weird-kernel' }));
+  assert.equal(r.binder.memfd.available, 'unknown');
+  assert.equal(r.binder.supported, 'unknown');
+  assert.equal(r.overall, 'unknown');
+  assert.ok(r.binder.suggestions.some((s) => s.includes('modprobe ashmem_linux'))); // honest fallback advice
 });
 
 test('unreadable /proc/modules → unknown, never absent/present (honest tri-state)', async () => {

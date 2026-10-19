@@ -220,3 +220,51 @@ SSE（`/api/tasks/runs/:id/events`、`/api/containers/events`）係長連接；W
 - worker log grep：`skipped`（overlap/concurrency）、`sync_error`、`PROVIDER_`（分類錯誤）、`stalled`。
 - DB 簡單儀表：`select status, count(*) from task_runs group by 1`；`select * from schedules where "syncStatus"='sync_error'`；audit_events 每日量。
 - disk：pgdata 增長（task_run_events 係最大表 — P6 實測 1600 行 = 0.7 MB dump；長線要 prune 策略，見已知限制 K4）。
+
+---
+
+## 9. Redroid 宿主機一次性設定（Stage A 實測 — 2026-10-19）
+
+**只係第一次部署 Redroid 功能先要跑**（換機/換 kernel/重裝系统都要重跑）。跑一次，boot 之後都有效（module + mount + 目錄全部持久化）。
+
+### 9.1 背景（點解要呢幾樣）
+
+- **kernel 6.8 無 ashmem_linux**（6.x 已移除，memfd_create 取代）— redroid 14 唔需要佢（真 boot 實測過）。
+- **binderfs 每個 mount 有獨立 device set**（實測：容器內建嘅 binder 節點唔會 propagate 返 host）。所以：
+  - host 只係需要 `/dev/binder` **存在**（host-level preflight check + 日後 debug 用）；
+  - **binder/hwbinder/vndbinder chardev 節點由 redroid wrapper image 喺容器內自建**（`docker/redroid-matrix/redroid-binder-init`，靜態 C entrypoint：private binderfs mount → `BINDER_CTL_ADD` ioctl 建節點 → `chmod 0666`（kernel 6.8 control 建嘅節點預設 0600，Android uid 1000/1002 service 打唔到 → 必改）→ bind mount 上 `/dev/{binder,hwbinder,vndbinder}`）。host 完全唔郁，完全可逆。
+- **api 容器 read-only rootfs** → per-device `/data` 目錄必須喺 host（`/var/lib/water-army`）+ compose volume 入去 api 容器，API 先 mkdir 得到（api 行 uid 1000）。**唔做呢步 → device create 永遠 500 `REDROID_DATA_DIR_ERROR`**（Stage A 實測）。
+
+### 9.2 跑 script（老細一次性，root）
+
+```bash
+cd /home/kenneth/.openclaw/workspace/water_army
+sudo bash scripts/redroid-host-setup.sh
+```
+
+Script 做三樣（全部冪等、可重跑、script header 有完整 undo 命令）：
+1. `modprobe binder_linux` + 入 `/etc/modules`（每次 boot 自動載入）
+2. binderfs mount 上 `/dev/binder` + 入 `/etc/fstab`（`x-systemd.requires=binder_linux.module` 保證 module 先 mount）
+3. `mkdir /var/lib/water-army` + `chown 1000:1000`（api 容器用戶）
+
+**次序重要**：先跑 script 先 `compose up` — 否則 docker 會 root:root 自動建 `/var/lib/water-army`，api（uid 1000）寫唔到。
+
+### 9.3 驗證
+
+```bash
+lsmod | grep binder_linux                      # binder_linux ... (O)
+mount | grep '^binder on /dev/binder '         # binder on /dev/binder type binder (rw,...)
+ls -la /dev/binder                             # binder-control + features（host 唔使有 binder 節點！）
+stat -c '%U:%G %a' /var/lib/water-army         # node:node 750
+```
+
+### 9.4 重啟宿主機之後
+
+乜都唔使做（module/fstab 已持久化）。`systemctl daemon-reload` 唔需要（fstab mount 每次 boot 自動）。
+
+### 9.5 已知行為（Stage A 實測記錄 — 唔好當新 bug）
+
+- **首個 boot cycle 可能軟重啟一次**：multi-stage wrapper image 首次 boot 記錄到 gralloc GBM SIGFPE（host GPU mode / RTX 3090 consumer card，MD §2.4 預期風險）+ redroid 已知 bluetooth sim 无效 MAC aborts → 系統 09:13:19 軟重啟 → 第二個 cycle 穩定（7+ 分鐘零 crash，VSYNC/allocator/SF 正常）。如复現：等一個 boot cycle（<2 分鐘）再驗證；持續 crash-loop 先係 blocker。
+- **GPU 永遠係「未驗證」**：P5 冇 in-device render check（MD §2.4）— nvidia-smi OK ≠ Android EGL OK。4 區診斷 GPU zone 固定 `unverified`（host mode）/`software`（swiftshader），誠實核心。
+- **api 容器冇 adb binary** → 4 區診斷 ADB zone 由 api 視角係 `offline`（engine 無 binary，空證據）。ADB 真驗證用 host-level adb（`/home/kenneth/.openclaw/workspace/tools/platform-tools/adb`）：`adb connect 127.0.0.1:<port>` → `adb -s <port> shell getprop ro.build.version.sdk`。
+- **redroid container stdout 係靜音**（init 行 logcat 唔行 stdout）→ 診斷 container-logs zone 正常係 0 行。log 證據一律行 logcat（host adb）或 docker inspect。

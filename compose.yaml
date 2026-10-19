@@ -98,6 +98,12 @@ services:
     volumes:
       # THE ONLY service with Docker socket access — read-only.
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Redroid per-device /data roots (Stage A redroid-matrix-A-20261019): the
+      # api rootfs is read-only, so per-device data dirs must live on the host.
+      # Run scripts/redroid-host-setup.sh FIRST (creates it owned by uid 1000 =
+      # the api user) — otherwise docker auto-creates it root:root and device
+      # create fails REDROID_DATA_DIR_ERROR. See runbook §9.
+      - /var/lib/water-army:/var/lib/water-army
     depends_on:
       postgres:
         condition: service_healthy
