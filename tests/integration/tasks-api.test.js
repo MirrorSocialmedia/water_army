@@ -445,6 +445,39 @@ test('tasks API (P3)', async (t) => {
     assert.equal(dup.json().error.code, 'PROVIDER_NAME_TAKEN');
   });
 
+  await t.test('providers: SSRF guard rejects loopback/private/metadata baseUrls (create + patch + test)', async () => {
+    for (const baseUrl of [
+      'http://127.0.0.1:9000/v1',
+      'http://169.254.169.254/latest',
+      'http://localhost/v1',
+      'http://10.0.0.5:8000/v1',
+      'http://[::1]:8000/v1',
+    ]) {
+      const res = await app.inject({
+        method: 'POST', url: '/api/providers', headers: { cookie: admin },
+        payload: { name: 'ssrf', baseUrl },
+      });
+      assert.equal(res.statusCode, 400, `${baseUrl} should be 400, got ${res.statusCode}`);
+      assert.equal(res.json().error.code, 'BLOCKED_URL', `${baseUrl} code`);
+    }
+    // not stored
+    assert.equal(db.__state.providerRows.size >= 0 && ![...db.__state.providerRows.values()].some((p) => p.name === 'ssrf'), true);
+    // patch of an existing provider to a blocked URL is refused too
+    const patch = await app.inject({
+      method: 'PATCH', url: '/api/providers/openai', headers: { cookie: admin },
+      payload: { baseUrl: 'http://169.254.169.254/latest' },
+    });
+    assert.equal(patch.statusCode, 400);
+    assert.equal(patch.json().error.code, 'BLOCKED_URL');
+  });
+
+  await t.test('providers: /test re-checks a blocked baseUrl stored directly in the DB', async () => {
+    await db.providerConfig.create({ data: { name: 'legacy-bad', providerType: 'openai_compatible', baseUrl: 'http://127.0.0.1:1234/v1', isEnabled: true } });
+    const res = await app.inject({ method: 'POST', url: '/api/providers/legacy-bad/test', headers: { cookie: admin } });
+    assert.equal(res.statusCode, 400);
+    assert.equal(res.json().error.code, 'BLOCKED_URL');
+  });
+
   await t.test('providers: patch rotates the key + toggles enabled; audit records changes', async () => {
     const list = await app.inject({ method: 'GET', url: '/api/providers', headers: { cookie: admin } });
     const id = list.json().providers.find((p) => p.name === 'openai').id;

@@ -134,6 +134,28 @@ test('rate limit: 5 failed logins / 60s / IP → 6th is 429 (fresh app, clean li
   assert.equal(withReal.statusCode, 429);
 });
 
+test('rate limit is keyed by (ip+username): flooding one account does not lock out another', async (t) => {
+  const passwordHash = await hash(PASSWORD, { type: argon2id });
+  const { app } = await makeApp({
+    users: [
+      { id: 'u1', username: 'admin', passwordHash, role: 'admin' },
+      { id: 'u2', username: 'victim', passwordHash, role: 'admin' },
+    ],
+  });
+  t.after(() => app.close());
+
+  // Attacker burns the limit on 'admin' (same source ip in app.inject).
+  for (let i = 0; i < 6; i++) {
+    await app.inject({ method: 'POST', url: '/api/auth/login', payload: { username: 'admin', password: `Wrong${i}99` } });
+  }
+  const adminBlocked = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { username: 'admin', password: PASSWORD } });
+  assert.equal(adminBlocked.statusCode, 429, 'the flooded account is rate-limited');
+
+  // A different account from the same ip is unaffected — this is the DoS fix.
+  const victimOk = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { username: 'victim', password: PASSWORD } });
+  assert.equal(victimOk.statusCode, 200, 'other accounts must not be locked out');
+});
+
 test('login body validation (fresh app, no rate-limit interference)', async (t) => {
   const { app } = await makeApp({ users: [{ id: 'u1', username: 'admin', passwordHash: await hash(PASSWORD, { type: argon2id }), role: 'admin' }] });
   t.after(() => app.close());

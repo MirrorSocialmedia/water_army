@@ -31,6 +31,7 @@ import {
 
 import { enqueueTaskRun, removeWaitingTaskRun } from '../plugins/task-queue.js';
 import { requireHuman } from '../security/service-auth.js';
+import { assertPublicHttpUrl, UrlGuardError } from '../security/url-guard.js';
 
 // --------------------------------------------------------------------------
 // DTOs
@@ -239,6 +240,19 @@ function httpError(status, apiCode, message) {
   err.statusCode = status;
   err.apiCode = apiCode;
   return err;
+}
+
+/**
+ * SSRF guard for provider baseUrls (loopback/private/link-local/metadata).
+ * Converts a UrlGuardError into the route-layer 400 envelope.
+ */
+async function assertSafeBaseUrl(baseUrl, cfg) {
+  try {
+    await assertPublicHttpUrl(baseUrl, { skipDns: cfg?.providerUrlDnsCheck === false });
+  } catch (err) {
+    if (err instanceof UrlGuardError) throw httpError(400, 'BLOCKED_URL', err.message);
+    throw err;
+  }
 }
 
 // --------------------------------------------------------------------------
@@ -601,6 +615,7 @@ export function taskRoutes(app, deps = {}) {
     { preHandler: app.requireRole('admin'), schema: { body: { ...PROVIDER_BODY, required: ['name', 'baseUrl'] } } },
     async (req) => {
       const b = req.body;
+      await assertSafeBaseUrl(b.baseUrl, config());
       const key = resolveProviderKey(config().encryptionKey);
       let row;
       try {
@@ -638,6 +653,7 @@ export function taskRoutes(app, deps = {}) {
       const changes = [];
       const data = {};
       if (b.baseUrl !== undefined) {
+        await assertSafeBaseUrl(b.baseUrl, config());
         data.baseUrl = b.baseUrl;
         changes.push('baseUrl');
       }
@@ -676,6 +692,9 @@ export function taskRoutes(app, deps = {}) {
     async (req) => {
       const pc = await db().providerConfig.findUnique({ where: { name: req.params.name } });
       if (!pc) throw notFound(`provider '${req.params.name}' not found`);
+      // Defence in depth: re-check at fetch time (covers rows stored before
+      // the guard existed, and DNS that now resolves to a private address).
+      await assertSafeBaseUrl(pc.baseUrl, config());
       let apiKey = '';
       if (pc.encryptedApiKey) {
         try {

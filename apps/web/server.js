@@ -55,6 +55,22 @@ function sendStatic(req, res) {
 }
 
 function proxyApi(req, res) {
+  // Forward client headers minus hop-by-hop, then OVERWRITE the forwarding
+  // headers with the real socket peer. Overwriting (not appending) is what
+  // stops a client from spoofing its source IP: whatever X-Forwarded-For /
+  // X-Real-IP / Forwarded the client sent is discarded, and the api — which
+  // trusts this single hop — keys login rate limiting on the true client IP.
+  const headers = Object.fromEntries(
+    Object.entries(req.headers).filter(([k]) => {
+      const key = k.toLowerCase();
+      return !HOP_BY_HOP.has(key) && key !== 'x-forwarded-for' && key !== 'x-real-ip' && key !== 'forwarded';
+    }),
+  );
+  const clientIp = (req.socket.remoteAddress ?? '').replace(/^::ffff:/, '');
+  if (clientIp) {
+    headers['x-forwarded-for'] = clientIp;
+    headers['x-real-ip'] = clientIp;
+  }
   const upstreamReq = http.request(
     {
       protocol: upstreamUrl.protocol,
@@ -62,9 +78,7 @@ function proxyApi(req, res) {
       port: upstreamUrl.port,
       method: req.method,
       path: req.url,
-      headers: Object.fromEntries(
-        Object.entries(req.headers).filter(([k]) => !HOP_BY_HOP.has(k.toLowerCase())),
-      ),
+      headers,
     },
     (upstreamRes) => {
       const headers = Object.fromEntries(

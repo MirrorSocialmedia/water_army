@@ -164,6 +164,17 @@ export function loadConfig(env = process.env, opts = {}) {
     // P3 provider default when POST /api/tasks/runs omits body.provider.
     aiProvider: e.AI_PROVIDER ?? '',
     logLevel: e.LOG_LEVEL ?? (nodeEnv === 'production' ? 'info' : 'debug'),
+    // The shipped topology puts the api behind the web reverse proxy, so the
+    // real client IP arrives in X-Forwarded-For (the web proxy overwrites it
+    // with the socket peer — a client cannot spoof it). Trusting that header
+    // is what makes per-client login rate limiting work; without it every
+    // request appears to come from the proxy and one flooder locks out all
+    // users. Set TRUST_PROXY=false only if the api is exposed directly.
+    trustProxy: e.TRUST_PROXY === 'false' ? false : true,
+    // Provider baseUrl SSRF guard also resolves DNS names and range-checks the
+    // result. Set false only in environments without outbound DNS (the literal
+    // IP / reserved-name checks still apply regardless).
+    providerUrlDnsCheck: e.PROVIDER_URL_DNS_CHECK === 'false' ? false : true,
   };
 
   const origins = new Set();

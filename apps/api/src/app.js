@@ -71,6 +71,11 @@ export async function buildApp(opts = {}) {
       stream: opts.logStream,
     },
     bodyLimit: 1_000_000,
+    // Behind the web reverse proxy; req.ip reflects X-Forwarded-For (the proxy
+    // overwrites it with the socket peer, so it cannot be spoofed by clients).
+    // Without this, login rate limiting keys on the proxy IP and one flooder
+    // can lock out every user. Disable with TRUST_PROXY=false if api is direct.
+    trustProxy: config.trustProxy ?? true,
     ajv: {
       customOptions: { useDefaults: true, removeAdditional: false, coerceTypes: false },
     },

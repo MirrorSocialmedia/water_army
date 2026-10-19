@@ -957,4 +957,9 @@ export const testConfig = {
   taskMaxConcurrency: 4,
   logLevel: 'silent',
   allowedOrigins: ['http://127.0.0.1:3012', 'http://127.0.0.1:3000', 'http://localhost:3000'],
+  trustProxy: true,
+  // Hermetic: no outbound DNS in the suite. The SSRF guard's literal-IP and
+  // reserved-name checks still run; the DNS-resolution path is unit-tested
+  // separately with an injected resolver (tests/unit/url-guard.test.js).
+  providerUrlDnsCheck: false,
 };

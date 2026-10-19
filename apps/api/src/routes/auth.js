@@ -42,7 +42,12 @@ const publicUser = (user) => ({
 export function authRoutes(app) {
   app.post('/api/auth/login', { schema: LOGIN_SCHEMA }, async (req, reply) => {
     const ip = req.ip;
-    const gate = app.rateLimiter.check(ip);
+    // Key by (ip + username): a flood against one account from one source can
+    // no longer lock out other accounts, and — now that req.ip is the real
+    // client (trustProxy + proxy-overwritten XFF) — a single flooder can only
+    // rate-limit itself, not the whole deployment.
+    const rateKey = `${ip}|${String(req.body.username).toLowerCase()}`;
+    const gate = app.rateLimiter.check(rateKey);
     if (!gate.allowed) {
       await app.audit({
         action: 'auth.login_failed',
@@ -68,7 +73,7 @@ export function authRoutes(app) {
       : await verify(DUMMY_HASH, password);
 
     if (!user || !passwordOk) {
-      app.rateLimiter.hit(ip);
+      app.rateLimiter.hit(rateKey);
       await app.audit({
         action: 'auth.login_failed',
         status: 'failure',
@@ -85,7 +90,7 @@ export function authRoutes(app) {
       });
     }
     if (!user.isActive) {
-      app.rateLimiter.hit(ip);
+      app.rateLimiter.hit(rateKey);
       await app.audit({
         action: 'auth.login_failed',
         status: 'failure',
