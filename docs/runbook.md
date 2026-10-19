@@ -264,7 +264,7 @@ stat -c '%U:%G %a' /var/lib/water-army         # node:node 750
 
 ### 9.5 已知行為（Stage A 實測記錄 — 唔好當新 bug）
 
-- **首個 boot cycle 可能軟重啟一次**：multi-stage wrapper image 首次 boot 記錄到 gralloc GBM SIGFPE（host GPU mode / RTX 3090 consumer card，MD §2.4 預期風險）+ redroid 已知 bluetooth sim 无效 MAC aborts → 系統 09:13:19 軟重啟 → 第二個 cycle 穩定（7+ 分鐘零 crash，VSYNC/allocator/SF 正常）。如复現：等一個 boot cycle（<2 分鐘）再驗證；持續 crash-loop 先係 blocker。
+- **Boot 頭 13 秒有一輪一次性 service crash（自愈，唔使理）**：Stage A 實測（09:12:02 boot）— graphics.allocator@2.0 gralloc GBM SIGFPE ×1（host GPU mode / RTX 3090 consumer card，MD §2.4 預期風險）+ redroid 已知 bluetooth sim 无效 MAC aborts（sim ×2 + framework app ×2）。全部集中喺 boot 頭 13 秒，init 自動重啟（allocator 09:12:08 穩定、bluetooth sim 09:12:18 穩定），之後 **18+ 分鐘零 crash**（VSYNC/SF/allocator 正常）。判斷口徑：`adb logcat -d | grep 'Fatal signal'` 時間戳全部集中喺 boot 頭幾十秒 = 正常；同一 service 每幾秒一次嘅持續 crash-loop 先係 blocker。
 - **GPU 永遠係「未驗證」**：P5 冇 in-device render check（MD §2.4）— nvidia-smi OK ≠ Android EGL OK。4 區診斷 GPU zone 固定 `unverified`（host mode）/`software`（swiftshader），誠實核心。
 - **api 容器冇 adb binary** → 4 區診斷 ADB zone 由 api 視角係 `offline`（engine 無 binary，空證據）。ADB 真驗證用 host-level adb（`/home/kenneth/.openclaw/workspace/tools/platform-tools/adb`）：`adb connect 127.0.0.1:<port>` → `adb -s <port> shell getprop ro.build.version.sdk`。
 - **redroid container stdout 係靜音**（init 行 logcat 唔行 stdout）→ 診斷 container-logs zone 正常係 0 行。log 證據一律行 logcat（host adb）或 docker inspect。
