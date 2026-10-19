@@ -17,6 +17,8 @@
  */
 import { EventEmitter } from 'node:events';
 
+import { T2S_SETUP_FILE, TUN2SOCKS_CHECK_MARKER, TUN2SOCKS_PIN } from './redroid-service.js';
+
 let mockIdSeq = 9000;
 
 /**
@@ -288,16 +290,52 @@ export function createMockPreflight() {
 }
 
 /**
- * Mock in-container exec (Stage B tunnel provisioning): records every
- * {containerId, script} call and returns a deterministic success whose stdout
- * is a fake `ps` line (tests assert the EXACT script via `calls`).
- * opts.fail = true → exit 1 (for the failure path).
+ * Mock in-container exec (Stage B tunnel provisioning + R1 staged execution):
+ * records every {containerId, script} call and emulates the device:
+ *  - binary-check scripts (contain the TUN2SOCKS_CHECK_MARKER) → configurable
+ *    BINARY_STATE=… line (default: ready — keeps the happy path deterministic)
+ *  - stage scripts (base64 → T2S_SETUP_FILE) → success; the staged payload is
+ *    captured so the run call can emulate the INNER script's output
+ *  - run scripts (sh T2S_SETUP_FILE) → the inner script's success output
+ *    (teardown → TUNNEL_TEARDOWN_DONE; setup → the fake `ps` line the service
+ *    greps for liveness)
+ * opts.fail = true → exit 1 on every call (for the failure path).
  */
-export function createMockExec({ fail = false } = {}) {
+export function createMockExec({ fail = false, binaryCheck } = {}) {
   const calls = [];
+  let lastStagedB64 = null;
   async function exec(containerId, script) {
     calls.push({ containerId, script, at: Date.now() });
     if (fail) return { exitCode: 1, stdout: 'mock exec: forced failure', stderr: 'TUNNEL_TEARDOWN_FAILED' };
+    // R1: tun2socks binary diagnostic check
+    if (script.includes(TUN2SOCKS_CHECK_MARKER)) {
+      const bc = binaryCheck ?? { state: 'ready', version: `tun2socks-${TUN2SOCKS_PIN.version}` };
+      const lines = [`BINARY_STATE=${bc.state}`];
+      if (bc.detail) lines.push(`BINARY_DETAIL=${bc.detail}`);
+      if (bc.version) lines.push(`BINARY_VERSION=${bc.version}`);
+      return { exitCode: 0, stdout: lines.join('\n') + '\n', stderr: '' };
+    }
+    // R1: stage (base64 → file). Capture the payload for the run call.
+    const m = script.match(/printf '%s' '([A-Za-z0-9+\/=]+)' \| base64 -d/);
+    if (m) {
+      lastStagedB64 = m[1];
+      return { exitCode: 0, stdout: 'T2S_STAGED\n', stderr: '' };
+    }
+    // R1: run the staged file — emulate the inner script's success output
+    if (script.includes(T2S_SETUP_FILE)) {
+      let inner = '';
+      if (lastStagedB64) {
+        try { inner = Buffer.from(lastStagedB64, 'base64').toString('utf8'); } catch { inner = ''; }
+      }
+      if (inner.includes('TUNNEL_TEARDOWN_DONE')) {
+        return { exitCode: 0, stdout: 'TUNNEL_TEARDOWN_DONE\n', stderr: '' };
+      }
+      return {
+        exitCode: 0,
+        stdout: 'root 4444 1 0 10:00:00 ? 00:00:01 /data/local/tmp/tun2socks --device tun0 --proxy socks5://172.17.0.1:20082 --loglevel debug\n',
+        stderr: '',
+      };
+    }
     return {
       exitCode: 0,
       stdout: 'root 4444 1 0 10:00:00 ? 00:00:01 /data/local/tmp/tun2socks --device tun0 --proxy socks5://172.17.0.1:20082 --loglevel debug\n',

@@ -147,11 +147,13 @@ test('stageb proxy: tunnel scripts — verified netd sequence (table 100 + onlin
   assert.match(setup, /ip link add tun0 type tun 2>\/dev\/null \|\| true/);
   // tun2socks starts BEFORE addr/route config (it owns the device fd)
   assert.ok(setup.indexOf('tun2socks --device tun0') < setup.indexOf('ip addr add 10.8.0.1'), 't2s must start before addr add');
-  assert.match(setup, /pkill -f tun2socks 2>\/dev\/null \|\| true/);
+  // F-B (R1): bracketed + quoted pattern — combined with staged-file execution
+  // (buildT2sRunScript) this is what keeps pkill from killing the runner shell
+  assert.match(setup, /pkill -f "\[t\]un2socks" 2>\/dev\/null \|\| true/);
   assert.match(setup, /nohup \/data\/local\/tmp\/tun2socks --device tun0 --proxy socks5:\/\/172\.17\.0\.1:20082 --loglevel debug > \/data\/local\/tmp\/tun2socks\.log 2>&1 &/);
   assert.match(setup, /ps -ef \| grep \[t\]un2socks/); // bracket trick — grep must not self-match
   assert.throws(() => buildTunnelSetupScript({ gostPort: 21000 }), /gostPort/);
-  assert.match(buildTunnelTeardownScript(), /pkill -f tun2socks/);
+  assert.match(buildTunnelTeardownScript(), /pkill -f "\[t\]un2socks"/);
   assert.match(buildTunnelTeardownScript(), /ip link del tun0/);
 });
 
@@ -281,13 +283,20 @@ test('stageb proxy: device create inherits template proxy — gost up + tunnel p
   const started = redroidMock.docker.client.__calls.filter((c) => c.method === 'start');
   assert.ok(started.length >= 2, 'redroid + gost containers started');
 
-  // background tunnel: exec seam recorded the EXACT setup script; state → running
+  // background tunnel: staged-file execution (F-B/R1) — stage then run;
+  // the INNER setup script (decoded from the stage b64) keeps the exact shape
   const device2 = await waitProxyState(app, cookies.operator, 'redroid-p1', 'running');
   assert.equal(device2.proxy.gostPort, device.proxy.gostPort);
-  const tunnelCalls = redroidMock.exec.calls.filter((c) => c.script.includes('tun2socks') && c.script.includes('ip link add'));
-  assert.equal(tunnelCalls.length, 1, 'setup script executed exactly once');
-  assert.ok(tunnelCalls[0].script.includes(`socks5://172.17.0.1:${device.proxy.gostPort}`), 'setup script must point at THIS device\'s gost port');
-  assert.ok(tunnelCalls[0].script.includes('table 100 onlink'));
+  const stageCalls = redroidMock.exec.calls.filter((c) => c.script.includes('T2S_STAGED'));
+  const runCalls = redroidMock.exec.calls.filter((c) => c.script.includes('sh /data/local/tmp/.t2s-setup.sh'));
+  assert.equal(stageCalls.length, 1, 'setup staged exactly once');
+  assert.equal(runCalls.length, 1, 'staged script executed exactly once');
+  assert.ok(redroidMock.exec.calls.findIndex((c) => c.script.includes('T2S_STAGED')) <
+    redroidMock.exec.calls.findIndex((c) => c.script.includes('sh /data/local/tmp/.t2s-setup.sh')), 'stage must precede run');
+  const inner = Buffer.from(stageCalls[0].script.match(/printf '%s' '([A-Za-z0-9+\/=]+)' \| base64 -d/)[1], 'base64').toString('utf8');
+  assert.ok(inner.includes(`socks5://172.17.0.1:${device.proxy.gostPort}`), 'inner setup script must point at THIS device\'s gost port');
+  assert.ok(inner.includes('table 100 onlink'));
+  assert.ok(!runCalls[0].script.includes('tun2socks'), 'RUNNER cmdline must never contain the literal tun2socks (F-B)');
 });
 
 test('stageb proxy: device-level proxyUrl override wins over template', async (t) => {
@@ -371,19 +380,24 @@ test('stageb proxy: stop → stopped (+ teardown exec); start → re-provisioned
   await seedTemplate(app, cookies.admin, 'tpl-lc', { proxyUrl: PROXY_A });
   await app.inject({ method: 'POST', url: '/api/devices/redroid', headers: { cookie: cookies.operator }, payload: { name: 'redroid-lc1', templateName: 'tpl-lc', idempotencyKey: 'sb-k-00020' } });
   await waitProxyState(app, cookies.operator, 'redroid-lc1', 'running');
-  const setupCountBefore = redroidMock.exec.calls.filter((c) => c.script.includes('ip link add')).length;
+  const stagedInnerScripts = (calls = redroidMock.exec.calls) =>
+    calls.filter((c) => c.script.includes('T2S_STAGED'))
+      .map((c) => Buffer.from(c.script.match(/printf '%s' '([A-Za-z0-9+\/=]+)' \| base64 -d/)[1], 'base64').toString('utf8'));
+  const stagesBeforeStop = stagedInnerScripts().length;
 
   const stop = await app.inject({ method: 'POST', url: '/api/devices/redroid/redroid-lc1/stop', headers: { cookie: cookies.operator } });
   assert.equal(stop.statusCode, 200, stop.body);
   assert.equal(stop.json().device.proxy.state, 'stopped');
-  const teardownCalls = redroidMock.exec.calls.filter((c) => c.script.includes('TUNNEL_TEARDOWN_DONE'));
-  assert.equal(teardownCalls.length, 1, 'teardown script executed on stop');
+  // teardown is also staged (F-B/R1): decode the stage payloads, not the runner
+  const stagedAfterStop = stagedInnerScripts();
+  assert.equal(stagedAfterStop.length, stagesBeforeStop + 1, 'one more staged script on stop (the teardown)');
+  assert.ok(stagedAfterStop[stagedAfterStop.length - 1].includes('TUNNEL_TEARDOWN_DONE'), 'last staged script on stop is the teardown');
 
   const start = await app.inject({ method: 'POST', url: '/api/devices/redroid/redroid-lc1/start', headers: { cookie: cookies.operator } });
   assert.equal(start.statusCode, 200, start.body);
   await waitProxyState(app, cookies.operator, 'redroid-lc1', 'running');
-  const setupCountAfter = redroidMock.exec.calls.filter((c) => c.script.includes('ip link add')).length;
-  assert.equal(setupCountAfter, setupCountBefore + 1, 're-provisioned on start');
+  const stagedAfterStart = stagedInnerScripts();
+  assert.equal(stagedAfterStart.length, stagesBeforeStop + 2, 're-provisioned on start (one more staged setup)');
   // gost container is reused (idempotent — still exactly one create total)
   const gostCreates = redroidMock.docker.client.__calls.filter((c) => c.cfg?._body?.Labels?.['app.kind'] === 'redroid-gost');
   assert.equal(gostCreates.length, 1, 'gost container must be reused, not recreated');

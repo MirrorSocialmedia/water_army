@@ -91,6 +91,79 @@ export const TUN = Object.freeze({
   logFile: '/data/local/tmp/tun2socks.log',
 });
 
+/**
+ * tun2socks deployment pin (R1, 2026-10-20) — the binary is fetched +
+ * checksum-verified at wrapper-image BUILD time (see
+ * docker/redroid-matrix/tun2socks.env — that file is the shell-side single
+ * source of truth for the Dockerfile; this constant is the JS-side mirror).
+ * A unit test asserts the two stay in sync (tests/unit/redroid-t2s-pin.test.js).
+ * MIT-licensed upstream (xjasonlyu/tun2socks); static x86-64 ELF → runs in
+ * the redroid Android x86_64 userspace on an x86_64 host kernel.
+ */
+export const TUN2SOCKS_PIN = Object.freeze({
+  version: '2.7.0',
+  asset: 'tun2socks-linux-amd64.zip',
+  innerFile: 'tun2socks-linux-amd64',
+  sha256: '98d545a663b790b4a4100d0c796e1d43d82c5442efdb6e9c4d82e2e32e99c031',
+  url: 'https://github.com/xjasonlyu/tun2socks/releases/download/v2.7.0/tun2socks-linux-amd64.zip',
+  binPath: TUN.bin,
+});
+
+/** Marker comment line in the binary-check script (mock detection + versioning). */
+export const TUN2SOCKS_CHECK_MARKER = 'wa-t2scheck-v1';
+
+/** Derived asset URL — one place (no floating 'latest' possible: version is a constant). */
+export function tun2socksAssetUrl(version = TUN2SOCKS_PIN.version, asset = TUN2SOCKS_PIN.asset) {
+  return `https://github.com/xjasonlyu/tun2socks/releases/download/v${version}/${asset}`;
+}
+
+/**
+ * F-B fix (R1, 2026-10-20) — tunnel scripts are STAGED AS A FILE inside the
+ * device, then executed as `sh <file>`. Why: the exec seam runs
+ * `docker exec … sh -c '<script text>'`, so the script text sits IN THE
+ * RUNNER'S CMDLINE. The setup script contains the literal tun2socks path
+ * (nohup line), so any `pkill -f tun2socks`-style pattern — bracket trick
+ * included — also matches the runner itself → pkill SIGTERMs its own shell
+ * (pre-fix: rc=143, repro in docs/audits/repair-baseline.md §5.4; the tunnel
+ * could NEVER be provisioned by the repo code path). With the file staged,
+ * the runner cmdline is `sh /data/local/tmp/.t2s-setup.sh` — zero tun2socks
+ * literal in it — so the in-file pkill can only ever match the real daemon.
+ * (Same failure class the grep bracket trick defends against, but pkill -f
+ * has NO escape: the nohup line is itself the daemon's cmdline shape.)
+ */
+export const T2S_SETUP_FILE = '/data/local/tmp/.t2s-setup.sh';
+
+/**
+ * Stage script (pure — unit-tested): base64-decode the inner script into the
+ * device and make it 0700 (root-only: it configures routes). The b64 blob is
+ * safe in a shell single-quoted arg (charset A-Za-z0-9+/=).
+ * @param {string} innerScript buildTunnel*Script() output
+ */
+export function buildT2sStageScript(innerScript) {
+  const b64 = Buffer.from(String(innerScript), 'utf8').toString('base64');
+  return [
+    `printf '%s' '${b64}' | base64 -d > ${T2S_SETUP_FILE}`,
+    `chmod 0700 ${T2S_SETUP_FILE}`,
+    'echo T2S_STAGED',
+  ].join('\n');
+}
+
+/**
+ * Run script (pure — unit-tested): execute the staged file, capture its
+ * combined output (the exec seam reads it for the ps-based liveness check),
+ * remove the file (no residue), and propagate the inner exit code.
+ * NOTE: this text becomes the runner's cmdline — it must NEVER contain the
+ * literal 'tun2socks' (guarded by tests/unit/redroid-t2s-staging.test.js).
+ */
+export function buildT2sRunScript() {
+  return [
+    `sh ${T2S_SETUP_FILE} 2>&1`,
+    'rc=$?',
+    `rm -f ${T2S_SETUP_FILE}`,
+    'exit $rc',
+  ].join('\n');
+}
+
 /** socks5://[user:pass@]host:port — strict, no scheme drift, no spaces. */
 const PROXY_URL_RE = /^socks5:\/\/(?:([^:@\s/]+):([^:@\s/]+)@)?([a-zA-Z0-9.-]+):([1-9][0-9]{0,4})$/;
 
@@ -176,7 +249,11 @@ export function buildTunnelSetupScript({ gostPort }) {
   }
   const lines = [
     'set -e',
-    'pkill -f tun2socks 2>/dev/null || true',
+    // bracketed + quoted: this line only ever executes from the staged file
+    // (buildT2sRunScript), where the runner cmdline is clean — but the bracket
+    // also keeps the pkill process's OWN cmdline from matching (defense in
+    // depth; see F-B note above T2S_SETUP_FILE).
+    'pkill -f "[t]un2socks" 2>/dev/null || true',
     'sleep 1',
     `ip link del ${TUN.iface} 2>/dev/null || true`,
     // best-effort: RTM_NEWLINK is blocked in some Android netd states;
@@ -204,7 +281,8 @@ export function buildTunnelSetupScript({ gostPort }) {
 /** Teardown script: kill tun2socks (tun0 dies with the process) + stray tun0 fallback. */
 export function buildTunnelTeardownScript() {
   return [
-    'pkill -f tun2socks 2>/dev/null || true',
+    // bracketed + quoted (F-B, R1 — same rule as the setup script)
+    'pkill -f "[t]un2socks" 2>/dev/null || true',
     'sleep 1',
     `ip link del ${TUN.iface} 2>/dev/null || true`,
     'echo TUNNEL_TEARDOWN_DONE',
@@ -644,9 +722,15 @@ export function createRedroidService({
       await setProxyState(row.id, 'error');
       throw fail('REDROID_TUNNEL_BOOT_TIMEOUT', 504, `Device '${row.name}' did not report boot_completed within ${Math.round(bootTimeoutMs / 1000)}s — tunnel not provisioned`);
     }
-    // 3) verified setup script
-    const script = buildTunnelSetupScript({ gostPort: row.gostPort });
-    const r = await execInContainer(row.containerId, script);
+    // 3) stage the verified setup script into the device, then run it
+    //    (F-B, R1: the runner cmdline must not contain the script text —
+    //    see T2S_SETUP_FILE note. Two execs: stage → run.)
+    const stage = await execInContainer(row.containerId, buildT2sStageScript(buildTunnelSetupScript({ gostPort: row.gostPort })));
+    if (stage.exitCode !== 0 || !/T2S_STAGED/.test(stage.stdout)) {
+      await setProxyState(row.id, 'error');
+      throw fail('REDROID_TUNNEL_PROVISION_FAILED', 500, `tunnel script staging failed on '${row.name}': exit=${stage.exitCode} ${String(stage.stdout ?? stage.stderr).trim().slice(0, 200)}`);
+    }
+    const r = await execInContainer(row.containerId, buildT2sRunScript());
     if (r.exitCode === 0 && /tun2socks/.test(r.stdout)) {
       await setProxyState(row.id, 'running');
       log.info({ device: row.name, gostPort: row.gostPort }, 'redroid proxy: tunnel up (tun2socks verified running)');
@@ -656,12 +740,16 @@ export function createRedroidService({
     throw fail('REDROID_TUNNEL_PROVISION_FAILED', 500, `tunnel setup failed on '${row.name}': exit=${r.exitCode} ${String(r.stdout ?? r.stderr).trim().slice(0, 200)}`);
   }
 
-  /** Kill tun2socks inside the device (best-effort; idempotent). */
+  /** Kill tun2socks inside the device (best-effort; idempotent). F-B/R1: staged-file execution (same two-exec pattern as provisioning). */
   async function teardownTunnel(row) {
     if (!row.gostPort) return { done: false, reason: 'no-proxy' };
     if (!row.containerId || row.containerState !== 'running') return { done: false, reason: 'container-not-running' };
     try {
-      const r = await execInContainer(row.containerId, buildTunnelTeardownScript());
+      const stage = await execInContainer(row.containerId, buildT2sStageScript(buildTunnelTeardownScript()));
+      if (stage.exitCode !== 0) {
+        return { done: false, error: `staging failed: exit=${stage.exitCode} ${String(stage.stdout ?? stage.stderr).trim().slice(0, 160)}` };
+      }
+      const r = await execInContainer(row.containerId, buildT2sRunScript());
       const ok = r.exitCode === 0;
       if (ok) await setProxyState(row.id, 'stopped');
       return { done: ok, error: ok ? undefined : String(r.stdout ?? r.stderr).trim().slice(0, 200) };
