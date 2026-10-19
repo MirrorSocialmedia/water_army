@@ -274,7 +274,10 @@ stat -c '%U:%G %a' /var/lib/water-army         # node:node 750
 ### 10.1 架構（per-device 隔離）
 
 - 每部有 proxy 嘅 device 配一個 **gost container**：`redroid-matrix-b-gost-<devName>`，image = `gogost/gost@sha256:f7a958c4...b7580`（digest pin，`GOST_IMAGE` 常量），bind **172.17.0.1:<20080–20179>**（DB unique，唔係 127.0.0.1 都唔係公网），`Cmd: [start, -L, socks5://:1080, -F, <proxyUrl>]`、`Env: []`。
-- device 內 **tun2socks v2.7.0**（bake 入 wrapper image，`/data/local/tmp/tun2socks`，sha256 `98d545a6...c031`）起 `tun0`（10.8.0.1 peer 10.8.0.2），全部出域流量（DNS UDP + TCP + UDP）經 tun0 → SOCKS5 → gost → 上游 proxy。
+- device 內 **tun2socks v2.7.0** 喺 `/data/local/tmp/tun2socks`（0755）起 `tun0`（10.8.0.1 peer 10.8.0.2），全部出域流量（DNS UDP + TCP + UDP）經 tun0 → SOCKS5 → gost → 上游 proxy。
+  - **binary 部署契約（R1, 2026-10-20）**：binary 唔係手動 adb push、唔係 host 檔 — wrapper image 嘅 **builder stage** 由 pin（`docker/redroid-matrix/tun2socks.env`：v2.7.0 + inner sha256 `98d545a6...c031`，**唔浮動 latest**）經 `fetch-tun2socks.sh` 下載 + 驗證（retry ≤3、sha256、ELF 64-bit x86-64）+ stage 0755，再 COPY 入 final stage。checksum 錯 / 格式錯 / 下載失敗 = **build 失敗**（壞 binary 出唔到 fleet）。build context 零本機未提交檔 → **clean clone 可重現**（R1 實測：fresh build → image 內 binary mode 0755、sha256 一致、device 內 `--version` rc=0）。
+  - **pre-provision binary check（fail-closed）**：每次 tunnel provision 前，service 喺 device 內跑 read-only check（存在 → 可執行 → ELF magic → `--version` canary），machine-readable：`BINARY_STATE=missing|ready|invalid|error` + `BINARY_VERSION` / `BINARY_DETAIL`（rc 0/3/4）。missing/invalid → apiCode `BINARY_MISSING` / `BINARY_INVALID`（seam 失敗 = `BINARY_CHECK_ERROR`）+ `proxyState=error`，**device 絕唔會入 proxy `running`**；診斷持久化 + view 暴露 `proxy.binaryState` / `proxy.binaryVersion`（**零憑證**）。
+  - **F-B（R1 P0 修復）**：tunnel script 先 **stage 做 file**（base64 → `/data/local/tmp/.t2s-setup.sh` 0700 → `sh <file>`）先執行 — exec seam 嘅 runner cmdline 唔含 script text，in-file `pkill -f "[t]un2socks"` 只會匹配真 daemon。舊 code 嘅 inline script + `pkill -f tun2socks` = **自殺式**（runner 自身被殺 rc=143，隧道永遠 provision 唔到；重現記錄 `docs/audits/repair-baseline.md` §5.4）。
 - 代理 URL 加密存 DB（`proxyUrlEncrypted`，`v1:` 前綴）；API view 只暴露 `hasProxyUrl` / `gostPort` / `proxyState`（`off|provisioning|running|stopped|error`），**永遠唔輸出明文**。
 - tunnel 係 **背景 provision**（等 `sys.boot_completed`，5s poll，10min timeout）；gost 係 **同步**（create 時起，失敗 = rollback 連 device 一齊）。
 
@@ -295,6 +298,7 @@ sg docker -c "docker exec <dev> sh -c 'ip addr show tun0; ip route show table 10
 | 症狀 | 診斷 | 處理 |
 |------|------|------|
 | `proxyState=error`，create 失敗 | `docker inspect redroid-matrix-b-gost-<dev>` / api log | 端口撞（DB unique 已防）→ 重試（會重分配）；image pull 失敗 → 檢查 host 網絡 |
+| `proxyState=error` + view `proxy.binaryState=missing|invalid` | view 已有 `binaryState` + `binaryVersion`；device 內核 `/data/local/tmp/tun2socks`（存在？0755？`--version` 得唔得？） | image 唔係 R1 契約 build 或 binary 被改壞 → 用 `docker/redroid-matrix/Dockerfile` 重新 build wrapper image（pin 唔變）再重建 device。臨時手動補 binary 唔鼓勵 — 部署契約 = image 內 binary（§10.1） |
 | `proxyState=running` 但 device 冇出域 | device 內 `docker exec <dev> sh -c 'tail -20 /data/local/tmp/tun2socks.log'` | t2s 死咗 → 重跑 start action（會重 provision）；log 見 `connection reset by peer`（dial 172.17.0.1:<gostPort>）→ **table 100 缺 gateway exception**（見 10.5 #2）— 重跑 provision script 會重建 |
 | t2s log 見 `TUNSETIFF` 錯 | `ip link show` 睇 tun0 有冇殘留 | provision script 本身冪等（pkill + del 先）→ 直接重跑 start |
 | tunnel 死咗之後流量「似乎 OK」 | `ip route get 8.8.8.8` | **fail-open 行為**：tun0 消失 → 路由影消失 → 直連漏出。**安全上唔等於阻断**；監控 proxyState +（跟進項）fail-closed monitor（iptables 兜底，另開單） |
@@ -304,7 +308,8 @@ sg docker -c "docker exec <dev> sh -c 'ip addr show tun0; ip route show table 10
 ```bash
 # 经 api：DELETE device（teardownTunnel + teardownGost + container remove 順序已實現）
 # 手動（api 死咗先使）：
-sg docker -c "docker exec <dev> pkill -f tun2socks"        # tun0 隨 process 死
+# F-B（R1）：pkill 要 bracket pattern — 直書 `sh -c 'pkill -f tun2socks'` 會連 runner 自己一齊殺（rc=143）
+sg docker -c "docker exec <dev> sh -c 'pkill -f \"[t]un2socks\"'"   # tun0 隨 process 死
 sg docker -c "docker rm -f redroid-matrix-b-gost-<devName>"
 ```
 

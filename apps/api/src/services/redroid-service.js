@@ -58,11 +58,20 @@ const fail = (code, status, message, details) => new RedroidServiceError({ code,
 //    20080–20179, DB-unique). gost forwards to the fleet/proxy upstream
 //    (socks5://[user:pass@]host:port).
 //  - inside the redroid device: tun0 (10.8.0.1 peer 10.8.0.2/32) +
-//    tun2socks v2.7.0 baked into the wrapper image pointing at
+//    tun2socks v2.7.0 at /data/local/tmp/tun2socks pointing at
 //    socks5://172.17.0.1:<gostPort>; Android netd's table 100 default route
 //    (via 10.8.0.2 onlink) shadows the eth0 default → all device egress
 //    (DNS UDP verified end-to-end; see progress doc for the known
 //    gVisor TCP-over-TUN payload limitation) crosses the proxy.
+//  - R1 (2026-10-20) binary contract: the tun2socks binary is a VERIFIED
+//    build artifact of the wrapper image (pinned fetch + sha256/ELF check in
+//    docker/redroid-matrix, reproducible from a clean clone) — not a manual
+//    push. Every provision run FIRST executes a read-only in-device check
+//    (checkTun2socksBinary: present → executable → ELF → --version canary)
+//    and FAILS CLOSED (BINARY_MISSING/BINARY_INVALID/BINARY_CHECK_ERROR,
+//    proxyState=error, device never reaches 'running'); the diagnosis is
+//    persisted (binary_state/binary_version) and exposed in the device view
+//    without ever carrying credentials.
 //  - proxy URL (with credentials) is ENCRYPTED at rest (AES-256-GCM,
 //    provider-key pattern) and NEVER appears in API responses or audit
 //    details — views expose `hasProxyUrl` / masked host only.

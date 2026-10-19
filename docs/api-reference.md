@@ -107,7 +107,7 @@ worker 喺 terminal scheduled run（succeeded/failed/timed_out/skipped，**包�
 | DELETE | `/redroid/templates/:id` | **admin** | — | 204；409 `IN_USE`；404 |
 | POST | `/devices/redroid` | operator+ | body `{name, templateName, idempotencyKey, proxyUrl?}` — **body 冇任何 Docker 欄位**（注入 = 400） | 201 `{device, replay, startError?, preflight?}`（回放 = 200）；404 template/disabled；409 name；port 用盡 = 503；`proxyUrl` = device 級出口 override（省略 = 跟 template；加密落庫，view 只出 `hasUrl/gostPort/proxyState`，永不回傳 URL） |
 | GET | `/devices/redroid` | viewer+ | query `template`（過濾） | 200 `{devices}` |
-| GET | `/devices/redroid/:id` | viewer+ | — | 200 `{device}`（pinned image/`127.0.0.1:<port>`/容器狀態/ADB 狀態/解析度/GPU 健康/`proxy`（`configured/gostPort/gostBind/state/hasUrl` — URL 永不回傳））；404 |
+| GET | `/devices/redroid/:id` | viewer+ | — | 200 `{device}`（pinned image/`127.0.0.1:<port>`/容器狀態/ADB 狀態/解析度/GPU 健康/`proxy`（`configured/gostPort/gostBind/state/hasUrl/binaryState/binaryVersion` — URL 永不回傳；`binaryState` = `missing|ready|invalid|error|null`，R1 pre-provision check 診斷，fail-closed：missing/invalid 時 proxy 絕非 `running`））；404 |
 | POST | `/devices/redroid/:id/start` `<stop>` `<restart>` | operator+ | — | 200 `{device, idempotent, action}`（P2 action protocol；container 消失 = `missing` + 409 誠實）；404 |
 | POST | `/devices/redroid/:id/refresh` | operator+ | — | 200 `{device, adbNote}`（重查 daemon + ADB 狀態，唔重跑全套診斷） |
 | POST | `/devices/redroid/:id/diagnostics` | operator+ | — | 200 **4 個獨立結果區**（kernel / container-logs / adb-connectivity / gpu-verification），每區 `executed` + `status`（未執行 = `未驗證`，從無假 pass） |
