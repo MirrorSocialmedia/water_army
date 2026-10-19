@@ -125,6 +125,8 @@ export function makeFakeDb({ users = [] } = {}) {
       if (where.templateId && d.templateId !== where.templateId) return false;
       if (where.containerState !== undefined && d.containerState !== where.containerState) return false;
       if (where.adbPort !== undefined && d.adbPort !== where.adbPort) return false;
+      if (where.gostPort !== undefined && where.gostPort !== null && d.gostPort !== where.gostPort) return false;
+      if (where.gostPort === null && d.gostPort !== null) return false;
       return true;
     });
   }
@@ -604,6 +606,8 @@ export function makeFakeDb({ users = [] } = {}) {
           privileged: data.privileged ?? false,
           privilegedReason: data.privilegedReason ?? null,
           isEnabled: data.isEnabled ?? true,
+          // Stage B: encrypted egress proxy (null = no fleet proxy)
+          proxyUrlEncrypted: data.proxyUrlEncrypted ?? null,
           createdAt: ts,
           updatedAt: ts,
         };
@@ -662,6 +666,9 @@ export function makeFakeDb({ users = [] } = {}) {
         if (data.adbPort !== undefined && data.adbPort !== null && [...deviceRows.values()].some((d) => d.adbPort === data.adbPort)) {
           throw Object.assign(new Error(`Unique constraint failed on the fields: (adbPort)`), { code: 'P2002' });
         }
+        if (data.gostPort !== undefined && data.gostPort !== null && [...deviceRows.values()].some((d) => d.gostPort === data.gostPort)) {
+          throw Object.assign(new Error(`Unique constraint failed on the fields: (gostPort)`), { code: 'P2002' });
+        }
         const ts = now();
         const row = {
           id: data.id ?? randomUUID(),
@@ -682,6 +689,10 @@ export function makeFakeDb({ users = [] } = {}) {
           adbState: data.adbState ?? 'unknown',
           gpuStatus: data.gpuStatus ?? 'unknown',
           lastDiagnosedAt: data.lastDiagnosedAt ?? null,
+          // Stage B: per-device proxy binding (null trio = no proxy)
+          gostPort: data.gostPort ?? null,
+          proxyUrlEncrypted: data.proxyUrlEncrypted ?? null,
+          proxyState: data.proxyState ?? 'off',
           createdAt: ts,
           updatedAt: ts,
         };
@@ -693,6 +704,9 @@ export function makeFakeDb({ users = [] } = {}) {
         if (!row) throw Object.assign(new Error('device not found'), { code: 'P2025' });
         if (data.adbPort !== undefined && data.adbPort !== null && [...deviceRows.values()].some((d) => d.id !== row.id && d.adbPort === data.adbPort)) {
           throw Object.assign(new Error(`Unique constraint failed on the fields: (adbPort)`), { code: 'P2002' });
+        }
+        if (data.gostPort !== undefined && data.gostPort !== null && [...deviceRows.values()].some((d) => d.id !== row.id && d.gostPort === data.gostPort)) {
+          throw Object.assign(new Error(`Unique constraint failed on the fields: (gostPort)`), { code: 'P2002' });
         }
         const clean = Object.fromEntries(Object.entries(data).filter(([, v]) => v !== undefined));
         Object.assign(row, clean, { updatedAt: now() });

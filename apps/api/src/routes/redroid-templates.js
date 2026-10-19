@@ -28,6 +28,9 @@ const TEMPLATE_BODY = {
     privileged: { type: 'boolean', default: false },
     privilegedReason: { type: 'string', minLength: 10, maxLength: 200 },
     isEnabled: { type: 'boolean', default: true },
+    // Stage B: optional fleet egress proxy. socks5://[user:pass@]host:port only.
+    // Encrypted at rest by the service; the response never echoes the URL.
+    proxyUrl: { type: ['string', 'null'], maxLength: 512 },
   },
 };
 

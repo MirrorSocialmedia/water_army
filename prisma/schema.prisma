@@ -243,8 +243,13 @@ model RedroidTemplate {
   privileged       Boolean  @default(false)
   privilegedReason String?  @map("privileged_reason") // required when privileged=true — the explicit label (MD §9.2)
   isEnabled        Boolean  @default(true) @map("is_enabled")
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
+  // Stage B (2026-10-19): optional fleet egress proxy, socks5://[user:pass@]host:port.
+  // Stored ENCRYPTED (AES-256-GCM via @water-army/shared, same pattern as provider
+  // api keys) — plaintext never touches the DB, API responses, or audit details.
+  // Devices snapshot/override this at creation.
+  proxyUrlEncrypted String? @map("proxy_url_encrypted")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
 
   devices Device[]
 
@@ -274,6 +279,14 @@ model Device {
   containerState  String    @default("unknown") @map("container_state") // created|running|exited|paused|dead|missing|unknown
   adbState        String    @default("unknown") @map("adb_state") // online|offline|unknown
   gpuStatus       String    @default("unknown") @map("gpu_status") // unknown|unverified|software|verified — 未驗證 = 誠信核心
+  // Stage B (2026-10-19): per-device egress proxy binding.
+  // proxyUrlEncrypted = device-level override (null → fall back to template). Encrypted at rest.
+  // gostPort = this device's dedicated gost container's host port (172.17.0.1, range
+  // 20080–20179, DB-unique). null = no proxy configured.
+  // proxyState machine: off → provisioning → running | stopped | error.
+  proxyUrlEncrypted String? @map("proxy_url_encrypted")
+  gostPort          Int?    @unique @map("gost_port")
+  proxyState        String  @default("off") @map("proxy_state") // off|provisioning|running|stopped|error
   lastDiagnosedAt DateTime? @map("last_diagnosed_at")
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")

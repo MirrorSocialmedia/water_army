@@ -22,7 +22,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { DOCKER_ERROR } from '@water-army/shared';
+import { DOCKER_ERROR, encryptSecret, decryptSecret, resolveProviderKey } from '@water-army/shared';
 
 import { DockerServiceError } from './docker-service.js';
 import { checkPortAvailable, } from './preflight.js';
@@ -48,6 +48,141 @@ export class RedroidServiceError extends Error {
 }
 
 const fail = (code, status, message, details) => new RedroidServiceError({ code, status, message, details });
+
+// ---------------------------------------------------------------------------
+// Stage B (2026-10-19): per-device egress proxy (gost + tun2socks)
+//
+// Architecture (live-spike-verified, see logs/redroid-matrix-B-progress.md):
+//  - one gost container PER device: `redroid-matrix-b-gost-<devName>`,
+//    bridge network, publishes 1080/tcp on 172.17.0.1:<gostPort> (range
+//    20080–20179, DB-unique). gost forwards to the fleet/proxy upstream
+//    (socks5://[user:pass@]host:port).
+//  - inside the redroid device: tun0 (10.8.0.1 peer 10.8.0.2/32) +
+//    tun2socks v2.7.0 baked into the wrapper image pointing at
+//    socks5://172.17.0.1:<gostPort>; Android netd's table 100 default route
+//    (via 10.8.0.2 onlink) shadows the eth0 default → all device egress
+//    (DNS UDP verified end-to-end; see progress doc for the known
+//    gVisor TCP-over-TUN payload limitation) crosses the proxy.
+//  - proxy URL (with credentials) is ENCRYPTED at rest (AES-256-GCM,
+//    provider-key pattern) and NEVER appears in API responses or audit
+//    details — views expose `hasProxyUrl` / masked host only.
+// ---------------------------------------------------------------------------
+
+/** gogost/gost pinned BY DIGEST (Docker Hub 3.3.0; `docker pull` verified). */
+export const GOST_IMAGE = 'gogost/gost@sha256:f7a958c451928fbe1b99046d25bd0c9bf42019d4c60a82200f50dc8e617b7580';
+/** In-container listen port (fixed; the per-device variable is the host port). */
+export const GOST_LISTEN_PORT = 1080;
+/**
+ * Host bind for gost ports: the docker bridge gateway IP — reachable from
+ * every bridge-network device (spike-verified), NOT exposed on the public
+ * interfaces. Never client input.
+ */
+export const GOST_HOST_BIND = '172.17.0.1';
+/** Dedicated (non-ADB) port range for per-device gost listeners. */
+export const GOST_PORT_RANGE = Object.freeze({ start: 20080, end: 20179 });
+/** proxyState machine: off → provisioning → running | stopped | error. */
+export const PROXY_STATES = Object.freeze(['off', 'provisioning', 'running', 'stopped', 'error']);
+/** TUN constants inside the device (spike-verified addresses). */
+export const TUN = Object.freeze({
+  iface: 'tun0',
+  localIp: '10.8.0.1',
+  peerIp: '10.8.0.2',
+  bin: '/data/local/tmp/tun2socks',
+  logFile: '/data/local/tmp/tun2socks.log',
+});
+
+/** socks5://[user:pass@]host:port — strict, no scheme drift, no spaces. */
+const PROXY_URL_RE = /^socks5:\/\/(?:([^:@\s/]+):([^:@\s/]+)@)?([a-zA-Z0-9.-]+):([1-9][0-9]{0,4})$/;
+
+/**
+ * Parse a socks5 proxy URL. Returns {scheme,user,pass,host,port,raw} or
+ * null (never throws — callers decide the error shape).
+ */
+export function parseProxyUrl(url) {
+  const s = String(url ?? '').trim();
+  const m = PROXY_URL_RE.exec(s);
+  if (!m) return null;
+  const port = Number(m[4]);
+  if (port > 65535) return null;
+  return { scheme: 'socks5', user: m[1] ?? null, pass: m[2] ?? null, host: m[3], port, raw: s };
+}
+
+/** Validate a proxy URL; throws RedroidServiceError (400) when malformed. */
+export function validateProxyUrl(url) {
+  const p = parseProxyUrl(url);
+  if (!p) throw fail('VALIDATION_ERROR', 400, "proxyUrl must look like socks5://[user:pass@]host:port (socks5 only, no spaces)");
+  return p;
+}
+
+/** Deterministic gost container name — the name IS the binding (no extra DB column). */
+export function gostContainerName(deviceName) {
+  return `redroid-matrix-b-gost-${deviceName}`;
+}
+
+/**
+ * Build the gost container create-body (pure — unit-testable, no docker).
+ * Security: the upstream URL (with credentials) lives ONLY in Cmd; Env is
+ * deliberately empty (the docker host is the trust boundary — root there
+ * can already read every container's filesystem).
+ */
+export function buildGostContainerBody({ deviceName, gostPort, proxyUrl }) {
+  const p = parseProxyUrl(proxyUrl);
+  if (!p) throw fail('VALIDATION_ERROR', 400, 'proxyUrl is malformed (buildGostContainerBody)');
+  if (!Number.isInteger(gostPort) || gostPort < GOST_PORT_RANGE.start || gostPort > GOST_PORT_RANGE.end) {
+    throw fail('VALIDATION_ERROR', 400, `gostPort must be an integer in ${GOST_PORT_RANGE.start}-${GOST_PORT_RANGE.end}`);
+  }
+  return {
+    Image: GOST_IMAGE,
+    ExposedPorts: { [`${GOST_LISTEN_PORT}/tcp`]: {} },
+    Cmd: ['start', '-L', `socks5://:${GOST_LISTEN_PORT}`, '-F', p.raw],
+    Env: [],
+    Labels: {
+      'app.managed': 'true',
+      'app.kind': 'redroid-gost',
+      'redroid.device.name': deviceName,
+    },
+    HostConfig: {
+      NetworkMode: 'bridge',
+      PortBindings: { [`${GOST_LISTEN_PORT}/tcp`]: [{ HostIP: GOST_HOST_BIND, HostPort: String(gostPort) }] },
+    },
+  };
+}
+
+/**
+ * The in-device tunnel setup script (pure — exact sequence verified on the
+ * live spike; netd owns table 100, `onlink` is required because 10.8.0.2
+ * is not resolvable inside table 100). Idempotent: re-runnable while the
+ * device is up (deletes tun0 first).
+ */
+export function buildTunnelSetupScript({ gostPort }) {
+  if (!Number.isInteger(gostPort) || gostPort < GOST_PORT_RANGE.start || gostPort > GOST_PORT_RANGE.end) {
+    throw fail('VALIDATION_ERROR', 400, `gostPort must be an integer in ${GOST_PORT_RANGE.start}-${GOST_PORT_RANGE.end}`);
+  }
+  const lines = [
+    'set -e',
+    `ip link del ${TUN.iface} 2>/dev/null || true`,
+    `ip link add ${TUN.iface} type tun`,
+    `ip addr add ${TUN.localIp} peer ${TUN.peerIp}/32 dev ${TUN.iface}`,
+    `ip link set ${TUN.iface} up`,
+    `ip route add default via ${TUN.peerIp} dev ${TUN.iface} table 100 onlink`,
+    'pkill -f tun2socks 2>/dev/null || true',
+    `nohup ${TUN.bin} --device ${TUN.iface} --proxy socks5://${GOST_HOST_BIND}:${gostPort} --loglevel debug > ${TUN.logFile} 2>&1 &`,
+    'sleep 2',
+    // bracket trick: grep must not match its own cmdline
+    'ps -ef | grep [t]un2socks || { echo TUN2SOCKS_NOT_RUNNING; exit 1; }',
+  ];
+  return lines.join('\n');
+}
+
+/** Teardown script: kill tun2socks (tun0 dies with the process) + stray tun0 fallback. */
+export function buildTunnelTeardownScript() {
+  return [
+    'pkill -f tun2socks 2>/dev/null || true',
+    'sleep 1',
+    `ip link del ${TUN.iface} 2>/dev/null || true`,
+    'echo TUNNEL_TEARDOWN_DONE',
+  ].join('\n');
+}
 
 // ---------------------------------------------------------------------------
 // Validation (exported for unit tests)
@@ -103,6 +238,16 @@ export function validateRedroidTemplate(t) {
     problems.push('privileged=true requires privilegedReason (10-200 chars) — the explicit label (MD §9.2)');
   }
 
+  // Stage B: optional fleet egress proxy (validated URL, stored encrypted by the service).
+  let proxyUrl = null;
+  if (t?.proxyUrl !== undefined && t.proxyUrl !== null) {
+    if (typeof t.proxyUrl !== 'string' || parseProxyUrl(t.proxyUrl) === null) {
+      problems.push('proxyUrl must look like socks5://[user:pass@]host:port (socks5 only, no spaces)');
+    } else {
+      proxyUrl = String(t.proxyUrl).trim();
+    }
+  }
+
   if (problems.length) throw fail('VALIDATION_ERROR', 400, problems.join('; '));
 
   return {
@@ -117,6 +262,7 @@ export function validateRedroidTemplate(t) {
     privileged,
     privilegedReason: privileged ? privilegedReason : null,
     isEnabled: t?.isEnabled === undefined ? true : Boolean(t.isEnabled),
+    proxyUrl, // plaintext ONLY here — the service encrypts before any DB/API touch
   };
 }
 
@@ -159,6 +305,10 @@ export function createRedroidService({
   audit = async () => {},
   adb,
   preflight,
+  // Stage B: in-container exec seam. Real path = dockerode exec (built lazily
+  // below); mock mode injects a recorder so tests assert the EXACT tunnel
+  // scripts without a daemon. Returns {exitCode, stdout, stderr}.
+  exec: injectedExec,
 } = {}) {
   const adbEngine = adb ?? createAdbWhitelist({
     adbBinary: config?.redroidAdbBinary,
@@ -168,6 +318,52 @@ export function createRedroidService({
     logcatTailDefault: config?.redroidLogcatTailDefault,
     log,
   });
+
+  /**
+   * Run a shell script inside a container (Stage B tunnel provisioning).
+   * Single-purpose: the ONLY scripts that pass through are the exported,
+   * unit-tested buildTunnel*Script() outputs — no arbitrary-shell endpoint
+   * exists (same zero-arbitrary-shell rule as the ADB whitelist).
+   */
+  async function execInContainer(containerId, script, { timeoutMs = 120_000 } = {}) {
+    if (injectedExec) return injectedExec(containerId, script, { timeoutMs });
+    const client = requireClient();
+    const dockerExec = await client.getContainer(containerId).exec({
+      Cmd: ['sh', '-c', script],
+      AttachStdout: true,
+      AttachStderr: true,
+    });
+    const chunksOut = [];
+    const chunksErr = [];
+    const stream = await dockerExec.start({ hijack: false, stream: true });
+    stream.on('data', (d) => chunksOut.push(d));
+    // stream mode: stderr is multiplexed on the same stream; dockerode
+    // exposes it via the 'stderr' event when Demux is requested — we don't
+    // demux, so collect what we get and rely on the exit code + stdout.
+    const exited = await new Promise((resolve) => {
+      const timer = setTimeout(() => resolve('timeout'), timeoutMs);
+      stream.on('end', () => { clearTimeout(timer); resolve('end'); });
+      stream.on('close', () => { clearTimeout(timer); resolve('close'); });
+      stream.on('error', () => { clearTimeout(timer); resolve('error'); });
+    });
+    let exitCode = 1;
+    try {
+      const info = await dockerExec.inspect();
+      exitCode = info?.ExitCode ?? 1;
+    } catch { /* inspect failed — treat as failure */ }
+    return {
+      exitCode: exited === 'timeout' ? 124 : exitCode,
+      stdout: Buffer.concat(chunksOut).toString('utf8').slice(0, 65536),
+      stderr: Buffer.concat(chunksErr).toString('utf8').slice(0, 65536),
+    };
+  }
+
+  function gostRange() {
+    return {
+      start: config?.redroidGostRangeStart ?? GOST_PORT_RANGE.start,
+      end: config?.redroidGostRangeEnd ?? GOST_PORT_RANGE.end,
+    };
+  }
 
   const createIdempotency = new Map(); // key → {state, at, result?}
 
@@ -198,9 +394,14 @@ export function createRedroidService({
    */
   async function createTemplate(input, { actorUserId, requestId, ip } = {}) {
     const t = validateRedroidTemplate(input);
+    // Stage B encryption boundary: plaintext proxyUrl (validated above) → ciphertext for the DB.
+    let proxyUrlEncrypted = null;
+    if (t.proxyUrl) {
+      proxyUrlEncrypted = encryptSecret(t.proxyUrl, proxyKey());
+    }
     let row;
     try {
-      row = await db.redroidTemplate.create({ data: t });
+      row = await db.redroidTemplate.create({ data: { ...t, proxyUrl: undefined, proxyUrlEncrypted } });
     } catch (err) {
       if (err?.code === 'P2002') throw fail('REDROID_TEMPLATE_NAME_TAKEN', 409, `Template name '${t.name}' already exists`);
       throw err;
@@ -213,7 +414,7 @@ export function createRedroidService({
       requestId: requestId ?? null,
       ip: ip ?? null,
       status: 'success',
-      details: { name: t.name, image: t.image, gpuMode: t.gpuMode, privileged: t.privileged },
+      details: { name: t.name, image: t.image, gpuMode: t.gpuMode, privileged: t.privileged, proxySet: Boolean(t.proxyUrl) },
     });
     return publicTemplate(row);
   }
@@ -221,6 +422,17 @@ export function createRedroidService({
   async function updateTemplate(id, patch, { actorUserId, requestId, ip } = {}) {
     const current = await db.redroidTemplate.findUnique({ where: { id } });
     if (!current) throw fail('REDROID_TEMPLATE_NOT_FOUND', 404, `Template '${id}' not found`);
+    // Stage B: proxy is handled OUTSIDE the plain-field merge (encryption boundary).
+    //   undefined → keep current | null → clear | string → validate + encrypt
+    let proxyUrlEncrypted;
+    if (patch.proxyUrl === undefined) {
+      proxyUrlEncrypted = current.proxyUrlEncrypted ?? null;
+    } else if (patch.proxyUrl === null) {
+      proxyUrlEncrypted = null;
+    } else {
+      const p = validateProxyUrl(patch.proxyUrl); // 400 when malformed
+      proxyUrlEncrypted = encryptSecret(p.raw, proxyKey());
+    }
     const merged = validateRedroidTemplate({
       name: patch.name ?? current.name,
       image: patch.image ?? current.image,
@@ -236,7 +448,7 @@ export function createRedroidService({
     });
     let row;
     try {
-      row = await db.redroidTemplate.update({ where: { id }, data: merged });
+      row = await db.redroidTemplate.update({ where: { id }, data: { ...merged, proxyUrl: undefined, proxyUrlEncrypted } });
     } catch (err) {
       if (err?.code === 'P2002') throw fail('REDROID_TEMPLATE_NAME_TAKEN', 409, `Template name '${merged.name}' already exists`);
       throw err;
@@ -249,7 +461,7 @@ export function createRedroidService({
       requestId: requestId ?? null,
       ip: ip ?? null,
       status: 'success',
-      details: { name: row.name, changed: Object.keys(patch) },
+      details: { name: row.name, changed: Object.keys(patch), proxyChanged: patch.proxyUrl !== undefined },
     });
     return publicTemplate(row);
   }
@@ -297,6 +509,160 @@ export function createRedroidService({
     throw fail('REDROID_PORT_UNAVAILABLE', 503, `No free ADB port in ${start}-${end} (all in use or occupied on 127.0.0.1)`);
   }
 
+  // ---- Stage B: proxy (gost + tun2socks) lifecycle --------------------------
+
+  /**
+   * Allocate a unique gost host port in the dedicated range (DB-unique +
+   * 127.0.0.1 bind probe as a conservative collision screen — the real bind
+   * is 172.17.0.1; a 0.0.0.0 listener shows up as occupied, a 127.0.0.1-only
+   * listener does not and cannot conflict with 172.17.0.1).
+   */
+  async function allocateGostPort({ excludeDeviceId } = {}) {
+    const { start, end } = gostRange();
+    for (let port = start; port <= end; port++) {
+      const taken = await db.device.findFirst({
+        where: { gostPort: port, ...(excludeDeviceId ? { id: { not: excludeDeviceId } } : {}) },
+        select: { id: true },
+      });
+      if (taken) continue;
+      const state = await checkPortAvailable(port, { timeoutMs: 1500 });
+      if (state === 'free') return port;
+      if (state === 'unknown') continue; // probe inconclusive — try next
+    }
+    throw fail('REDROID_GOST_PORT_UNAVAILABLE', 503, `No free gost port in ${start}-${end} (all allocated or occupied)`);
+  }
+
+  /** Set proxyState (best-effort — never blocks the main lifecycle). */
+  async function setProxyState(id, state) {
+    await db.device.update({ where: { id }, data: { proxyState: state } }).catch((err) => {
+      log.warn({ deviceId: id, state, error: err?.message }, 'redroid proxy: setProxyState failed');
+    });
+  }
+
+  /**
+   * Create+start the device's gost container (idempotent — an existing
+   * container with the deterministic name is reused, e.g. after an API
+   * restart). Called from createDevice / start-action while the device
+   * container is running.
+   */
+  async function provisionGost(row) {
+    const client = requireClient();
+    const name = gostContainerName(row.name);
+    try {
+      const existing = await client.getContainer(name).inspect();
+      return { containerId: existing.Id, reused: true };
+    } catch { /* not present — create below */ }
+    const body = buildGostContainerBody({ deviceName: row.name, gostPort: row.gostPort, proxyUrl: row._proxyUrlPlaintext });
+    let created;
+    try {
+      created = await client.createContainer({ _query: { name }, _body: body });
+    } catch (err) {
+      const msg = String(err?.message ?? err);
+      if (/port is already allocated|address already in use/i.test(msg)) {
+        throw fail('REDROID_GOST_PORT_IN_USE', 502, `gost host port ${row.gostPort} conflicted at engine create time`);
+      }
+      throw toDockerServiceError(err, 'redroid.gost.create', name);
+    }
+    const containerId = typeof created?.id === 'string' ? created.id : created?.Id;
+    if (!containerId || containerId.length < 12) {
+      throw fail(DOCKER_ERROR.GENERIC, 502, 'gost container create returned no container id');
+    }
+    await client.getContainer(containerId).start();
+    return { containerId, reused: false };
+  }
+
+  /** Stop+remove the device's gost container (best-effort; idempotent). */
+  async function teardownGost(row) {
+    if (!row.gostPort) return { removed: false, reason: 'no-gost' };
+    const client = requireClient();
+    const name = gostContainerName(row.name);
+    try {
+      await client.getContainer(name).stop().catch(() => {});
+    } catch { /* already gone */ }
+    try {
+      await client.getContainer(name).remove({ force: true });
+      return { removed: true };
+    } catch (err) {
+      if (/No such container|not found/i.test(String(err?.message ?? err))) return { removed: true, reason: 'already-gone' };
+      return { removed: false, error: String(err?.message ?? err).slice(0, 200) };
+    }
+  }
+
+  /**
+   * Bring up the in-device tunnel: wait for Android boot (adb whitelist
+   * getprop sys.boot_completed — the SAME op the diagnostics use), then run
+   * the verified setup script via the exec seam. Idempotent. Runs in the
+   * background (never blocks the create/start API response); failures land
+   * in proxyState='error' + the log.
+   */
+  async function provisionTunnel(row) {
+    if (row.proxyState === 'running') return { started: false, reason: 'already-running' };
+    await setProxyState(row.id, 'provisioning');
+    const bootTimeoutMs = config?.redroidTunnelBootTimeoutMs ?? 600_000;
+    const pollMs = config?.redroidTunnelPollMs ?? 5000;
+    const deadline = Date.now() + bootTimeoutMs;
+    const target = `127.0.0.1:${row.adbPort}`;
+    // 1) adb connect (first contact) — best effort
+    await adbEngine.run({ op: 'connect', target }).catch(() => {});
+    // 2) wait for boot_completed
+    let booted = false;
+    while (Date.now() < deadline) {
+      try {
+        const r = await adbEngine.run({ op: 'getprop', target, prop: 'sys.boot_completed' });
+        if (!r.timedOut && r.exitCode === 0 && r.stdout?.trim() === '1') { booted = true; break; }
+      } catch { /* adb engine validation error — do not loop forever */ break; }
+      await new Promise((res) => setTimeout(res, pollMs));
+    }
+    if (!booted) {
+      await setProxyState(row.id, 'error');
+      throw fail('REDROID_TUNNEL_BOOT_TIMEOUT', 504, `Device '${row.name}' did not report boot_completed within ${Math.round(bootTimeoutMs / 1000)}s — tunnel not provisioned`);
+    }
+    // 3) verified setup script
+    const script = buildTunnelSetupScript({ gostPort: row.gostPort });
+    const r = await execInContainer(row.containerId, script);
+    if (r.exitCode === 0 && /tun2socks/.test(r.stdout)) {
+      await setProxyState(row.id, 'running');
+      log.info({ device: row.name, gostPort: row.gostPort }, 'redroid proxy: tunnel up (tun2socks verified running)');
+      return { started: true };
+    }
+    await setProxyState(row.id, 'error');
+    throw fail('REDROID_TUNNEL_PROVISION_FAILED', 500, `tunnel setup failed on '${row.name}': exit=${r.exitCode} ${String(r.stdout ?? r.stderr).trim().slice(0, 200)}`);
+  }
+
+  /** Kill tun2socks inside the device (best-effort; idempotent). */
+  async function teardownTunnel(row) {
+    if (!row.gostPort) return { done: false, reason: 'no-proxy' };
+    if (!row.containerId || row.containerState !== 'running') return { done: false, reason: 'container-not-running' };
+    try {
+      const r = await execInContainer(row.containerId, buildTunnelTeardownScript());
+      const ok = r.exitCode === 0;
+      if (ok) await setProxyState(row.id, 'stopped');
+      return { done: ok, error: ok ? undefined : String(r.stdout ?? r.stderr).trim().slice(0, 200) };
+    } catch (err) {
+      return { done: false, error: String(err?.message ?? err).slice(0, 200) };
+    }
+  }
+
+  /** Resolved 32-byte proxy encryption key (or a clean 500 — never a raw crypto throw). */
+  function proxyKey() {
+    if (!config?.encryptionKey) throw fail('REDROID_PROXY_CONFIG_INVALID', 500, 'APP_ENCRYPTION_KEY is not configured — cannot store proxyUrl');
+    try {
+      return resolveProviderKey(config.encryptionKey);
+    } catch {
+      throw fail('REDROID_PROXY_CONFIG_INVALID', 500, 'APP_ENCRYPTION_KEY is invalid — cannot store proxyUrl');
+    }
+  }
+
+  /** Decrypt a stored proxy URL (template or device) — throws 500 on corrupt ciphertext. */
+  function decryptProxyUrl(encrypted, what) {
+    if (!encrypted) return null;
+    try {
+      return decryptSecret(encrypted, proxyKey());
+    } catch {
+      throw fail('REDROID_PROXY_CONFIG_INVALID', 500, `${what} proxyUrl failed to decrypt — fix or re-set it`);
+    }
+  }
+
   // ---- device lifecycle ------------------------------------------------------
 
   async function findDevice(idOrName) {
@@ -334,6 +700,22 @@ export function createRedroidService({
     const template = await db.redroidTemplate.findUnique({ where: { name: templateName } });
     if (!template) throw fail('REDROID_TEMPLATE_NOT_FOUND', 404, `Redroid template '${templateName}' not found`);
     if (!template.isEnabled) throw fail('REDROID_TEMPLATE_DISABLED', 409, `Redroid template '${templateName}' is disabled`);
+
+    // Stage B: resolve the effective egress proxy — device override > template.
+    // Both are encrypted at rest; the plaintext exists only in this function's
+    // scope (never logged, never in audit details, never in the response).
+    const templateProxyPlain = decryptProxyUrl(template.proxyUrlEncrypted, 'template');
+    let effectiveProxy = null;
+    if (typeof input.proxyUrl === 'string' && input.proxyUrl.trim() !== '') {
+      effectiveProxy = validateProxyUrl(input.proxyUrl); // 400 when malformed
+    } else if (templateProxyPlain) {
+      effectiveProxy = parseProxyUrl(templateProxyPlain);
+      if (!effectiveProxy) throw fail('REDROID_PROXY_CONFIG_INVALID', 500, 'template proxyUrl decrypted but is malformed — fix the template');
+    }
+    let proxyUrlEncrypted = null;
+    if (effectiveProxy) {
+      proxyUrlEncrypted = encryptSecret(effectiveProxy.raw, proxyKey());
+    }
 
     // Override allowlist: display geometry only (工單: template 允許嘅字段).
     const o = overrides ?? {};
@@ -383,6 +765,7 @@ export function createRedroidService({
       const portAttempts = Math.min(endRange(config) - startRange(config) + 1, 25);
       for (let attempt = 0; ; attempt++) {
         const adbPort = await allocateAdbPort();
+        const gostPort = effectiveProxy ? await allocateGostPort() : null;
         try {
           row = await db.device.create({
             data: {
@@ -404,6 +787,10 @@ export function createRedroidService({
               // MD §2.4: DeviceRequests 存在 ≠ GPU 正常 — host mode starts
               // as 未驗證; swiftshader is honestly 'software'.
               gpuStatus: template.gpuMode === 'host' ? 'unverified' : 'software',
+              // Stage B: per-device proxy binding (null trio = no proxy).
+              gostPort,
+              proxyUrlEncrypted,
+              proxyState: effectiveProxy ? 'provisioning' : 'off',
             },
           });
           break;
@@ -413,6 +800,7 @@ export function createRedroidService({
               throw fail('REDROID_NAME_TAKEN', 409, `Device name '${name}' already exists`);
             }
             if (String(err?.message ?? '').includes('adbPort') && attempt < portAttempts) continue;
+            if (String(err?.message ?? '').includes('gostPort') && attempt < portAttempts) continue;
             throw err;
           }
           throw err;
@@ -502,6 +890,22 @@ export function createRedroidService({
         data: { containerId, containerState },
       });
 
+      // Stage B: when a proxy is bound, bring up the per-device gost container
+      // (synchronous — part of the creation contract: a device with a proxy
+      // that has no working local listener is broken-by-default) and then the
+      // in-device tunnel in the BACKGROUND (boot can take minutes; the create
+      // response must not wait — failures land in proxyState='error').
+      if (effectiveProxy && containerState === 'running') {
+        row._proxyUrlPlaintext = effectiveProxy.raw;
+        await provisionGost(row); // throws → rollback() tears down (incl. gost)
+        const freshRow = { ...row, containerId, containerState };
+        provisionTunnel(freshRow).catch((err) => {
+          log.error({ device: name, error: err?.message }, 'redroid proxy: background tunnel provisioning failed');
+        });
+      } else if (effectiveProxy && containerState !== 'running') {
+        log.warn({ device: name, containerState }, 'redroid proxy: container not running at create — tunnel will be provisioned on the start action');
+      }
+
       const result = deviceView({ ...row, template: { name: template.name } }, { withDataDir: true });
       if (idempotencyKey) createIdempotency.set(idempotencyKey, { state: 'done', at: Date.now(), result, preflight: preflightResult });
 
@@ -521,6 +925,8 @@ export function createRedroidService({
           adbBind: REDROID_LOOPBACK_BIND,
           gpuMode: template.gpuMode,
           privileged: Boolean(template.privileged),
+          proxySet: Boolean(effectiveProxy),
+          gostPort: row.gostPort ?? null,
           startError: startError ?? undefined,
           preflightOverall: preflightResult?.overall ?? null,
         },
@@ -533,8 +939,13 @@ export function createRedroidService({
     }
   }
 
-  /** Roll back a failed create: DB row + the fresh data dir (never a pre-existing one). */
+  /** Roll back a failed create: DB row + fresh data dir (never a pre-existing one) + any gost container already started. */
   async function rollback(row, dataDir, createdDir) {
+    try {
+      if (row?.gostPort) await teardownGost(row).catch(() => {});
+    } catch {
+      /* best-effort */
+    }
     try {
       if (row) await db.device.delete({ where: { id: row.id } }).catch(() => {});
     } catch {
@@ -581,6 +992,11 @@ export function createRedroidService({
     if (!row.containerId) {
       throw fail('REDROID_NOT_PROVISIONED', 409, `Device '${row.name}' has no container (create failed) — delete and recreate it`);
     }
+    // Stage B: tear the tunnel down BEFORE the container stops (exec needs a
+    // running container). Best-effort — the docker action is the contract.
+    if (row.gostPort && (action === 'stop' || action === 'restart')) {
+      await teardownTunnel(row).catch(() => {});
+    }
     let result;
     try {
       result = await dockerService.runAction(row.containerId, action);
@@ -592,6 +1008,21 @@ export function createRedroidService({
       throw err;
     }
     await db.device.update({ where: { id: row.id }, data: { containerState: result.state } });
+    // Stage B: after start/restart — (re)provision gost (idempotent reuse)
+    // synchronously + the in-device tunnel in the background (boot may take minutes).
+    if (row.gostPort && (action === 'start' || action === 'restart') && result.state === 'running') {
+      row._proxyUrlPlaintext =
+        decryptProxyUrl(row.proxyUrlEncrypted, `device '${row.name}'`) ??
+        decryptProxyUrl(row.template?.proxyUrlEncrypted, 'template');
+      if (!row._proxyUrlPlaintext) {
+        throw fail('REDROID_PROXY_CONFIG_INVALID', 500, `Device '${row.name}' has a gost port but no resolvable proxyUrl`);
+      }
+      await provisionGost(row);
+      const freshNow = await findDevice(row.id);
+      provisionTunnel(freshNow).catch((err) => {
+        log.error({ device: row.name, error: err?.message }, 'redroid proxy: background tunnel provisioning failed');
+      });
+    }
     await audit({
       actorUserId: actorUserId ?? null,
       action: `redroid.device.${action}`,
@@ -622,6 +1053,12 @@ export function createRedroidService({
 
     let containerRemoved = false;
     let containerError = null;
+    // Stage B: tear down the tunnel FIRST (needs the container running), then
+    // the container, then the per-device gost container.
+    let tunnelTeardown = null;
+    if (row.gostPort) {
+      tunnelTeardown = await teardownTunnel(row).catch((e) => ({ done: false, error: String(e?.message ?? e).slice(0, 200) }));
+    }
     if (row.containerId) {
       try {
         await dockerService.runAction(row.containerId, 'stop').catch(() => {});
@@ -642,6 +1079,11 @@ export function createRedroidService({
       dataRemoveError = r.error;
     }
 
+    let gostTeardown = null;
+    if (row.gostPort) {
+      gostTeardown = await teardownGost(row).catch((e) => ({ removed: false, error: String(e?.message ?? e).slice(0, 200) }));
+    }
+
     await db.device.delete({ where: { id: row.id } });
     await audit({
       actorUserId: actorUserId ?? null,
@@ -651,9 +1093,9 @@ export function createRedroidService({
       requestId: requestId ?? null,
       ip: ip ?? null,
       status: containerError ? 'failure' : 'success',
-      details: { name: row.name, adbPort: row.adbPort, containerRemoved, removeData: Boolean(removeData), dataRemoved, dataRemoveError: dataRemoveError ?? undefined, containerError: containerError ?? undefined },
+      details: { name: row.name, adbPort: row.adbPort, containerRemoved, removeData: Boolean(removeData), dataRemoved, dataRemoveError: dataRemoveError ?? undefined, containerError: containerError ?? undefined, proxyTornDown: tunnelTeardown ?? undefined, gostRemoved: gostTeardown ?? undefined },
     });
-    return { deleted: true, name: row.name, containerRemoved, removeData: Boolean(removeData), dataRemoved, dataRemoveError: dataRemoveError ?? undefined, containerError: containerError ?? undefined };
+    return { deleted: true, name: row.name, containerRemoved, removeData: Boolean(removeData), dataRemoved, dataRemoveError: dataRemoveError ?? undefined, containerError: containerError ?? undefined, proxyTornDown: tunnelTeardown ?? undefined, gostRemoved: gostTeardown ?? undefined };
   }
 
   /**
@@ -950,6 +1392,8 @@ function publicTemplate(t) {
     privileged: t.privileged,
     privilegedReason: t.privilegedReason,
     isEnabled: t.isEnabled,
+    // Stage B: proxy binding presence only (never the URL itself)
+    proxy: t.proxyUrlEncrypted ? { configured: true, hasUrl: true } : { configured: false, hasUrl: false },
     createdAt: t.createdAt,
     updatedAt: t.updatedAt,
   };
@@ -974,6 +1418,18 @@ function deviceView(row, { withDataDir = false } = {}) {
     containerId: row.containerId,
     containerState: row.containerState,
     adbState: row.adbState,
+    // Stage B: proxy binding. The URL itself NEVER leaves the server —
+    // clients see existence + port + state only.
+    proxy: row.gostPort
+      ? {
+          configured: true,
+          gostPort: row.gostPort,
+          gostBind: GOST_HOST_BIND,
+          state: row.proxyState ?? 'off',
+          hasUrl: Boolean(row.proxyUrlEncrypted),
+          containerName: gostContainerName(row.name),
+        }
+      : { configured: false, gostPort: null, state: row.proxyState ?? 'off', hasUrl: false },
     lastDiagnosedAt: row.lastDiagnosedAt,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,

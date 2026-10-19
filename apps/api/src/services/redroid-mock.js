@@ -288,14 +288,35 @@ export function createMockPreflight() {
 }
 
 /**
+ * Mock in-container exec (Stage B tunnel provisioning): records every
+ * {containerId, script} call and returns a deterministic success whose stdout
+ * is a fake `ps` line (tests assert the EXACT script via `calls`).
+ * opts.fail = true → exit 1 (for the failure path).
+ */
+export function createMockExec({ fail = false } = {}) {
+  const calls = [];
+  async function exec(containerId, script) {
+    calls.push({ containerId, script, at: Date.now() });
+    if (fail) return { exitCode: 1, stdout: 'mock exec: forced failure', stderr: 'TUNNEL_TEARDOWN_FAILED' };
+    return {
+      exitCode: 0,
+      stdout: 'root 4444 1 0 10:00:00 ? 00:00:01 /data/local/tmp/tun2socks --device tun0 --proxy socks5://172.17.0.1:20082 --loglevel debug\n',
+      stderr: '',
+    };
+  }
+  return { exec, calls };
+}
+
+/**
  * Assemble the full mock redroid environment (app.js REDROID_ADAPTER=mock).
- * @returns {{docker:object, adb:object, preflight:Function}}
+ * @returns {{docker:object, adb:object, preflight:Function, exec:object}}
  */
 export function createMockRedroidEnvironment(opts = {}) {
   return {
     docker: createMockRedroidDockerWrapper(opts),
     adb: createMockAdb(opts),
     preflight: createMockPreflight(),
+    exec: createMockExec(opts.execOpts ?? {}),
   };
 }
 

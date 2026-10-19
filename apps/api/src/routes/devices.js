@@ -37,6 +37,10 @@ const CREATE_BODY = {
       },
     },
     idempotencyKey: { type: 'string', minLength: 8, maxLength: 64, pattern: '^[a-zA-Z0-9_-]+$' },
+    // Stage B: optional per-device egress proxy override (socks5://[user:pass@]host:port).
+    // When omitted, the template's proxy (if any) applies. Encrypted at rest;
+    // the response exposes only presence + port + state, never the URL.
+    proxyUrl: { type: 'string', maxLength: 512 },
   },
 };
 

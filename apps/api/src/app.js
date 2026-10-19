@@ -123,6 +123,9 @@ export async function buildApp(opts = {}) {
           log: app.log,
         })
       : undefined,
+    // Stage B: in-container exec seam. Mock mode = recorder (asserted in tests);
+    // real mode = undefined → the service builds a dockerode exec internally.
+    exec: redroidEnv ? redroidEnv.exec.exec : undefined,
     preflight: redroidEnv?.preflight ?? ((params) => runRedroidPreflight({ config, docker: { ping: () => docker.ping() }, log: app.log, ...params })),
   });
   if (redroidEnv) app.decorate('redroidMockEnv', redroidEnv); // test seam — exists ONLY in mock mode
