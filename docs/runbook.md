@@ -268,3 +268,56 @@ stat -c '%U:%G %a' /var/lib/water-army         # node:node 750
 - **GPU 永遠係「未驗證」**：P5 冇 in-device render check（MD §2.4）— nvidia-smi OK ≠ Android EGL OK。4 區診斷 GPU zone 固定 `unverified`（host mode）/`software`（swiftshader），誠實核心。
 - **api 容器冇 adb binary** → 4 區診斷 ADB zone 由 api 視角係 `offline`（engine 無 binary，空證據）。ADB 真驗證用 host-level adb（`/home/kenneth/.openclaw/workspace/tools/platform-tools/adb`）：`adb connect 127.0.0.1:<port>` → `adb -s <port> shell getprop ro.build.version.sdk`。
 - **redroid container stdout 係靜音**（init 行 logcat 唔行 stdout）→ 診斷 container-logs zone 正常係 0 行。log 證據一律行 logcat（host adb）或 docker inspect。
+
+## 10. Redroid Stage B — 出口代理矩陣（gost + tun2socks — 2026-10-19 實測）
+
+### 10.1 架構（per-device 隔離）
+
+- 每部有 proxy 嘅 device 配一個 **gost container**：`redroid-matrix-b-gost-<devName>`，image = `gogost/gost@sha256:f7a958c4...b7580`（digest pin，`GOST_IMAGE` 常量），bind **172.17.0.1:<20080–20179>**（DB unique，唔係 127.0.0.1 都唔係公网），`Cmd: [start, -L, socks5://:1080, -F, <proxyUrl>]`、`Env: []`。
+- device 內 **tun2socks v2.7.0**（bake 入 wrapper image，`/data/local/tmp/tun2socks`，sha256 `98d545a6...c031`）起 `tun0`（10.8.0.1 peer 10.8.0.2），全部出域流量（DNS UDP + TCP + UDP）經 tun0 → SOCKS5 → gost → 上游 proxy。
+- 代理 URL 加密存 DB（`proxyUrlEncrypted`，`v1:` 前綴）；API view 只暴露 `hasProxyUrl` / `gostPort` / `proxyState`（`off|provisioning|running|stopped|error`），**永遠唔輸出明文**。
+- tunnel 係 **背景 provision**（等 `sys.boot_completed`，5s poll，10min timeout）；gost 係 **同步**（create 時起，失敗 = rollback 連 device 一齊）。
+
+### 10.2 正常狀態驗證（host，`sg docker -c`）
+
+```bash
+# 1) 狀態（api view 或 DB）：proxyState=running、gostPort ∈ 20080-20179
+sg docker -c "docker ps --filter name=redroid-matrix-b-gost- --format '{{.Names}} {{.Status}}'"
+# 2) tun0 + 路由（device 內）— 三個條件缺一不可：
+sg docker -c "docker exec <dev> sh -c 'ip addr show tun0; ip route show table 100; ip rule show | grep 5000'"
+#    table 100 必有兩條：default via 10.8.0.2 onlink + 172.17.0.1 dev eth0 scope link（gateway exception）
+#    必有 rule 5000: from all lookup 100
+# 3) canary（tests/mocks/mock-socks5.js 或真 proxy）：device 內 dnsping canary.example → NOERROR
+```
+
+### 10.3 故障排檢（症狀 → 診斷 → 處理）
+
+| 症狀 | 診斷 | 處理 |
+|------|------|------|
+| `proxyState=error`，create 失敗 | `docker inspect redroid-matrix-b-gost-<dev>` / api log | 端口撞（DB unique 已防）→ 重試（會重分配）；image pull 失敗 → 檢查 host 網絡 |
+| `proxyState=running` 但 device 冇出域 | device 內 `docker exec <dev> sh -c 'tail -20 /data/local/tmp/tun2socks.log'` | t2s 死咗 → 重跑 start action（會重 provision）；log 見 `connection reset by peer`（dial 172.17.0.1:<gostPort>）→ **table 100 缺 gateway exception**（見 10.5 #2）— 重跑 provision script 會重建 |
+| t2s log 見 `TUNSETIFF` 錯 | `ip link show` 睇 tun0 有冇殘留 | provision script 本身冪等（pkill + del 先）→ 直接重跑 start |
+| tunnel 死咗之後流量「似乎 OK」 | `ip route get 8.8.8.8` | **fail-open 行為**：tun0 消失 → 路由影消失 → 直連漏出。**安全上唔等於阻断**；監控 proxyState +（跟進項）fail-closed monitor（iptables 兜底，另開單） |
+
+### 10.4 Teardown（單 device）
+
+```bash
+# 经 api：DELETE device（teardownTunnel + teardownGost + container remove 順序已實現）
+# 手動（api 死咗先使）：
+sg docker -c "docker exec <dev> pkill -f tun2socks"        # tun0 隨 process 死
+sg docker -c "docker rm -f redroid-matrix-b-gost-<devName>"
+```
+
+### 10.5 已知環境行為（2026-10-19 實測 — 唔好當新 bug）
+
+1. **Android netd 間中 block RTM_NEWLINK**（container netns 內 `ip link add` → EOPNOTSUPP；ioctl TUNSETIFF 一直 OK）。provision script 已用 netd-safe 序列：`ip link add` 係 best-effort，tun2socks 自己經 ioctl 建 tun0（兩路都實錚過）。如果 netd 狀態變化令 `ip link add` 又得返，都唔使改 code（兩路兼容）。
+2. **gateway exception 唔可以省**：table 100 冇 `172.17.0.1 dev eth0 scope link` 時，gVisor→gost handshake hairpin 返 tun0 → RST → **proxy 零流量但 routing 睇落「正常」**（dev2 實測事故；`ip route get 8.8.8.8` 照常顯示 via tun0）。
+3. **TCP-over-TUN 平台限制（升級項，未解）**：tun2socks v2.7.0 內置 gVisor — UDP/DNS 全通，**TCP payload 唔過**（SYN 過、payload 唔過，mock sink 證實）。DNS canary = 出口驗證基線；TCP 級證明要等 gVisor 替換（rebuild tun2socks 唔用 gVisor，另開單）。
+4. **mock 用舊 code 起過 → 靜默 RST**：`tests/mocks/mock-socks5.js` 修過 UDP ASSOCIATE / gVisor relay framing（commit `18f8139`）；起 mock 前確認系修後版本，否則 device 端只見到 `connection reset by peer` 而 mock 零記錄。
+5. **rule 5000 要兜底**：netd 只為佢「註冊過」嘅 TUN 建 rule 5000；ioctl 建嘅 TUN netd 唔知 → script 有 EEXIST-safe 兜底（`ip rule add priority 5000 from all lookup 100`）。
+
+### 10.6 實錚證據（2026-10-19 14:24 UTC，2 device 2 路）
+
+- dev1(172.17.0.3) → mock1(172.17.0.1:20082)：`canary.example` = NOERROR + A 93.184.216.34
+- dev2(172.17.0.4) → mock2(172.17.0.1:20084)：`canary.example` = NOERROR + A 93.184.216.34；`other.example` = NXDOMAIN
+- 各 mock 只見到自己嗰部 device 嘅源 IP（路由隔離成立）。詳細 log / 過程：`logs/redroid-matrix-B-progress.md`。
