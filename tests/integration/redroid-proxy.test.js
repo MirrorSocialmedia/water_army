@@ -137,6 +137,16 @@ test('stageb proxy: tunnel scripts — verified netd sequence (table 100 + onlin
   assert.match(setup, /ip link set tun0 up/);
   // the onlink flag is REQUIRED (10.8.0.2 is not resolvable inside table 100)
   assert.match(setup, /ip route add default via 10\.8\.0\.2 dev tun0 table 100 onlink/);
+  // GATEWAY EXCEPTION (live-found 2026-10-19: without it the gVisor→gost
+  // handshake hairpins out tun0 and the proxy connection is reset)
+  assert.match(setup, /ip route add 172\.17\.0\.1 dev eth0 scope link table 100/);
+  // rule 5000 fallback (netd owns it for TUNs it registers; EEXIST-safe)
+  assert.match(setup, /ip rule add priority 5000 from all lookup 100 2>\/dev\/null \|\| true/);
+  // RTM_NEWLINK is blocked in some Android netd states — link add must be
+  // best-effort (tun2socks creates tun0 via ioctl when it is)
+  assert.match(setup, /ip link add tun0 type tun 2>\/dev\/null \|\| true/);
+  // tun2socks starts BEFORE addr/route config (it owns the device fd)
+  assert.ok(setup.indexOf('tun2socks --device tun0') < setup.indexOf('ip addr add 10.8.0.1'), 't2s must start before addr add');
   assert.match(setup, /pkill -f tun2socks 2>\/dev\/null \|\| true/);
   assert.match(setup, /nohup \/data\/local\/tmp\/tun2socks --device tun0 --proxy socks5:\/\/172\.17\.0\.1:20082 --loglevel debug > \/data\/local\/tmp\/tun2socks\.log 2>&1 &/);
   assert.match(setup, /ps -ef \| grep \[t\]un2socks/); // bracket trick — grep must not self-match

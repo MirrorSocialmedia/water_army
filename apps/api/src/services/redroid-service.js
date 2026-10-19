@@ -149,10 +149,26 @@ export function buildGostContainerBody({ deviceName, gostPort, proxyUrl }) {
 }
 
 /**
- * The in-device tunnel setup script (pure — exact sequence verified on the
- * live spike; netd owns table 100, `onlink` is required because 10.8.0.2
- * is not resolvable inside table 100). Idempotent: re-runnable while the
- * device is up (deletes tun0 first).
+ * The in-device tunnel setup script (pure — unit-tested; the sequence was
+ * verified on TWO live devices, see logs/redroid-matrix-B-progress.md).
+ *
+ * Environment facts baked in (all empirically found, do not "simplify"):
+ *  - Android netd sometimes BLOCKS RTM_NEWLINK (new-link creation over
+ *    netlink → EOPNOTSUPP). So `ip link add` is BEST-EFFORT: when blocked,
+ *    tun2socks (gVisor) creates tun0 itself via ioctl TUNSETIFF (proven to
+ *    work) and holds the fd. When allowed, it pre-creates it — gVisor
+ *    attaches to the existing device either way (both paths verified).
+ *  - netd owns table 100 + rule 5000 for TUNs it registers itself; for an
+ *    ioctl-created TUN netd does NOT add the rule → we add it (EEXIST-safe;
+ *    if netd owns it, ours is a no-op duplicate of the same shape).
+ *  - `onlink` is REQUIRED on the table-100 default (10.8.0.2 is not
+ *    resolvable inside table 100 → ENETUNREACH without it).
+ *  - GATEWAY EXCEPTION: 172.17.0.1 (docker bridge) must route via eth0
+ *    INSIDE table 100 — otherwise the gVisor→gost handshake (dst
+ *    172.17.0.1:<gostPort>) matches the table-100 default and HAIRPINS
+ *    back out tun0 → connection reset, zero proxy traffic. Live-found
+ *    (dev2 failure mode, 2026-10-19).
+ *  - Idempotent: re-runnable while the device is up (pkill + del first).
  */
 export function buildTunnelSetupScript({ gostPort }) {
   if (!Number.isInteger(gostPort) || gostPort < GOST_PORT_RANGE.start || gostPort > GOST_PORT_RANGE.end) {
@@ -160,16 +176,27 @@ export function buildTunnelSetupScript({ gostPort }) {
   }
   const lines = [
     'set -e',
-    `ip link del ${TUN.iface} 2>/dev/null || true`,
-    `ip link add ${TUN.iface} type tun`,
-    `ip addr add ${TUN.localIp} peer ${TUN.peerIp}/32 dev ${TUN.iface}`,
-    `ip link set ${TUN.iface} up`,
-    `ip route add default via ${TUN.peerIp} dev ${TUN.iface} table 100 onlink`,
     'pkill -f tun2socks 2>/dev/null || true',
+    'sleep 1',
+    `ip link del ${TUN.iface} 2>/dev/null || true`,
+    // best-effort: RTM_NEWLINK is blocked in some Android netd states;
+    // tun2socks creates the device itself via ioctl when it is
+    `ip link add ${TUN.iface} type tun 2>/dev/null || true`,
+    // tun2socks FIRST: opens/creates tun0 via ioctl and holds the fd
     `nohup ${TUN.bin} --device ${TUN.iface} --proxy socks5://${GOST_HOST_BIND}:${gostPort} --loglevel debug > ${TUN.logFile} 2>&1 &`,
     'sleep 2',
+    `ip addr add ${TUN.localIp} peer ${TUN.peerIp}/32 dev ${TUN.iface} 2>/dev/null || true`,
+    `ip link set ${TUN.iface} up`,
+    'ip route flush table 100 2>/dev/null || true',
+    `ip route add default via ${TUN.peerIp} dev ${TUN.iface} table 100 onlink`,
+    // GATEWAY EXCEPTION — without this the gVisor→gost handshake hairpins
+    // out tun0 (table-100 default) and the proxy connection is reset
+    `ip route add ${GOST_HOST_BIND} dev eth0 scope link table 100`,
+    'ip rule add priority 5000 from all lookup 100 2>/dev/null || true',
+    'sleep 1',
     // bracket trick: grep must not match its own cmdline
     'ps -ef | grep [t]un2socks || { echo TUN2SOCKS_NOT_RUNNING; exit 1; }',
+    `ip route get 8.8.8.8 || true`,
   ];
   return lines.join('\n');
 }
