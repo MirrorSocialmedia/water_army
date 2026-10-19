@@ -51,13 +51,21 @@
 #
 # The builder stage compiles the static entrypoint with gcc on a dated
 # (version-pinned) ubuntu base — `latest` is forbidden per the image-pinning
-# rule (MD §7).
+# rule (MD §7). It ALSO fetches + verifies the pinned tun2socks release
+# (tun2socks.env: version + sha256, no floating 'latest'; fetch-tun2socks.sh:
+# bounded retry, sha256 + ELF x86-64 verification, fail-fast) — the binary is
+# the image's OWN verified artifact, not a host file, not a manual adb push.
+# The build is reproducible from a clean clone: the only inputs are the
+# committed source + the pinned upstream release (MD §3.4).
 # =============================================================================
 
 # ---- builder: compile the static entrypoint (audited source next to this file)
 FROM ubuntu:24.04 AS builder
+# curl + ca-certificates: the builder's download client + TLS trust bundle
+# (ubuntu:24.04 ships neither by default; --no-install-recommends drops the
+# ca-certificates recommendation curl relies on)
 RUN apt-get update \
- && apt-get install -y --no-install-recommends gcc libc6-dev \
+ && apt-get install -y --no-install-recommends gcc libc6-dev unzip curl ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 WORKDIR /build
 COPY redroid-binder-init.c .
@@ -66,9 +74,24 @@ COPY redroid-binder-init.c .
 # entrypoint must not depend on it.
 RUN gcc -O2 -static -o redroid-binder-init redroid-binder-init.c
 
+# ---- tun2socks (R1, 2026-10-20): fetch + verify the PINNED release --------
+# Pin: tun2socks.env (version 2.7.0 + sha256 of the inner binary). The
+# script fail-fasts on checksum mismatch / wrong arch / download failure,
+# so a corrupt or tampered upstream release breaks the BUILD (not the fleet).
+COPY fetch-tun2socks.sh tun2socks.env ./
+RUN sh ./fetch-tun2socks.sh /build/t2s \
+ && test -f /build/t2s/tun2socks \
+ && test -x /build/t2s/tun2socks \
+ && echo "tun2socks staged: $(sha256sum /build/t2s/tun2socks | awk '{print $1}')"
+
 # ---- final: the dated upstream redroid image + wrapper entrypoint
 FROM redroid/redroid:14.0.0-240527
 COPY --from=builder /build/redroid-binder-init /usr/local/bin/redroid-binder-init
+# tun2socks for the per-device egress proxy (Stage B). Build-time contract:
+# fetched + sha256/ELF-verified above; COPY preserves the builder's 0755
+# mode (NOTE: the stock image has no /bin/sh, so no RUN/chmod step is
+# possible in this stage — the mode is correct BY CONSTRUCTION).
+COPY --from=builder /build/t2s/tun2socks /data/local/tmp/tun2socks
 # NOTE: the stock image has no /bin/sh, so no RUN shell step is possible in
 # this stage — COPY preserves the builder's 0755 mode.
 #
