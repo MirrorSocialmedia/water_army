@@ -42,6 +42,7 @@ function parseArgs(argv) {
     relay: '127.0.0.1:20090',
     canary: 'canary.example',
     answer: '93.184.216.34',
+    reject: false,
   };
   for (let i = 2; i < argv.length; i += 1) {
     const a = argv[i];
@@ -51,6 +52,7 @@ function parseArgs(argv) {
     else if (a === '--relay') args.relay = next();
     else if (a === '--canary') args.canary = next();
     else if (a === '--answer') args.answer = next();
+    else if (a === '--reject') args.reject = true;
     else throw new Error(`unknown arg: ${a}`);
   }
   if (!args.port || !args.log) throw new Error('--port and --log are required');
@@ -295,6 +297,15 @@ const tcpServer = net.createServer((client) => {
       }
       if (cmd !== 0x01) { log({ t: 'tcp-reject', why: `cmd-${cmd}`, from, raw: handshakeBuf.length <= 64 ? handshakeBuf.toString('hex') : undefined }); client.destroy(); return; }
       const port = handshakeBuf.readUInt16BE(addrLen - 2);
+      // --reject (R2 lifecycle test "proxy 拒絕連線"): answer RFC1928
+      // rep=0x05 (connection not allowed by ruleset) + close; default path
+      // below is untouched.
+      if (CFG.reject) {
+        log({ t: 'tcp-reject-connect', dest: `${addr}:${port}`, from });
+        client.write(Buffer.from([0x05, 0x05, 0x00, 0x01, 0, 0, 0, 0]));
+        client.destroy();
+        return;
+      }
       const rest = Buffer.from(handshakeBuf.subarray(addrLen));
       relaying = true;
       log({ t: 'tcp-connect', dest: `${addr}:${port}`, from });
@@ -327,8 +338,8 @@ const tcpServer = net.createServer((client) => {
 });
 
 tcpServer.listen(CFG.port, '0.0.0.0', () => {
-  log({ t: 'mock-start', port: CFG.port, relay: CFG.relay, canary: CFG.canary, answer: CFG.answer });
-  process.stderr.write(`mock-socks5 listening on :${CFG.port} log=${LOG}\n`);
+  log({ t: 'mock-start', port: CFG.port, relay: CFG.relay, canary: CFG.canary, answer: CFG.answer, reject: CFG.reject || undefined });
+  process.stderr.write(`mock-socks5${CFG.reject ? '[reject]' : ''} listening on :${CFG.port} log=${LOG}\n`);
 });
 udpMain.bind(CFG.port, '0.0.0.0', () => log({ t: 'mock-udp-bound', port: CFG.port }));
 
