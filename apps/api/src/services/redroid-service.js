@@ -164,6 +164,41 @@ export function buildT2sRunScript() {
   ].join('\n');
 }
 
+/**
+ * Binary diagnostic check script (pure — unit-tested). RUN INLINE (not
+ * staged): it is read-only (no pkill/pgrep, no route mutation), so it
+ * carries no F-B hazard, and the mock seam detects it via the marker
+ * comment. Machine-readable contract — one BINARY_STATE= line always,
+ * optional BINARY_DETAIL=/BINARY_VERSION=, exit codes:
+ *   0 ready · 3 missing · 4 invalid (any flavor) · 1 anything else
+ */
+export function buildT2sCheckScript() {
+  return [
+    `# ${TUN2SOCKS_CHECK_MARKER}`,
+    'set -u',
+    // T2S_BIN is a TEST KNOB (unset in-device → the single canonical path).
+    `BIN=${'${T2S_BIN:-' + TUN.bin + '}'}`,
+    `if [ ! -f "$BIN" ]; then echo "BINARY_STATE=missing"; exit 3; fi`,
+    `if [ ! -x "$BIN" ]; then echo "BINARY_STATE=invalid"; echo "BINARY_DETAIL=not-executable"; exit 4; fi`,
+    `MAGIC=$(head -c 4 "$BIN" 2>/dev/null | od -An -tx1 2>/dev/null | tr -d ' \\n')`,
+    `if [ "$MAGIC" != "7f454c46" ]; then MAGIC8=$(printf '%s' "$MAGIC" | cut -c1-8); echo "BINARY_STATE=invalid"; echo "BINARY_DETAIL=not-elf(magic=$MAGIC8)"; exit 4; fi`,
+    `V=$("$BIN" --version 2>&1 | head -n 1) || { echo "BINARY_STATE=invalid"; echo "BINARY_DETAIL=exec-failed"; exit 4; }`,
+    'case "$V" in',
+    '  tun2socks-*) echo "BINARY_STATE=ready"; echo "BINARY_VERSION=$V"; exit 0 ;;',
+    '  *) echo "BINARY_STATE=invalid"; echo "BINARY_DETAIL=unexpected-version($V)"; exit 4 ;;',
+    'esac',
+  ].join('\n');
+}
+
+/** Parse the check script's machine-readable output (pure — unit-tested). */
+export function parseT2sCheckOutput(stdout) {
+  const s = String(stdout ?? '');
+  const state = s.match(/BINARY_STATE=(\w+)/)?.[1] ?? null;
+  const version = s.match(/BINARY_VERSION=(\S+)/)?.[1] ?? null;
+  const detail = s.match(/BINARY_DETAIL=(.+)/)?.[1] ?? null;
+  return { state, version, detail };
+}
+
 /** socks5://[user:pass@]host:port — strict, no scheme drift, no spaces. */
 const PROXY_URL_RE = /^socks5:\/\/(?:([^:@\s/]+):([^:@\s/]+)@)?([a-zA-Z0-9.-]+):([1-9][0-9]{0,4})$/;
 
@@ -644,6 +679,32 @@ export function createRedroidService({
     });
   }
 
+  /** Set the tun2socks binary diagnosis (best-effort; never blocks). State ∈ missing|ready|invalid|error. */
+  async function setBinaryState(id, state, version) {
+    await db.device.update({ where: { id }, data: { binaryState: state, binaryVersion: version ?? null } }).catch((err) => {
+      log.warn({ deviceId: id, state, error: err?.message }, 'redroid proxy: setBinaryState failed');
+    });
+  }
+
+  /**
+   * Pre-provision binary check (R1). Verifies the image-baked tun2socks at
+   * the single canonical path (TUN.bin) BEFORE any tunnel work: present →
+   * executable → ELF magic → --version canary. Returns {state, version,
+   * detail}; state=error means the check itself could not be executed
+   * (exec seam failure). Machine-readable — no credentials, ever.
+   */
+  async function checkTun2socksBinary(containerId, name) {
+    try {
+      const r = await execInContainer(containerId, buildT2sCheckScript());
+      const parsed = parseT2sCheckOutput(r.stdout);
+      if (parsed.state) return { state: parsed.state, version: parsed.version, detail: parsed.detail };
+      // no marker line at all — the check did not complete (weird output)
+      return { state: 'error', version: null, detail: `unexpected check output (exit=${r.exitCode})` };
+    } catch (err) {
+      return { state: 'error', version: null, detail: String(err?.message ?? err).slice(0, 160) };
+    }
+  }
+
   /**
    * Create+start the device's gost container (idempotent — an existing
    * container with the deterministic name is reused, e.g. after an API
@@ -722,7 +783,22 @@ export function createRedroidService({
       await setProxyState(row.id, 'error');
       throw fail('REDROID_TUNNEL_BOOT_TIMEOUT', 504, `Device '${row.name}' did not report boot_completed within ${Math.round(bootTimeoutMs / 1000)}s — tunnel not provisioned`);
     }
-    // 3) stage the verified setup script into the device, then run it
+    // 3) binary check (R1): the image-baked tun2socks must be present +
+    //    executable + valid BEFORE we provision — fail-closed, machine-
+    //    readable, and the device never reaches proxy 'running' on a bad
+    //    binary. Diagnosis is persisted for the device view/health.
+    const check = await checkTun2socksBinary(row.containerId, row.name);
+    await setBinaryState(row.id, check.state, check.version);
+    if (check.state === 'missing') {
+      await setProxyState(row.id, 'error');
+      throw fail('BINARY_MISSING', 500, `tun2socks binary missing on '${row.name}' at ${TUN.bin} — rebuild the wrapper image (pinned v${TUN2SOCKS_PIN.version}, see docker/redroid-matrix) — tunnel not provisioned`);
+    }
+    if (check.state !== 'ready') {
+      await setProxyState(row.id, 'error');
+      const code = check.state === 'invalid' ? 'BINARY_INVALID' : 'BINARY_CHECK_ERROR';
+      throw fail(code, 500, `tun2socks binary ${check.state} on '${row.name}': ${check.detail ?? 'no detail'} — tunnel not provisioned`);
+    }
+    // 4) stage the verified setup script into the device, then run it
     //    (F-B, R1: the runner cmdline must not contain the script text —
     //    see T2S_SETUP_FILE note. Two execs: stage → run.)
     const stage = await execInContainer(row.containerId, buildT2sStageScript(buildTunnelSetupScript({ gostPort: row.gostPort })));
@@ -1543,8 +1619,12 @@ function deviceView(row, { withDataDir = false } = {}) {
           state: row.proxyState ?? 'off',
           hasUrl: Boolean(row.proxyUrlEncrypted),
           containerName: gostContainerName(row.name),
+          // R1: tun2socks binary diagnosis (state + version string only —
+          // no path internals, no credentials, ever).
+          binaryState: row.binaryState ?? null,
+          binaryVersion: row.binaryVersion ?? null,
         }
-      : { configured: false, gostPort: null, state: row.proxyState ?? 'off', hasUrl: false },
+      : { configured: false, gostPort: null, state: row.proxyState ?? 'off', hasUrl: false, binaryState: row.binaryState ?? null, binaryVersion: row.binaryVersion ?? null },
     lastDiagnosedAt: row.lastDiagnosedAt,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,

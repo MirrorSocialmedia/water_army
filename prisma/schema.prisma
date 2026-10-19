@@ -287,6 +287,15 @@ model Device {
   proxyUrlEncrypted String? @map("proxy_url_encrypted")
   gostPort          Int?    @unique @map("gost_port")
   proxyState        String  @default("off") @map("proxy_state") // off|provisioning|running|stopped|error
+  // R1 (2026-10-20): tun2socks binary diagnostic. Populated by the pre-provision
+  // binary check (single staging point: /data/local/tmp/tun2socks).
+  //   missing  — file absent (image built without the contract / container predates it)
+  //   ready    — present, executable, valid ELF, --version canary passed
+  //   invalid  — present but not executable / not ELF / canary failed (corruption)
+  //   error    — the check itself could not be run (exec seam failure)
+  // Never contains proxy credentials — state + version string only.
+  binaryState   String? @map("binary_state")   // missing|ready|invalid|error
+  binaryVersion String? @map("binary_version") // e.g. "tun2socks-2.7.0" (canary output, line 1)
   lastDiagnosedAt DateTime? @map("last_diagnosed_at")
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
