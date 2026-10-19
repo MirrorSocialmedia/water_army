@@ -1,0 +1,12 @@
+HTTP/1.1 200 OK
+Content-Type: text/plain
+Content-Length: 142
+Connection: close
+Date: Mon, 19 Oct 2026 20:13:56 GMT
+
+MOCK-ECHO-1
+nonce=r2-l1b-36276
+method=GET
+url=/echo
+req_bytes=512
+req_sha256=10ed511cf42e3a8a9d4d2c696d8d481216cba309afd63d1eca62fcebc917b076

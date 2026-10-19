@@ -1,0 +1,5 @@
+GET /h HTTP/1.1
+Host: x
+Content-Length: 0
+Connection: close
+

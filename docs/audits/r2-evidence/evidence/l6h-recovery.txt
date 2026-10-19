@@ -1,0 +1,7 @@
+re-provision: root          3063  3058 0 20:48:19 ?     00:00:00 tun2socks --device tun0 --proxy socks5://172.17.0.1:20082 --loglevel debug
+8.8.8.8 via 10.8.0.2 dev tun0 table 100 src 10.8.0.1 uid 0 
+    cache 
+
+probe: RC=read-timeout SENT=659 RECV=0 T_CONN_MS=0 T_TOTAL_MS=30000 SETTLE_MS=0
+verify: no header/body separator
+server=null

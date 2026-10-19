@@ -1,0 +1,8 @@
+nonce=r2-l6d-40951
+probe: RC=read-timeout SENT=404 RECV=0 T_CONN_MS=0 T_TOTAL_MS=30000 SETTLE_MS=0
+verify: no header/body separator
+socks5-close: {"ts":"2026-10-19T20:47:25.346Z","t":"tcp-close","dest":"93.184.216.34:20271","from":"172.17.0.3:44456","bytesIn":0,"bytesOut":51,"why":"upstream-close"}
+{"ts":"2026-10-19T20:47:25.347Z","t":"tcp-close","dest":"93.184.216.34:20271","from":"172.17.0.3:44454","bytesIn":663,"bytesOut":51,"why":"upstream-close"}
+{"ts":"2026-10-19T20:47:25.347Z","t":"tcp-close","dest":"93.184.216.34:20271","from":"172.17.0.3:44468","bytesIn":663,"bytesOut":51,"why":"upstream-close"}
+socks5-errors: {"ts":"2026-10-19T20:47:25.347Z","t":"relay-error","dest":"93.184.216.34:20271","err":"This socket has been ended by the other party"}
+{"ts":"2026-10-19T20:47:25.347Z","t":"relay-error","dest":"93.184.216.34:20271","err":"This socket has been ended by the other party"}

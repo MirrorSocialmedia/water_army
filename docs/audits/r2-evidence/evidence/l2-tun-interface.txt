@@ -1,0 +1,32 @@
+== ip link show tun0 ==
+3: tun0: <POINTOPOINT,MULTICAST,NOARP,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UNKNOWN mode DEFAULT group default qlen 500
+    link/none 
+== ip addr show tun0 ==
+3: tun0: <POINTOPOINT,MULTICAST,NOARP,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UNKNOWN group default qlen 500
+    link/none 
+    inet 10.8.0.1 peer 10.8.0.2/32 scope global tun0
+       valid_lft forever preferred_lft forever
+    inet6 fe80::49e1:6f81:468f:eb0b/64 scope link stable-privacy 
+       valid_lft forever preferred_lft forever
+== ip route show table 100 ==
+default via 10.8.0.2 dev tun0 onlink 
+172.17.0.1 dev eth0 scope link 
+== ip rule show ==
+0:	from all lookup local 
+5000:	from all lookup 100 
+10000:	from all fwmark 0xc0000/0xd0000 lookup legacy_system 
+11000:	from all iif lo oif eth0 uidrange 0-0 lookup eth0 
+16000:	from all fwmark 0x10063/0x1ffff iif lo lookup local_network 
+16000:	from all fwmark 0x10064/0x1ffff iif lo lookup eth0 
+17000:	from all iif lo oif eth0 lookup eth0 
+18000:	from all fwmark 0x0/0x10000 lookup legacy_system 
+== ip route get 8.8.8.8 ==
+8.8.8.8 via 10.8.0.2 dev tun0 table 100 src 10.8.0.1 uid 0 
+    cache 
+== ip route get 172.17.0.1 ==
+172.17.0.1 dev eth0 table 100 src 172.17.0.3 uid 0 
+    cache 
+== /proc/net/dev tun0 ==
+  tun0:       0       0    0    0    0     0          0         0       96       2    0    0    0     0       0          0
+== MTU ==
+1500

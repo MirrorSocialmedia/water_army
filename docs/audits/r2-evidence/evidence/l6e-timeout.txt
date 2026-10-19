@@ -1,0 +1,6 @@
+nonce=r2-l6e-75140
+probe: RC=read-timeout SENT=404 RECV=0 T_CONN_MS=0 T_TOTAL_MS=8000 SETTLE_MS=0
+echo-hang-log: 
+re-provision: root          2848  2843 0 20:47:51 ?     00:00:00 tun2socks --device tun0 --proxy socks5://172.17.0.1:20084 --loglevel debug
+8.8.8.8 via 10.8.0.2 dev tun0 table 100 src 10.8.0.1 uid 0 
+    cache 

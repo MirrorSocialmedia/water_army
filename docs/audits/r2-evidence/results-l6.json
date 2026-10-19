@@ -1,0 +1,66 @@
+[
+  {
+    "layer": "L6",
+    "id": "L6a",
+    "name": "3 sequential connections",
+    "verdict": "FAIL",
+    "detail": "#1 RC=read-timeout SENT=663 RECV=0 T_CONN_MS=0 T_TOTAL_MS=30000 SETTLE_MS=0 | no header/body separator | server=null || #2 RC=read-timeout SENT=663 RECV=0 T_CONN_MS=0 T_TOTAL_MS=30000 SETTLE_MS=0 | no",
+    "evidence": "l6a-sequential3"
+  },
+  {
+    "layer": "L6",
+    "id": "L6b",
+    "name": "3 parallel connections",
+    "verdict": "FAIL",
+    "detail": "#1 RC=read-timeout SENT=663 RECV=0 T_CONN_MS=0 T_TOTAL_MS=30000 SETTLE_MS=0 | no header/body separator || #2 RC=read-timeout SENT=663 RECV=0 T_CONN_MS=0 T_TOTAL_MS=30000 SETTLE_MS=0 | no header/body s",
+    "evidence": "l6b-parallel3"
+  },
+  {
+    "layer": "L6",
+    "id": "L6c",
+    "name": "half-close (SHUT_WR) 8KB",
+    "verdict": "FAIL",
+    "detail": "probe=read-timeout no header/body separator",
+    "evidence": "l6c-halfclose"
+  },
+  {
+    "layer": "L6",
+    "id": "L6d",
+    "name": "clean close (FIN both sides)",
+    "verdict": "FAIL",
+    "detail": "probe=read-timeout closeLogged=true errors=2",
+    "evidence": "l6d-clean-close"
+  },
+  {
+    "layer": "L6",
+    "id": "L6e",
+    "name": "timeout (server never responds)",
+    "verdict": "FAIL",
+    "detail": "probe=read-timeout recv=0 hangServerSawRequest=false (fwd-dir NOT visible to server)",
+    "evidence": "l6e-timeout"
+  },
+  {
+    "layer": "L6",
+    "id": "L6f",
+    "name": "RST (server reset conn)",
+    "verdict": "FAIL",
+    "detail": "probe=read-timeout detail=- rstServerSawData=false",
+    "evidence": "l6f-rst"
+  },
+  {
+    "layer": "L6",
+    "id": "L6g",
+    "name": "proxy rejects CONNECT (rep=5)",
+    "verdict": "PASS",
+    "detail": "probe=read-error rejectLogged=true",
+    "evidence": "l6g-proxy-reject"
+  },
+  {
+    "layer": "L6",
+    "id": "L6h",
+    "name": "recovery after reject (re-provision)",
+    "verdict": "FAIL",
+    "detail": "prov=true probe=read-timeout verify=false server=null",
+    "evidence": "l6h-recovery"
+  }
+]

@@ -1,0 +1,14 @@
+nonce=r2-l4-49831
+probe: RC=read-timeout SENT=1171 RECV=0 T_CONN_MS=0 T_TOTAL_MS=30000 SETTLE_MS=0
+socks5-lines:
+{"ts":"2026-10-19T20:18:47.155Z","t":"tcp-connect","dest":"93.184.216.34:20271","from":"172.17.0.3:52470"}
+{"ts":"2026-10-19T20:19:54.179Z","t":"tcp-close","dest":"93.184.216.34:20271","from":"172.17.0.3:52470","bytesIn":0,"bytesOut":51,"why":"upstream-close"}
+{"ts":"2026-10-19T20:19:54.207Z","t":"tcp-connect","dest":"93.184.216.34:20271","from":"172.17.0.3:37364"}
+{"ts":"2026-10-19T20:20:54.216Z","t":"tcp-close","dest":"93.184.216.34:20271","from":"172.17.0.3:37364","bytesIn":0,"bytesOut":51,"why":"upstream-close"}
+{"ts":"2026-10-19T20:20:54.243Z","t":"tcp-connect","dest":"93.184.216.34:20271","from":"172.17.0.3:51868"}
+{"ts":"2026-10-19T20:21:54.276Z","t":"tcp-close","dest":"93.184.216.34:20271","from":"172.17.0.3:51868","bytesIn":0,"bytesOut":51,"why":"upstream-close"}
+{"ts":"2026-10-19T20:21:54.303Z","t":"tcp-connect","dest":"93.184.216.34:20271","from":"172.17.0.3:60388"}
+{"ts":"2026-10-19T20:22:54.336Z","t":"tcp-close","dest":"93.184.216.34:20271","from":"172.17.0.3:60388","bytesIn":0,"bytesOut":51,"why":"upstream-close"}
+{"ts":"2026-10-19T20:29:09.853Z","t":"tcp-connect","dest":"93.184.216.34:20271","from":"172.17.0.3:42624"}
+echo-log: {"ts":"2026-10-19T20:13:56.289Z","t":"http-echo","seq":3,"method":"GET","url":"/echo","host":"172.17.0.1","nonce":"r2-l1b-36276","from":"172.17.0.3:58996","bytes":512,"sha256":"10ed511cf42e3a8a9d4d2c696d8d481216cba309afd63d1eca62fcebc917b076"}
+verify: no header/body separator

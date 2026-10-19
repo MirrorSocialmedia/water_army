@@ -1,0 +1,17 @@
+nonce=r2-l1b-36276
+probe: RC=ok SENT=655 RECV=264 T_CONN_MS=0 T_TOTAL_MS=0 SETTLE_MS=0
+capture(264B):
+HTTP/1.1 200 OK
+Content-Type: text/plain
+Content-Length: 142
+Connection: close
+Date: Mon, 19 Oct 2026 20:13:56 GMT
+
+MOCK-ECHO-1
+nonce=r2-l1b-36276
+method=GET
+url=/echo
+req_bytes=512
+req_sha256=10ed511cf42e3a8a9d4d2c696d8d481216cba309afd63d1eca62fcebc917b076
+
+verify: status=HTTP/1.1 200 OK headOk=true bodyOk=true clenOk=true recvBytes=264 expectedBody=142

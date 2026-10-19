@@ -1,0 +1,12 @@
+HTTP/1.1 200 OK
+Content-Type: text/plain
+Content-Length: 149
+Connection: close
+Date: Mon, 19 Oct 2026 19:58:35 GMT
+
+MOCK-ECHO-1
+nonce=r2-selftest-001
+method=GET
+url=/selftest
+req_bytes=257
+req_sha256=fcc3dc5ac8f8665649ea1d037037742523acc2f64b895f5972db7a1894850372

@@ -1,0 +1,5 @@
+{"ts":"2026-10-19T20:02:53.434Z","t":"mock-start","port":20273,"mode":"hang"}
+{"ts":"2026-10-19T20:29:00.266Z","t":"http-hang","seq":1,"method":"GET","url":"/h","host":"x","nonce":null,"from":"127.0.0.1:53864","bytes":0,"sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}
+{"ts":"2026-10-19T20:44:06.437Z","t":"http-hang","seq":2,"method":"GET","url":"/h","host":"x","nonce":null,"from":"127.0.0.1:39502","bytes":0,"sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}
+{"ts":"2026-10-19T21:00:09.123Z","t":"mock-stop","sig":"SIGTERM"}
+{"ts":"2026-10-19T23:47:22.986Z","t":"mock-start","port":20273,"mode":"hang"}

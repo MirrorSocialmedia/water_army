@@ -1,0 +1,6 @@
+{"ts":"2026-10-19T20:02:53.424Z","t":"mock-udp-bound","port":20083}
+{"ts":"2026-10-19T20:02:53.424Z","t":"mock-start","port":20083,"relay":"127.0.0.1:20271","canary":"canary.example","answer":"93.184.216.34","reject":true}
+{"ts":"2026-10-19T20:48:19.528Z","t":"tcp-reject-connect","dest":"93.184.216.34:20271","from":"172.17.0.3:37292"}
+{"ts":"2026-10-19T21:00:09.122Z","t":"mock-stop","sig":"SIGTERM"}
+{"ts":"2026-10-19T23:47:22.976Z","t":"mock-udp-bound","port":20083}
+{"ts":"2026-10-19T23:47:22.976Z","t":"mock-start","port":20083,"relay":"127.0.0.1:20271","canary":"canary.example","answer":"93.184.216.34","reject":true}

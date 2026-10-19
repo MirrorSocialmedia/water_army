@@ -1,0 +1,5 @@
+nonce=r2-l5b-9891
+probe: RC=read-timeout SENT=1172 RECV=0 T_CONN_MS=0 T_TOTAL_MS=31000 SETTLE_MS=1000
+verify: no header/body separator
+echo-log: {"ts":"2026-10-19T20:13:56.289Z","t":"http-echo","seq":3,"method":"GET","url":"/echo","host":"172.17.0.1","nonce":"r2-l1b-36276","from":"172.17.0.3:58996","bytes":512,"sha256":"10ed511cf42e3a8a9d4d2c696d8d481216cba309afd63d1eca62fcebc917b076"}
+tun: {"rxBytes":2305,"rxPkts":37,"txBytes":17151,"txPkts":54} → {"rxBytes":2417,"rxPkts":39,"txBytes":18539,"txPkts":58}

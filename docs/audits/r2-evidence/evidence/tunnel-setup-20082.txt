@@ -1,0 +1,9 @@
+{
+  "checkOut": "BINARY_STATE=ready\nBINARY_VERSION=tun2socks-2.7.0\n",
+  "staged": true,
+  "stagedRc": 0,
+  "runRc": 0,
+  "runOut": "root          2414  2409 0 20:17:59 ?     00:00:00 tun2socks --device tun0 --proxy socks5://172.17.0.1:20082 --loglevel debug\n8.8.8.8 via 10.8.0.2 dev tun0 table 100 src 10.8.0.1 uid 0 \n    cache \n",
+  "ps": "root          2414     1 0 20:17:59 ?     00:00:00 tun2socks --device tun0 --proxy socks5://172.17.0.1:20082 --loglevel debug\n",
+  "ok": true
+}

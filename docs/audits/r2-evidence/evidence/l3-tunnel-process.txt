@@ -1,0 +1,28 @@
+== ps -ef tun2socks ==
+root          2414     1 0 20:17:59 ?     00:00:00 tun2socks --device tun0 --proxy socks5://172.17.0.1:20082 --loglevel debug
+root          2461     0 0 20:18:12 ?     00:00:00 sh -c echo "== ps -ef tun2socks =="; ps -ef | grep [t]un2socks?echo "== --version =="; /data/local/tmp/tun2socks --version 2>&1?echo "== --help (proxy flags) =="; /data/local/tmp/tun2socks --help 2>&1 | head -30?echo "== tun2socks.log head =="; head -25 /data/local/tmp/tun2socks.log 2>&1?echo "== tun2socks.log tail =="; tail -12 /data/local/tmp/tun2socks.log 2>&1
+== --version ==
+tun2socks-2.7.0
+linux/amd64, go1.26.3, 8dda19e
+== --help (proxy flags) ==
+Usage of /data/local/tmp/tun2socks:
+  -c, --config string              YAML format configuration file
+  -d, --device string              Use this device [driver://]name
+      --fwmark int                 Set firewall MARK (Linux/BSD)
+      --interface string           Use network INTERFACE (Linux/MacOS/Windows)
+      --loglevel string            Log level [debug|info|warn|error|silent] (default "info")
+      --mtu int                    Set device maximum transmission unit (MTU)
+      --multicast-groups strings   Set multicast groups, separated by commas
+  -p, --proxy string               Use this proxy [protocol://]host[:port]
+      --restapi string             HTTP statistic server listen address
+      --tcp-auto-tuning            Enable TCP receive buffer auto-tuning
+      --tcp-rcvbuf string          Set TCP receive buffer size for netstack
+      --tcp-sndbuf string          Set TCP send buffer size for netstack
+      --tun-post-up string         Execute a command after TUN device setup
+      --tun-pre-up string          Execute a command before TUN device setup
+      --udp-timeout duration       Set timeout for each UDP session
+  -v, --version                    Show version and then quit
+== tun2socks.log head ==
+2026-10-19T20:18:00.566Z	INFO	engine/engine.go:250	[STACK] tun0 <-> socks5://172.17.0.1:20082
+== tun2socks.log tail ==
+2026-10-19T20:18:00.566Z	INFO	engine/engine.go:250	[STACK] tun0 <-> socks5://172.17.0.1:20082

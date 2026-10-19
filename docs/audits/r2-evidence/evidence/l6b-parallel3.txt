@@ -1,0 +1,4 @@
+shellrc=0
+#1 RC=read-timeout SENT=663 RECV=0 T_CONN_MS=0 T_TOTAL_MS=30000 SETTLE_MS=0 | no header/body separator
+#2 RC=read-timeout SENT=663 RECV=0 T_CONN_MS=0 T_TOTAL_MS=30000 SETTLE_MS=0 | no header/body separator
+#3 RC=read-timeout SENT=663 RECV=0 T_CONN_MS=0 T_TOTAL_MS=30000 SETTLE_MS=0 | no header/body separator
