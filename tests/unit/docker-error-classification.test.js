@@ -117,6 +117,34 @@ test('classification: unclassified → GENERIC 502 (message preserved)', () => {
   assert.match(r.message, /weird engine blerg/);
 });
 
+test('classification: missing image reference → IMAGE_NOT_FOUND (R5 handoff / R6)', async (t) => {
+  await t.test('daemon 404 + dockerode create wording (R5 live shape) → IMAGE_NOT_FOUND 404, clean message', () => {
+    // Exact shape from docs/live-evidence/r5-20261020/bad-image-negative.txt
+    const r = classifyDockerError(withStatus(404, '(HTTP code 404) no such container - No such image: water-army/redroid:99.9.9-doesnotexist'));
+    assert.equal(r.code, DOCKER_ERROR.IMAGE_NOT_FOUND);
+    assert.equal(r.status, 404);
+    assert.equal(r.message, 'Image not found: water-army/redroid:99.9.9-doesnotexist');
+    assert.ok(!/no such container/i.test(r.message), 'the misleading container prefix must not survive');
+  });
+
+  await t.test('daemon 404 + plain daemon wording "No such image" → IMAGE_NOT_FOUND', () => {
+    const r = classifyDockerError(withStatus(404, 'Error response from daemon: No such image: redroid/redroid:15.0.0'));
+    assert.equal(r.code, DOCKER_ERROR.IMAGE_NOT_FOUND);
+    assert.equal(r.status, 404);
+    assert.equal(r.message, 'Image not found: redroid/redroid:15.0.0');
+  });
+
+  await t.test('wording ALONE (no daemon status) is NOT definitive → GENERIC (MD §9.1)', () => {
+    const r = classifyDockerError(new Error('No such image: x/y:z'));
+    assert.equal(r.code, DOCKER_ERROR.GENERIC);
+  });
+
+  await t.test('container 404 WITHOUT image wording is unchanged (CONTAINER_NOT_FOUND)', () => {
+    const r = classifyDockerError(withStatus(404, 'No such container: deadbeef'));
+    assert.equal(r.code, DOCKER_ERROR.CONTAINER_NOT_FOUND);
+  });
+});
+
 test('precedence: never conflate (MD §9.1)', async (t) => {
   await t.test('timeout error with not-found-ish message → TIMEOUT (code wins)', () => {
     const r = classifyDockerError(withCode('ETIMEDOUT', 'container xyz not found (timed out)'));

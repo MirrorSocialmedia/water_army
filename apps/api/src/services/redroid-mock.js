@@ -26,8 +26,12 @@ let mockIdSeq = 9000;
  * @param {string[]} [opts.networks]
  * @param {boolean} [opts.startFails] created containers fail to start (simulate boot crash)
  * @param {string} [opts.startErrorMessage]
+ * @param {{statusCode:number, message:string}} [opts.createError] createContainer
+ *   fails with a dockerode-shaped engine error (e.g. the daemon's
+ *   "(HTTP code 404) no such container - No such image: <ref>" for a missing
+ *   image reference — R6 error-contract test seam)
  */
-export function createMockRedroidDocker({ networks = ['bridge'], startFails = false, startErrorMessage = 'OCI runtime create failed: /dev/binder not found (mock host without binder_linux)' } = {}) {
+export function createMockRedroidDocker({ networks = ['bridge'], startFails = false, startErrorMessage = 'OCI runtime create failed: /dev/binder not found (mock host without binder_linux)', createError = null } = {}) {
   const byId = new Map();
   const byName = new Map();
   const calls = [];
@@ -143,6 +147,7 @@ export function createMockRedroidDocker({ networks = ['bridge'], startFails = fa
 
     async createContainer(cfg) {
       calls.push({ method: 'createContainer', cfg: cfg ?? null });
+      if (createError) throw engineError(createError.statusCode, createError.message);
       const body = cfg?._body ?? cfg ?? {};
       const name = String(cfg?._query?.name ?? body.Name ?? '').replace(/^\//, '');
       if (!name) throw engineError(400, 'container name required');
@@ -201,8 +206,11 @@ export function createMockRedroidDockerWrapper(opts = {}) {
  * @param {object} [opts]
  * @param {boolean} [opts.online] get-state reports online (default true)
  * @param {string[]} [opts.logcatLines] per-line source (default: generated)
+ * @param {string} [opts.spawnError] make EVERY exec throw a spawn failure
+ *   (ENOENT-shaped — the adb binary is missing / unrunnable on this host;
+ *   R6 ADB_UNAVAILABLE error-contract test seam)
  */
-export function createMockAdb({ online = true, logcatLines } = {}) {
+export function createMockAdb({ online = true, logcatLines, spawnError = null } = {}) {
   const calls = [];
 
   const lines =
@@ -211,6 +219,12 @@ export function createMockAdb({ online = true, logcatLines } = {}) {
 
   async function exec(bin, argv) {
     calls.push({ bin, argv: [...argv] });
+    if (spawnError) {
+      const e = new Error(spawnError);
+      e.code = 'ENOENT';
+      e.stderr = '';
+      throw e;
+    }
     const targetIdx = argv.indexOf('-s');
     const target = targetIdx !== -1 ? argv[targetIdx + 1] : argv.find((a) => /^127\.0\.0\.1:\d+$/.test(a));
 
@@ -310,11 +324,11 @@ export function createMockPreflight() {
  *    control-plane failure shapes (e.g. process=dead, effective=direct).
  * opts.canary = {pass, reason, ms} — inject data-plane failure shapes.
  */
-export function createMockExec({ fail = false, binaryCheck, netcheck, canary } = {}) {
+export function createMockExec({ fail = false, binaryCheck, netcheck, canary, stageFail = false } = {}) {
   const calls = [];
   let lastStagedB64 = null;
   // Mutable behavior (tests flip failure shapes mid-scenario):
-  const behavior = { fail, binaryCheck, netcheck, canary };
+  const behavior = { fail, binaryCheck, netcheck, canary, stageFail };
   async function exec(containerId, script) {
     calls.push({ containerId, script, at: Date.now() });
     if (behavior.fail) return { exitCode: 1, stdout: 'mock exec: forced failure', stderr: 'TUNNEL_TEARDOWN_FAILED' };
@@ -348,6 +362,11 @@ export function createMockExec({ fail = false, binaryCheck, netcheck, canary } =
     // R1: stage (base64 → file). Capture the payload for the run call.
     const m = script.match(/printf '%s' '([A-Za-z0-9+\/=]+)' \| base64 -d/);
     if (m) {
+      if (behavior.stageFail) {
+        // R6: stage fails while the binary check passed — isolates the
+        // TUNNEL_SETUP_FAILED (script-stage-failed) persistence path.
+        return { exitCode: 1, stdout: '', stderr: 'mock: forced stage failure' };
+      }
       lastStagedB64 = m[1];
       return { exitCode: 0, stdout: 'T2S_STAGED\n', stderr: '' };
     }
@@ -388,6 +407,7 @@ export function createMockExec({ fail = false, binaryCheck, netcheck, canary } =
       behavior.binaryCheck = b.binaryCheck;
       behavior.netcheck = b.netcheck;
       behavior.canary = b.canary;
+      behavior.stageFail = Boolean(b.stageFail);
     },
   };
 }

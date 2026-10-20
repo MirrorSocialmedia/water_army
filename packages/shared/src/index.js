@@ -180,8 +180,13 @@ export const HEALTH_CHECK_TIMEOUT_MS = 2500;
  * Each code maps to a fixed HTTP status in DockerService.
  */
 export const DOCKER_ERROR = Object.freeze({
-  /** Definitive 404 from the daemon (container/image/network not found). */
+  /** Definitive 404 from the daemon (container/network not found). */
   CONTAINER_NOT_FOUND: 'CONTAINER_NOT_FOUND',
+  /** Definitive 404 for a missing image reference (create/pull of an
+   *  unknown image). Distinct from CONTAINER_NOT_FOUND — R5 live evidence:
+   *  dockerode composes "(HTTP code 404) no such container - No such image:
+   *  <ref>", where the 404 is about the IMAGE, not a container. */
+  IMAGE_NOT_FOUND: 'IMAGE_NOT_FOUND',
   /** Socket connect refused / missing / reset — daemon down or path wrong. */
   DAEMON_UNAVAILABLE: 'DOCKER_DAEMON_UNAVAILABLE',
   /** EACCES on the socket — api lacks docker group permission. */
@@ -201,6 +206,7 @@ export const DOCKER_ERROR = Object.freeze({
 /** HTTP status per Docker error code (single source of truth). */
 export const DOCKER_ERROR_STATUS = Object.freeze({
   [DOCKER_ERROR.CONTAINER_NOT_FOUND]: 404,
+  [DOCKER_ERROR.IMAGE_NOT_FOUND]: 404,
   [DOCKER_ERROR.DAEMON_UNAVAILABLE]: 503,
   [DOCKER_ERROR.PERMISSION_DENIED]: 502,
   [DOCKER_ERROR.TIMEOUT]: 504,

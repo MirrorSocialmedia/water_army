@@ -55,12 +55,14 @@ const SOCKET_MSG =
 const PERMISSION_MSG = /permission denied|EACCES/i;
 const TIMEOUT_MSG = /timed? ?out|timeout|ETIMEDOUT|ESOCKETTIMEDOUT/i;
 const NOT_FOUND_MSG = /no such (container|network|volume|image|object|task|exec|node)|not found/i;
+const IMAGE_NOT_FOUND_MSG = /no such image/i;
 
 /**
  * Classify a raw Dockerode/socket error into a stable code.
  *
  * Precedence (MD §9.1 hard rule — only a DEFINITIVE 404 is not-found;
  * socket/permission/timeout must never be read as "container gone"):
+ *   0. daemon answered 4xx + "No such image" → IMAGE_NOT_FOUND
  *   1. daemon answered 404 (or "No such container") → CONTAINER_NOT_FOUND
  *   2. permission denied on the socket            → PERMISSION_DENIED
  *   3. socket-level failure (daemon down/path)    → DAEMON_UNAVAILABLE
@@ -73,6 +75,16 @@ const NOT_FOUND_MSG = /no such (container|network|volume|image|object|task|exec|
 export function classifyDockerError(err) {
   const message = (err?.message ?? String(err ?? '')).trim() || 'docker error';
 
+  // 0. image not found: the daemon's 404 for a missing image reference at
+  //    container-create time. dockerode composes "(HTTP code 404) no such
+  //    container - No such image: <ref>" — misleading, because the 404 is
+  //    about the IMAGE, not a container (R5 live evidence). Normalize to a
+  //    clean message carrying only the image reference. Wording alone
+  //    (no daemon 4xx status) is NOT definitive — stays GENERIC (MD §9.1).
+  if (IMAGE_NOT_FOUND_MSG.test(message) && (err?.statusCode === 404 || (err?.statusCode >= 400 && err?.statusCode < 500))) {
+    const ref = message.match(/no such image:\s*([^\s)]+)/i)?.[1] ?? null;
+    return { code: DOCKER_ERROR.IMAGE_NOT_FOUND, status: 404, message: ref ? `Image not found: ${ref}` : 'Image not found (no reference in error)' };
+  }
   // 1. definitive not-found: daemon answered 404, or its canonical wording.
   if (err?.statusCode === 404 || (err?.statusCode && err.statusCode < 500 && NOT_FOUND_MSG.test(message))) {
     return { code: DOCKER_ERROR.CONTAINER_NOT_FOUND, status: 404, message: `Container not found: ${message}` };

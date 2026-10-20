@@ -154,6 +154,7 @@ export const NET_ERRORS = Object.freeze({
   CANARY_NOT_CONFIGURED: 'CANARY_NOT_CONFIGURED',    // no admin canary target → data plane unverifiable → can never be HEALTHY
   TUNNEL_CHECK_ERROR: 'TUNNEL_CHECK_ERROR',          // netcheck script itself failed (exec seam) — inconclusive
   DOCKER_UNAVAILABLE: 'DOCKER_UNAVAILABLE',          // daemon unreachable during a check — inconclusive
+  TUNNEL_SETUP_FAILED: 'TUNNEL_SETUP_FAILED',        // in-device tunnel script stage/run failed (provision aborted) — R6: was referenced but undefined (netLastErrorCode silently dropped)
   TUNNEL_START_TIMEOUT: 'TUNNEL_START_TIMEOUT',      // stuck in STARTING beyond boot timeout
   RECOVERY_EXHAUSTED: 'RECOVERY_EXHAUSTED',          // recovery budget spent → FAILED + manual intervention
   STALL_REPROVISION_USELESS: 'STALL_REPROVISION_USELESS', // gVisor stall signature: re-provision did not restore data plane (R2 L6h)

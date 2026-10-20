@@ -105,12 +105,12 @@ export function redroidDeviceRoutes(app) {
     '/api/devices/redroid/:id/refresh',
     { preHandler: app.requireRole('operator'), schema: { params: { type: 'object', additionalProperties: false, required: ['id'], properties: { id: DEVICE_ID } } } },
     async (req) => {
-      const { device, adbNote, network } = await app.redroidService.refreshDevice(req.params.id, {
+      const { device, adbNote, adbError, network } = await app.redroidService.refreshDevice(req.params.id, {
         actorUserId: req.user.id,
         requestId: req.id,
         ip: req.ip,
       });
-      return { device, adbNote: adbNote ?? null, network };
+      return { device, adbNote: adbNote ?? null, adbError: adbError ?? null, network };
     },
   );
 

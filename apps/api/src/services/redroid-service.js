@@ -25,7 +25,7 @@ import path from 'node:path';
 
 import { DOCKER_ERROR, encryptSecret, decryptSecret, resolveProviderKey } from '@water-army/shared';
 
-import { DockerServiceError } from './docker-service.js';
+import { DockerServiceError, classifyDockerError } from './docker-service.js';
 import { checkPortAvailable, } from './preflight.js';
 import { createAdbWhitelist } from './adb-whitelist.js';
 import {
@@ -1835,9 +1835,15 @@ export function createRedroidService({
 
   function toDockerServiceError(err, operation, name) {
     if (err instanceof RedroidServiceError || err instanceof DockerServiceError) return err;
-    const e = new DockerServiceError({ code: DOCKER_ERROR.GENERIC, message: String(err?.message ?? err).slice(0, 300) });
+    // R6: delegate to the shared classifier (single source of truth) — a
+    // missing image reference must surface as IMAGE_NOT_FOUND (404), not as
+    // a generic DOCKER_ERROR with the misleading "no such container" prefix
+    // (R5 live evidence: bad-image-negative.txt).
+    const { code, status, message } = classifyDockerError(err);
+    const e = new DockerServiceError({ code, status, message: message.slice(0, 300) });
     e.operation = operation;
     e.containerId = name;
+    e.cause = err;
     return e;
   }
 
@@ -1992,6 +1998,12 @@ export function createRedroidService({
    * state via the whitelist `get-state` op (honest: adb unavailable →
    * 'unknown', never 'online'). gpuStatus is NEVER touched here — only an
    * in-device render check may change it (MD §2.4).
+   *
+   * R6 error contract (§8.3): `adbError` is the machine-readable code for a
+   * failed ADB health check — 'ADB_UNAVAILABLE' when the adb engine itself
+   * cannot run (binary missing / spawn failure) or the whitelist rejects the
+   * call (then that apiCode). null = check ran (or was legitimately not
+   * executed). The human `adbNote` stays as before.
    */
   async function refreshDevice(idOrName, { actorUserId, requestId, ip } = {}) {
     const row = await findDevice(idOrName);
@@ -2010,17 +2022,30 @@ export function createRedroidService({
 
     let adbState = 'unknown';
     let adbNote = null;
+    let adbError = null;
     if (containerState === 'running') {
       try {
         const res = await adbEngine.run({ op: 'get-state', target: `127.0.0.1:${row.adbPort}` });
-        const out = `${res.stdout}\n${res.stderr}`.toLowerCase();
-        if (res.timedOut) adbNote = 'adb get-state timed out';
-        else if (/device online/.test(out)) adbState = 'online';
-        else if (/offline|no devices|cannot connect/.test(out)) adbState = 'offline';
-        else adbState = res.exitCode === 0 ? 'online' : 'offline';
-        if (res.truncated) adbNote = adbNote ?? 'adb output truncated';
+        // R6: the whitelist engine NEVER throws for an exec failure — a
+        // missing/unrunnable binary (ENOENT/EACCES) or a timeout settles to
+        // exitCode=null. That is an ENGINE failure, not a device state:
+        // honest 'unknown' + the machine-readable code (MD §8.3). Before R6
+        // this path silently produced adbState='offline' with no note.
+        if (res.timedOut || res.exitCode === null) {
+          adbState = 'unknown';
+          adbError = res.timedOut ? 'ADB_TIMEOUT' : 'ADB_UNAVAILABLE';
+          adbNote = res.timedOut ? 'adb get-state timed out' : 'adb unavailable on this host (engine failure)';
+        } else {
+          const out = `${res.stdout}\n${res.stderr}`.toLowerCase();
+          if (/device online/.test(out)) adbState = 'online';
+          else if (/offline|no devices|cannot connect/.test(out)) adbState = 'offline';
+          else adbState = res.exitCode === 0 ? 'online' : 'offline';
+          if (res.truncated) adbNote = adbNote ?? 'adb output truncated';
+        }
       } catch (err) {
         adbState = 'unknown';
+        // R6: machine-readable code — the engine failed, not the device.
+        adbError = err?.apiCode ?? 'ADB_UNAVAILABLE';
         adbNote = err?.apiCode ? err.message : 'adb unavailable on this host';
       }
     } else {
@@ -2036,7 +2061,7 @@ export function createRedroidService({
       requestId: requestId ?? null,
       ip: ip ?? null,
       status: 'success',
-      details: { name: row.name, containerState, adbState },
+      details: { name: row.name, containerState, adbState, adbError: adbError ?? undefined },
     });
     const fresh = await findDevice(row.id);
     if (!fresh) throw fail('REDROID_DEVICE_NOT_FOUND', 404, `Device '${row.name}' vanished during refresh`);
@@ -2048,7 +2073,7 @@ export function createRedroidService({
       try { netTick = await healthTickDevice(fresh); } catch (err) { netTick = { error: clip(err?.message, 160) }; }
     }
     const fresh2 = netTick && !netTick.skipped ? await findDevice(row.id) : fresh;
-    return { device: deviceView(fresh2 ?? fresh), adbNote, network: fresh2?.gostPort ? buildNetPayload(fresh2 ?? fresh, { staleTtlMs: healthCfg().staleTtlMs, canaryConfigured: canaryConfigured() }) : null };
+    return { device: deviceView(fresh2 ?? fresh), adbNote, adbError: adbError ?? null, network: fresh2?.gostPort ? buildNetPayload(fresh2 ?? fresh, { staleTtlMs: healthCfg().staleTtlMs, canaryConfigured: canaryConfigured() }) : null };
   }
 
   // ---- diagnostics (工單: 4 個獨立結果區，任一項未執行 = 未驗證) ----------
@@ -2117,26 +2142,48 @@ export function createRedroidService({
       };
       try {
         let res = await adbEngine.run({ op: 'get-state', target });
-        let online = parseState(res);
         let connectAttempted = false;
-        if (!online) {
+        // R6: exitCode=null = the engine itself failed (binary missing /
+        // spawn error / timeout) — no process ran, so a connect retry is
+        // pointless and the zone is 'error', NOT a device-side 'offline'.
+        if (res.exitCode !== null && !res.timedOut && !parseState(res)) {
           // one connect attempt, then re-check (still whitelist ops only)
           await adbEngine.run({ op: 'connect', target });
           connectAttempted = true;
           res = await adbEngine.run({ op: 'get-state', target });
-          online = parseState(res);
         }
+        if (res.exitCode === null || res.timedOut) {
+          adbConnectivity = {
+            executed: true,
+            status: 'error',
+            error: res.timedOut ? 'ADB_TIMEOUT' : 'ADB_UNAVAILABLE',
+            target,
+            note: res.timedOut ? 'adb get-state timed out' : 'adb unavailable on this host (engine failure)',
+          };
+        } else {
+          const online = parseState(res);
+          adbConnectivity = {
+            executed: true,
+            status: online ? 'online' : 'offline',
+            target,
+            connectAttempted,
+            timedOut: res.timedOut || undefined,
+            truncated: res.truncated || undefined,
+            evidence: (res.stdout ?? '').slice(0, 500),
+          };
+        }
+      } catch (err) {
+        // R6: an engine failure (adb binary missing / spawn error) is NOT
+        // 'offline' — 'offline' means adbd answered the host protocol. An
+        // unrunnable check is 'error' with the machine-readable code
+        // (ADB_UNAVAILABLE), so consumers can distinguish host-prerequisite
+        // failures from device-side offline (MD §8.3).
         adbConnectivity = {
           executed: true,
-          status: online ? 'online' : 'offline',
-          target,
-          connectAttempted,
-          timedOut: res.timedOut || undefined,
-          truncated: res.truncated || undefined,
-          evidence: (res.stdout ?? '').slice(0, 500),
+          status: 'error',
+          error: err?.apiCode ?? 'ADB_UNAVAILABLE',
+          note: err?.apiCode ? err.message : 'adb unavailable on this host',
         };
-      } catch (err) {
-        adbConnectivity = { executed: true, status: 'offline', note: err?.apiCode ? err.message : 'adb unavailable on this host' };
       }
     }
 
