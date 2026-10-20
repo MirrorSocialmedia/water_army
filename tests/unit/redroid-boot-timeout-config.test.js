@@ -33,3 +33,26 @@ test('redroidTunnelBootTimeoutMs: REDROID_TUNNEL_BOOT_TIMEOUT_MS overrides', () 
     /REDROID_TUNNEL_BOOT_TIMEOUT_MS must be a positive integer/,
   );
 });
+
+/**
+ * R7 (2026-10-21): `redroidTunnelPollMs` had the SAME unmapped-knob defect —
+ * redroid-service.js provisionTunnel read `config?.redroidTunnelPollMs ?? 5000`
+ * but config.js never read REDROID_TUNNEL_POLL_MS from env, so the knob
+ * silently did not exist (R6 handoff #1: wire-or-document → wired, because it
+ * is a real operator knob on the boot-wait loop and .env.example must only
+ * list vars the program actually reads — MD §9.1). Default 5000 = behavior-
+ * identical to the old in-service fallback.
+ */
+test('redroidTunnelPollMs: 5000ms default (identical to the in-service fallback)', () => {
+  assert.equal(loadConfig({}).redroidTunnelPollMs, 5_000);
+});
+
+test('redroidTunnelPollMs: REDROID_TUNNEL_POLL_MS overrides; non-numeric fails fast', () => {
+  assert.equal(loadConfig({ REDROID_TUNNEL_POLL_MS: '250' }).redroidTunnelPollMs, 250);
+  assert.throws(
+    () => loadConfig({ REDROID_TUNNEL_POLL_MS: 'bogus' }),
+    /REDROID_TUNNEL_POLL_MS must be a positive integer/,
+  );
+  // must stay positive (a 0/negative poll would spin the boot-wait loop)
+  assert.throws(() => loadConfig({ REDROID_TUNNEL_POLL_MS: '0' }), /positive integer/);
+});

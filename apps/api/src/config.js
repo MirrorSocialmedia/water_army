@@ -176,6 +176,14 @@ export function loadConfig(env = process.env, opts = {}) {
     // REDROID_TUNNEL_BOOT_TIMEOUT_MS=2400000 via env, so 2400s becomes the
     // honest default. Fast hosts may lower it via env.
     redroidTunnelBootTimeoutMs: optInt(e, 'REDROID_TUNNEL_BOOT_TIMEOUT_MS', 2_400_000),
+    // provisionTunnel boot-wait poll interval (adb getprop get sys.boot_completed
+    // between deadline checks). R7 (2026-10-21): same unmapped-knob defect R6
+    // fixed for REDROID_TUNNEL_BOOT_TIMEOUT_MS — the service read
+    // config.redroidTunnelPollMs with a `?? 5000` fallback but config.js never
+    // mapped the env var, so the knob silently did not exist. Wired here with
+    // the same 5000 default (behavior-identical); operators may lower it on
+    // fast hosts or raise it on loaded hosts.
+    redroidTunnelPollMs: optInt(e, 'REDROID_TUNNEL_POLL_MS', 5_000),
     // Data-plane canary: TCP bidirectional payload probe target. UNCONFIGURED
     // (empty host) = the data plane is unverifiable = the device can never be
     // (stay) HEALTHY (fail-closed — MD §5.3/§5.5).
