@@ -17,7 +17,7 @@
  */
 import { EventEmitter } from 'node:events';
 
-import { T2S_SETUP_FILE, T2S_NETCHECK_MARKER, T2S_CANARY_MARKER, TUN2SOCKS_CHECK_MARKER, TUN2SOCKS_PIN } from './redroid-service.js';
+import { removeRedroidDataDir, T2S_SETUP_FILE, T2S_NETCHECK_MARKER, T2S_CANARY_MARKER, TUN2SOCKS_CHECK_MARKER, TUN2SOCKS_PIN } from './redroid-service.js';
 
 let mockIdSeq = 9000;
 
@@ -434,12 +434,27 @@ export function createMockProxyReachable({ ok = true, error = null } = {}) {
  * @returns {{docker:object, adb:object, preflight:Function, exec:object, proxyReachable:Function}}
  */
 export function createMockRedroidEnvironment(opts = {}) {
+  // R6 (R5 handoff #5): data-dir removal seam. Default = the REAL guarded
+  // implementation (the data dir is real fs under the test tmp root). A test
+  // can force a failure shape — the R5 live finding was EACCES on a
+  // ROOT-OWNED dir (privileged container files the API uid cannot remove).
+  const removeDataDirState = { failure: opts.removeDataDirFailure ?? null };
+  const removeDataDir = async (dataDir, dataRoot) => {
+    if (removeDataDirState.failure) {
+      const e = removeDataDirState.failure;
+      const code = e?.code === 'EACCES' || e?.code === 'EPERM' ? 'DATA_DIR_PERM_DENIED' : 'DATA_DIR_REMOVAL_FAILED';
+      return { removed: false, code, error: String(e?.message ?? e).slice(0, 200) };
+    }
+    return removeRedroidDataDir(dataDir, dataRoot);
+  };
   return {
     docker: createMockRedroidDockerWrapper(opts),
     adb: createMockAdb(opts),
     preflight: createMockPreflight(),
     exec: createMockExec(opts.execOpts ?? {}),
     proxyReachable: createMockProxyReachable(opts.proxyReachableOpts ?? {}),
+    removeDataDir,
+    setRemoveDataDirFailure: (err) => { removeDataDirState.failure = err; },
   };
 }
 

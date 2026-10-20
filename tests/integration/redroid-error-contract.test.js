@@ -106,6 +106,41 @@ test('error contract: diagnostics adb zone with an unrunnable engine → status 
   assert.match(zone.note, /adb unavailable/i);
 });
 
+test('error contract: delete with removeData + permission failure → 200 + dataRemoved:false + DATA_DIR_PERM_DENIED (R5 handoff #5: surface, never silent)', async (t) => {
+  const { app, db, cookies, close } = await makeApp();
+  t.after(close);
+
+  await seedRedroidTemplates(app, cookies.admin);
+  const created = await app.inject({
+    method: 'POST', url: '/api/devices/redroid', headers: { cookie: cookies.operator },
+    payload: { name: 'redroid-rmdel', templateName: 'redroid-14-swiftshader', idempotencyKey: 'key-rmdel-1' },
+  });
+  assert.equal(created.statusCode, 201, created.body);
+
+  // R5 live shape: the privileged container leaves ROOT-OWNED files in the
+  // data dir; the API uid cannot remove them → EACCES.
+  app.redroidMockEnv.setRemoveDataDirFailure(
+    Object.assign(new Error('EACCES: permission denied, rmdir (root-owned data dir)'), { code: 'EACCES' }),
+  );
+
+  const res = await app.inject({
+    method: 'DELETE', url: '/api/devices/redroid/redroid-rmdel', headers: { cookie: cookies.admin },
+    payload: { confirm: 'redroid-rmdel', removeData: true },
+  });
+  // The delete itself SUCCEEDED (container gone, row gone) — the data
+  // cleanup failure is PARTIAL: 200 + explicit machine-readable fields,
+  // never a silent success and never a fake error on the delete itself.
+  assert.equal(res.statusCode, 200, res.body);
+  const j = res.json();
+  assert.equal(j.deleted, true);
+  assert.equal(j.containerRemoved, true);
+  assert.equal(j.removeData, true);
+  assert.equal(j.dataRemoved, false);
+  assert.equal(j.dataRemoveErrorCode, 'DATA_DIR_PERM_DENIED', 'stable machine code for the known root-owned-dir shape');
+  assert.match(j.dataRemoveError, /EACCES/);
+  assert.equal(await db.device.findUnique({ where: { name: 'redroid-rmdel' } }), null);
+});
+
 test('error contract: tunnel stage failure persists TUNNEL_SETUP_FAILED (was undefined → silently dropped)', async (t) => {
   const { app, db, cookies, close } = await makeApp();
   t.after(close);

@@ -128,6 +128,9 @@ export async function buildApp(opts = {}) {
     exec: redroidEnv ? redroidEnv.exec.exec : undefined,
     // R3: host-side proxy-leg probe (mock mode = deterministic {ok, error}).
     proxyReachable: redroidEnv ? redroidEnv.proxyReachable : undefined,
+    // R6: data-dir removal (mock mode = seam that can force the EACCES shape
+    // from the R5 live finding; real mode = the guarded removeRedroidDataDir).
+    removeDataDir: redroidEnv ? redroidEnv.removeDataDir : undefined,
     preflight:
       redroidEnv?.preflight ??
       ((params) =>

@@ -528,7 +528,12 @@ export function createRedroidService({
   // inspect + TCP connect to 172.17.0.1:<gostPort>; mock adapter injects a
   // deterministic stand-in (the whole device is simulated there).
   proxyReachable: injectedProxyReachable,
+  // R6: data-dir removal seam. Real = removeRedroidDataDir (path-guarded
+  // recursive rm); mock mode can force a failure shape (e.g. the EACCES the
+  // R5 live run hit on root-owned dirs) to test the partial-failure surface.
+  removeDataDir: injectedRemoveDataDir,
 } = {}) {
+  const removeDataDir = injectedRemoveDataDir ?? removeRedroidDataDir;
   const adbEngine = adb ?? createAdbWhitelist({
     adbBinary: config?.redroidAdbBinary,
     timeoutMs: config?.redroidAdbTimeoutMs,
@@ -1958,10 +1963,12 @@ export function createRedroidService({
 
     let dataRemoved = false;
     let dataRemoveError = null;
+    let dataRemoveErrorCode = null;
     if (removeData) {
-      const r = await removeRedroidDataDir(row.dataDir, config?.redroidDataRoot);
+      const r = await removeDataDir(row.dataDir, config?.redroidDataRoot);
       dataRemoved = r.removed;
       dataRemoveError = r.error;
+      dataRemoveErrorCode = r.code ?? null;
     }
 
     let gostTeardown = null;
@@ -1988,9 +1995,9 @@ export function createRedroidService({
       requestId: requestId ?? null,
       ip: ip ?? null,
       status: containerError ? 'failure' : 'success',
-      details: { name: row.name, adbPort: row.adbPort, containerRemoved, removeData: Boolean(removeData), dataRemoved, dataRemoveError: dataRemoveError ?? undefined, containerError: containerError ?? undefined, proxyTornDown: tunnelTeardown ?? undefined, gostRemoved: gostTeardown ?? undefined },
+      details: { name: row.name, adbPort: row.adbPort, containerRemoved, removeData: Boolean(removeData), dataRemoved, dataRemoveErrorCode, dataRemoveError: dataRemoveError ?? undefined, containerError: containerError ?? undefined, proxyTornDown: tunnelTeardown ?? undefined, gostRemoved: gostTeardown ?? undefined },
     });
-    return { deleted: true, name: row.name, containerRemoved, removeData: Boolean(removeData), dataRemoved, dataRemoveError: dataRemoveError ?? undefined, containerError: containerError ?? undefined, proxyTornDown: tunnelTeardown ?? undefined, gostRemoved: gostTeardown ?? undefined };
+    return { deleted: true, name: row.name, containerRemoved, removeData: Boolean(removeData), dataRemoved, dataRemoveErrorCode, dataRemoveError: dataRemoveError ?? undefined, containerError: containerError ?? undefined, proxyTornDown: tunnelTeardown ?? undefined, gostRemoved: gostTeardown ?? undefined };
   }
 
   /**
@@ -2524,19 +2531,25 @@ export async function removeRedroidDataDir(dataDir, dataRoot) {
   const root = path.resolve(dataRoot ?? '/var/lib/water-army/redroid');
   const target = path.resolve(dataDir);
   if (target === root || !target.startsWith(root + path.sep)) {
-    return { removed: false, error: `refusing to remove '${dataDir}' — outside redroid data root` };
+    return { removed: false, code: 'DATA_DIR_REFUSED', error: `refusing to remove '${dataDir}' — outside redroid data root` };
   }
   try {
     const real = await fs.promises.realpath(target);
     const realRoot = await fs.promises.realpath(root);
     if (real !== realRoot && !real.startsWith(realRoot + path.sep)) {
-      return { removed: false, error: 'refusing to remove — realpath escapes the redroid data root (symlink?)' };
+      return { removed: false, code: 'DATA_DIR_REFUSED', error: 'refusing to remove — realpath escapes the redroid data root (symlink?)' };
     }
     const stat = await fs.promises.lstat(real);
-    if (!stat.isDirectory()) return { removed: false, error: 'refusing to remove — not a directory' };
+    if (!stat.isDirectory()) return { removed: false, code: 'DATA_DIR_REFUSED', error: 'refusing to remove — not a directory' };
     await fs.promises.rm(real, { recursive: true, force: true });
-    return { removed: true, error: null };
+    return { removed: true, code: null, error: null };
   } catch (err) {
-    return { removed: false, error: String(err?.message ?? err).slice(0, 200) };
+    // R6 (§8.3): a stable machine-readable code alongside the OS message.
+    // EACCES is the known real-world shape (R5 live finding: the privileged
+    // container leaves ROOT-OWNED files in the data dir; the API uid cannot
+    // remove them). Host paths inside the message are permitted by the error
+    // contract; nothing else secret can appear here.
+    const code = err?.code === 'EACCES' || err?.code === 'EPERM' ? 'DATA_DIR_PERM_DENIED' : 'DATA_DIR_REMOVAL_FAILED';
+    return { removed: false, code, error: String(err?.message ?? err).slice(0, 200) };
   }
 }
