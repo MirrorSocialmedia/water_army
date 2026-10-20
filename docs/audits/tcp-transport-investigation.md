@@ -306,3 +306,67 @@ L7 四檔 dRx（device→gVisor 方向）全部係**微少嘅 ~53–56B/pkt 小�
 - R1 缺口：獨立小 commit + hermetic + 真 image 驗證 — **做完**
 - 回歸：`npm test` **517 tests / 516 pass / 0 fail / 1 skip**（基線 515/514/0/1，+2 新 test 全綠，零回歸）
 - 清理：spike 容器 stop+rm、mock kill、adb disconnect、port 釋放 — 見 progress log 收尾段
+
+---
+
+## R7 Addendum（2026-10-21 — 文檔同步交叉核，MD §9.1）
+
+> 本節不推翻上文（R2 診斷紀錄保持原狀）。上文嘅 spike 觀察喺**嗰個 spike 拓撲**
+> （device → t2s → **host 直接 mock socks5 relay**，無 gost）係真實、可重現、有證據
+> 嘅（L4–L8 全矩阵）。R3/R4 live 之後，產品鏈路嘅實際狀態同上文結論有重要差異 —
+> 讀本文檔嘅人必須兩段都讀。
+
+### A. R3 發現嘅 production 層 bug（a34baad）— 改寫「TCP 唔通」嘅語境
+
+R3 live 開頭先發現：Stage B（ffe800f）起，**所有 provisioned gost container 喺 ~73ms
+內 Exited(1)**（`fatal: Config File "gost" Not Found` — pin 咗嘅 gogost/gost image
+ENTRYPOINT 係 `["/bin/gost"]`，舊 Cmd 多咗個 `start` arg 被 gost CLI 當 config file
+name 解析）→ **產品鏈嘅 device→proxy 一脢由 Stage B 起就係死嘅**（mock E2E 喺
+docker 層 mock 咗，冇捉到）。`a34baad` 修復（Cmd 落 `start`）+ 3 fixture pin。
+⇒ R2 spike（無 gost 拓撲）觀察到嘅 stall 同「產品鏈 TCP 狀態」係兩回事。
+
+### B. R3/R4 live：產品鏈（t2s → gost → upstream）雙向 TCP canary **PASS**
+
+R3 live（`docs/live-evidence/r3-20261020/`，真 Redroid + 真 t2s + 真 gost 容器）：
+create → HEALTHY 23s，canary = **雙向 TCP payload（nonce + sha256 回顯，latency
+1000ms）** 經完整真鏈 device kernel → tun0 → t2s → socks5(gostPort) → gost 容器 →
+mock socks5(16095) → canary echo(16090) — **R2 spike 嘅 forward stall 喺產品鏈未
+重現**（canaryHits 持續增長 = 鏈路持續流通；R4 live 同樣 HEALTHY→kill→BLOCKED→
+recovery→HEALTHY 全循環 canary PASS）。
+
+### C. 機制裁定：仍然 open（誠實保留，唔猜結論）
+
+- R3 結語「R2 gVisor attribution = mechanism-level wrong」嘅理由係「host 無 gVisor
+  **runtime**（runc）」— 呢個理由**唔成立**：R2 指嘅 gVisor 係 **t2s 內嵌 netstack**
+  （`gvisor.dev/gvisor v0.0.0-20260701204157`，t2s 進程內嘅 userspace TCP/IP 實現），
+  同 container runtime 係兩層；兩個環境跑緊嘅係同一個 t2s binary（同一 sha256）。
+- 正確口徑：**R2 spike 拓撲（t2s 第一跳 = 裸 mock socks5 relay）嘅 forward stall
+  根因未完全裁定**；spike 同產品鏈唯一結構性差異 = 第一跳 relay（mock vs gost
+  容器）。候選因素（未測）：第一跳 relay 對 gVisor netstack TCP framing（coalesced
+  CONNECT+payload / window 行為）嘅處理差異 vs gVisor netstack 自身狀態機（§8 未解
+  清單：restapi netstats instrument 未做）。
+- **產品影響 = 無（現行配置）**：產品鏈嘅 t2s 第一跳**永遠係 per-device gost 容器**
+  （`provisionGost` 同步、create 時起；`socks5://172.17.0.1:<gostPort>`）— 無「裸
+  第一跳」配置存在。若日後引入非 gost 第一跳拓撲，**必須重跑本八層矩陣**（R2
+  證據仍有效為該拓撲嘅警示）。
+- **持續防線（已實錚）**：watchdog 每 30s 跑同一條雙向 TCP canary（`REDROID_HEALTH_POLL_MS`）；
+  HEALTHY 唯一入口 = fresh canary PASS（transition table 結構性保證）；任何 data-plane
+  回歸 = DEGRADED→BLOCKED（R3 Phase B live 實錚：canary-down 3s 內 DEGRADED、
+  recoveries 保持 0 唔亂 re-provision）— 即使 stall 喺某拓撲存在，**唔會產生假
+  HEALTHY**。
+
+### D. 對 §6/§7 結論嘅修訂（只改判定，唔改證據）
+
+| 項 | 原文 | R7 修訂 |
+|----|------|---------|
+| §7 Option A（升 gVisor 重 build） | 「R3 首選」 | **降級為 backlog**（無產品影響 — 產品鏈 canary 持續綠；若未來 canary 喺產品鏈變紅，先按 §8 restapi 清單定位 + Option A/C 重評） |
+| §7 Option B（REDIRECT） | 死（實錚） | 不變（容器內雙牆實錚仍成立） |
+| §7 Option C（host relay 替換） | 最後一步 | 不變；另加一個未記錄嘅維度：呢條路同時係 §A 未解根因嘅繞過方案（若日後要引入非 gost 第一跳） |
+| §0 一句話結論 | 故障層 = gVisor netstack TCP forward | **scope 限縮**：= R2 spike 拓撲（裸第一跳）下嘅 forward 故障層指认；產品鏈（gost 第一跳）未重現；機制裁定 open（§C） |
+
+### E. 本 addendum 嘅證據指針
+
+- R3 live 總結 + 四 phase 時間線 + recovery ledger：`docs/live-evidence/r3-20261020/summary.md`（+ 4 個 phase log）
+- R4 live（UI 文字驗證 + audit row 實抽）：`docs/live-evidence/r4-20261020/`（6 截圖 + `audit-net-events.txt`）
+- fail-closed 全矩陣（hermetic + live）：`docs/audits/fail-closed-validation.md`
+- gost Cmd bug 修復：commit `a34baad`（message 內有 73ms Exited(1) 證據 + 全鏈 curl 200 nonce+sha256）
