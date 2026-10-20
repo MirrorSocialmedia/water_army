@@ -52,6 +52,12 @@ if (bad) {
 const env = { ...process.env };
 if (!env.DATABASE_URL) env.DATABASE_URL = 'postgresql://preflight-cli:nodb@127.0.0.1:5432/preflight-cli';
 if (!env.REDIS_URL) env.REDIS_URL = 'redis://127.0.0.1:6379';
+// Secret knobs: the CLI never authenticates anything — these exist ONLY to
+// satisfy config shape validation (loadConfig rejects missing/placeholder
+// secrets). Overridable via the real environment if ever needed.
+if (!env.SESSION_SECRET) env.SESSION_SECRET = 'preflight-cli-placeholder-secret-not-used-0000000000';
+if (!env.APP_ENCRYPTION_KEY) env.APP_ENCRYPTION_KEY = 'preflight-cli-placeholder-key-not-used-00000000000000000000';
+if (!env.WORKER_API_TOKEN) env.WORKER_API_TOKEN = 'preflight-cli-placeholder-token-not-used-000000';
 let config;
 try {
   config = loadConfig(env, { envFile: false });
