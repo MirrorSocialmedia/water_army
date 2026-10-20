@@ -1,0 +1,166 @@
+# =============================================================================
+# water_army — CI (R7, 2026-10-21 — MD §9.2)
+#
+# Scope boundary (honest, MD §9.2):
+#   GitHub-hosted runners are runc Ubuntu VMs — they CANNOT run real Redroid
+#   (needs binderfs + binder_linux + GPU host: scripts/redroid-host-setup.sh on
+#   the 3090 box) nor the Playwright E2E (needs the live compose stack +
+#   system Chrome). Those are MANUAL / self-hosted and are NOT claimed green
+#   here — see README §測試 (manual 段) and docs/audits/release-gate-r7.md
+#   (gate item 6: real Redroid evidence lives in docs/live-evidence/).
+#
+#   - lint / typecheck: N/A by design — the repo is plain ESM JavaScript with
+#     no eslint/biome/TS config (R0 baseline). The nearest standing guards are
+#     the hermetic test suite + the repo-level static scanners already inside
+#     it (tests/unit/patch-default-guard.test.js, redroid-t2s-pin.test.js).
+#
+#   - the env-gated real-redis integration test (schedules-real-redis) is run
+#     FOR REAL here (redis:7.4.5 service), so the hermetic "1 skip" never
+#     passes as unverified coverage (ADR §15.8 rule 3).
+#
+# Jobs (all must be green for CI to be green):
+#   test            npm ci (lockfile) + full unit+integration (Node 24)
+#                   + compose config validation
+#   web-build       frontend production build (vite)
+#   images-app      docker build: api + web + worker
+#   images-redroid  docker build: redroid-matrix wrapper (R1 binary contract:
+#                   pinned tun2socks fetch + sha256 fail-fast on every build)
+#   secrets         gitleaks full-history scan + tracked-.env check
+# =============================================================================
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "24" # package.json engines: node >=24 (.nvmrc = 24)
+
+jobs:
+  test:
+    name: lockfile install + unit + integration + compose config
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7.4.5
+        ports:
+          - 16379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 12
+    env:
+      # enables the env-gated real-redis test (tests/integration/
+      # schedules-real-redis.test.js) — same disposable-redis pattern as the
+      # host runbook (README §測試), here the runner's service container.
+      SCHEDULES_REDIS_URL: redis://127.0.0.1:16379
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - name: Lockfile-consistent install (npm ci — fails if package.json and lockfile drift)
+        run: npm ci --no-audit --no-fund
+      - name: Full hermetic suite (unit + integration; real redis for the gated test)
+        run: npm test
+      - name: Docker Compose configuration validation
+        env:
+          # dummy values only — `compose config` validates the file (required
+          # ${VAR:?} + structure), nothing is started, nothing connects.
+          APP_ENCRYPTION_KEY: ci-dummy-64-hex-0000000000000000000000000000000000000000000000000000000000
+          SESSION_SECRET: ci-dummy-64-hex-0000000000000000000000000000000000000000000000000000000000
+          POSTGRES_PASSWORD: ci-dummy-32-hex-00000000000000000000000000000000
+          WORKER_API_TOKEN: ci-dummy-service-token-00000000000000000000000000000
+        run: docker compose config --quiet
+
+  web-build:
+    name: frontend production build (vite)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: vite build (production)
+        run: npm run build --workspace=@water-army/web
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: apps/web/dist
+          retention-days: 7
+
+  images-app:
+    name: docker image build — api + web + worker
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build api image
+        run: docker build -f docker/api.Dockerfile -t water-army/api:ci .
+      - name: Build web image
+        run: docker build -f docker/web.Dockerfile -t water-army/web:ci .
+      - name: Build worker image
+        run: docker build -f docker/worker.Dockerfile -t water-army/worker:ci .
+
+  images-redroid:
+    # R1 reproducible-binary contract exercised on every push: the wrapper
+    # image build fetches the PINNED tun2socks release (tun2socks.env:
+    # version + sha256) and FAILS THE BUILD on checksum/arch mismatch.
+    # Heavier job: pulls the dated redroid base image (multi-GB) — isolated
+    # from the fast jobs so a registry hiccup can't mask the app results.
+    name: docker image build — redroid-matrix (R1 pin + sha256 fail-fast)
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build redroid wrapper image (fetch + verify pinned tun2socks inside)
+        run: >
+          docker build
+          -f docker/redroid-matrix/Dockerfile
+          -t water-army/redroid:14.0.0-240527-matrixa-ci
+          docker/redroid-matrix
+      - name: Smoke-assert the binary contract inside the built image
+        run: |
+          # the image must carry BOTH tun2socks landing spots (R1 canonical +
+          # R2 fallback) with the expected mode; sha256 must equal the pin
+          CID=$(docker create water-army/redroid:14.0.0-240527-matrixa-ci)
+          docker cp "$CID":/data/local/tmp/tun2socks /tmp/t2s-canonical
+          docker cp "$CID":/usr/local/bin/tun2socks /tmp/t2s-fallback
+          docker rm "$CID" >/dev/null
+          sha_expected=$(sed -n 's/^TUN2SOCKS_SHA256=${TUN2SOCKS_SHA256:-\([0-9a-f]\{64\}\)}$/\1/p' docker/redroid-matrix/tun2socks.env)
+          sha_actual=$(sha256sum /tmp/t2s-canonical | awk '{print $1}')
+          test -n "$sha_expected" || { echo "pin missing from tun2socks.env"; exit 1; }
+          test "$sha_expected" = "$sha_actual" || { echo "sha256 mismatch: $sha_actual != $sha_expected"; exit 1; }
+          file /tmp/t2s-canonical | grep -q 'statically linked' || { echo "not a static ELF"; exit 1; }
+          test -x /tmp/t2s-fallback || { echo "fallback copy missing"; exit 1; }
+          echo "R1 binary contract OK: sha256=$sha_actual (pinned), static x86-64, both landing spots"
+
+  secrets:
+    name: secret scan + tracked .env check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history — secrets must not exist in ANY commit
+      - name: gitleaks (all history)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: No .env file may ever be tracked (only .env.example)
+        run: |
+          if git ls-files | grep -E '(^|/)\.env(\.[a-zA-Z0-9_-]+)?$'; then
+            echo "::error::A .env file is tracked. Only .env.example is allowed (MD §8.2)."
+            exit 1
+          fi
+          git ls-files | grep -E '\.env' || true
+          echo "OK: no .env files tracked"
