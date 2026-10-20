@@ -320,13 +320,13 @@ test('tasks API (P3)', async (t) => {
   });
 
   // ---------------------------------------------------------------- tools
-  await t.test('tools: registry lists 5 P3 tools with safety classes; no shell/exec/raw tools', async () => {
+  await t.test('tools: registry lists the P3 tools + redroid.get_device_status (R4) with safety classes; no shell/exec/raw tools', async () => {
     const res = await app.inject({ method: 'GET', url: '/api/tools', headers: { cookie: view } });
     assert.equal(res.statusCode, 200, res.body);
     const names = res.json().tools.map((t) => t.name);
     assert.deepEqual(
       [...names].sort(),
-      ['docker.get_managed_container_logs', 'docker.get_managed_container_status', 'docker.list_managed_containers', 'docker.restart_managed', 'system.get_health'],
+      ['docker.get_managed_container_logs', 'docker.get_managed_container_status', 'docker.list_managed_containers', 'docker.restart_managed', 'redroid.get_device_status', 'system.get_health'],
     );
     for (const t of res.json().tools) {
       assert.ok([TOOL_SAFETY_CLASS.READONLY, TOOL_SAFETY_CLASS.APPROVAL_REQUIRED].includes(t.safetyClass));

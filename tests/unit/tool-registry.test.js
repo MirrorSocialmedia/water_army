@@ -21,6 +21,7 @@ test('registry: P3 exposes exactly the readonly + one approval_required tools; n
     'docker.get_managed_container_status',
     'docker.list_managed_containers',
     'docker.restart_managed',
+    'redroid.get_device_status', // R4 MD §6.3 — worker fail-closed gate (readonly GET)
     'system.get_health',
   ]);
   for (const t of TOOL_REGISTRY) {

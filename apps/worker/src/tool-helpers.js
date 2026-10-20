@@ -96,6 +96,10 @@ export function createApiClient({ baseUrl, serviceToken, timeoutMs = 15_000, fet
     async restartContainer(id) {
       return request('POST', `/api/containers/${encodeURIComponent(id)}/restart`, { body: {} });
     },
+    /** GET /api/devices/redroid/:id — redroid.get_device_status (R4 MD §6.3). */
+    async redroidDeviceStatus(idOrName) {
+      return request('GET', `/api/devices/redroid/${encodeURIComponent(idOrName)}`);
+    },
   };
 }
 
@@ -159,6 +163,38 @@ export function createToolHandlers({ api, log = console }) {
     'docker.restart_managed': async (args) => {
       const r = await api.restartContainer(args.container);
       return { ok: true, result: r };
+    },
+
+    // R4 (MD §6.3): the worker-side fail-closed signal. The deterministic
+    // dispatch gate is `networkReady === true` (HEALTHY + fresh canary +
+    // zero consecutive failures) — the worker must never infer "running"
+    // from containerState/adbState alone (the legacy green-badge bug).
+    // Zero secrets: status vocabulary only, no proxy URL/credential.
+    'redroid.get_device_status': async (args) => {
+      const r = await api.redroidDeviceStatus(args.device);
+      const d = r?.device ?? {};
+      const net = d.proxy?.network ?? null;
+      return {
+        ok: true,
+        result: {
+          id: d.id ?? null,
+          name: d.name ?? null,
+          containerState: d.containerState ?? null,
+          adbState: d.adbState ?? null,
+          network: net
+            ? {
+                state: net.state,
+                stale: net.stale,
+                checkedAt: net.checkedAt,
+                lastSuccessAt: net.lastSuccessAt,
+                consecutiveFailures: net.consecutiveFailures ?? 0,
+                lastError: net.lastError ? { code: net.lastError.code, at: net.lastError.at } : null,
+                checks: net.checks ?? null,
+                dispatch: net.networkReady ? 'ALLOWED' : 'BLOCKED',
+              }
+            : null,
+        },
+      };
     },
   };
 }
