@@ -346,3 +346,25 @@ sg docker -c "docker rm -f redroid-matrix-b-gost-<devName>"
 4. 仍無解：當 container-runtime/kernel 層問題升上嚟（留 `docker inspect` + diagnostics 輸出），唔好喺 product 層再試。
 
 **防復發**：R6 已將 signature 做咗 machine-readable（`suspectedHostProtocolStall`）+ 本節 runbook；product 層刻意保持「只 surface、唔自動重啟」。
+
+### 10.8 代理憑證輪替 / 刪除（MD §8.2 — secret handling）
+
+**儲存契約**：proxy URL（含 `user:pass`）只以 **AES-256-GCM 密文**（`v1:` 前綴，key = `APP_ENCRYPTION_KEY`）存 DB（`redroid_templates.proxyUrlEncrypted` + `devices.proxyUrlEncrypted`，device create 時從 template 複製 = **device 自己一份**）。API view / list / audit / log **永遠唔輸出 URL**：view 只出 `hasUrl` / `gostPort` / `proxyState` / `network`；audit detail 只出 `proxyChanged: true/false`（唔出 URL）；校驗錯誤（`proxyUrl must look like socks5://...`）同解密失敗（`REDROID_PROXY_CONFIG_INVALID`）都**唔回顯 URL**。唯一持有明文的界 = docker host（gost container `Cmd` 帶 `-F <upstream>`）——documented risk：docker host root 可讀，唔係 product 層新風險（§10.1）。
+
+**輪替（改上游 proxy 憑證）**：
+1. **先喺上游換**（舊憑證仲有效嘅窗口），唔好先 revoke 舊嘅再落新嘅（gap = fleet 斷出口）。
+2. template 層：`PUT /api/redroid/templates/:id {proxyUrl: "socks5://newuser:newpass@host:port"}`（admin）→ 重新加密落庫（audit `proxyChanged:true`）。
+3. **既有 device 唔會自動跟**（device 持有自己 create 時嘅密文副本；proxy 綁定 per-device immutable by design — 冇 in-place 改 proxy 嘅 API，呢個係有意嘅：改 = 重建，避免半改狀態）。要換既有 device 嘅出口：delete → 同 template 重建（`removeData` 唔 tick = 保留 `/data`）。
+4. 重建 / start 後 verify：`proxyState` → `network.state=HEALTHY`（canary PASS 先算數，fail-closed）。
+
+**刪除**：
+- template 嘅 proxy：`PUT /api/redroid/templates/:id {proxyUrl: null}` → 密文清掉（DB null；view `hasUrl:false`）。
+- device 嘅 proxy：冇獨立「清 proxy」API（同上 immutable-by-design）— delete device（row 消 = 密文消）即洗；要留 device 但改回 template 預設 = 重建。
+- **上游憑證 revoke**：等所有 device 都轉完 / 重完先 revoke（先新後舊，避免 fleet 斷出口）。
+
+**`APP_ENCRYPTION_KEY` 輪替 × proxy 密文（誠實代價，跟 §3.4）**：key 換咗之後，**所有** `proxyUrlEncrypted`（template + device）解唔開 → 用嗰下（provision / 重 provision）= `REDROID_PROXY_CONFIG_INVALID` 500（**唔係靜默失敗**）。所以 §3.4 流程做唔做完，都要跟住：
+1. 所有 template 用 `PUT {proxyUrl: <原明文>}` 重傳（重新加密）；
+2. 既有 device：冇 in-place 重傳 API（immutable-by-design）→ 有需要嘅 device 重建（原明文 URL 喺手先做得到）；
+3. 原明文 URL 唔喺手 = 要喺上游重發憑證（同 §3.4 provider 口徑）。
+
+**測試 fixture 紀律（§8.2）**：所有 test 嘅 proxy URL 係假 target（`proxy-a.example` / `10.9.9.9` / `fixture-user:fixture-pass`），零真憑證；`.env` 永唔提交（`.env.example` 只列 program 真讀嘅變數 + 佔位符）。

@@ -318,12 +318,13 @@ render check，host 模式 = `unverified`，swiftshader = `software`）。
 |--------|------|------|------|
 | GET | `/redroid/preflight` | 真主機檢查（kernel modules / device nodes / dmesg / docker / data root）；三態 `supported\|unsupported\|unknown` — 讀唔到 = unknown，嚴禁假報。**api 容器視角**：host `/dev` 狀態報 `unknown`（永唔假報 absent）— **host-level preflight 係權威**（見 §Redroid 實機矩陣） | viewer+ |
 | GET/POST/PUT/DELETE | `/redroid/templates[/:id]` | Redroid template CRUD：image **pin 死**（latest/nightly 拒）、`privileged` 只可 admin 建 + reason 標籤 10–200 字、Stage B：`proxyUrl`（fleet 出口，socks5 only，加密落庫、view 永不回傳） | 讀 viewer+；寫 admin |
-| POST | `/devices/redroid` | 由 template 建 device：`{name, templateName, idempotencyKey, proxyUrl?}` — body 冇任何 Docker 欄位（注入 = 400）；`proxyUrl` = device 級出口 override（省略 = 跟 template）；response 帶 preflight（warning，唔係 fail-closed） | operator+ |
-| GET | `/devices/redroid[/:id]` | list / detail（name/pinned image/Android 版本/`127.0.0.1:<port>`/容器狀態/ADB 狀態/解析度/DPI/FPS/GPU 健康/`proxy`（configured/gostPort/state/hasUrl — URL 永不回傳）/最後診斷時間） | viewer+ |
+| POST | `/devices/redroid` | 由 template 建 device：`{name, templateName, idempotencyKey, overrides?{width?,height?,dpi?,fps?}, proxyUrl?}` — body 冇任何 Docker 欄位（注入 = 400）；`proxyUrl` = device 級出口 override（省略 = 跟 template）；缺 image = 404 `IMAGE_NOT_FOUND`；response 帶 preflight（warning，唔係 fail-closed） | operator+ |
+| GET | `/devices/redroid[/:id]` | list / detail（name/pinned image/Android 版本/`127.0.0.1:<port>`/容器狀態/ADB 狀態/解析度/DPI/FPS/GPU 健康/`dataDir`/`proxy`（configured/gostPort/state/hasUrl/binaryState/binaryVersion/network — URL 永不回傳）/最後診斷時間） | viewer+ |
 | POST | `/devices/redroid/:id/start\|stop\|restart` | 生命週期（P2 action protocol：inspect→op→confirm；container 消失 = `missing` + 409，誠實唔假報） | operator+ |
-| POST | `/devices/redroid/:id/diagnostics` | **4 個獨立結果區**（kernel / container-logs / adb-connectivity / gpu-verification），每區 `executed` + `status` — 未執行 = `未驗證`，從無假 pass | operator+ |
+| POST | `/devices/redroid/:id/refresh` | 輕量重查 daemon + ADB 狀態（唔重跑全套診斷）；`adbError` = engine 級失敗碼（`ADB_UNAVAILABLE`/`ADB_TIMEOUT`）— engine 跑唔到時 `adbState='unknown'`（永唔假報 offline） | operator+ |
+| POST | `/devices/redroid/:id/diagnostics` | **5 個獨立結果區**（kernel / container-logs / adb-connectivity / gpu-verification / network），每區 `executed` + `status` — 未執行 = `未驗證`，從無假 pass；adb 區 engine 失敗 = `error` + 碼（唔係 offline）；recreate-stall signature = `suspectedHostProtocolStall:true`（runbook §10.7） | operator+ |
 | GET | `/devices/redroid/:id/logcat?tail=` | 白名單 logcat（server 永遠加 `-d -t <n>`）；tail clamp 到 `REDROID_LOGCAT_TAIL_MAX`（5000）；`truncated`（byte cap）+ `mayHaveMore`（window 披露） | operator+ |
-| DELETE | `/devices/redroid/:id` | 兩步 confirm（type name）；`removeData=true` 先 rm `/data`（realpath-scoped）；container 先除、data 預設保留 | admin |
+| DELETE | `/devices/redroid/:id` | 兩步 confirm（type name）；`removeData=true` 先 rm device data dir（realpath-scoped）；container 先除、data 預設保留；data 清除失敗 = 部分失敗（照 200 + `dataRemoved:false` + 穩定碼 `DATA_DIR_PERM_DENIED` 等） | admin |
 
 **無 `POST /exec` 端點**（任意命令 = 404）；冇 `shell:true`；ADB binary 固定路徑。
 
@@ -335,7 +336,8 @@ P5 覆蓋（80 tests：unit 33 + integration 47）：
 | `tests/unit/adb-whitelist.test.js` | 精確 argv 構造、allowlist 拒絕、注入（`;`/`$(`/反引号/非 loopback target）、logcat 嚴格整數 + cap、固定 binary + 無 shell、非零 exit 透傳、byte 截斷 + truncated、timeout |
 | `tests/unit/redroid-seed.test.js` | seed 冪等 + template 形狀（pin、privileged reason） |
 | `tests/integration/redroid-lifecycle.test.js` | RBAC 401/403 矩陣、image pinning 拒、privileged reason、create 形狀斷言（錄到嘅 docker call：HostIP 127.0.0.1 / Cmd androidboot.* / Env 空 / `/data` bind / DeviceRequests 只 host）、0.0.0.0/privileged/hostConfig 注入 400、冪等、name 409、**真 127.0.0.1 碰撞 → next port + 用盡 503**、全生命週期 + audit、delete confirm + data dir 保留/清除、`/exec` 404、template in-use 409、disabled template 409、mock honesty 標籤 |
-| `tests/integration/redroid-diagnostics.test.js` | 4 區獨立性 + executed/status 矩陣、host→unverified、swiftshader→software、stopped→adb 未執行=未驗證、offline + 单次 connect、logcap default/explicit/**server-side clamp** + byte-cap 截斷、RBAC、boot-crash device 誠實 `created` |
+| `tests/integration/redroid-diagnostics.test.js` | 5 區獨立性 + executed/status 矩陣（kernel/container-logs/adb/gpu/network）、host→unverified、swiftshader→software、stopped→adb 未執行=未驗證、offline + 单次 connect、logcap default/explicit/**server-side clamp** + byte-cap 截斷、RBAC、boot-crash device 誠實 `created` |
+| R6 新增（§8 施工） | `tests/unit/patch-default-guard.test.js`（repo 級 PUT/PATCH body 無 `default:` 守門 + scanner 自測）／`tests/unit/docker-error-classification.test.js`（`IMAGE_NOT_FOUND` 分級 + R5 live 訊息形狀 pin）／`tests/integration/redroid-error-contract.test.js`（缺 image 404 + rollback 誠實、refresh `ADB_UNAVAILABLE`、diagnostics engine 失敗 `error`、`TUNNEL_SETUP_FAILED` 持久化）／`tests/unit/redroid-data-dir-remove.test.js`（path/symlink guard + `DATA_DIR_PERM_DENIED` 等穩定碼）／`tests/unit/redroid-boot-timeout-config.test.js`（40min 校準 pin） |
 
 全套 **423 tests**（422 pass + 1 gated-skip，0 fail）— 截至 P5；P6 加 42 = 465；2026-10-19 security patch +11、Stage A +4、Stage B +12 = **492**（見 §2026-10-19 更新覆蓋）。
 

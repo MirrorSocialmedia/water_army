@@ -11,7 +11,7 @@ Base：`http://127.0.0.1:3012/api`（web 同源反代；api 本體唔 publish ho
 - **Body 驗證**：JSON Schema（`additionalProperties: false` — 未知欄位 400，防 mass-assignment）。
 - **Idempotency**：建容器 / run-now / task run 支持 `idempotencyKey`（body 或 `Idempotency-Key` header）；回放 = 同結果 + `idempotent-replay: true` header（建容器）或 200（run-now）。
 - **SSE 端點**：`text/event-stream`；斷線重連由 client 處理（web UI 有 backoff）；`?after=<uuid>` cursor resume（task events）。
-- **Docker 錯誤分類**（`DOCKER_ERROR`）：`CONTAINER_NOT_FOUND`→404／`DOCKER_DAEMON_UNAVAILABLE`→503／`DOCKER_PERMISSION_DENIED`→502／`DOCKER_TIMEOUT`→504／`DOCKER_DISABLED`→503／`OPERATION_PENDING`→503／其餘 `DOCKER_ERROR`→502。
+- **Docker 錯誤分類**（`DOCKER_ERROR`）：`CONTAINER_NOT_FOUND`→404／`IMAGE_NOT_FOUND`→404（缺 image reference — 404 係 **image** 嘅，非 container；R5 live 修正：dockerode 合成訊息 "(HTTP code 404) no such container - No such image: <ref>" 會誤導，分級優先於 container-404，message 清理做 `Image not found: <ref>`）／`DOCKER_DAEMON_UNAVAILABLE`→503／`DOCKER_PERMISSION_DENIED`→502／`DOCKER_TIMEOUT`→504／`DOCKER_DISABLED`→503／`OPERATION_PENDING`→503／其餘 `DOCKER_ERROR`→502。
 - **通用錯誤碼**：`VALIDATION_ERROR` 400／`NOT_FOUND` 404／`NOT_MANAGED` 403（managed gate）／`NAME_TAKEN` 409／`IN_USE` 409（template 使用中）／`RATE_LIMITED` 429／`INTERNAL` 500。
 
 ## Health（無 auth）
@@ -100,20 +100,20 @@ worker 喺 terminal scheduled run（succeeded/failed/timed_out/skipped，**包�
 
 | Method | Path | Role | 參數 | 錯誤碼 / 備註 |
 |--------|------|------|------|--------------|
-| GET | `/redroid/preflight` | viewer+ | — | 200 真主機檢查（kernel modules/device nodes/dmesg/docker/data root）；三態 `supported\|unsupported\|unknown`（讀唔到 = unknown，嚴禁假報）。**api 容器視角**：host `/dev` 狀態 = `unknown`（永唔假報 absent）；**host-level preflight 係權威**（runbook §9.3） |
+| GET | `/redroid/preflight` | viewer+ | query `gpu`（`true`/`false`）／`port`（1–65535）／`image`（pinned ref，R5 架構檢查）— 全部可選 | 200 真主機檢查（kernel modules/device nodes/dmesg/docker/data root）；三態 `supported\|unsupported\|unknown`（讀唔到 = unknown，嚴禁假報）。**api 容器視角**：host `/dev` 狀態 = `unknown`（永唔假報 absent）；**host-level preflight 係權威**（runbook §9.3） |
 | GET | `/redroid/templates` | viewer+ | — | 200（image 必 pin；`privileged` 行帶 reason）；無 `:id` 只讀端點（list 已含全欄位） |
-| POST | `/redroid/templates` | **admin** | body `{name, image, privileged?, privilegedReason?, androidBoot?{...}, proxyUrl?}` | 201；image `latest`/`nightly` 拒（400）；privileged 要 reason；409 name；`proxyUrl` = fleet 出口（`socks5://[user:pass@]host:port` only，加密落庫，view 永不回傳 URL，只出 `proxy.configured/hasUrl`） |
-| PUT | `/redroid/templates/:id` | **admin** | 同上（patch） | 200/404/400/409 `IN_USE` |
-| DELETE | `/redroid/templates/:id` | **admin** | — | 204；409 `IN_USE`；404 |
-| POST | `/devices/redroid` | operator+ | body `{name, templateName, idempotencyKey, proxyUrl?}` — **body 冇任何 Docker 欄位**（注入 = 400） | 201 `{device, replay, startError?, preflight?}`（回放 = 200）；404 template/disabled；409 name；port 用盡 = 503；`proxyUrl` = device 級出口 override（省略 = 跟 template；加密落庫，view 只出 `hasUrl/gostPort/proxyState/network`，永不回傳 URL） |
+| POST | `/redroid/templates` | **admin** | body `{name, image, androidVersion（必）, width?/height?/dpi?/fps?/gpuMode?（schema default），privileged?, privilegedReason?, isEnabled?, cpuLimit?（number\|null，>0–256），memoryLimitBytes?（int\|null，1–256 GiB），proxyUrl?}` | 201；image `latest`/`nightly`/untagged 拒（400）；privileged 要 reason；409 name；`proxyUrl` = fleet 出口（`socks5://[user:pass@]host:port` only，加密落庫，view 永不回傳 URL，只出 `proxy.configured/hasUrl`） |
+| PUT | `/redroid/templates/:id` | **admin** | body = **partial update**（≥1 欄；schema **無 `default:`** — absent 就 absent，R5 clobber 修復；repo 級守門 `tests/unit/patch-default-guard.test.js` 防復發） | 200 `{template}`/404/400/409 `IN_USE` |
+| DELETE | `/redroid/templates/:id` | **admin** | — | 200 `{deleted, name}`；409 `IN_USE`；404 |
+| POST | `/devices/redroid` | operator+ | body `{name, templateName, idempotencyKey, overrides?{width?,height?,dpi?,fps?}, proxyUrl?}` — **body 冇任何 Docker 欄位**（注入 = 400） | 201 `{device, replay, startError?, preflight?}`（回放 = 200）；404 template/disabled；409 name；port 用盡 = 503；缺 image = 404 `IMAGE_NOT_FOUND`；`proxyUrl` = device 級出口 override（省略 = 跟 template；加密落庫，view 只出 `hasUrl/gostPort/proxyState/network`，永不回傳 URL） |
 | GET | `/devices/redroid` | viewer+ | query `template`（過濾） | 200 `{devices}` |
-| GET | `/devices/redroid/:id` | viewer+ | — | 200 `{device}`（pinned image/`127.0.0.1:<port>`/容器狀態/ADB 狀態/解析度/GPU 健康/`proxy`（`configured/gostPort/gostBind/state/hasUrl/containerName/binaryState/binaryVersion/network` — URL 永不回傳；`binaryState` = `missing\|ready\|invalid\|error\|null`，R1 pre-provision check 診斷，fail-closed：missing/invalid 時 proxy 絕非 `running`；`network` = **權威網絡健康狀態**，見下「網絡健康狀態契約」；無 proxy 綁定時 `network: null`））；404 |
+| GET | `/devices/redroid/:id` | viewer+ | — | 200 `{device}`（pinned image/`127.0.0.1:<port>`/容器狀態/ADB 狀態/解析度/GPU 健康/`dataDir`（device host data 目錄路徑 — delete `removeData` 嘅 realpath-scoped rm 範圍）/`proxy`（`configured/gostPort/gostBind/state/hasUrl/containerName/binaryState/binaryVersion/network` — URL 永不回傳；`binaryState` = `missing\|ready\|invalid\|error\|null`，R1 pre-provision check 診斷，fail-closed：missing/invalid 時 proxy 絕非 `running`；`network` = **權威網絡健康狀態**，見下「網絡健康狀態契約」；無 proxy 綁定時 `network: null`））；404 |
 | POST | `/devices/redroid/:id/start` `<stop>` `<restart>` | operator+ | — | 200 `{device, idempotent, action}`（P2 action protocol；container 消失 = `missing` + 409 誠實）；404 |
-| POST | `/devices/redroid/:id/refresh` | operator+ | — | 200 `{device, adbNote}`（重查 daemon + ADB 狀態，唔重跑全套診斷） |
-| POST | `/devices/redroid/:id/diagnostics` | operator+ | — | 200 **4 個獨立結果區**（kernel / container-logs / adb-connectivity / gpu-verification），每區 `executed` + `status`（未執行 = `未驗證`，從無假 pass） |
+| POST | `/devices/redroid/:id/refresh` | operator+ | — | 200 `{device, adbNote, adbError, network}`（重查 daemon + ADB 狀態，唔重跑全套診斷）；`adbError` = engine 級失敗碼（`ADB_UNAVAILABLE`/`ADB_TIMEOUT`）— engine 跑唔到時 `device.adbState='unknown'`（永唔假報 offline） |
+| POST | `/devices/redroid/:id/diagnostics` | operator+ | — | 200 **5 個獨立結果區**（kernel / container-logs / adb-connectivity / gpu-verification / network），每區 `executed` + `status`（未執行 = `未驗證`，從無假 pass）；adb 區 `status` ∈ `online\|offline\|error\|unverified` — engine 失敗 = `error` + `error` 碼（`ADB_UNAVAILABLE`/`ADB_TIMEOUT`，**唔係** device offline）；**recreate-stall signature**（container running + 曾確認 online + 而家 adbd 靜音）= `suspectedHostProtocolStall:true` + `hint`（runbook §10.7，product 刻意唔自動 recovery） |
 | POST | `/devices/redroid/:id/proxy/retry` | operator+ | — | 200 `{device, network}`（R3 手工介入觸發：FAILED / stuck DEGRADED\|BLOCKED → 重設 episode + 強制 recovery attempt；attempt 仍然落 VERIFYING + canary 才可能返 HEALTHY — **從無盲信 HEALTHY**）；無 proxy 綁定 = 409 `REDROID_NO_PROXY`；404 |
 | GET | `/devices/redroid/:id/logcat` | operator+ | query `tail`（正整數字串；server clamp 到 `REDROID_LOGCAT_TAIL_MAX`） | 200（server 永遠加 `-d -t <n>`；`truncated`（byte cap）+ `mayHaveMore`）；404 |
-| DELETE | `/devices/redroid/:id` | **admin** | body `{confirm（type name）, removeData?}` | 204；confirm 唔匹配 = 400；`removeData=true` 先 rm `/data`（realpath-scoped）；container 先除、data 預設保留；404 |
+| DELETE | `/devices/redroid/:id` | **admin** | body `{confirm（type name）, removeData?}` | 200 `{deleted, name, containerRemoved, removeData, dataRemoved, dataRemoveErrorCode?, dataRemoveError?, containerError?, proxyTornDown?, gostRemoved?}`；confirm 唔匹配 = 400；`removeData=true` 先 rm data dir（realpath-scoped）；container 先除、data 預設保留；**data 清除失敗 = 部分失敗**（delete 本身已成功）→ 照 200 + `dataRemoved:false` + 穩定碼（`DATA_DIR_PERM_DENIED` = root-owned dir 已知形狀 R5／`DATA_DIR_REMOVAL_FAILED`／`DATA_DIR_REFUSED` = 安全拒決）；404 |
 
 **安全鐵律**：無 `POST /exec` 端點（任意命令 = 404）；冇 `shell: true`；ADB binary 固定路徑；ADB 5555 只綁 `127.0.0.1`（PortBindings host IP 硬編 + server 端 port 範圍驗證）。
 
@@ -144,6 +144,28 @@ proxy.network = null（無 proxy 綁定）或：
 ```
 
 **狀態更新規則**：後端（watchdog verify + recovery policy）= 唯一寫入者；HEALTHY 唯一入口 = VERIFYING + 新 canary PASS（transition table 冇直達 HEALTHY 嘅邊；非法轉移 = 拒 + `net_transition_refused` audit）。每次轉移審計：`deviceId`（resourceId）/ 前狀態 / 新狀態 / 原因 / 時間 / 觸發來源（watchdog|manual|provision）/ `relatedTaskId`（device 級網絡事件 = null）。legacy `proxy.state`（`off|provisioning|running|stopped|error`）= R3 state 嘅**保守投影**（`NET_TO_LEGACY_PROXY`：HEALTHY→running；DEGRADED→stopped；BLOCKED/FAILED→error；STOPPED→stopped；STARTING/VERIFYING→provisioning），唔准反向推算。Worker 網絡任務 gate：`networkReady === true` 先派（`redroid.get_device_status` 工具返 deterministic `dispatch: ALLOWED|BLOCKED`）；UI：所有狀態帶**文字**（STALE/RECOVERING 語義，唔跟颜色），過期 = STALE。
+
+### Redroid 錯誤碼契約（MD §8.3：穩定 machine-readable、單一詞彙）
+
+所有啟動／健康檢查／生命週期錯誤用**同一套**穩定 machine-readable 碼（`NET_ERRORS` / preflight item id / `DOCKER_ERROR` 同一詞彙風格），**無第二套系統**。MD 示例碼 → 實際 surface 對照：
+
+| 實際碼 | HTTP / 位置 | 意義（MD 示例碼對照） |
+|--------|-------------|----------------------|
+| `IMAGE_NOT_FOUND` | 404 create/pull | 缺 image reference（404 係 image 嘅，非 container；R5 live 修正） |
+| `BINARY_MISSING` | 500 provision | device 內 tun2socks binary 缺失（fail-closed：proxy 絕非 `running`） |
+| `BINARY_INVALID` / `BINARY_CHECK_ERROR` | 500 provision | binary 存在但檢查失敗 / 檢查本身跑唔到（seam） |
+| `REDROID_TUNNEL_PROVISION_FAILED` | 500 provision | tunnel script stage/run 失敗（MD `TUNNEL_START_FAILED` 嘅 api-code 面） |
+| `TUNNEL_SETUP_FAILED` | 持久 `netLastErrorCode` | in-device tunnel script stage/run 失敗（R6：以前被引用但**無定義** → `netLastErrorCode` 靜默丟失，已修） |
+| `REDROID_TUNNEL_BOOT_TIMEOUT` | 504 provision | `boot_completed` 未在時限內出現（default **40min**，R6 由 10min 校準 — 真 cold/recreate boot 實測 ~24min；knob `REDROID_TUNNEL_BOOT_TIMEOUT_MS`） |
+| `TUNNEL_START_TIMEOUT` | 持久 `netLastErrorCode` | boot 超時（net state machine 面） |
+| `TUNNEL_IFACE_MISSING` / `TUNNEL_IFACE_DOWN` / `TUNNEL_ROUTE_UNCERTAIN` | 持久 `netLastErrorCode` | tun0 缺失 / 唔 UP / 路由策略失守（MD `INTERFACE_MISSING` 族） |
+| `CANARY_FAIL` / `CANARY_TIMEOUT` | `checks.tcpCanary` + `netLastErrorCode` | data plane canary 失敗 / 超時（MD `DATA_PLANE_CHECK_FAILED` 嘅機器可讀形） |
+| `ADB_UNAVAILABLE` / `ADB_TIMEOUT` | refresh `adbError` / diagnostics adb 區 `error`（HTTP 200 欄位） | adb **engine** 本身跑唔到（binary 缺失/spawn 失敗）/ 超時 — **唔係** device offline（`adbState` 誠實報 `unknown`） |
+| `DATA_DIR_PERM_DENIED` / `DATA_DIR_REMOVAL_FAILED` / `DATA_DIR_REFUSED` | DELETE `dataRemoveErrorCode`（HTTP 200 欄位） | data dir 清除：權限失敗（root-owned dir，R5 實測形狀）／其他失敗／安全拒決（path 越界/symlink escape/非目錄） |
+| preflight item `id` + `status:'FAIL'` | preflight / diagnostics kernel 區 | host 先決條件缺失（MD `HOST_PREREQUISITE_MISSING` = item id 詞彙：binder module、device nodes、docker、data root…） |
+| `network.stale: true` | `proxy.network` 欄位 | 健康檢查過期（MD `HEALTHCHECK_STALE` — 穩定**布林欄位**，非獨立錯誤碼：佢係狀態投影，唔係事件） |
+
+**錯誤回應鐵律（§8.3）**：error message 永遠唔包含內部憑證、完整 proxy URL、宿主機敏感路徑以外嘅秘密；host path（data dir、log path）允許出現。上表碼全部喺 `redroid-service.js`（`fail(...)`）／`redroid-health.js`（`NET_ERRORS`）／`docker-service.js`（`classifyDockerError`）定死，測試用詞彙斷言鎖定（drift = test 爆）。
 
 ## Dashboard（P6）
 
