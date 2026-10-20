@@ -105,16 +105,45 @@ worker 喺 terminal scheduled run（succeeded/failed/timed_out/skipped，**包�
 | POST | `/redroid/templates` | **admin** | body `{name, image, privileged?, privilegedReason?, androidBoot?{...}, proxyUrl?}` | 201；image `latest`/`nightly` 拒（400）；privileged 要 reason；409 name；`proxyUrl` = fleet 出口（`socks5://[user:pass@]host:port` only，加密落庫，view 永不回傳 URL，只出 `proxy.configured/hasUrl`） |
 | PUT | `/redroid/templates/:id` | **admin** | 同上（patch） | 200/404/400/409 `IN_USE` |
 | DELETE | `/redroid/templates/:id` | **admin** | — | 204；409 `IN_USE`；404 |
-| POST | `/devices/redroid` | operator+ | body `{name, templateName, idempotencyKey, proxyUrl?}` — **body 冇任何 Docker 欄位**（注入 = 400） | 201 `{device, replay, startError?, preflight?}`（回放 = 200）；404 template/disabled；409 name；port 用盡 = 503；`proxyUrl` = device 級出口 override（省略 = 跟 template；加密落庫，view 只出 `hasUrl/gostPort/proxyState`，永不回傳 URL） |
+| POST | `/devices/redroid` | operator+ | body `{name, templateName, idempotencyKey, proxyUrl?}` — **body 冇任何 Docker 欄位**（注入 = 400） | 201 `{device, replay, startError?, preflight?}`（回放 = 200）；404 template/disabled；409 name；port 用盡 = 503；`proxyUrl` = device 級出口 override（省略 = 跟 template；加密落庫，view 只出 `hasUrl/gostPort/proxyState/network`，永不回傳 URL） |
 | GET | `/devices/redroid` | viewer+ | query `template`（過濾） | 200 `{devices}` |
-| GET | `/devices/redroid/:id` | viewer+ | — | 200 `{device}`（pinned image/`127.0.0.1:<port>`/容器狀態/ADB 狀態/解析度/GPU 健康/`proxy`（`configured/gostPort/gostBind/state/hasUrl/binaryState/binaryVersion` — URL 永不回傳；`binaryState` = `missing|ready|invalid|error|null`，R1 pre-provision check 診斷，fail-closed：missing/invalid 時 proxy 絕非 `running`））；404 |
+| GET | `/devices/redroid/:id` | viewer+ | — | 200 `{device}`（pinned image/`127.0.0.1:<port>`/容器狀態/ADB 狀態/解析度/GPU 健康/`proxy`（`configured/gostPort/gostBind/state/hasUrl/containerName/binaryState/binaryVersion/network` — URL 永不回傳；`binaryState` = `missing\|ready\|invalid\|error\|null`，R1 pre-provision check 診斷，fail-closed：missing/invalid 時 proxy 絕非 `running`；`network` = **權威網絡健康狀態**，見下「網絡健康狀態契約」；無 proxy 綁定時 `network: null`））；404 |
 | POST | `/devices/redroid/:id/start` `<stop>` `<restart>` | operator+ | — | 200 `{device, idempotent, action}`（P2 action protocol；container 消失 = `missing` + 409 誠實）；404 |
 | POST | `/devices/redroid/:id/refresh` | operator+ | — | 200 `{device, adbNote}`（重查 daemon + ADB 狀態，唔重跑全套診斷） |
 | POST | `/devices/redroid/:id/diagnostics` | operator+ | — | 200 **4 個獨立結果區**（kernel / container-logs / adb-connectivity / gpu-verification），每區 `executed` + `status`（未執行 = `未驗證`，從無假 pass） |
+| POST | `/devices/redroid/:id/proxy/retry` | operator+ | — | 200 `{device, network}`（R3 手工介入觸發：FAILED / stuck DEGRADED\|BLOCKED → 重設 episode + 強制 recovery attempt；attempt 仍然落 VERIFYING + canary 才可能返 HEALTHY — **從無盲信 HEALTHY**）；無 proxy 綁定 = 409 `REDROID_NO_PROXY`；404 |
 | GET | `/devices/redroid/:id/logcat` | operator+ | query `tail`（正整數字串；server clamp 到 `REDROID_LOGCAT_TAIL_MAX`） | 200（server 永遠加 `-d -t <n>`；`truncated`（byte cap）+ `mayHaveMore`）；404 |
 | DELETE | `/devices/redroid/:id` | **admin** | body `{confirm（type name）, removeData?}` | 204；confirm 唔匹配 = 400；`removeData=true` 先 rm `/data`（realpath-scoped）；container 先除、data 預設保留；404 |
 
 **安全鐵律**：無 `POST /exec` 端點（任意命令 = 404）；冇 `shell: true`；ADB binary 固定路徑；ADB 5555 只綁 `127.0.0.1`（PortBindings host IP 硬編 + server 端 port 範圍驗證）。
+
+### 網絡健康狀態契約（R3 state machine + R4 邊界統一，MD §5/§6）
+
+`proxy.network` = **唯一權威**網絡健康投射（`redroid-health.js` 純 state machine + watchdog 計算，`net_*` DB 持久化，API restart 後還原）。**API / worker / UI 三個邊界全部讀呢個 schema**（`NET_PAYLOAD_KEYS`/`NET_CHECK_KEYS` 喺 `redroid-health.js` 定死，drift = test 爆）；任何邊界唔准自行推算狀態。
+
+```
+proxy.network = null（無 proxy 綁定）或：
+{
+  state: 'STOPPED'|'STARTING'|'VERIFYING'|'HEALTHY'|'DEGRADED'|'BLOCKED'|'FAILED',  // 唯一合法值；非法值 → STOPPED（fail-closed）
+  stateSince: ISO8601|null,        // 進入當前 state 嘅時間
+  checkedAt: ISO8601|null,         // 上次完整 verify 時間（stale 判定依據）
+  lastSuccessAt: ISO8601|null,     // ≙ MD lastSuccessfulCheckAt；上次 canary PASS 時間
+  consecutiveFailures: int,        // 連續 verify 失敗計數（PASS → 0）
+  recoveries: int,                 // 累計 recovery attempt 數
+  manualIntervention: bool,        // terminal FAILED（stall/recovery exhausted）→ 要人手
+  canaryConfigured: bool,          // false = data plane 不可驗證 = 永唔可以 HEALTHY（fail-closed）
+  stale: bool,                     // HEALTHY 但 checkedAt 過期（> REDROID_HEALTH_STALE_MS，default 60s）→ 按唔健康處理
+  networkReady: bool,              // **consumer gate**：HEALTHY && !stale && consecutiveFailures===0 → 先派網絡任務 / UI 綠
+  checks: { binary, process, interface, routePolicy, tcpCanary },  // 固定 5 key；每值 ∈ PASS|FAIL|UNKNOWN（fail-closed：讀唔到/SKIPPED = UNKNOWN，永唔假 PASS）
+  lastErrorCode: string|null,      // 機器可讀碼（NET_ERRORS 詞彙：TUNNEL_PROCESS_DEAD / TUNNEL_IFACE_MISSING / CANARY_FAIL / CANARY_TIMEOUT / STALL_REPROVISION_USELESS / RECOVERY_EXHAUSTED / CONTAINER_NOT_RUNNING …）
+  nextRecoveryAt: ISO8601|null,    // backoff 錨（下次自動 recovery attempt 時間；null = 唔喺 backoff 期）
+  recoveryLock: { held: bool, until: ISO8601 } | null,  // single-flight recovery lease 摘要（owner id 係 process-internal，唔暴露）
+  lastError: { code, detail, at } | null,   // detail = 診斷摘要（canary reason 等）；**零 proxy URI / credential**
+  lastCanary: { result:'PASS', latencyMs, nonce } | { result:'FAIL'|'ERROR', reason } | null,
+}
+```
+
+**狀態更新規則**：後端（watchdog verify + recovery policy）= 唯一寫入者；HEALTHY 唯一入口 = VERIFYING + 新 canary PASS（transition table 冇直達 HEALTHY 嘅邊；非法轉移 = 拒 + `net_transition_refused` audit）。每次轉移審計：`deviceId`（resourceId）/ 前狀態 / 新狀態 / 原因 / 時間 / 觸發來源（watchdog|manual|provision）/ `relatedTaskId`（device 級網絡事件 = null）。legacy `proxy.state`（`off|provisioning|running|stopped|error`）= R3 state 嘅**保守投影**（`NET_TO_LEGACY_PROXY`：HEALTHY→running；DEGRADED→stopped；BLOCKED/FAILED→error；STOPPED→stopped；STARTING/VERIFYING→provisioning），唔准反向推算。Worker 網絡任務 gate：`networkReady === true` 先派（`redroid.get_device_status` 工具返 deterministic `dispatch: ALLOWED|BLOCKED`）；UI：所有狀態帶**文字**（STALE/RECOVERING 語義，唔跟颜色），過期 = STALE。
 
 ## Dashboard（P6）
 
@@ -124,4 +153,4 @@ worker 喺 terminal scheduled run（succeeded/failed/timed_out/skipped，**包�
 
 ## 端點總計
 
-**68 條路由**（逐檔案計，實核 2026-10-15 gen2）：health 2 + auth 3 + containers 15（含 5 個 action + exceptions 3 條 + create-from-template）+ container templates 2 + dashboard 1 + tasks 15（runs 6 + approvals 3 + tools 1 + providers 4 + audit 1）+ task definitions 1 + schedules 10（含 POST preview）+ schedule notifications 4 + redroid templates/preflight 5 + redroid devices 10（含 3 個 action）。所有寫操作（POST/PATCH/PUT/DELETE，`/auth/login` 除外）：RBAC + audit row（actor、request_id、IP、status、details scrub）+ Origin 檢查（browser mutating 請求）。
+**69 條路由**（逐檔案計，實核 2026-10-20 R4）：health 2 + auth 3 + containers 15（含 5 個 action + exceptions 3 條 + create-from-template）+ container templates 2 + dashboard 1 + tasks 15（runs 6 + approvals 3 + tools 1 + providers 4 + audit 1）+ task definitions 1 + schedules 10（含 POST preview）+ schedule notifications 4 + redroid templates/preflight 5 + redroid devices 11（含 3 個 action + proxy/retry）。所有寫操作（POST/PATCH/PUT/DELETE，`/auth/login` 除外）：RBAC + audit row（actor、request_id、IP、status、details scrub）+ Origin 檢查（browser mutating 請求）。

@@ -102,3 +102,13 @@
 4. **§6.3 UI**：`netStateBadge`（文字，全狀態+STALE）；DeviceDetail Network 卡；Devices list 網絡欄；retry 入口。
 5. **§6.4 測試**：逐條加（見測試 plan）。
 6. **Docs**：api-reference.md network payload 段同步（checks/lastErrorCode/STALE/networkReady）。
+
+## 6. 解決方案落地（2026-10-20 R4 交付時補記）
+
+| Gap | 狀態 | 落地 |
+|-----|------|------|
+| UI 無網絡狀態 | **已修** | `DeviceDetail` Network 卡（5 checks / timestamps / recovery lock / manual intervention / retry 入口）；`Devices` list 網絡欄；`netStateBadge`/`netCheckBadge` 全狀態文字（stale→STALE、VERIFYING=RECOVERING、fail-closed 永唔假綠）— `apps/web/src/components/redroid-utils.js` + `tests/unit/redroid-utils.test.js` |
+| worker 無 fail-closed 訊號 | **已修** | `redroid.get_device_status` READONLY tool（service token → `GET /api/devices/redroid/:id`）；redacted 投影（state/stale/timestamps/consecutiveFailures/lastError.code/checks）+ deterministic `dispatch: ALLOWED\|BLOCKED`（= `networkReady`）；registry description 明寫 gate 語義 — `packages/shared/src/tool-registry.js` + `apps/worker/src/tool-helpers.js` |
+| idempotency replay 陷阱 | **已修** | 雙層：(a) replay 前驗證 row 存在（唔存在 → invalidate key + fresh create）；(b) delete 時 sweep map 入面指向該 device 嘅 done entry。回歸：create→delete→同 key recreate = 201 新 id（`tests/integration/r4-state-consistency.test.js`） |
+| §6.4 五條必加測試 | **已落**（6 條） | `tests/integration/r4-state-consistency.test.js`（process+canary / dns+tcp / stale / live-view fixture 對拍 / late-event+restart no-overwrite + idempotency）；`tests/unit/r4-payload-contract.test.js`（`NET_PAYLOAD_KEYS`/`NET_CHECK_KEYS` 精確 key set + 三邊界一致 + fail-closed checks） |
+| api-reference.md 同步 | **已落** | `proxy.network` 完整契約（17 key + checks 5 key + 語義）、`NET_TO_LEGACY_PROXY` 投影表、`proxy/retry` 端點補錄、路由總數 68→69 實核 |
