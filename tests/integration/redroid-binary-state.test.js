@@ -91,9 +91,11 @@ test('t2s binary check: script is read-only (no F-B hazard) and machine-readable
   assert.ok(s.includes(TUN2SOCKS_CHECK_MARKER), 'carries the versioned marker (mock + audit)');
   assert.ok(!/pkill|pgrep|kill /.test(s), 'no process-kill commands (read-only — F-B hazard class absent)');
   assert.ok(!/ip route|ip link|ip rule|netd/.test(s), 'no route/link mutation');
-  assert.ok(s.includes(TUN.bin), 'checks the single canonical path');
+  assert.ok(s.includes(TUN.bin), 'checks the canonical path');
+  assert.ok(s.includes(TUN.binFallback), 'carries the /usr/local/bin fallback (R2 fresh-/data shadowing gap)');
   assert.ok(s.includes('BINARY_STATE=missing'), 'missing branch is machine-readable');
   assert.ok(s.includes('BINARY_STATE=ready'), 'ready branch is machine-readable');
+  assert.ok(s.includes('BINARY_DETAIL=fallback('), 'fallback provenance is machine-readable');
   assert.ok(s.includes('7f454c46'), 'ELF magic check present');
 });
 
@@ -105,6 +107,10 @@ test('t2s binary check: output parser (pure)', () => {
     state: 'invalid', version: null, detail: 'not-elf(magic=0000dead)',
   });
   assert.equal(parseT2sCheckOutput('garbage without markers').state, null);
+  // R2: fallback provenance rides in BINARY_DETAIL (state stays 'ready')
+  assert.deepEqual(parseT2sCheckOutput('BINARY_STATE=ready\nBINARY_VERSION=tun2socks-2.7.0\nBINARY_DETAIL=fallback(/usr/local/bin/tun2socks)\n'), {
+    state: 'ready', version: 'tun2socks-2.7.0', detail: 'fallback(/usr/local/bin/tun2socks)',
+  });
 });
 
 /**
@@ -169,6 +175,31 @@ test('t2s binary check: real execution (sh) — all four outcomes', (t) => {
   const lieR = run('/bin/true');
   assert.equal(lieR.status, 4, `wrong canary: rc=4 got ${lieR.status} ${lieR.stderr}`);
   assert.match(lieR.stdout, /BINARY_DETAIL=unexpected-version/);
+
+  // 6) R2 fallback: canonical path absent, T2S_BIN unset (→ $CANON), fallback
+  //    knob points at the good canary → ready WITH fallback provenance.
+  //    (Hermetic stand-in for the fresh-/data geometry where the baked
+  //    canonical is shadowed but /usr/local/bin/tun2socks survives.)
+  const fb = path.join(dir, 'canary-fallback');
+  const cc2 = spawnSync('gcc', ['-O2', '-o', fb, '-x', 'c', '-', '-s', 'tun2socks-2.7.0\n'], { encoding: 'utf8', input: '#include <stdio.h>\nint main(void){ printf("tun2socks-2.7.0\\n"); return 0; }' });
+  if (cc2.status !== 0) {
+    console.error('t2s check fallback-case: skipped (no gcc)');
+  } else {
+    const fbRun = spawnSync('sh', [scriptFile], { encoding: 'utf8', env: { ...process.env, T2S_BIN_FALLBACK: fb } });
+    assert.equal(fbRun.status, 0, `fallback ready: rc=0 got ${fbRun.status} ${fbRun.stderr}`);
+    assert.match(fbRun.stdout, /BINARY_STATE=ready/);
+    assert.match(fbRun.stdout, new RegExp(`BINARY_DETAIL=fallback\(${fb.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\)`));
+    assert.match(fbRun.stdout, /BINARY_VERSION=tun2socks-2\.7\.0/);
+  }
+
+  // 7) R2 fallback must NOT engage when T2S_BIN is set (test-knob priority;
+  //    also guards the "$BIN != $CANON → no fallback" branch — case 1 above
+  //    already proves rc=3 with a bogus T2S_BIN even though a fallback knob
+  //    could have been offered).
+  const noFb = spawnSync('sh', [scriptFile], { encoding: 'utf8', env: { ...process.env, T2S_BIN: path.join(dir, 'nope'), T2S_BIN_FALLBACK: path.join(dir, 'canary-bin') } });
+  assert.equal(noFb.status, 3, `T2S_BIN set + missing: rc=3 got ${noFb.status} ${noFb.stderr}`);
+  assert.match(noFb.stdout, /BINARY_STATE=missing/);
+  assert.ok(!noFb.stdout.includes('BINARY_DETAIL=fallback('), 'no fallback when T2S_BIN is explicit');
 });
 
 // ---------------------------------------------------------------------------

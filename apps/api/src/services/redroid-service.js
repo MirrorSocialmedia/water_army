@@ -97,6 +97,12 @@ export const TUN = Object.freeze({
   localIp: '10.8.0.1',
   peerIp: '10.8.0.2',
   bin: '/data/local/tmp/tun2socks',
+  // R2 (2026-10-20): second landing spot, OUTSIDE /data. A fresh /data volume
+  // (production createDevice geometry) shadows the image layer that bakes
+  // /data/local/tmp/tun2socks → the canonical path is missing on every fresh
+  // device while /usr/local/bin/tun2socks survives. The setup script self-heals
+  // canonical ← fallback; the check script falls back for diagnosis.
+  binFallback: '/usr/local/bin/tun2socks',
   logFile: '/data/local/tmp/tun2socks.log',
 });
 
@@ -119,7 +125,7 @@ export const TUN2SOCKS_PIN = Object.freeze({
 });
 
 /** Marker comment line in the binary-check script (mock detection + versioning). */
-export const TUN2SOCKS_CHECK_MARKER = 'wa-t2scheck-v1';
+export const TUN2SOCKS_CHECK_MARKER = 'wa-t2scheck-v2';
 
 /** Derived asset URL — one place (no floating 'latest' possible: version is a constant). */
 export function tun2socksAssetUrl(version = TUN2SOCKS_PIN.version, asset = TUN2SOCKS_PIN.asset) {
@@ -185,15 +191,21 @@ export function buildT2sCheckScript() {
   return [
     `# ${TUN2SOCKS_CHECK_MARKER}`,
     'set -u',
+    `CANON=${TUN.bin}`,
+    // T2S_BIN_FALLBACK is a TEST KNOB (unset in-device → the real fallback path).
+    `FALLBACK=${'${T2S_BIN_FALLBACK:-' + TUN.binFallback + '}'}`,
     // T2S_BIN is a TEST KNOB (unset in-device → the single canonical path).
-    `BIN=${'${T2S_BIN:-' + TUN.bin + '}'}`,
+    `BIN=${'${T2S_BIN:-$CANON}'}`,
+    // R2: fresh /data volumes shadow the baked canonical path — fall back to
+    // the /usr/local/bin copy (same build-verified artifact, image layer).
+    `if [ ! -f "$BIN" ] && [ "$BIN" = "$CANON" ] && [ -f "$FALLBACK" ]; then BIN=$FALLBACK; SRC=fallback; else SRC=canonical; fi`,
     `if [ ! -f "$BIN" ]; then echo "BINARY_STATE=missing"; exit 3; fi`,
     `if [ ! -x "$BIN" ]; then echo "BINARY_STATE=invalid"; echo "BINARY_DETAIL=not-executable"; exit 4; fi`,
     `MAGIC=$(head -c 4 "$BIN" 2>/dev/null | od -An -tx1 2>/dev/null | tr -d ' \\n')`,
     `if [ "$MAGIC" != "7f454c46" ]; then MAGIC8=$(printf '%s' "$MAGIC" | cut -c1-8); echo "BINARY_STATE=invalid"; echo "BINARY_DETAIL=not-elf(magic=$MAGIC8)"; exit 4; fi`,
     `V=$("$BIN" --version 2>&1 | head -n 1) || { echo "BINARY_STATE=invalid"; echo "BINARY_DETAIL=exec-failed"; exit 4; }`,
     'case "$V" in',
-    '  tun2socks-*) echo "BINARY_STATE=ready"; echo "BINARY_VERSION=$V"; exit 0 ;;',
+    `  tun2socks-*) echo "BINARY_STATE=ready"; echo "BINARY_VERSION=$V"; [ "$SRC" = fallback ] && echo "BINARY_DETAIL=fallback($FALLBACK)"; exit 0 ;;`,
     '  *) echo "BINARY_STATE=invalid"; echo "BINARY_DETAIL=unexpected-version($V)"; exit 4 ;;',
     'esac',
   ].join('\n');
@@ -293,6 +305,11 @@ export function buildTunnelSetupScript({ gostPort }) {
   }
   const lines = [
     'set -e',
+    // R2: fresh /data volumes shadow the image-layer /data/local/tmp/tun2socks
+    // (R1 P0 gap). Self-heal from the second landing spot before starting t2s;
+    // the pre-provision check (wa-t2scheck-v2) already admitted the fallback,
+    // and its magic+version gates apply to the same artifact.
+    `if [ ! -f ${TUN.bin} ] && [ -f ${TUN.binFallback} ]; then cp ${TUN.binFallback} ${TUN.bin} && chmod 0755 ${TUN.bin}; fi`,
     // bracketed + quoted: this line only ever executes from the staged file
     // (buildT2sRunScript), where the runner cmdline is clean — but the bracket
     // also keeps the pkill process's OWN cmdline from matching (defense in
@@ -800,7 +817,7 @@ export function createRedroidService({
     await setBinaryState(row.id, check.state, check.version);
     if (check.state === 'missing') {
       await setProxyState(row.id, 'error');
-      throw fail('BINARY_MISSING', 500, `tun2socks binary missing on '${row.name}' at ${TUN.bin} — rebuild the wrapper image (pinned v${TUN2SOCKS_PIN.version}, see docker/redroid-matrix) — tunnel not provisioned`);
+      throw fail('BINARY_MISSING', 500, `tun2socks binary missing on '${row.name}' at ${TUN.bin} (fallback ${TUN.binFallback} also absent) — rebuild the wrapper image (pinned v${TUN2SOCKS_PIN.version}, see docker/redroid-matrix) — tunnel not provisioned`);
     }
     if (check.state !== 'ready') {
       await setProxyState(row.id, 'error');

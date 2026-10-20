@@ -92,6 +92,14 @@ COPY --from=builder /build/redroid-binder-init /usr/local/bin/redroid-binder-ini
 # mode (NOTE: the stock image has no /bin/sh, so no RUN/chmod step is
 # possible in this stage — the mode is correct BY CONSTRUCTION).
 COPY --from=builder /build/t2s/tun2socks /data/local/tmp/tun2socks
+# R2 (2026-10-20): SECOND landing spot, outside /data. Production devices get
+# a FRESH /data volume (createDevice dataDir) which shadows the image layer
+# containing /data/local/tmp/tun2socks → on every fresh device the canonical
+# path is missing while this copy survives (image layer, never shadowed).
+# The tunnel setup script self-heals canonical ← fallback (cp + 0755) and
+# the binary check (wa-t2scheck-v2) diagnoses the fallback. Same artifact,
+# same sha256-verified build — no second fetch, no floating version.
+COPY --from=builder /build/t2s/tun2socks /usr/local/bin/tun2socks
 # NOTE: the stock image has no /bin/sh, so no RUN shell step is possible in
 # this stage — COPY preserves the builder's 0755 mode.
 #

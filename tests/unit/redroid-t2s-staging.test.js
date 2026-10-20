@@ -32,6 +32,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import {
   T2S_SETUP_FILE,
   TUN2SOCKS_PIN,
+  TUN,
   buildTunnelSetupScript,
   buildTunnelTeardownScript,
   buildT2sStageScript,
@@ -165,4 +166,56 @@ test('f-b fix: staged geometry (sh <file> runner) — no self-kill, stale daemon
   assert.ok(!fs.existsSync(tmpFile), 'staged file removed after the run (no residue)');
 
   assert.ok(await waitStandInGone(victim), 'stale daemon stand-in killed by the in-file pkill');
+});
+
+// ---------------------------------------------------------------------------
+// R2 (2026-10-20) — fresh-/data volume shadowing: canonical ← fallback self-heal
+// ---------------------------------------------------------------------------
+
+test('r2: setup script carries the self-heal before start', () => {
+  const s = buildTunnelSetupScript({ gostPort: 20082 });
+  const healIdx = s.indexOf(`cp ${TUN.binFallback} ${TUN.bin}`);
+  const nohupIdx = s.indexOf('nohup');
+  assert.ok(healIdx >= 0, 'self-heal cp line present (fresh /data shadows the baked canonical)');
+  assert.ok(nohupIdx >= 0 && healIdx < nohupIdx, 'self-heal runs BEFORE tun2socks starts');
+  assert.ok(s.includes(`chmod 0755 ${TUN.bin}`), 'restored binary is made executable');
+  // conditional: never clobbers a healthy canonical
+  assert.match(s, /if \[ ! -f [^\]]+ \] && \[ -f [^\]]+ \]; then cp/);
+});
+
+test('r2: self-heal line executes for real (sh) — restore / no-clobber / no-op', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wa-r2-heal-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const canonical = path.join(dir, 'canonical'); // neutral names: no 'tun2socks' literal in any child cmdline (F-B-safe)
+  const fallback = path.join(dir, 'fallback');
+  // Extract the EXACT self-heal line from the generated script and swap the
+  // in-device paths to tmp paths — same path-swap technique as the staged test above.
+  const generated = buildTunnelSetupScript({ gostPort: 20082 });
+  const line = generated.split('\n').find((l) => l.includes(`cp ${TUN.binFallback} ${TUN.bin}`));
+  assert.ok(line, 'self-heal line found in generated script');
+  const adapted = line.split(TUN.binFallback).join(fallback).split(TUN.bin).join(canonical);
+  assert.ok(!adapted.includes(TUN.bin) && !adapted.includes(TUN.binFallback), 'paths fully swapped to tmp');
+  const run = () => runShell(adapted);
+
+  // 1) fresh volume: canonical absent, fallback present → restored + 0755 + same bytes
+  fs.writeFileSync(fallback, 'FAKE-ELF-PAYLOAD', { mode: 0o644 });
+  let r = run();
+  assert.equal(r.status, 0, `restore: rc=0 got ${r.status} ${r.stderr}`);
+  assert.ok(fs.existsSync(canonical), 'canonical restored');
+  assert.equal(fs.readFileSync(canonical, 'utf8'), 'FAKE-ELF-PAYLOAD', 'bytes identical');
+  assert.equal(fs.statSync(canonical).mode & 0o777, 0o755, 'restored mode is 0755');
+
+  // 2) no clobber: canonical already healthy, fallback differs → canonical untouched
+  fs.writeFileSync(canonical, 'HEALTHY-CANONICAL');
+  fs.writeFileSync(fallback, 'STALE-FALLBACK');
+  r = run();
+  assert.equal(r.status, 0, `no-clobber: rc=0 got ${r.status} ${r.stderr}`);
+  assert.equal(fs.readFileSync(canonical, 'utf8'), 'HEALTHY-CANONICAL', 'healthy canonical never overwritten');
+
+  // 3) no-op: both absent → no file created, no error (the pre-provision
+  //    check has already fail-closed with BINARY_MISSING before this point)
+  fs.rmSync(canonical); fs.rmSync(fallback);
+  r = run();
+  assert.equal(r.status, 0, `no-op: rc=0 got ${r.status} ${r.stderr}`);
+  assert.ok(!fs.existsSync(canonical), 'nothing fabricated when both landing spots are empty');
 });
