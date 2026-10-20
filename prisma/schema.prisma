@@ -297,6 +297,27 @@ model Device {
   binaryState   String? @map("binary_state")   // missing|ready|invalid|error
   binaryVersion String? @map("binary_version") // e.g. "tun2socks-2.7.0" (canary output, line 1)
   lastDiagnosedAt DateTime? @map("last_diagnosed_at")
+  // R3 (2026-10-20): network health state — the fail-closed watchdog's
+  // source of truth (survives container + API restarts). Written ONLY via
+  // the audited persistNet() transition path. Never contains credentials.
+  //   net_state: STOPPED|STARTING|VERIFYING|HEALTHY|DEGRADED|BLOCKED|FAILED
+  //   net_next_recovery_at: persisted backoff anchor (next auto attempt
+  //     may not start before it; null = no schedule)
+  //   net_recovery_lock_owner/until: cross-process single-flight lease
+  netState            String    @default("STOPPED") @map("net_state")
+  netStateSince       DateTime? @map("net_state_since")
+  netCheckedAt        DateTime? @map("net_checked_at")
+  netLastSuccessAt    DateTime? @map("net_last_success_at")
+  netConsecutiveFailures Int    @default(0) @map("net_consecutive_failures")
+  netLastErrorCode    String?   @map("net_last_error_code")
+  netLastErrorDetail  String?   @map("net_last_error_detail")
+  netLastCanary       String?   @map("net_last_canary")
+  netRecoveries       Int       @default(0) @map("net_recoveries")
+  netLastRecoveryAt   DateTime? @map("net_last_recovery_at")
+  netNextRecoveryAt   DateTime? @map("net_next_recovery_at")
+  netManualIntervention Boolean @default(false) @map("net_manual_intervention")
+  netRecoveryLockOwner  String?  @map("net_recovery_lock_owner")
+  netRecoveryLockUntil  DateTime? @map("net_recovery_lock_until")
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
