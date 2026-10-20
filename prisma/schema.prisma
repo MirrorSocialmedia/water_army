@@ -318,6 +318,9 @@ model Device {
   netManualIntervention Boolean @default(false) @map("net_manual_intervention")
   netRecoveryLockOwner  String?  @map("net_recovery_lock_owner")
   netRecoveryLockUntil  DateTime? @map("net_recovery_lock_until")
+  // R4 (MD §6.2): per-check breakdown of the LAST verification pass — flat
+  // machine-readable status values only (zero secrets; no proxy URL ever).
+  netLastChecks     Json?     @map("net_last_checks")
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 

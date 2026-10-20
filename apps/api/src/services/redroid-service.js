@@ -798,7 +798,13 @@ export function createRedroidService({
           await audit({
             actorUserId: null, action: 'redroid.device.net_transition_refused', resourceType: 'redroid_device', resourceId: row.id,
             requestId: null, ip: null, status: 'failure',
-            details: { name: row.name, from, to, reason: ev.reason ?? null, source: ev.source ?? null },
+            details: {
+              name: row.name, from, to, reason: ev.reason ?? null, source: ev.source ?? null,
+              // MD §6.3 audit contract: device-level network events have no
+              // associated task run — the field exists so the contract is
+              // complete (task-bound dispatch would carry its id here).
+              relatedTaskId: null,
+            },
           }).catch(() => {});
           return null;
         }
@@ -819,6 +825,7 @@ export function createRedroidService({
     if (ev.checkedAt !== undefined) data.netCheckedAt = ev.checkedAt;
     if (ev.lastSuccessAt !== undefined) data.netLastSuccessAt = ev.lastSuccessAt;
     if (ev.lastCanaryLine !== undefined) data.netLastCanary = ev.lastCanaryLine;
+    if (ev.lastChecks !== undefined) data.netLastChecks = ev.lastChecks; // R4 MD §6.2 per-check breakdown
     if (ev.recoveries !== undefined) data.netRecoveries = ev.recoveries;
     if (ev.lastRecoveryAt !== undefined) data.netLastRecoveryAt = ev.lastRecoveryAt;
     if (ev.nextRecoveryAt !== undefined) data.netNextRecoveryAt = ev.nextRecoveryAt;
@@ -846,6 +853,11 @@ export function createRedroidService({
           source: ev.source ?? null,
           consecutiveFailures: updated.netConsecutiveFailures ?? null,
           recoveries: updated.netRecoveries ?? null,
+          // MD §6.3 audit contract: deviceId (resourceId) + from/to + reason
+          // + time (createdAt) + trigger source (source) + related task id.
+          // Device-level network events have no associated task run — null
+          // is the honest value (task-bound dispatch would carry its id).
+          relatedTaskId: null,
         },
       }).catch(() => {});
     }
@@ -956,10 +968,31 @@ export function createRedroidService({
       }
     }
 
+    // R4 (MD §6.2): persist the per-check breakdown of THIS pass — the
+    // single source for the `checks{binary,process,interface,routePolicy,
+    // tcpCanary}` view that API/worker/UI all read (one calculation, one
+    // schema). Flat status vocabulary only — zero secrets by construction.
+    const lastChecks = {
+      at: new Date().toISOString(),
+      container: checks.container, // PASS|FAIL|UNKNOWN (host docker inspect)
+      binary: row.binaryState ?? 'unknown', // ready|missing|invalid|error (R1)
+      process: checks.netcheck?.process ?? 'unknown', // alive|dead|unknown
+      interface: checks.netcheck?.iface ?? 'unknown', // up|down|missing|unknown
+      routePolicy: checks.netcheck
+        ? (checks.netcheck.route === 'present' && checks.netcheck.rule === 'present' ? 'enforced' : 'broken')
+        : 'unknown',
+      effectiveRoute: checks.netcheck?.effective ?? 'unknown', // tunnel|direct|unknown
+      proxy: checks.proxy ?? 'UNKNOWN', // PASS|FAIL (gost leg)
+      tcpCanary: canary
+        ? (canary.result === 'PASS' ? 'PASS' : canary.result === 'FAIL' ? 'FAIL' : canary.result === 'ERROR' ? 'ERROR' : 'SKIPPED')
+        : 'UNKNOWN',
+      canaryReason: canary?.reason ?? null,
+    };
+
     const now = new Date();
     if (!definite && !soft) {
       // all required checks pass — the canary PASS IS the entry condition
-      const base = { checkedAt: now, lastSuccessAt: now, lastCanaryLine: canaryLine, consecutiveFailures: 0, errorCode: null, errorDetail: null, source };
+      const base = { checkedAt: now, lastSuccessAt: now, lastCanaryLine: canaryLine, consecutiveFailures: 0, errorCode: null, errorDetail: null, source, lastChecks };
       const evidence = { canary: { result: 'PASS', nonce: canary.nonce, at: now.getTime() } };
       if (cur === 'HEALTHY') {
         const updated = await persistNet(row, 'HEALTHY', { ...base, reason: 'verify-refresh' });
@@ -989,6 +1022,7 @@ export function createRedroidService({
       errorCode: failed.code,
       errorDetail: failed.detail,
       source,
+      lastChecks,
     };
     const updated = await persistNet(row, target, {
       ...base,
@@ -1471,7 +1505,19 @@ export function createRedroidService({
 
     if (idempotencyKey) {
       const entry = createIdempotency.get(idempotencyKey);
-      if (entry?.state === 'done') return { device: entry.result, replay: true, preflight: entry.preflight ?? null };
+      if (entry?.state === 'done') {
+        // R4: replay integrity (R3 live-found footgun) — the cached create
+        // result can reference a device that was DELETED within the TTL
+        // window. Replaying a dead id returns a PHANTOM view (create 200,
+        // GET 404). Validate the row first: gone → invalidate the key and
+        // fall through to a FRESH create (this request is a legitimate
+        // re-create, not a duplicate); present → replay as before.
+        const rid = entry.result?.id;
+        if (rid && (await findDevice(rid))) {
+          return { device: entry.result, replay: true, preflight: entry.preflight ?? null };
+        }
+        createIdempotency.delete(idempotencyKey);
+      }
       if (entry?.state === 'pending' && now - entry.at <= (config?.redroidIdempotencyTtlMs ?? 600_000)) {
         throw fail('REDROID_CREATE_IN_PROGRESS', 409, 'A device creation with this idempotency key is still in progress');
       }
@@ -1886,6 +1932,16 @@ export function createRedroidService({
     let gostTeardown = null;
     if (row.gostPort) {
       gostTeardown = await teardownGost(row).catch((e) => ({ removed: false, error: String(e?.message ?? e).slice(0, 200) }));
+    }
+
+    // R4: invalidate any create-idempotency entry that cached THIS device's
+    // create result — otherwise a re-create with the same key within the TTL
+    // window would replay the deleted device (phantom view: create 200,
+    // GET 404). Defense in depth: the replay path ALSO validates row
+    // existence (covers an API crash-restart between create and delete…
+    // note the map is per-process, so this sweep is the same-process guard).
+    for (const [k, v] of createIdempotency) {
+      if (v?.state === 'done' && v.result?.id === row.id) createIdempotency.delete(k);
     }
 
     await db.device.delete({ where: { id: row.id } });

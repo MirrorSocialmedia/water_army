@@ -399,6 +399,54 @@ export function computeRecoveryDecision({ netState, recoveries = 0, nextRecovery
 // View helpers (pure — the service feeds row fields in).
 // ---------------------------------------------------------------------------
 
+/** MD §6.2 per-check display vocabulary (one value set for API/worker/UI). */
+export const NET_CHECK_VALUES = Object.freeze(['PASS', 'FAIL', 'UNKNOWN']);
+
+function checkBinary(v) {
+  const s = String(v ?? '').toLowerCase();
+  if (s === 'ready') return 'PASS';
+  if (s === 'missing' || s === 'invalid' || s === 'error') return 'FAIL';
+  return 'UNKNOWN'; // null/unknown = never checked (or pre-R1 row)
+}
+
+function checkEnum(v, passVals) {
+  const s = String(v ?? '').toLowerCase();
+  if (!s || s === 'unknown' || s === 'none') return 'UNKNOWN';
+  if (passVals.includes(s)) return 'PASS';
+  return 'FAIL'; // any definite non-passing value (dead/down/missing/broken...)
+}
+
+function checkCanary(v) {
+  const s = String(v ?? '').toUpperCase();
+  if (s === 'PASS') return 'PASS';
+  if (s === 'FAIL' || s === 'ERROR') return 'FAIL';
+  return 'UNKNOWN'; // SKIPPED (canary not configured) or missing — fail-closed:
+                    // "not verified" is never displayed as a pass
+}
+
+/**
+ * Derive the MD §6.2 `checks` breakdown from the persisted row. PURE +
+ * total: any missing/malformed input degrades to UNKNOWN, never to PASS
+ * (fail-closed display). The five keys are fixed — API, worker and UI all
+ * read these (one calculation, one schema; docs/audits/r4-state-sources.md §2.1).
+ * Zero secrets: values are the status vocabulary only.
+ */
+export function deriveNetChecks(row) {
+  const r = row ?? {};
+  let stored = r.netLastChecks ?? null;
+  if (typeof stored === 'string') {
+    try { stored = JSON.parse(stored); } catch { stored = null; }
+  }
+  const c = stored && typeof stored === 'object' ? stored : {};
+  return {
+    binary: checkBinary(r.binaryState ?? c.binary),
+    process: checkEnum(c.process, ['alive']),
+    interface: checkEnum(c.interface, ['up']),
+    routePolicy: checkEnum(c.routePolicy, ['enforced']),
+    tcpCanary: checkCanary(c.tcpCanary),
+  };
+}
+
 /**
  * Build the `proxy.network` payload (MD §6.2 shape, adapted to this repo's
  * flat style). STALE rule (MD §5.5): a HEALTHY whose last check is older
@@ -437,6 +485,19 @@ export function buildNetPayload(row, { now = Date.now(), staleTtlMs = 60_000, ca
     // R4 consumer gate (task dispatch / UI badge): network work is allowed
     // for THIS device only when the authoritative state is a FRESH HEALTHY.
     networkReady: state === 'HEALTHY' && !stale && consecutiveFailures === 0,
+    // MD §6.2 per-check breakdown (API/worker/UI — same five keys, same
+    // PASS/FAIL/UNKNOWN vocabulary; derived, never free-text).
+    checks: deriveNetChecks(r),
+    // MD §6.2 flat last-error code (lastError keeps the richer {code,detail,at}).
+    lastErrorCode: typeof r.netLastErrorCode === 'string' && r.netLastErrorCode !== '' ? r.netLastErrorCode : null,
+    // R3→R4 interface gap: the persisted backoff anchor + recovery-lock
+    // summary — the UI can show "next auto attempt at …" and the scheduler
+    // can see single-flight state. Owner id is deliberately NOT exposed
+    // (process-internal; until+held are the contract).
+    nextRecoveryAt: r.netNextRecoveryAt ? new Date(r.netNextRecoveryAt).toISOString() : null,
+    recoveryLock: r.netRecoveryLockOwner && r.netRecoveryLockUntil
+      ? { held: new Date(r.netRecoveryLockUntil).getTime() > now, until: new Date(r.netRecoveryLockUntil).toISOString() }
+      : null,
     lastError: r.netLastErrorCode
       ? { code: r.netLastErrorCode, detail: r.netLastErrorDetail || null, at: checkedAt !== null ? new Date(checkedAt).toISOString() : null }
       : null,

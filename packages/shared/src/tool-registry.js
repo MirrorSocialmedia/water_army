@@ -84,6 +84,28 @@ export const TOOL_REGISTRY = Object.freeze([
     }),
     TOOL_SAFETY_CLASS.APPROVAL_REQUIRED,
   ),
+  // R4 (repair MD §6.3): the worker-side fail-closed signal — the ONLY way an
+  // AI task learns whether a redroid device may be used for network work:
+  // `networkReady === true` is the deterministic gate. Read-only (a GET via
+  // the service token; the worker never touches Docker/ADB itself — T1).
+  tool(
+    'redroid.get_device_status',
+    'Read the authoritative state of one redroid device (container + network health). ' +
+    'DISPATCH GATE (fail-closed): do NOT dispatch or continue network-dependent work on this device ' +
+    'unless result.network.networkReady === true. networkReady=false (states DEGRADED/BLOCKED/FAILED/STARTING/' +
+    'VERIFYING/STOPPED or a stale HEALTHY) means the device\'s network protection is not verified — defer or skip, ' +
+    'and do NOT auto-retry yourself: the platform watchdog owns recovery (backoff + capped retries). ' +
+    'state FAILED requires human intervention (manual retry via the console), not more retries.',
+    Object.freeze({
+      type: 'object',
+      additionalProperties: false,
+      required: Object.freeze(['device']),
+      properties: Object.freeze({
+        device: Object.freeze({ type: 'string', minLength: 1, maxLength: 64, description: 'Device id (uuid) or device name' }),
+      }),
+    }),
+    TOOL_SAFETY_CLASS.READONLY,
+  ),
 ]);
 
 /** name → tool def (O(1) lookup). */
