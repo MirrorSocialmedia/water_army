@@ -159,6 +159,23 @@ export function loadConfig(env = process.env, opts = {}) {
     redroidPreflightTimeoutMs: optInt(e, 'REDROID_PREFLIGHT_TIMEOUT_MS', 5000),
     redroidPreflightMaxOutput: optInt(e, 'REDROID_PREFLIGHT_MAX_OUTPUT', 65_536),
     redroidIdempotencyTtlMs: optInt(e, 'REDROID_IDEMPOTENCY_TTL_MS', 600_000),
+    // R3 network health / fail-closed watchdog (repair MD Phase 3).
+    // pollMs=0 disables the interval (tests drive __tickOnceHealth explicitly).
+    redroidHealthPollMs: optInt(e, 'REDROID_HEALTH_POLL_MS', 30_000),
+    redroidHealthStaleMs: optInt(e, 'REDROID_HEALTH_STALE_MS', 60_000),
+    redroidNetcheckTimeoutMs: optInt(e, 'REDROID_NETCHECK_TIMEOUT_MS', 20_000),
+    // Data-plane canary: TCP bidirectional payload probe target. UNCONFIGURED
+    // (empty host) = the data plane is unverifiable = the device can never be
+    // (stay) HEALTHY (fail-closed — MD §5.3/§5.5).
+    redroidCanaryHost: e.REDROID_CANARY_HOST ?? '',
+    redroidCanaryPort: optInt(e, 'REDROID_CANARY_PORT', 0),
+    redroidCanaryTimeoutMs: optInt(e, 'REDROID_CANARY_TIMEOUT_MS', 10_000),
+    redroidCanaryFailThreshold: optInt(e, 'REDROID_CANARY_FAIL_THRESHOLD', 2),
+    // Recovery policy: backoff + max retries (MD §5.4.4/§5.5).
+    redroidRecoveryBackoffBaseMs: optInt(e, 'REDROID_RECOVERY_BACKOFF_BASE_MS', 15_000),
+    redroidRecoveryBackoffMaxMs: optInt(e, 'REDROID_RECOVERY_BACKOFF_MAX_MS', 600_000),
+    redroidRecoveryMaxRetries: optInt(e, 'REDROID_RECOVERY_MAX_RETRIES', 3),
+    redroidRecoveryLockLeaseMs: optInt(e, 'REDROID_RECOVERY_LOCK_LEASE_MS', 900_000),
     // P3 service identity: worker→API token (empty = service auth disabled).
     serviceToken: e.WORKER_API_TOKEN ?? '',
     // P3 provider default when POST /api/tasks/runs omits body.provider.

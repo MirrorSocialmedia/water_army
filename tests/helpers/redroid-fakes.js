@@ -14,7 +14,7 @@ import path from 'node:path';
 import argon2 from '@node-rs/argon2';
 
 import { buildApp } from '../../apps/api/src/app.js';
-import { makeFakeDb, testConfig, fakeRedisOk } from './fakes.js';
+import { makeFakeDb, testConfig, fakeRedisOk, makeFakeQueue } from './fakes.js';
 
 const { argon2id, hash } = argon2;
 export const TEST_PASSWORD = 'TestPass123';
@@ -41,12 +41,32 @@ export async function makeRedroidTestApp({ redroidMockOpts = {}, configOverride 
     redroidDataRoot: dataRoot,
     redroidAdbRangeStart: 15000,
     redroidAdbRangeEnd: 15999,
+    // R3 network health (mock mode): a canary target MUST be configured or
+    // every proxied device is unverifiable (fail-closed by design). The mock
+    // exec emulates the TCP bidirectional probe against this (unused) target;
+    // pollMs=0 disables the interval timer — tests drive ticks explicitly
+    // via app.redroidService.__tickOnceHealth (deterministic, no wall clock).
+    redroidCanaryHost: 'canary.mock',
+    redroidCanaryPort: 20281,
+    redroidHealthPollMs: 0,
+    redroidCanaryTimeoutMs: 2000,
+    redroidCanaryFailThreshold: 2,
+    redroidTunnelBootTimeoutMs: 15_000,
+    redroidTunnelPollMs: 25,
+    redroidRecoveryBackoffBaseMs: 100,
+    redroidRecoveryBackoffMaxMs: 1000,
+    redroidRecoveryMaxRetries: 3,
+    redroidRecoveryLockLeaseMs: 5000,
     ...configOverride,
   };
   const app = await buildApp({
     config,
     db,
     redis: fakeRedisOk(),
+    // hermetic: the redroid path never touches the task queue — a fake keeps
+    // BullMQ (and its redis reconnect storm) out of these suites, matching
+    // the tasks/schedules suite convention.
+    taskQueue: makeFakeQueue(),
     // P2 container routes stay inert (disabled wrapper); the redroid service
     // uses the deterministic mock env (REDROID_ADAPTER=mock, test seam).
     docker: makeContainerFake(),

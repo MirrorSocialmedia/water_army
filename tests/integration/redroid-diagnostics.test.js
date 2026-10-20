@@ -36,7 +36,7 @@ async function createRunningDevice(app, cookie, name = 'redroid-diag', templateN
   return res.json().device;
 }
 
-test('diagnostics: four INDEPENDENT zones, all executed, host GPU = unverified (never fake-verified)', async (t) => {
+test('diagnostics: five INDEPENDENT zones, all executed, host GPU = unverified (never fake-verified)', async (t) => {
   const { app, db, cookies, close } = await makeApp();
   t.after(close);
   const H = { cookie: cookies.operator };
@@ -80,12 +80,18 @@ test('diagnostics: four INDEPENDENT zones, all executed, host GPU = unverified (
     assert.notEqual(device.gpuStatus, 'verified');
   });
 
+  await t.test('zone 5 network (R3): no-proxy device = unconfigured (nothing to verify, no fake pass)', async () => {
+    assert.equal(d.network.executed, false);
+    assert.equal(d.network.status, 'unconfigured');
+    assert.match(d.network.note, /no proxy binding/);
+  });
+
   await t.test('lastDiagnosedAt is stamped + diagnostics audited', async () => {
     const detail = await app.inject({ method: 'GET', url: `/api/devices/redroid/${device.id}`, headers: H });
     assert.ok(detail.json().device.lastDiagnosedAt, 'lastDiagnosedAt must be set');
     const audit = db.__state.auditRows.find((a) => a.action === 'redroid.device.diagnostics');
     assert.ok(audit, 'diagnostics must be audited');
-    assert.deepEqual(audit.detailsJson.zones, { kernel: 'supported', containerLogs: 'ok', adbConnectivity: 'online', gpuVerification: 'unverified' });
+    assert.deepEqual(audit.detailsJson.zones, { kernel: 'supported', containerLogs: 'ok', adbConnectivity: 'online', gpuVerification: 'unverified', network: 'unconfigured' });
   });
 });
 

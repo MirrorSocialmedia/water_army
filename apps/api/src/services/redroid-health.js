@@ -361,16 +361,23 @@ export function isStallSignature(lastErrorCode) {
 
 /**
  * Decide the recovery action for a device whose health just failed.
- * Inputs: { netState, recoveries, lastRecoveryAt (ms|0), lockHeldBy,
- *           lastErrorCode, now } + cfg.
+ * Inputs: { netState, recoveries, nextRecoveryAt (persisted backoff anchor,
+ *           ms|0), lockHeldBy, lastErrorCode, now } + cfg.
  * Returns (in priority order):
  *   { action:'manual-fail', code }   → transition to FAILED + manual flag
  *   { action:'locked' }              → another holder owns the lock: WAIT (no spin)
- *   { action:'wait', retryAt }       → backoff not elapsed yet
+ *   { action:'wait', retryAt }       → the persisted backoff anchor is in the future
  *   { action:'recover', attempt }    → proceed with recovery attempt #attempt
  *   { action:'skip' }                → state is not recoverable (STOPPED/FAILED/HEALTHY)
+ *
+ * Backoff semantics (R3): the anchor is PERSISTED (netNextRecoveryAt) and
+ * armed by the watchdog when it observes a failing verify. EVERY attempt —
+ * including #1 — must wait for the anchor. This makes the failure state
+ * (DEGRADED/BLOCKED) stable and observable (no racing STARTING right after
+ * a tick) and crash-safe (the schedule survives an API restart). Manual
+ * retry bypasses the anchor by resetting the episode (anchor cleared).
  */
-export function computeRecoveryDecision({ netState, recoveries = 0, lastRecoveryAt = 0, lockHeldBy = null, lastErrorCode = null, now = 0 }, cfg = RECOVERY_DEFAULTS) {
+export function computeRecoveryDecision({ netState, recoveries = 0, nextRecoveryAt = 0, lockHeldBy = null, lastErrorCode = null, now = 0 }, cfg = RECOVERY_DEFAULTS) {
   if (!['DEGRADED', 'BLOCKED'].includes(netState)) return { action: 'skip' };
   const maxRetries = Math.max(1, cfg.maxRetries ?? RECOVERY_DEFAULTS.maxRetries);
   const stallMax = Math.max(0, cfg.stallMaxRetries ?? RECOVERY_DEFAULTS.stallMaxRetries);
@@ -383,12 +390,8 @@ export function computeRecoveryDecision({ netState, recoveries = 0, lastRecovery
   }
   if (lockHeldBy) return { action: 'locked' };
   const attempt = recoveries + 1;
-  // First attempt of an episode: no prior wait (the failure was just
-  // detected this tick). Backoff governs the GAPS BETWEEN attempts.
-  if (attempt === 1) return { action: 'recover', attempt: 1 };
-  const delay = backoffMs(attempt, cfg);
-  const retryAt = (lastRecoveryAt || 0) + delay;
-  if (now < retryAt) return { action: 'wait', retryAt };
+  // Stable anchor: wait until the persisted schedule time (0 = not armed).
+  if (nextRecoveryAt > now) return { action: 'wait', retryAt: nextRecoveryAt };
   return { action: 'recover', attempt };
 }
 

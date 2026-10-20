@@ -176,39 +176,44 @@ test('r3 recovery: decision — skip when not recoverable', () => {
   }
 });
 
-test('r3 recovery: decision — first attempt immediate; subsequent attempts respect backoff', () => {
+test('r3 recovery: decision — every attempt (incl. #1) waits for the persisted backoff anchor', () => {
   const now = 1_000_000;
-  // fresh failure (no prior attempt in this episode): first attempt goes now
-  assert.deepEqual(computeRecoveryDecision({ netState: 'BLOCKED', recoveries: 0, lastRecoveryAt: 0, now }, SMALL), { action: 'recover', attempt: 1 });
-  // after attempt 1 recorded at T, attempt 2 waits 2*base from T
-  const T = now + 1000;
-  const d2 = computeRecoveryDecision({ netState: 'BLOCKED', recoveries: 1, lastRecoveryAt: T, now: T + 1500 }, SMALL);
-  assert.equal(d2.action, 'wait');
-  assert.equal(d2.retryAt, T + 2000);
-  assert.deepEqual(computeRecoveryDecision({ netState: 'BLOCKED', recoveries: 1, lastRecoveryAt: T, now: T + 2000 }, SMALL), { action: 'recover', attempt: 2 });
-  // attempt 3 waits 4*base from the LAST attempt time
-  const T2 = T + 2000;
-  const d3 = computeRecoveryDecision({ netState: 'BLOCKED', recoveries: 2, lastRecoveryAt: T2, now: T2 + 3999 }, SMALL);
-  assert.equal(d3.action, 'wait');
-  assert.deepEqual(computeRecoveryDecision({ netState: 'BLOCKED', recoveries: 2, lastRecoveryAt: T2, now: T2 + 4000 }, SMALL), { action: 'recover', attempt: 3 });
+  // anchor not armed (0) → recover immediately (manual-retry path resets it)
+  assert.deepEqual(computeRecoveryDecision({ netState: 'BLOCKED', recoveries: 0, nextRecoveryAt: 0, now }, SMALL), { action: 'recover', attempt: 1 });
+  // anchor armed in the future → wait (the state stays observable as BLOCKED/DEGRADED — no racing STARTING)
+  const armedAt = now + 1000;
+  const dWait = computeRecoveryDecision({ netState: 'DEGRADED', recoveries: 0, nextRecoveryAt: armedAt, now: now + 999 }, SMALL);
+  assert.equal(dWait.action, 'wait');
+  assert.equal(dWait.retryAt, armedAt);
+  // anchor elapsed → the attempt the service armed for (recoveries+1)
+  assert.deepEqual(computeRecoveryDecision({ netState: 'DEGRADED', recoveries: 0, nextRecoveryAt: armedAt, now: armedAt }, SMALL), { action: 'recover', attempt: 1 });
+  assert.deepEqual(computeRecoveryDecision({ netState: 'BLOCKED', recoveries: 2, nextRecoveryAt: now, now }, SMALL), { action: 'recover', attempt: 3 });
+  // anchor is crash-safe by construction: it is a plain persisted timestamp —
+  // restarting the API with the same row yields the same wait/recover decision
+  const restarted = computeRecoveryDecision({ netState: 'BLOCKED', recoveries: 1, nextRecoveryAt: now + 4000, now: now + 1 }, SMALL);
+  assert.equal(restarted.action, 'wait');
+  assert.equal(restarted.retryAt, now + 4000);
 });
 
 test('r3 recovery: decision — lock contention is a WAIT, never a second recovery', () => {
-  const d = computeRecoveryDecision({ netState: 'BLOCKED', recoveries: 0, lastRecoveryAt: 0, lockHeldBy: 'other-owner', now: 1e12 }, SMALL);
+  const d = computeRecoveryDecision({ netState: 'BLOCKED', recoveries: 0, nextRecoveryAt: 0, lockHeldBy: 'other-owner', now: 1e12 }, SMALL);
   assert.deepEqual(d, { action: 'locked' });
 });
 
 test('r3 recovery: decision — max retries → FAILED (manual intervention)', () => {
-  const d = computeRecoveryDecision({ netState: 'BLOCKED', recoveries: SMALL.maxRetries, lastRecoveryAt: 0, now: 1e12 }, SMALL);
+  const d = computeRecoveryDecision({ netState: 'BLOCKED', recoveries: SMALL.maxRetries, nextRecoveryAt: 0, now: 1e12 }, SMALL);
   assert.equal(d.action, 'manual-fail');
   assert.equal(d.code, NET_ERRORS.RECOVERY_EXHAUSTED);
+  // budget check outranks the anchor: an exhausted episode never spins on 'wait'
+  const d2 = computeRecoveryDecision({ netState: 'BLOCKED', recoveries: SMALL.maxRetries, nextRecoveryAt: 2e12, now: 1e12 }, SMALL);
+  assert.equal(d2.action, 'manual-fail');
 });
 
 test('r3 recovery: decision — gVisor stall signature gets the small budget (R2 L6h: re-provision useless)', () => {
   // canary dead + process alive = the stall. After ONE auto re-provision that
   // did not restore the data plane, stop and require a human.
   const stall = (recoveries) => computeRecoveryDecision(
-    { netState: 'BLOCKED', recoveries, lastRecoveryAt: 0, lastErrorCode: NET_ERRORS.CANARY_TIMEOUT, now: 1e12 },
+    { netState: 'BLOCKED', recoveries, nextRecoveryAt: 0, lastErrorCode: NET_ERRORS.CANARY_TIMEOUT, now: 1e12 },
     SMALL,
   );
   assert.deepEqual(stall(0), { action: 'recover', attempt: 1 });
@@ -222,7 +227,7 @@ test('r3 recovery: decision — gVisor stall signature gets the small budget (R2
 
 test('r3 recovery: decision — non-stall failures use the full budget', () => {
   const d = computeRecoveryDecision(
-    { netState: 'BLOCKED', recoveries: 1, lastRecoveryAt: 0, lastErrorCode: NET_ERRORS.TUNNEL_PROCESS_DEAD, now: 1e12 },
+    { netState: 'BLOCKED', recoveries: 1, nextRecoveryAt: 0, lastErrorCode: NET_ERRORS.TUNNEL_PROCESS_DEAD, now: 1e12 },
     SMALL,
   );
   assert.deepEqual(d, { action: 'recover', attempt: 2 }, 'process-death failures keep the full retry budget');

@@ -20,6 +20,7 @@
  *  - worker is NOT involved: all device ops are synchronous API-side (工單)
  */
 import fs from 'node:fs';
+import net from 'node:net';
 import path from 'node:path';
 
 import { DOCKER_ERROR, encryptSecret, decryptSecret, resolveProviderKey } from '@water-army/shared';
@@ -27,6 +28,29 @@ import { DOCKER_ERROR, encryptSecret, decryptSecret, resolveProviderKey } from '
 import { DockerServiceError } from './docker-service.js';
 import { checkPortAvailable, } from './preflight.js';
 import { createAdbWhitelist } from './adb-whitelist.js';
+import {
+  NET_STATES,
+  NET_TO_LEGACY_PROXY,
+  NET_ERRORS,
+  T2S_NETCHECK_MARKER,
+  T2S_CANARY_MARKER,
+  assertNetTransition,
+  IllegalNetTransition,
+  buildT2sNetcheckScript,
+  parseNetcheckOutput,
+  classifyNetcheck,
+  buildT2sCanaryScript,
+  parseCanaryOutput,
+  classifyCanary,
+  generateCanaryNonce,
+  computeRecoveryDecision,
+  backoffMs,
+  buildNetPayload,
+} from './redroid-health.js';
+
+// R3 markers are re-exported so the mock adapter (redroid-mock.js) can match
+// the canary/netcheck scripts without a second import surface.
+export { T2S_NETCHECK_MARKER, T2S_CANARY_MARKER } from './redroid-health.js';
 
 /** Server-side ADB bind constant — MD §1.2: 127.0.0.1 ONLY. Never client input. */
 export const REDROID_LOOPBACK_BIND = '127.0.0.1';
@@ -475,6 +499,10 @@ export function createRedroidService({
   // below); mock mode injects a recorder so tests assert the EXACT tunnel
   // scripts without a daemon. Returns {exitCode, stdout, stderr}.
   exec: injectedExec,
+  // R3: host-side proxy-leg reachability probe. Real = gost container
+  // inspect + TCP connect to 172.17.0.1:<gostPort>; mock adapter injects a
+  // deterministic stand-in (the whole device is simulated there).
+  proxyReachable: injectedProxyReachable,
 } = {}) {
   const adbEngine = adb ?? createAdbWhitelist({
     adbBinary: config?.redroidAdbBinary,
@@ -698,14 +726,531 @@ export function createRedroidService({
     throw fail('REDROID_GOST_PORT_UNAVAILABLE', 503, `No free gost port in ${start}-${end} (all allocated or occupied)`);
   }
 
-  /** Set proxyState (best-effort — never blocks the main lifecycle). */
-  async function setProxyState(id, state) {
-    await db.device.update({ where: { id }, data: { proxyState: state } }).catch((err) => {
-      log.warn({ deviceId: id, state, error: err?.message }, 'redroid proxy: setProxyState failed');
-    });
+  // ---- R3: network health (repair MD Phase 3 — fail-closed watchdog) ------
+  //
+  // Architecture: ONE authoritative state machine (redroid-health.js) + one
+  // in-process watchdog loop. The ONLY code path into HEALTHY is VERIFYING +
+  // a fresh bidirectional-TCP-canary PASS (MD §5.2/§6.3). The legacy
+  // proxyState is a conservative PROJECTION of the new state (R4 retires it).
+
+  /** Health/watchdog config with safe defaults (REDROID_* env knobs). */
+  function healthCfg() {
+    return {
+      pollMs: config?.redroidHealthPollMs ?? 30_000,
+      canaryHost: String(config?.redroidCanaryHost ?? '').trim(),
+      canaryPort: Number(config?.redroidCanaryPort ?? 0) || 0,
+      canaryTimeoutMs: config?.redroidCanaryTimeoutMs ?? 10_000,
+      canaryFailThreshold: Math.max(1, config?.redroidCanaryFailThreshold ?? 2),
+      staleTtlMs: config?.redroidHealthStaleMs ?? 60_000,
+      netcheckTimeoutMs: config?.redroidNetcheckTimeoutMs ?? 20_000,
+      backoffBaseMs: config?.redroidRecoveryBackoffBaseMs ?? 15_000,
+      backoffMaxMs: config?.redroidRecoveryBackoffMaxMs ?? 600_000,
+      maxRetries: Math.max(1, config?.redroidRecoveryMaxRetries ?? 3),
+      stallMaxRetries: Math.max(0, config?.redroidRecoveryStallMaxRetries ?? 1),
+      lockLeaseMs: config?.redroidRecoveryLockLeaseMs ?? 900_000,
+      startingTimeoutMs: config?.redroidTunnelBootTimeoutMs ?? 600_000,
+    };
   }
 
-  /** Set the tun2socks binary diagnosis (best-effort; never blocks). State ∈ missing|ready|invalid|error. */
+  function canaryConfigured() {
+    const c = healthCfg();
+    return c.canaryHost !== '' && c.canaryPort >= 1 && c.canaryPort <= 65535;
+  }
+
+  function netPolicyCfg() {
+    const c = healthCfg();
+    return { backoffBaseMs: c.backoffBaseMs, backoffMaxMs: c.backoffMaxMs, maxRetries: c.maxRetries, stallMaxRetries: c.stallMaxRetries };
+  }
+
+  function clip(s, n = 200) {
+    return String(s ?? '').slice(0, n);
+  }
+
+  function normNetState(row) {
+    return NET_STATES.includes(row?.netState) ? row.netState : 'STOPPED';
+  }
+
+  /**
+   * The ONLY network-state write path (MD §6.3 — state moves only via
+   * verified events). Writes the net_* columns + the legacy proxyState
+   * projection in ONE update; audits every transition.
+   *  - to === from → "refresh": field update only, no transition event
+   *  - to !== from → assertNetTransition first; an illegal transition is
+   *    REJECTED (warn log + audit 'net_transition_refused', nothing written)
+   * ZERO SECRETS: details are machine-readable codes / script status lines
+   * (canary + netcheck output) — never a proxy URL.
+   */
+  async function persistNet(row, to, ev = {}) {
+    if (!row?.id) return row;
+    const from = normNetState(row);
+    const data = {};
+    if (to !== from) {
+      try {
+        assertNetTransition(from, to, ev);
+      } catch (err) {
+        if (err instanceof IllegalNetTransition) {
+          log.warn({ device: row.name, from, to, reason: ev.reason ?? null }, 'redroid net: ILLEGAL transition refused (state unchanged)');
+          await audit({
+            actorUserId: null, action: 'redroid.device.net_transition_refused', resourceType: 'redroid_device', resourceId: row.id,
+            requestId: null, ip: null, status: 'failure',
+            details: { name: row.name, from, to, reason: ev.reason ?? null, source: ev.source ?? null },
+          }).catch(() => {});
+          return null;
+        }
+        throw err;
+      }
+      data.netState = to;
+      data.netStateSince = new Date();
+      // legacy projection — only devices WITH a proxy leave 'off'
+      if (row.gostPort) data.proxyState = NET_TO_LEGACY_PROXY[to];
+      if (to === 'HEALTHY') { data.netRecoveries = 0; data.netManualIntervention = false; data.netNextRecoveryAt = null; }
+      if (to === 'FAILED') data.netManualIntervention = true; // MD §5.4.6: FAILED = 人工介入
+    }
+    if (ev.consecutiveFailures !== undefined) data.netConsecutiveFailures = ev.consecutiveFailures;
+    if (ev.errorCode !== undefined) {
+      data.netLastErrorCode = ev.errorCode;
+      data.netLastErrorDetail = ev.errorDetail !== undefined ? clip(ev.errorDetail, 300) : null;
+    }
+    if (ev.checkedAt !== undefined) data.netCheckedAt = ev.checkedAt;
+    if (ev.lastSuccessAt !== undefined) data.netLastSuccessAt = ev.lastSuccessAt;
+    if (ev.lastCanaryLine !== undefined) data.netLastCanary = ev.lastCanaryLine;
+    if (ev.recoveries !== undefined) data.netRecoveries = ev.recoveries;
+    if (ev.lastRecoveryAt !== undefined) data.netLastRecoveryAt = ev.lastRecoveryAt;
+    if (ev.nextRecoveryAt !== undefined) data.netNextRecoveryAt = ev.nextRecoveryAt;
+    if (ev.manualIntervention !== undefined) data.netManualIntervention = ev.manualIntervention;
+    if (Object.keys(data).length === 0) return row;
+    let updated = null;
+    try {
+      updated = await db.device.update({ where: { id: row.id }, data });
+    } catch (err) {
+      log.warn({ device: row.name, to, error: err?.message }, 'redroid net: persistNet failed');
+      return row;
+    }
+    if (to !== from) {
+      log.info(
+        { device: row.name, from, to, reason: ev.reason ?? null, errorCode: ev.errorCode ?? undefined, consecutiveFailures: ev.consecutiveFailures ?? undefined },
+        'redroid net: transition',
+      );
+      await audit({
+        actorUserId: null, action: 'redroid.device.net_transition', resourceType: 'redroid_device', resourceId: row.id,
+        requestId: null, ip: null, status: to === 'HEALTHY' ? 'success' : 'warning',
+        details: {
+          name: row.name, from, to,
+          reason: ev.reason ?? null,
+          errorCode: ev.errorCode ?? null,
+          source: ev.source ?? null,
+          consecutiveFailures: updated.netConsecutiveFailures ?? null,
+          recoveries: updated.netRecoveries ?? null,
+        },
+      }).catch(() => {});
+    }
+    return updated ?? row;
+  }
+
+  /**
+   * One full verification pass (MD §5.3 — control plane AND data plane):
+   *   container (host) → netcheck (in-device: process/tun0/table-100/rule/
+   *   effective route) → TCP bidirectional canary → proxy leg (gost listener)
+   * Outcome applied through persistNet:
+   *   all pass  → HEALTHY (via VERIFYING, with the canary PASS as evidence)
+   *   definite  → BLOCKED immediately (process dead / tun0 gone / route lost /
+   *               fail-open detected / container gone / proxy unreachable)
+   *   soft      → consecutiveFailures++ → DEGRADED (1) / BLOCKED (threshold)
+   * Stale-health rule: a canary that did not run / timed out is a failure,
+   * never an absence of evidence (MD §5.5).
+   * Returns { healthy, checks, canary, row, failed? }.
+   */
+  async function verifyNow(row, { source = 'watchdog' } = {}) {
+    const cfg = healthCfg();
+    const cur = normNetState(row);
+    const checks = {};
+
+    // -- container (host side) --
+    let containerRunning = null; // null = unknown (daemon unreachable)
+    if (row.containerId) {
+      try {
+        const s = await dockerService.inspectSummary(row.containerId);
+        containerRunning = s?.state?.status === 'running';
+      } catch (err) {
+        containerRunning = err instanceof DockerServiceError && err.apiCode === DOCKER_ERROR.CONTAINER_NOT_FOUND ? false : null;
+      }
+    } else {
+      containerRunning = false;
+    }
+    checks.container = containerRunning === null ? 'UNKNOWN' : containerRunning ? 'PASS' : 'FAIL';
+
+    let definite = null; // {code, detail} — protection DEFINITIVELY lost
+    let soft = null;     // {code, detail} — inconclusive / data-plane failure
+    if (containerRunning === false) {
+      definite = { code: NET_ERRORS.CONTAINER_NOT_RUNNING, detail: 'device container is not running' };
+    } else if (containerRunning === null) {
+      soft = { code: NET_ERRORS.DOCKER_UNAVAILABLE, detail: 'docker inspect failed (daemon unavailable?)' };
+    }
+
+    // -- in-device control-plane netcheck --
+    let canary = null;
+    let canaryLine = null;
+    if (containerRunning === true) {
+      try {
+        const r = await execInContainer(row.containerId, buildT2sNetcheckScript(), { timeoutMs: cfg.netcheckTimeoutMs });
+        const parsed = parseNetcheckOutput(r.stdout);
+        if (!parsed.ok) {
+          soft = soft ?? { code: parsed.code, detail: `netcheck inconclusive (exit=${r.exitCode})` };
+        } else {
+          checks.netcheck = { process: parsed.process, pid: parsed.pid, iface: parsed.iface, route: parsed.route, rule: parsed.rule, effective: parsed.effective };
+          const cls = classifyNetcheck(parsed);
+          if (cls) {
+            const line = `process=${parsed.process} iface=${parsed.iface} route=${parsed.route} rule=${parsed.rule} effective=${parsed.effective}`;
+            if (cls.severity === 'definite') definite = definite ?? { code: cls.code, detail: line };
+            else soft = soft ?? { code: cls.code, detail: line };
+          }
+        }
+      } catch (err) {
+        soft = soft ?? { code: NET_ERRORS.TUNNEL_CHECK_ERROR, detail: clip(err?.message, 160) };
+      }
+
+      // -- data-plane canary (the ONLY thing that may earn HEALTHY) --
+      if (!canaryConfigured()) {
+        // No admin canary target → data plane UNVERIFIABLE → fail-closed:
+        // the device can never be (stay) HEALTHY (MD §5.3/§5.5).
+        canary = { result: 'SKIPPED', reason: 'not-configured' };
+        canaryLine = 'CANARY=FAIL nonce=0000000000000000 reason=not-configured';
+        soft = soft ?? { code: NET_ERRORS.CANARY_NOT_CONFIGURED, detail: 'no REDROID_CANARY_HOST/REDROID_CANARY_PORT configured — data plane unverifiable' };
+      } else {
+        const nonce = generateCanaryNonce();
+        let r = null;
+        try {
+          r = await execInContainer(
+            row.containerId,
+            buildT2sCanaryScript({ host: cfg.canaryHost, port: cfg.canaryPort, timeoutMs: cfg.canaryTimeoutMs, nonce }),
+            { timeoutMs: cfg.canaryTimeoutMs + 15_000 },
+          );
+        } catch (err) {
+          r = null; // exec seam failure → counted below (never silently healthy)
+        }
+        canary = r ? parseCanaryOutput(r.stdout) : { result: 'ERROR', reason: 'exec-error' };
+        canaryLine = canary.result === 'PASS'
+          ? `CANARY=PASS nonce=${nonce} ms=${canary.ms ?? 0}`
+          : `CANARY=FAIL nonce=${nonce} reason=${canary.reason}`;
+        const cls = classifyCanary(canary);
+        if (!cls.pass) soft = soft ?? { code: cls.code, detail: `canary ${canary.result}:${canary.reason}` };
+      }
+
+      // -- proxy leg (host side: gost container + listener) --
+      let proxy = null;
+      try {
+        proxy = await proxyReachableFn(row);
+      } catch (err) {
+        proxy = { ok: false, error: clip(err?.message, 160) };
+      }
+      checks.proxy = proxy?.ok ? 'PASS' : 'FAIL';
+      if (!proxy?.ok && canary?.result !== 'PASS') {
+        // A canary PASS already proves the full leg (device→t2s→gost→upstream);
+        // a probe failure despite a canary PASS is a probe artifact, not loss.
+        definite = definite ?? { code: NET_ERRORS.PROXY_UNREACHABLE, detail: proxy?.error ?? 'proxy listener not reachable' };
+      }
+    }
+
+    const now = new Date();
+    if (!definite && !soft) {
+      // all required checks pass — the canary PASS IS the entry condition
+      const base = { checkedAt: now, lastSuccessAt: now, lastCanaryLine: canaryLine, consecutiveFailures: 0, errorCode: null, errorDetail: null, source };
+      const evidence = { canary: { result: 'PASS', nonce: canary.nonce, at: now.getTime() } };
+      if (cur === 'HEALTHY') {
+        const updated = await persistNet(row, 'HEALTHY', { ...base, reason: 'verify-refresh' });
+        return { healthy: Boolean(updated), checks, canary, row: updated ?? row };
+      }
+      if (cur === 'VERIFYING') {
+        const updated = await persistNet(row, 'HEALTHY', { ...base, reason: 'verification-passed', ...evidence });
+        return { healthy: Boolean(updated), checks, canary, row: updated ?? row };
+      }
+      // DEGRADED / BLOCKED → VERIFYING → HEALTHY (two audited transitions;
+      // direct DEGRADED/BLOCKED→HEALTHY edges do not exist in the table)
+      const mid = await persistNet(row, 'VERIFYING', { reason: 'recovery-verify', source });
+      if (!mid) return { healthy: false, checks, canary, row };
+      const updated = await persistNet(mid, 'HEALTHY', { ...base, reason: 'recovery-verification-passed', ...evidence });
+      return { healthy: Boolean(updated), checks, canary, row: updated ?? row };
+    }
+
+    // ---- failure path ----
+    const failed = definite ?? soft;
+    const consecutive = (Number.isInteger(row.netConsecutiveFailures) ? row.netConsecutiveFailures : 0) + 1;
+    const isDefinite = Boolean(definite);
+    const target = isDefinite || consecutive >= cfg.canaryFailThreshold ? 'BLOCKED' : 'DEGRADED';
+    const base = {
+      checkedAt: now,
+      lastCanaryLine: canaryLine,
+      consecutiveFailures: consecutive,
+      errorCode: failed.code,
+      errorDetail: failed.detail,
+      source,
+    };
+    const updated = await persistNet(row, target, {
+      ...base,
+      reason: target === cur ? undefined : (isDefinite ? `definite-loss:${failed.code}` : `consecutive-failures:${consecutive}/${cfg.canaryFailThreshold}`),
+    });
+    return { healthy: false, checks, canary, row: updated ?? row, failed, target };
+  }
+
+  // ---- R3: recovery (lock + backoff + max retries + stall rule) -----------
+
+  let watchdogTimer = null;
+  let watchdogSweepTimer = null;
+  let watchdogRunning = false;
+  /** In-process double-trigger guard (the DB lease is the cross-crash guard). */
+  const recovering = new Set();
+
+  /**
+   * Acquire the per-device recovery lock as a DB LEASE (conditional update —
+   * only one holder fleet-wide; a stale lease from a crashed process expires
+   * on its own). Fail-closed: any DB error = NOT acquired = no recovery.
+   */
+  async function acquireRecoveryLock(deviceId, owner, leaseMs) {
+    try {
+      const until = new Date(Date.now() + leaseMs);
+      const res = await db.$queryRaw`
+        UPDATE "devices" SET "net_recovery_lock_owner" = ${owner}, "net_recovery_lock_until" = ${until}
+        WHERE id = ${deviceId} AND ("net_recovery_lock_until" IS NULL OR "net_recovery_lock_until" < now())
+        RETURNING id`;
+      return Array.isArray(res) && res.length > 0;
+    } catch (err) {
+      log.warn({ deviceId, error: err?.message }, 'redroid net: recovery lock acquire failed (no recovery this tick)');
+      return false;
+    }
+  }
+
+  async function releaseRecoveryLock(deviceId) {
+    recovering.delete(deviceId);
+    await db.device.update({ where: { id: deviceId }, data: { netRecoveryLockOwner: null, netRecoveryLockUntil: null } }).catch(() => {});
+  }
+
+  /**
+   * One recovery attempt: STARTING → (container restart if needed) → gost
+   * ensure → FULL tunnel re-provision + immediate re-verification. Process
+   * resurrection is NOT health — only the canary can restore HEALTHY
+   * (MD §5.4.5).
+   */
+  async function runRecovery(deviceId, owner, attempt) {
+    try {
+      const row = await findDevice(deviceId);
+      if (!row || !row.gostPort) return;
+      const mid = await persistNet(row, 'STARTING', { reason: 'recovery-reprovision', source: 'watchdog', recoveries: attempt, lastRecoveryAt: new Date(), nextRecoveryAt: null });
+      if (!mid) return; // transition refused (device stopped/deleted meanwhile)
+
+      // container down? restart it first (provisionTunnel re-times the boot wait)
+      let containerState = null;
+      try {
+        const s = await dockerService.inspectSummary(row.containerId);
+        containerState = s?.state?.status ?? null;
+      } catch (err) {
+        containerState = err instanceof DockerServiceError && err.apiCode === DOCKER_ERROR.CONTAINER_NOT_FOUND ? 'missing' : null;
+      }
+      if (containerState && containerState !== 'running') {
+        try {
+          const r = await dockerService.runAction(row.containerId, 'restart');
+          await db.device.update({ where: { id: row.id }, data: { containerState: r?.state ?? 'running' } }).catch(() => {});
+        } catch (err) {
+          log.warn({ device: row.name, error: err?.message }, 'redroid net: recovery container restart failed');
+          await persistNet(row, 'FAILED', { reason: 'container-restart-failed', errorCode: NET_ERRORS.CONTAINER_NOT_RUNNING, errorDetail: clip(err?.message, 160), source: 'watchdog' });
+          return;
+        }
+      }
+      // ensure the per-device gost container (idempotent reuse), then the full
+      // tunnel re-provision (pkill + tun0 + t2s + routes) + re-verification
+      const fresh = await findDevice(row.id);
+      fresh._proxyUrlPlaintext =
+        decryptProxyUrl(fresh.proxyUrlEncrypted, `device '${fresh.name}'`) ??
+        decryptProxyUrl(fresh.template?.proxyUrlEncrypted, 'template');
+      if (fresh._proxyUrlPlaintext) {
+        try { await provisionGost(fresh); } catch (err) { log.warn({ device: row.name, error: err?.message }, 'redroid net: recovery gost ensure failed'); }
+      }
+      await provisionTunnel(fresh); // hard failures already persisted by it
+    } catch (err) {
+      log.warn({ device: deviceId, attempt, error: err?.message }, 'redroid net: recovery run failed');
+    } finally {
+      await releaseRecoveryLock(deviceId);
+    }
+  }
+
+  /**
+   * Decide + trigger recovery for a device that just failed a verify pass.
+   * Enforces (MD §5.4.4/§5.5): ONE recovery lock per device, exponential
+   * backoff, max retries, and the gVisor-stall small budget (R2 L6h).
+   */
+  async function scheduleRecovery(row) {
+    if (!row?.id || recovering.has(row.id)) return { recovery: 'locked' };
+    const cfg = healthCfg();
+    const lockUntilTs = row.netRecoveryLockUntil ? new Date(row.netRecoveryLockUntil).getTime() : 0;
+    const lockHeld = Boolean(row.netRecoveryLockOwner) && lockUntilTs > Date.now();
+    const dec = computeRecoveryDecision(
+      {
+        netState: normNetState(row),
+        recoveries: Number.isInteger(row.netRecoveries) ? row.netRecoveries : 0,
+        nextRecoveryAt: row.netNextRecoveryAt ? new Date(row.netNextRecoveryAt).getTime() : 0,
+        lockHeldBy: lockHeld ? row.netRecoveryLockOwner : null,
+        lastErrorCode: row.netLastErrorCode ?? null,
+        now: Date.now(),
+      },
+      netPolicyCfg(),
+    );
+    switch (dec.action) {
+      case 'skip':
+        return { recovery: 'skip' };
+      case 'locked':
+        return { recovery: 'locked' };
+      case 'wait':
+        return { recovery: 'wait', retryAt: dec.retryAt };
+      case 'manual-fail': {
+        const cur = normNetState(row);
+        const rootCause = row.netLastErrorCode ?? 'unknown';
+        const detail = dec.code === NET_ERRORS.STALL_REPROVISION_USELESS
+          ? `process alive + canary dead: re-provision did not restore the data plane (R2 L6h pattern) — manual intervention required (last failure: ${rootCause})`
+          : `recovery attempts exhausted (max=${cfg.maxRetries}) — manual intervention required (last failure: ${rootCause})`;
+        if (cur !== 'FAILED') {
+          await persistNet(row, 'FAILED', { reason: `recovery-exhausted:${dec.code}`, errorCode: dec.code, errorDetail: detail, source: 'watchdog' });
+        } else {
+          await db.device.update({ where: { id: row.id }, data: { netManualIntervention: true, netLastErrorCode: dec.code, netLastErrorDetail: detail } }).catch(() => {});
+        }
+        return { recovery: 'failed', code: dec.code };
+      }
+      case 'recover': {
+        const owner = `api-pid${process.pid}-${Date.now()}`;
+        const acquired = await acquireRecoveryLock(row.id, owner, cfg.lockLeaseMs);
+        if (!acquired) return { recovery: 'locked' };
+        recovering.add(row.id);
+        const attempt = dec.attempt;
+        log.info({ device: row.name, attempt }, 'redroid net: recovery attempt starting');
+        await audit({
+          actorUserId: null, action: 'redroid.device.net_recovery', resourceType: 'redroid_device', resourceId: row.id,
+          requestId: null, ip: null, status: 'success',
+          details: { name: row.name, attempt, from: normNetState(row) },
+        }).catch(() => {});
+        runRecovery(row.id, owner, attempt).catch((err) => log.error({ device: row.name, error: err?.message }, 'redroid net: recovery run crashed'));
+        return { recovery: 'started', attempt };
+      }
+      default:
+        return { recovery: 'skip' };
+    }
+  }
+
+  /** One watchdog pass over a single device (MD §5.4 — independent monitor). */
+  async function healthTickDevice(row) {
+    if (!row?.gostPort) return { skipped: 'no-proxy' };
+    const cfg = healthCfg();
+    const cur = normNetState(row);
+    if (cur === 'STOPPED') return { skipped: 'stopped' };
+    if (cur === 'FAILED') return { skipped: 'failed-manual-only' };
+    if (cur === 'STARTING') {
+      // stuck guard: provisioning has its own timeout, but a crashed provision
+      // path would leave the device in STARTING forever → FAILED (MD §5.4.6)
+      const sinceTs = row.netStateSince ? new Date(row.netStateSince).getTime() : (row.updatedAt ? new Date(row.updatedAt).getTime() : Date.now());
+      if (Date.now() - sinceTs > cfg.startingTimeoutMs) {
+        await persistNet(row, 'FAILED', {
+          reason: 'stuck-starting',
+          errorCode: NET_ERRORS.TUNNEL_START_TIMEOUT,
+          errorDetail: `no progress for ${Math.round((Date.now() - sinceTs) / 1000)}s`,
+          source: 'watchdog',
+        });
+        return { transitioned: 'FAILED' };
+      }
+      return { skipped: 'starting' };
+    }
+    // VERIFYING / HEALTHY / DEGRADED / BLOCKED → full re-verification
+    const v = await verifyNow(row, { source: 'watchdog' });
+    if (v.healthy) return { healthy: true };
+    if (v.row?.netConsecutiveFailures === 1) {
+      // first failure of the episode → its own audit event (transitions are
+      // audited separately; this keeps the failure REASON findable even when
+      // the state does not change)
+      await audit({
+        actorUserId: null, action: 'redroid.device.net_check_failed', resourceType: 'redroid_device', resourceId: row.id,
+        requestId: null, ip: null, status: 'failure',
+        details: { name: row.name, state: v.row?.netState ?? cur, code: v.failed?.code ?? null, detail: v.failed?.detail ?? null },
+      }).catch(() => {});
+    }
+    // Arm the recovery backoff BEFORE deciding (stable persisted anchor,
+    // MD §5.4.4): every auto attempt — including the first — is SCHEDULED,
+    // never immediate. This keeps the observed state stable (DEGRADED /
+    // BLOCKED, not a racing STARTING) across ticks and crash-safe across
+    // API restarts. Arm semantics: null = "no schedule" → arm now; future =
+    // wait; EXPIRED = fire the attempt this tick (never re-arm an expired
+    // anchor — that would push the schedule into the future on the very
+    // tick that should fire it and the device would wait forever).
+    let target = v.row;
+    if (!target.netNextRecoveryAt) {
+      const nextAttempt = (Number.isInteger(target.netRecoveries) ? target.netRecoveries : 0) + 1;
+      const armed = await persistNet(target, normNetState(target), { nextRecoveryAt: new Date(Date.now() + backoffMs(nextAttempt, netPolicyCfg())) });
+      if (armed) target = armed;
+    }
+    return scheduleRecovery(target);
+  }
+
+  async function tickWatchdog() {
+    if (watchdogRunning) return; // single-flight: never overlap sweeps
+    watchdogRunning = true;
+    try {
+      const rows = await db.device.findMany({ include: { template: true } });
+      for (const row of rows) {
+        if (!row.gostPort) continue;
+        try {
+          await healthTickDevice(row);
+        } catch (err) {
+          log.error({ device: row.name, error: err?.message }, 'redroid net: watchdog tick device error (isolated)');
+        }
+      }
+    } catch (err) {
+      log.warn({ error: err?.message }, 'redroid net: watchdog sweep failed (db?)');
+    } finally {
+      watchdogRunning = false;
+    }
+  }
+
+  function startWatchdog() {
+    stopWatchdog();
+    const pollMs = healthCfg().pollMs;
+    if (!pollMs || pollMs <= 0) return; // pollMs=0 → disabled (tests use __tickOnceHealth)
+    watchdogTimer = setInterval(() => {
+      tickWatchdog().catch((e) => log.warn({ error: e?.message }, 'redroid net: watchdog sweep crashed'));
+    }, pollMs);
+    watchdogTimer.unref?.();
+    // API-restart rule (MD §5.6.9): persisted state must be RECOMPUTED shortly
+    // after boot — a stale HEALTHY from before the restart must not stand.
+    watchdogSweepTimer = setTimeout(() => {
+      tickWatchdog().catch(() => {});
+    }, Math.min(pollMs, 5000));
+    watchdogSweepTimer.unref?.();
+  }
+
+  function stopWatchdog() {
+    if (watchdogTimer) { clearInterval(watchdogTimer); watchdogTimer = null; }
+    if (watchdogSweepTimer) { clearTimeout(watchdogSweepTimer); watchdogSweepTimer = null; }
+  }
+
+  /** Real host-side proxy-leg probe: gost container running + listener open. */
+  async function realProxyReachable(row) {
+    const client = requireClient();
+    let status = 'missing';
+    try {
+      const info = await client.getContainer(gostContainerName(row.name)).inspect();
+      status = info?.State?.Status ?? 'missing';
+    } catch { /* not found */ }
+    if (status !== 'running') return { ok: false, error: `gost container status=${status}` };
+    try {
+      await new Promise((resolve, reject) => {
+        const s = net.connect({ host: GOST_HOST_BIND, port: row.gostPort, timeout: 5000 });
+        s.once('connect', () => { s.destroy(); resolve(); });
+        s.once('timeout', () => { s.destroy(); reject(new Error('connect timeout')); });
+        s.once('error', (e) => reject(e));
+      });
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: `gost listener not accepting on ${GOST_HOST_BIND}:${row.gostPort} (${clip(err?.message, 80)})` };
+    }
+  }
+
+  const proxyReachableFn = injectedProxyReachable ?? realProxyReachable;
+
+  // ---- Stage B: proxy (gost + tun2socks) lifecycle --------------------------
   async function setBinaryState(id, state, version) {
     await db.device.update({ where: { id }, data: { binaryState: state, binaryVersion: version ?? null } }).catch((err) => {
       log.warn({ deviceId: id, state, error: err?.message }, 'redroid proxy: setBinaryState failed');
@@ -785,11 +1330,20 @@ export function createRedroidService({
    * getprop sys.boot_completed — the SAME op the diagnostics use), then run
    * the verified setup script via the exec seam. Idempotent. Runs in the
    * background (never blocks the create/start API response); failures land
-   * in proxyState='error' + the log.
+   * in the network state machine + the log.
+   *
+   * R3: the end of a successful provision is VERIFYING, NEVER 'running'/
+   * HEALTHY by fiat — the data-plane canary (verifyNow) is the only path
+   * into HEALTHY (MD §5.2/§6.3).
    */
   async function provisionTunnel(row) {
-    if (row.proxyState === 'running') return { started: false, reason: 'already-running' };
-    await setProxyState(row.id, 'provisioning');
+    const cur = normNetState(row);
+    if (cur === 'HEALTHY') return { started: false, reason: 'already-healthy' };
+    if (cur !== 'STARTING') {
+      const mid = await persistNet(row, 'STARTING', { reason: 'provision-begin', source: 'provision' });
+      if (!mid) return { started: false, reason: 'transition-refused' };
+      row = mid;
+    }
     const bootTimeoutMs = config?.redroidTunnelBootTimeoutMs ?? 600_000;
     const pollMs = config?.redroidTunnelPollMs ?? 5000;
     const deadline = Date.now() + bootTimeoutMs;
@@ -806,7 +1360,7 @@ export function createRedroidService({
       await new Promise((res) => setTimeout(res, pollMs));
     }
     if (!booted) {
-      await setProxyState(row.id, 'error');
+      await persistNet(row, 'FAILED', { reason: 'boot-timeout', errorCode: NET_ERRORS.TUNNEL_START_TIMEOUT, errorDetail: `boot_completed not seen within ${Math.round(bootTimeoutMs / 1000)}s`, source: 'provision' });
       throw fail('REDROID_TUNNEL_BOOT_TIMEOUT', 504, `Device '${row.name}' did not report boot_completed within ${Math.round(bootTimeoutMs / 1000)}s — tunnel not provisioned`);
     }
     // 3) binary check (R1): the image-baked tun2socks must be present +
@@ -816,11 +1370,11 @@ export function createRedroidService({
     const check = await checkTun2socksBinary(row.containerId, row.name);
     await setBinaryState(row.id, check.state, check.version);
     if (check.state === 'missing') {
-      await setProxyState(row.id, 'error');
+      await persistNet(row, 'FAILED', { reason: 'binary-missing', errorCode: 'BINARY_MISSING', errorDetail: `tun2socks absent at ${TUN.bin} (fallback ${TUN.binFallback} also absent)`, source: 'provision' });
       throw fail('BINARY_MISSING', 500, `tun2socks binary missing on '${row.name}' at ${TUN.bin} (fallback ${TUN.binFallback} also absent) — rebuild the wrapper image (pinned v${TUN2SOCKS_PIN.version}, see docker/redroid-matrix) — tunnel not provisioned`);
     }
     if (check.state !== 'ready') {
-      await setProxyState(row.id, 'error');
+      await persistNet(row, 'FAILED', { reason: `binary-${check.state}`, errorCode: check.state === 'invalid' ? 'BINARY_INVALID' : 'BINARY_CHECK_ERROR', errorDetail: clip(check.detail, 200), source: 'provision' });
       const code = check.state === 'invalid' ? 'BINARY_INVALID' : 'BINARY_CHECK_ERROR';
       throw fail(code, 500, `tun2socks binary ${check.state} on '${row.name}': ${check.detail ?? 'no detail'} — tunnel not provisioned`);
     }
@@ -829,23 +1383,31 @@ export function createRedroidService({
     //    see T2S_SETUP_FILE note. Two execs: stage → run.)
     const stage = await execInContainer(row.containerId, buildT2sStageScript(buildTunnelSetupScript({ gostPort: row.gostPort })));
     if (stage.exitCode !== 0 || !/T2S_STAGED/.test(stage.stdout)) {
-      await setProxyState(row.id, 'error');
+      await persistNet(row, 'FAILED', { reason: 'script-stage-failed', errorCode: NET_ERRORS.TUNNEL_SETUP_FAILED, errorDetail: `stage exit=${stage.exitCode} ${clip(stage.stdout ?? stage.stderr, 160)}`, source: 'provision' });
       throw fail('REDROID_TUNNEL_PROVISION_FAILED', 500, `tunnel script staging failed on '${row.name}': exit=${stage.exitCode} ${String(stage.stdout ?? stage.stderr).trim().slice(0, 200)}`);
     }
     const r = await execInContainer(row.containerId, buildT2sRunScript());
     if (r.exitCode === 0 && /tun2socks/.test(r.stdout)) {
-      await setProxyState(row.id, 'running');
-      log.info({ device: row.name, gostPort: row.gostPort }, 'redroid proxy: tunnel up (tun2socks verified running)');
-      return { started: true };
+      // tunnel process up — but PROCESS EXISTENCE IS NOT HEALTH (R2 L6h):
+      // go to VERIFYING and immediately run the full data-plane verification.
+      const mid = (await persistNet(row, 'VERIFYING', { reason: 'tunnel-process-up', source: 'provision' })) ?? row;
+      log.info({ device: row.name, gostPort: row.gostPort }, 'redroid proxy: tunnel up — VERIFYING (data-plane canary next; only a canary PASS may earn HEALTHY)');
+      const v = await verifyNow(mid, { source: 'provision' });
+      return { started: true, verified: v.healthy, networkState: v.row?.netState ?? 'VERIFYING' };
     }
-    await setProxyState(row.id, 'error');
+    await persistNet(row, 'FAILED', { reason: 'script-run-failed', errorCode: NET_ERRORS.TUNNEL_SETUP_FAILED, errorDetail: `run exit=${r.exitCode} ${clip(r.stdout ?? r.stderr, 160)}`, source: 'provision' });
     throw fail('REDROID_TUNNEL_PROVISION_FAILED', 500, `tunnel setup failed on '${row.name}': exit=${r.exitCode} ${String(r.stdout ?? r.stderr).trim().slice(0, 200)}`);
   }
 
   /** Kill tun2socks inside the device (best-effort; idempotent). F-B/R1: staged-file execution (same two-exec pattern as provisioning). */
   async function teardownTunnel(row) {
     if (!row.gostPort) return { done: false, reason: 'no-proxy' };
-    if (!row.containerId || row.containerState !== 'running') return { done: false, reason: 'container-not-running' };
+    if (!row.containerId || row.containerState !== 'running') {
+      // container not running → the tunnel cannot be up; claim STOPPED so no
+      // stale HEALTHY survives a container death discovered here (MD §5.4.1)
+      await persistNet(row, 'STOPPED', { reason: 'teardown-container-not-running', source: 'action' });
+      return { done: true, reason: 'container-not-running' };
+    }
     try {
       const stage = await execInContainer(row.containerId, buildT2sStageScript(buildTunnelTeardownScript()));
       if (stage.exitCode !== 0) {
@@ -853,7 +1415,7 @@ export function createRedroidService({
       }
       const r = await execInContainer(row.containerId, buildT2sRunScript());
       const ok = r.exitCode === 0;
-      if (ok) await setProxyState(row.id, 'stopped');
+      if (ok) await persistNet(row, 'STOPPED', { reason: 'teardown-complete', source: 'action' });
       return { done: ok, error: ok ? undefined : String(r.stdout ?? r.stderr).trim().slice(0, 200) };
     } catch (err) {
       return { done: false, error: String(err?.message ?? err).slice(0, 200) };
@@ -1008,6 +1570,14 @@ export function createRedroidService({
               gostPort,
               proxyUrlEncrypted,
               proxyState: effectiveProxy ? 'provisioning' : 'off',
+              // R3: authoritative network state — devices start STOPPED; the
+              // proxied path claims STARTING through the audited transition
+              // right below (the create event itself never writes state blind).
+              netState: 'STOPPED',
+              netStateSince: new Date(),
+              netConsecutiveFailures: 0,
+              netRecoveries: 0,
+              netManualIntervention: false,
             },
           });
           break;
@@ -1025,6 +1595,14 @@ export function createRedroidService({
       }
 
       if (idempotencyKey) createIdempotency.set(idempotencyKey, { state: 'pending', at: now });
+
+      // R3: claim the provisioning state through the audited STOPPED→STARTING
+      // transition (audit trail completeness — MD §5.4.2: every state change
+      // is a data event; the create must not bypass the state machine).
+      if (effectiveProxy) {
+        const mid = await persistNet(row, 'STARTING', { reason: 'provision-begin', source: 'create' });
+        if (mid) row = mid;
+      }
 
       // 3. docker create — config built from template fields ONLY (MD §13.1)
       const client = requireClient();
@@ -1212,6 +1790,10 @@ export function createRedroidService({
     // Stage B: tear the tunnel down BEFORE the container stops (exec needs a
     // running container). Best-effort — the docker action is the contract.
     if (row.gostPort && (action === 'stop' || action === 'restart')) {
+      // R3: claim STOPPED BEFORE the container stops — an operator stop must
+      // never be read as a crash by the watchdog (MD §5.4.1); the tunnel
+      // teardown then follows (needs the container still running).
+      await persistNet(row, 'STOPPED', { reason: `action-${action}`, source: 'action' });
       await teardownTunnel(row).catch(() => {});
     }
     let result;
@@ -1368,7 +1950,15 @@ export function createRedroidService({
     });
     const fresh = await findDevice(row.id);
     if (!fresh) throw fail('REDROID_DEVICE_NOT_FOUND', 404, `Device '${row.name}' vanished during refresh`);
-    return { device: deviceView(fresh), adbNote };
+    // R3: a refresh must not leave a stale HEALTHY — recompute the
+    // authoritative network state when a proxy is bound (a device whose
+    // container just died drops out of HEALTHY within this call).
+    let netTick = null;
+    if (fresh.gostPort) {
+      try { netTick = await healthTickDevice(fresh); } catch (err) { netTick = { error: clip(err?.message, 160) }; }
+    }
+    const fresh2 = netTick && !netTick.skipped ? await findDevice(row.id) : fresh;
+    return { device: deviceView(fresh2 ?? fresh), adbNote, network: fresh2?.gostPort ? buildNetPayload(fresh2 ?? fresh, { staleTtlMs: healthCfg().staleTtlMs, canaryConfigured: canaryConfigured() }) : null };
   }
 
   // ---- diagnostics (工單: 4 個獨立結果區，任一項未執行 = 未驗證) ----------
@@ -1478,6 +2068,36 @@ export function createRedroidService({
       };
     }
 
+    // -- zone 5: network (R3) — control plane + data plane + binary state --
+    // Runs the SAME verification pass as the watchdog (source=diagnostics),
+    // so a diagnostics call is authoritative — and the result feeds the
+    // transition table like any other verified event (MD §5.2/§5.3).
+    // ZERO SECRETS: only machine-readable check values are exposed.
+    let network;
+    if (!row.gostPort) {
+      network = { executed: false, status: 'unconfigured', note: 'device has no proxy binding — no network protection to verify' };
+    } else {
+      const curState = normNetState(row);
+      if (curState === 'STOPPED' || curState === 'FAILED') {
+        network = { executed: false, status: 'unverified', note: `network state ${curState} — checks not executed (operator/manual state; FAILED requires manual retry)`, state: curState };
+      } else {
+        try {
+          const v = await verifyNow(row, { source: 'diagnostics' });
+          network = {
+            executed: true,
+            status: v.healthy ? 'pass' : 'fail',
+            state: v.row?.netState ?? curState,
+            checks: v.checks ?? {},
+            canary: v.canary ? { result: v.canary.result, reason: v.canary.reason ?? undefined, latencyMs: v.canary.ms ?? undefined } : null,
+            lastError: v.failed ? { code: v.failed.code, detail: v.failed.detail } : null,
+            binaryState: { state: row.binaryState ?? null, version: row.binaryVersion ?? null },
+          };
+        } catch (err) {
+          network = { executed: true, status: 'error', state: curState, note: clip(err?.message, 200) };
+        }
+      }
+    }
+
     await db.device.update({ where: { id: row.id }, data: { lastDiagnosedAt: new Date() } }).catch(() => {});
     await audit({
       actorUserId: actorUserId ?? null,
@@ -1494,14 +2114,16 @@ export function createRedroidService({
           containerLogs: containerLogs.status,
           adbConnectivity: adbConnectivity.status,
           gpuVerification: gpuVerification.status,
+          network: network.status,
         },
       },
     });
 
+    const freshRow = await findDevice(row.id);
     return {
-      device: deviceView(row),
+      device: deviceView(freshRow ?? row),
       checkedAt: new Date().toISOString(),
-      diagnostics: { kernel, containerLogs, adbConnectivity, gpuVerification },
+      diagnostics: { kernel, containerLogs, adbConnectivity, gpuVerification, network },
     };
   }
 
@@ -1560,6 +2182,135 @@ export function createRedroidService({
     }
   }
 
+  /**
+   * Device view (closure — needs healthCfg for the R3 net payload).
+   * R3: proxy.network = the authoritative network health payload
+   * (state, freshness, canary result, error, recovery info) — ZERO SECRETS:
+   * no proxy URL/credentials in any field (buildNetPayload is structurally
+   * incapable of carrying them; only machine-readable status values).
+   */
+  function deviceView(row, { withDataDir = false } = {}) {
+    const net = row.gostPort
+      ? buildNetPayload(row, { staleTtlMs: healthCfg().staleTtlMs, canaryConfigured: canaryConfigured() })
+      : null;
+    const view = {
+      id: row.id,
+      name: row.name,
+      templateName: row.template?.name ?? null,
+      image: row.image,
+      androidVersion: row.androidVersion,
+      width: row.width,
+      height: row.height,
+      dpi: row.dpi,
+      fps: row.fps,
+      adbPort: row.adbPort,
+      adbBind: REDROID_LOOPBACK_BIND, // the UI must say "localhost only"
+      gpuMode: row.gpuMode,
+      gpuStatus: row.gpuStatus,
+      containerName: row.containerName,
+      containerId: row.containerId,
+      containerState: row.containerState,
+      adbState: row.adbState,
+      // Stage B: proxy binding. The URL itself NEVER leaves the server —
+      // clients see existence + port + state only.
+      proxy: row.gostPort
+        ? {
+            configured: true,
+            gostPort: row.gostPort,
+            gostBind: GOST_HOST_BIND,
+            state: row.proxyState ?? 'off', // legacy projection (R4 retires)
+            hasUrl: Boolean(row.proxyUrlEncrypted),
+            containerName: gostContainerName(row.name),
+            // R1: tun2socks binary diagnosis (state + version string only —
+            // no path internals, no credentials, ever).
+            binaryState: row.binaryState ?? null,
+            binaryVersion: row.binaryVersion ?? null,
+            // R3: authoritative network health (the state machine, not the
+            // legacy projection — R4 consumers read THIS).
+            network: net,
+          }
+        : { configured: false, gostPort: null, state: row.proxyState ?? 'off', hasUrl: false, binaryState: row.binaryState ?? null, binaryVersion: row.binaryVersion ?? null, network: net },
+      lastDiagnosedAt: row.lastDiagnosedAt,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    };
+    if (withDataDir) view.dataDir = row.dataDir;
+    return view;
+  }
+
+  /**
+   * POST /:id/proxy/retry — the manual-intervention trigger (MD §5.4.6):
+   * after FAILED (or to nudge a stuck DEGRADED/BLOCKED), a human resets the
+   * failure episode and forces a recovery attempt NOW (explicit human intent
+   * = backoff bypass). The attempt still ends in VERIFYING + canary — this
+   * endpoint can never blind-set HEALTHY.
+   */
+  async function retryProxyRecovery(idOrName, { actorUserId, requestId, ip } = {}) {
+    const row = await findDevice(idOrName);
+    if (!row) throw fail('REDROID_DEVICE_NOT_FOUND', 404, `Device '${idOrName}' not found`);
+    if (!row.gostPort) throw fail('REDROID_NO_PROXY', 409, `Device '${row.name}' has no proxy binding — nothing to recover`);
+    const cur = normNetState(row);
+    if (!['FAILED', 'BLOCKED', 'DEGRADED'].includes(cur)) {
+      throw fail('REDROID_NET_RETRY_INVALID_STATE', 409, `network state '${cur}' does not accept a manual retry (allowed: FAILED/BLOCKED/DEGRADED)`);
+    }
+    // reset the failure episode (counters, last error, stale lock)
+    await db.device.update({
+      where: { id: row.id },
+      data: {
+        netRecoveries: 0, netManualIntervention: false, netConsecutiveFailures: 0,
+        netLastErrorCode: null, netLastErrorDetail: null,
+        netRecoveryLockOwner: null, netRecoveryLockUntil: null, netLastRecoveryAt: null, netNextRecoveryAt: null,
+      },
+    }).catch((err) => log.warn({ device: row.name, error: err?.message }, 'redroid net: retry episode reset failed'));
+    const fresh = await findDevice(row.id);
+    await audit({
+      actorUserId: actorUserId ?? null, action: 'redroid.device.net_retry', resourceType: 'redroid_device', resourceId: row.id,
+      requestId: requestId ?? null, ip: ip ?? null, status: 'success',
+      details: { name: row.name, from: cur },
+    });
+    if (cur === 'FAILED') {
+      // The manual exit door (MD §5.4.6): FAILED → STARTING is the only
+      // manual transition out of the sink. Then the full re-provision +
+      // re-verification — only a canary PASS can restore HEALTHY.
+      const mid = await persistNet(fresh, 'STARTING', { reason: 'manual-retry', source: 'retry', recoveries: 0, nextRecoveryAt: null });
+      if (!mid) return { device: deviceView(fresh), triggered: false, schedule: { recovery: 'skip' } };
+      mid._proxyUrlPlaintext =
+        decryptProxyUrl(mid.proxyUrlEncrypted, `device '${mid.name}'`) ??
+        decryptProxyUrl(mid.template?.proxyUrlEncrypted, 'template');
+      if (mid._proxyUrlPlaintext) {
+        try { await provisionGost(mid); } catch (err) { log.warn({ device: mid.name, error: err?.message }, 'redroid net: manual retry gost ensure failed'); }
+      }
+      provisionTunnel(mid).catch((err) => log.error({ device: mid.name, error: err?.message }, 'redroid net: manual retry re-provision failed'));
+      const after = await findDevice(mid.id);
+      return { device: deviceView(after ?? mid), triggered: true, schedule: { recovery: 'started', attempt: 1 } };
+    }
+    // DEGRADED/BLOCKED: the episode reset above cleared the anchor, so the
+    // forced attempt is immediate (manual retry bypasses the auto backoff).
+    const sched = await scheduleRecovery(fresh);
+    const after = await findDevice(row.id);
+    return { device: deviceView(after ?? fresh), triggered: sched.recovery === 'started' || sched.recovery === 'wait' || sched.recovery === 'locked', schedule: sched };
+  }
+
+  /** Close the watchdog (test/ops seam; timers are unref'd anyway). */
+  async function close() {
+    stopWatchdog();
+  }
+
+  /** One watchdog pass (test/ops seam). deviceId omitted → all proxy devices. */
+  async function __tickOnceHealth(idOrName) {
+    if (idOrName) {
+      const row = await findDevice(idOrName);
+      if (!row) return { skipped: 'not-found' };
+      return healthTickDevice(row);
+    }
+    await tickWatchdog();
+    return { swept: true };
+  }
+
+  // The watchdog is the fail-closed heart of R3 — start it with the service.
+  // pollMs=0 disables it (hermetic tests drive __tickOnceHealth explicitly).
+  startWatchdog();
+
   return {
     listTemplates,
     getTemplateView,
@@ -1575,8 +2326,11 @@ export function createRedroidService({
     diagnoseDevice,
     getLogcat,
     getPreflight,
+    retryProxyRecovery,
+    close,
     // test/ops seams
     __allocateAdbPort: allocateAdbPort,
+    __tickOnceHealth,
   };
 }
 
@@ -1614,49 +2368,6 @@ function publicTemplate(t) {
     createdAt: t.createdAt,
     updatedAt: t.updatedAt,
   };
-}
-
-function deviceView(row, { withDataDir = false } = {}) {
-  const view = {
-    id: row.id,
-    name: row.name,
-    templateName: row.template?.name ?? null,
-    image: row.image,
-    androidVersion: row.androidVersion,
-    width: row.width,
-    height: row.height,
-    dpi: row.dpi,
-    fps: row.fps,
-    adbPort: row.adbPort,
-    adbBind: REDROID_LOOPBACK_BIND, // the UI must say "localhost only"
-    gpuMode: row.gpuMode,
-    gpuStatus: row.gpuStatus,
-    containerName: row.containerName,
-    containerId: row.containerId,
-    containerState: row.containerState,
-    adbState: row.adbState,
-    // Stage B: proxy binding. The URL itself NEVER leaves the server —
-    // clients see existence + port + state only.
-    proxy: row.gostPort
-      ? {
-          configured: true,
-          gostPort: row.gostPort,
-          gostBind: GOST_HOST_BIND,
-          state: row.proxyState ?? 'off',
-          hasUrl: Boolean(row.proxyUrlEncrypted),
-          containerName: gostContainerName(row.name),
-          // R1: tun2socks binary diagnosis (state + version string only —
-          // no path internals, no credentials, ever).
-          binaryState: row.binaryState ?? null,
-          binaryVersion: row.binaryVersion ?? null,
-        }
-      : { configured: false, gostPort: null, state: row.proxyState ?? 'off', hasUrl: false, binaryState: row.binaryState ?? null, binaryVersion: row.binaryVersion ?? null },
-    lastDiagnosedAt: row.lastDiagnosedAt,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-  };
-  if (withDataDir) view.dataDir = row.dataDir;
-  return view;
 }
 
 /**

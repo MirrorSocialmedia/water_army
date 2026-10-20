@@ -17,7 +17,7 @@
  */
 import { EventEmitter } from 'node:events';
 
-import { T2S_SETUP_FILE, TUN2SOCKS_CHECK_MARKER, TUN2SOCKS_PIN } from './redroid-service.js';
+import { T2S_SETUP_FILE, T2S_NETCHECK_MARKER, T2S_CANARY_MARKER, TUN2SOCKS_CHECK_MARKER, TUN2SOCKS_PIN } from './redroid-service.js';
 
 let mockIdSeq = 9000;
 
@@ -290,30 +290,60 @@ export function createMockPreflight() {
 }
 
 /**
- * Mock in-container exec (Stage B tunnel provisioning + R1 staged execution):
- * records every {containerId, script} call and emulates the device:
+ * Mock in-container exec (Stage B tunnel provisioning + R1 staged execution
+ * + R3 netcheck/canary): records every {containerId, script} call and
+ * emulates the device:
  *  - binary-check scripts (contain the TUN2SOCKS_CHECK_MARKER) → configurable
  *    BINARY_STATE=… line (default: ready — keeps the happy path deterministic)
+ *  - netcheck scripts (R2S netcheck marker) → configurable NETCHECK line
+ *    (default: fully healthy — process alive, tun0 up, table-100 route +
+ *    netd rule present, effective=tunnel)
+ *  - canary scripts (R3 canary marker) → configurable PASS/FAIL (default:
+ *    PASS with the script's nonce echoed — the bidirectional-payload shape)
  *  - stage scripts (base64 → T2S_SETUP_FILE) → success; the staged payload is
  *    captured so the run call can emulate the INNER script's output
  *  - run scripts (sh T2S_SETUP_FILE) → the inner script's success output
  *    (teardown → TUNNEL_TEARDOWN_DONE; setup → the fake `ps` line the service
  *    greps for liveness)
  * opts.fail = true → exit 1 on every call (for the failure path).
+ * opts.netcheck = {process,pid,iface,route,rule,effective} — inject
+ *    control-plane failure shapes (e.g. process=dead, effective=direct).
+ * opts.canary = {pass, reason, ms} — inject data-plane failure shapes.
  */
-export function createMockExec({ fail = false, binaryCheck } = {}) {
+export function createMockExec({ fail = false, binaryCheck, netcheck, canary } = {}) {
   const calls = [];
   let lastStagedB64 = null;
+  // Mutable behavior (tests flip failure shapes mid-scenario):
+  const behavior = { fail, binaryCheck, netcheck, canary };
   async function exec(containerId, script) {
     calls.push({ containerId, script, at: Date.now() });
-    if (fail) return { exitCode: 1, stdout: 'mock exec: forced failure', stderr: 'TUNNEL_TEARDOWN_FAILED' };
+    if (behavior.fail) return { exitCode: 1, stdout: 'mock exec: forced failure', stderr: 'TUNNEL_TEARDOWN_FAILED' };
     // R1: tun2socks binary diagnostic check
     if (script.includes(TUN2SOCKS_CHECK_MARKER)) {
-      const bc = binaryCheck ?? { state: 'ready', version: `tun2socks-${TUN2SOCKS_PIN.version}` };
+      const bc = behavior.binaryCheck ?? { state: 'ready', version: `tun2socks-${TUN2SOCKS_PIN.version}` };
       const lines = [`BINARY_STATE=${bc.state}`];
       if (bc.detail) lines.push(`BINARY_DETAIL=${bc.detail}`);
       if (bc.version) lines.push(`BINARY_VERSION=${bc.version}`);
       return { exitCode: 0, stdout: lines.join('\n') + '\n', stderr: '' };
+    }
+    // R3: control-plane netcheck
+    if (script.includes(T2S_NETCHECK_MARKER)) {
+      const nc = behavior.netcheck ?? { process: 'alive', pid: '4444', iface: 'up', route: 'present', rule: 'present', effective: 'tunnel' };
+      return {
+        exitCode: 0,
+        stdout: `NETCHECK process=${nc.process} pid=${nc.pid ?? 'none'} iface=${nc.iface} route=${nc.route} rule=${nc.rule} effective=${nc.effective}\n`,
+        stderr: '',
+      };
+    }
+    // R3: data-plane canary (TCP bidirectional payload probe)
+    if (script.includes(T2S_CANARY_MARKER)) {
+      const c = behavior.canary ?? { pass: true, ms: 42 };
+      const m = script.match(/NONCE=([a-f0-9]{8,64})/);
+      const nonce = m?.[1] ?? '0000000000000000';
+      if (c.pass) {
+        return { exitCode: 0, stdout: `CANARY=PASS nonce=${nonce} ms=${c.ms ?? 42} reqsha=${'ab'.repeat(32)}\n`, stderr: '' };
+      }
+      return { exitCode: 1, stdout: `CANARY=FAIL nonce=${nonce} reason=${c.reason ?? 'timeout'}\n`, stderr: '' };
     }
     // R1: stage (base64 → file). Capture the payload for the run call.
     const m = script.match(/printf '%s' '([A-Za-z0-9+\/=]+)' \| base64 -d/);
@@ -342,12 +372,46 @@ export function createMockExec({ fail = false, binaryCheck } = {}) {
       stderr: '',
     };
   }
-  return { exec, calls };
+  return {
+    exec,
+    calls,
+    /**
+     * Tests: change the emulated device behavior ({fail, binaryCheck,
+     * netcheck, canary}). REPLACE semantics — omitted keys fall back to the
+     * healthy defaults (see the ?? fallbacks in exec), so set({}) restores
+     * the pristine device. (Merge semantics would make a "the failure
+     * clears" reset impossible — live bug found in R3: a stuck canary
+     * override survived a set({}) and stalled a recovery scenario.)
+     */
+    set: (b = {}) => {
+      behavior.fail = Boolean(b.fail);
+      behavior.binaryCheck = b.binaryCheck;
+      behavior.netcheck = b.netcheck;
+      behavior.canary = b.canary;
+    },
+  };
+}
+
+/**
+ * Mock host-side proxy-leg reachability probe (R3): deterministic
+ * {ok, error} for the gost-container + listener check. opts.proxyReachableOpts
+ * = { ok, error }.
+ */
+export function createMockProxyReachable({ ok = true, error = null } = {}) {
+  const calls = [];
+  const behavior = { ok, error };
+  async function proxyReachable(row) {
+    calls.push({ device: row?.name ?? null, gostPort: row?.gostPort ?? null, at: Date.now() });
+    return { ok: behavior.ok, error: behavior.error };
+  }
+  proxyReachable.calls = calls;
+  proxyReachable.set = (b = {}) => Object.assign(behavior, b); // test seam
+  return proxyReachable;
 }
 
 /**
  * Assemble the full mock redroid environment (app.js REDROID_ADAPTER=mock).
- * @returns {{docker:object, adb:object, preflight:Function, exec:object}}
+ * @returns {{docker:object, adb:object, preflight:Function, exec:object, proxyReachable:Function}}
  */
 export function createMockRedroidEnvironment(opts = {}) {
   return {
@@ -355,6 +419,7 @@ export function createMockRedroidEnvironment(opts = {}) {
     adb: createMockAdb(opts),
     preflight: createMockPreflight(),
     exec: createMockExec(opts.execOpts ?? {}),
+    proxyReachable: createMockProxyReachable(opts.proxyReachableOpts ?? {}),
   };
 }
 

@@ -105,12 +105,12 @@ export function redroidDeviceRoutes(app) {
     '/api/devices/redroid/:id/refresh',
     { preHandler: app.requireRole('operator'), schema: { params: { type: 'object', additionalProperties: false, required: ['id'], properties: { id: DEVICE_ID } } } },
     async (req) => {
-      const { device, adbNote } = await app.redroidService.refreshDevice(req.params.id, {
+      const { device, adbNote, network } = await app.redroidService.refreshDevice(req.params.id, {
         actorUserId: req.user.id,
         requestId: req.id,
         ip: req.ip,
       });
-      return { device, adbNote: adbNote ?? null };
+      return { device, adbNote: adbNote ?? null, network };
     },
   );
 
@@ -119,6 +119,21 @@ export function redroidDeviceRoutes(app) {
     { preHandler: app.requireRole('operator'), schema: { params: { type: 'object', additionalProperties: false, required: ['id'], properties: { id: DEVICE_ID } } } },
     async (req) => {
       return app.redroidService.diagnoseDevice(req.params.id, {
+        actorUserId: req.user.id,
+        requestId: req.id,
+        ip: req.ip,
+      });
+    },
+  );
+
+  app.post(
+    '/api/devices/redroid/:id/proxy/retry',
+    { preHandler: app.requireRole('operator'), schema: { params: { type: 'object', additionalProperties: false, required: ['id'], properties: { id: DEVICE_ID } } } },
+    async (req) => {
+      // R3: manual-intervention trigger for the network recovery policy
+      // (FAILED / stuck DEGRADED|BLOCKED → reset episode + forced attempt;
+      // the attempt still ends in VERIFYING + canary — never a blind HEALTHY).
+      return app.redroidService.retryProxyRecovery(req.params.id, {
         actorUserId: req.user.id,
         requestId: req.id,
         ip: req.ip,
