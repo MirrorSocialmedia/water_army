@@ -164,6 +164,11 @@ export function loadConfig(env = process.env, opts = {}) {
     redroidHealthPollMs: optInt(e, 'REDROID_HEALTH_POLL_MS', 30_000),
     redroidHealthStaleMs: optInt(e, 'REDROID_HEALTH_STALE_MS', 60_000),
     redroidNetcheckTimeoutMs: optInt(e, 'REDROID_NETCHECK_TIMEOUT_MS', 20_000),
+    // Boot wait for provisionTunnel + the watchdog stuck-starting guard share
+    // this knob (R3 live-found 2026-10-20: fresh-/data first boot on a loaded
+    // host took >14 min — the unmapped 600s default killed healthy boots). A
+    // slow-but-healthy boot must not be mistaken for a stuck one.
+    redroidTunnelBootTimeoutMs: optInt(e, 'REDROID_TUNNEL_BOOT_TIMEOUT_MS', 600_000),
     // Data-plane canary: TCP bidirectional payload probe target. UNCONFIGURED
     // (empty host) = the data plane is unverifiable = the device can never be
     // (stay) HEALTHY (fail-closed — MD §5.3/§5.5).
