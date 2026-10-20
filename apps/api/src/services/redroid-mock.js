@@ -212,6 +212,9 @@ export function createMockRedroidDockerWrapper(opts = {}) {
  */
 export function createMockAdb({ online = true, logcatLines, spawnError = null } = {}) {
   const calls = [];
+  // Mutable so a test can model the R5 recreate-stall transition
+  // (confirmed online → adbd stops answering) without a new app instance.
+  let adbOnline = online;
 
   const lines =
     logcatLines ??
@@ -229,10 +232,10 @@ export function createMockAdb({ online = true, logcatLines, spawnError = null } 
     const target = targetIdx !== -1 ? argv[targetIdx + 1] : argv.find((a) => /^127\.0\.0\.1:\d+$/.test(a));
 
     if (argv[argv.length - 1] === 'get-state' && argv.includes('get-state') && argv[0] !== 'connect') {
-      return { stdout: online ? 'device online\n' : 'device offline\n', stderr: '' };
+      return { stdout: adbOnline ? 'device online\n' : 'device offline\n', stderr: '' };
     }
     if (argv[0] === 'connect') {
-      return { stdout: online ? `connected to ${target}\n` : `cannot connect to ${target}: Connection refused\n`, stderr: '' };
+      return { stdout: adbOnline ? `connected to ${target}\n` : `cannot connect to ${target}: Connection refused\n`, stderr: '' };
     }
     const shellArgv = argv.slice(argv.indexOf('shell') + 1);
     const op = shellArgv[0];
@@ -273,7 +276,12 @@ export function createMockAdb({ online = true, logcatLines, spawnError = null } 
     throw e;
   }
 
-  return { exec, calls };
+  return {
+    exec,
+    calls,
+    // R6 test seam: model the recreate-stall transition (online → offline).
+    setOnline: (v) => { adbOnline = Boolean(v); },
+  };
 }
 
 // ---------------------------------------------------------------------------

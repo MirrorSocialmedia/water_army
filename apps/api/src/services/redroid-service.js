@@ -2169,6 +2169,17 @@ export function createRedroidService({
           };
         } else {
           const online = parseState(res);
+          // R5 handoff #2 (recreate → adbd host-protocol stall): the stall
+          // leaves a machine-observable signature — container running, the
+          // device was last CONFIRMED online (persisted adbState from a real
+          // get-state), and now adbd answers nothing. R5 live: 100% repro
+          // after recreate; setprop/adbd-restart is outside the 5-op
+          // whitelist (no shell op) and a full container restart was tried
+          // and did NOT clear it. The product deliberately does NOT
+          // auto-recover (decide-and-document, runbook §10.7) — this flag +
+          // hint is the honest surface, and 'suspected' stays 'suspected'
+          // (a legit adbd death looks the same; only recovery confirms).
+          const wasOnline = row.adbState === 'online';
           adbConnectivity = {
             executed: true,
             status: online ? 'online' : 'offline',
@@ -2177,6 +2188,10 @@ export function createRedroidService({
             timedOut: res.timedOut || undefined,
             truncated: res.truncated || undefined,
             evidence: (res.stdout ?? '').slice(0, 500),
+            ...(online || !wasOnline ? {} : {
+              suspectedHostProtocolStall: true,
+              hint: 'adbd answers nothing after a confirmed online state (known recreate stall, R5) — see runbook §10.7 for the decision and recovery',
+            }),
           };
         }
       } catch (err) {

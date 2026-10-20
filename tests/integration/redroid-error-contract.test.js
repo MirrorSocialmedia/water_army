@@ -14,6 +14,13 @@
  *  - TUNNEL_SETUP_FAILED: a failed in-device tunnel script stage/run is
  *    persisted as the stable NET_ERRORS code (R6 fix: it was referenced but
  *    never defined, so netLastErrorCode was silently dropped).
+ *  - DATA_DIR_PERM_DENIED: delete ?removeData on a root-owned data dir (R5
+ *    live EACCES) is a PARTIAL failure — 200 + dataRemoved:false + the
+ *    stable code, never silent, never a fake error on the delete itself.
+ *  - suspectedHostProtocolStall: the R5 recreate → adbd stall signature
+ *    (running + last confirmed online + now offline) is surfaced as a
+ *    machine-readable diagnostics flag with a runbook pointer — the product
+ *    deliberately does NOT auto-recover (runbook §10.7 decision).
  *
  * All fakes carry zero real credentials (fixture proxy targets only).
  */
@@ -139,6 +146,47 @@ test('error contract: delete with removeData + permission failure → 200 + data
   assert.equal(j.dataRemoveErrorCode, 'DATA_DIR_PERM_DENIED', 'stable machine code for the known root-owned-dir shape');
   assert.match(j.dataRemoveError, /EACCES/);
   assert.equal(await db.device.findUnique({ where: { name: 'redroid-rmdel' } }), null);
+});
+
+test('error contract: recreate-stall signature → suspectedHostProtocolStall in diagnostics (R5 handoff #2: surface, no auto-recovery)', async (t) => {
+  const { app, cookies, close } = await makeApp();
+  t.after(close);
+
+  await seedRedroidTemplates(app, cookies.admin);
+
+  // Device A: was CONFIRMED online, then adbd stops answering (the R5
+  // recreate-stall transition — 100% repro after recreate, R5 live).
+  const a = await app.inject({
+    method: 'POST', url: '/api/devices/redroid', headers: { cookie: cookies.operator },
+    payload: { name: 'redroid-stall-a', templateName: 'redroid-14-swiftshader', idempotencyKey: 'key-stall-a-1' },
+  });
+  assert.equal(a.statusCode, 201, a.body);
+  let res = await app.inject({ method: 'POST', url: '/api/devices/redroid/redroid-stall-a/refresh', headers: { cookie: cookies.operator } });
+  assert.equal(res.statusCode, 200, res.body);
+  assert.equal(res.json().device.adbState, 'online', 'baseline: confirmed online (persisted)');
+
+  app.redroidMockEnv.adb.setOnline(false); // adbd stops answering
+  const diagA = await app.inject({ method: 'POST', url: '/api/devices/redroid/redroid-stall-a/diagnostics', headers: { cookie: cookies.operator } });
+  assert.equal(diagA.statusCode, 200, diagA.body);
+  const zoneA = diagA.json().diagnostics.adbConnectivity;
+  assert.equal(zoneA.executed, true);
+  assert.equal(zoneA.status, 'offline');
+  assert.equal(zoneA.suspectedHostProtocolStall, true, 'signature: running + last confirmed online + now offline');
+  assert.match(zoneA.hint, /runbook §10\.7/);
+
+  // Device B: offline from the start (fresh boot) — the SAME 'offline' zone
+  // state must NOT be flagged (no confirmed-online history = normal).
+  const b = await app.inject({
+    method: 'POST', url: '/api/devices/redroid', headers: { cookie: cookies.operator },
+    payload: { name: 'redroid-stall-b', templateName: 'redroid-14-swiftshader', idempotencyKey: 'key-stall-b-1' },
+  });
+  assert.equal(b.statusCode, 201, b.body);
+  const refreshB = await app.inject({ method: 'POST', url: '/api/devices/redroid/redroid-stall-b/refresh', headers: { cookie: cookies.operator } });
+  assert.equal(refreshB.json().device.adbState, 'offline');
+  const diagB = await app.inject({ method: 'POST', url: '/api/devices/redroid/redroid-stall-b/diagnostics', headers: { cookie: cookies.operator } });
+  const zoneB = diagB.json().diagnostics.adbConnectivity;
+  assert.equal(zoneB.status, 'offline');
+  assert.equal(zoneB.suspectedHostProtocolStall, undefined, 'never-online offline is NOT the stall signature');
 });
 
 test('error contract: tunnel stage failure persists TUNNEL_SETUP_FAILED (was undefined → silently dropped)', async (t) => {

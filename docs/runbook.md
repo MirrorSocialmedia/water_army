@@ -327,3 +327,22 @@ sg docker -c "docker rm -f redroid-matrix-b-gost-<devName>"
 - dev1(172.17.0.3) → mock1(172.17.0.1:20082)：`canary.example` = NOERROR + A 93.184.216.34
 - dev2(172.17.0.4) → mock2(172.17.0.1:20084)：`canary.example` = NOERROR + A 93.184.216.34；`other.example` = NXDOMAIN
 - 各 mock 只見到自己嗰部 device 嘅源 IP（路由隔離成立）。詳細 log / 過程：`logs/redroid-matrix-B-progress.md`。
+
+### 10.7 adbd recreate stall（R5 live 實測 — 2026-10-20；R6 decide-and-document）
+
+**症狀**：device recreate（delete + 同名重建 / 重新 create）後，container `running`、Android 實際 boot 咗，但 host adb 永遠 `offline` —— `adbState=offline` 而 `containerState=running`。R5 live：recreate **100% 中招**；fresh boot（全新 create）唔中招；stop/start 循環亦唔中招 → 係 recreate 特有嘅 container-runtime 行為（adbd host-protocol 未重新掛接），唔係 product 回歸。
+
+**machine-readable signature（diagnostics zone 3 自動標記）**：container `running` + 上次確認過 `adbState=online`（persisted）+ 而家 adbd 無回應 → diagnostics `adbConnectivity` 帶 `suspectedHostProtocolStall:true` + `hint`（見 runbook §10.7）。⚠️ `suspected` 就係 suspected：合法嘅 adbd 死法（system 重啟、adbd crash）signature 一樣，要 recovery 先確認。
+
+**點解 product 唔自動 recovery（決定，唔係遺漏）**：
+1. **whitelist scope**：adb 引擎只放 5 個 read-only op（`getprop/dumpsys/logcat/connect/get-state`）——冇 `shell`/`setprop`，所以 `setprop ctl.restart adbd` 根本唔喺 product 能力內；為咗呢一個 stall 去 expand whitelist 加 shell op = 擴攻擊面（§8.2 明確相反方向），唔做。
+2. **container restart 實測無效**：R5 live 試過經 API 全 container restart，stall 無清 → 自動重啟都救唔到，做咗反而多一個破壞性自動動作。
+3. **誠實優先**：而家 product 已經 honest 報 `containerState=running` + `adbState=offline`（R6 起 diagnostics 加 `suspectedHostProtocolStall`），operator 見到 signature 就有明確下一步；靜默自動重啟反而抹走跡象。
+
+**recovery（operator，admin）**：
+1. 確認 signature：`GET/POST .../diagnostics` 看 `adbConnectivity.suspectedHostProtocolStall=true`（或親驗 `container running` + `adb -s 127.0.0.1:<port> get-state` = `offline` + 之前確確實實 online 過）。
+2. 首選：**API 再 recreate 一次**（delete → 同 template 重建；`removeData` 按需——唔 tick 就保留 `/data`，F-Droid/設定跟住）；recreate 完 boot 完（14–24min，§10.1）→ `adbState` 回 `online`。
+3. 仲係 offline：落到 host 級——`sg docker -c "docker restart redroid-matrix-b-<dev>"`（等同 API restart，R5 已試可能無效）；或核 host adb server 本身（`adb kill-server && adb start-server`，只影響 host 層 adb client，唔郁 device）。
+4. 仍無解：當 container-runtime/kernel 層問題升上嚟（留 `docker inspect` + diagnostics 輸出），唔好喺 product 層再試。
+
+**防復發**：R6 已將 signature 做咗 machine-readable（`suspectedHostProtocolStall`）+ 本節 runbook；product 層刻意保持「只 surface、唔自動重啟」。
