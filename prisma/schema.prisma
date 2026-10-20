@@ -248,6 +248,11 @@ model RedroidTemplate {
   // api keys) — plaintext never touches the DB, API responses, or audit details.
   // Devices snapshot/override this at creation.
   proxyUrlEncrypted String? @map("proxy_url_encrypted")
+  // R5: optional per-device resource limits (MD §7.2.7) — mapped to
+  // HostConfig.NanoCpus / HostConfig.Memory at container create. Null =
+  // unlimited (the honest default; limits are opt-in).
+  cpuLimit         Float? @map("cpu_limit") // vCPU cap (e.g. 2 → NanoCpus 2000000000)
+  memoryLimitBytes BigInt? @map("memory_limit_bytes") // RAM cap in bytes (e.g. 4 GiB)
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 

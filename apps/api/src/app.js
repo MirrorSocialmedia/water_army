@@ -128,7 +128,33 @@ export async function buildApp(opts = {}) {
     exec: redroidEnv ? redroidEnv.exec.exec : undefined,
     // R3: host-side proxy-leg probe (mock mode = deterministic {ok, error}).
     proxyReachable: redroidEnv ? redroidEnv.proxyReachable : undefined,
-    preflight: redroidEnv?.preflight ?? ((params) => runRedroidPreflight({ config, docker: { ping: () => docker.ping() }, log: app.log, ...params })),
+    preflight:
+      redroidEnv?.preflight ??
+      ((params) =>
+        runRedroidPreflight({
+          config,
+          docker: {
+            ping: () => docker.ping(),
+            // R5: read-only socket vantage for GPU runtime visibility.
+            info: () =>
+              docker.client
+                ? docker.client.info()
+                : Promise.reject(new Error('docker client not configured')),
+            // R5: image arch check (read-only inspect; 'not local' = null, never a throw).
+            imageArchitecture: async (name) => {
+              if (!docker.client) return null;
+              try {
+                const meta = await docker.client.getImage(name).inspect();
+                return meta?.Architecture ?? null;
+              } catch (err) {
+                if (err?.statusCode === 404 || /no such image/i.test(String(err?.message ?? ''))) return null;
+                throw err;
+              }
+            },
+          },
+          log: app.log,
+          ...params,
+        })),
   });
   if (redroidEnv) app.decorate('redroidMockEnv', redroidEnv); // test seam — exists ONLY in mock mode
 

@@ -443,6 +443,24 @@ export function validateRedroidTemplate(t) {
     }
   }
 
+  // R5: optional resource limits (MD §7.2.7). Null/undefined = unlimited.
+  let cpuLimit = null;
+  if (t?.cpuLimit !== undefined && t.cpuLimit !== null) {
+    if (typeof t.cpuLimit !== 'number' || !Number.isFinite(t.cpuLimit) || t.cpuLimit <= 0 || t.cpuLimit > 256) {
+      problems.push('cpuLimit must be a number in (0, 256] vCPU');
+    } else {
+      cpuLimit = t.cpuLimit;
+    }
+  }
+  let memoryLimitBytes = null;
+  if (t?.memoryLimitBytes !== undefined && t.memoryLimitBytes !== null) {
+    if (!Number.isInteger(t.memoryLimitBytes) || t.memoryLimitBytes < 1073741824 || t.memoryLimitBytes > 274877906944) {
+      problems.push('memoryLimitBytes must be an integer in [1 GiB, 256 GiB]');
+    } else {
+      memoryLimitBytes = t.memoryLimitBytes;
+    }
+  }
+
   if (problems.length) throw fail('VALIDATION_ERROR', 400, problems.join('; '));
 
   return {
@@ -457,6 +475,8 @@ export function validateRedroidTemplate(t) {
     privileged,
     privilegedReason: privileged ? privilegedReason : null,
     isEnabled: t?.isEnabled === undefined ? true : Boolean(t.isEnabled),
+    cpuLimit,
+    memoryLimitBytes,
     proxyUrl, // plaintext ONLY here — the service encrypts before any DB/API touch
   };
 }
@@ -644,6 +664,9 @@ export function createRedroidService({
       privileged: patch.privileged ?? current.privileged,
       privilegedReason: patch.privilegedReason !== undefined ? patch.privilegedReason : current.privilegedReason,
       isEnabled: patch.isEnabled !== undefined ? patch.isEnabled : current.isEnabled,
+      // R5: null patch = clear the limit; undefined = keep current.
+      cpuLimit: patch.cpuLimit !== undefined ? patch.cpuLimit : current.cpuLimit,
+      memoryLimitBytes: patch.memoryLimitBytes !== undefined ? patch.memoryLimitBytes : current.memoryLimitBytes,
     });
     let row;
     try {
@@ -1566,7 +1589,7 @@ export function createRedroidService({
     let preflightResult = null;
     if (preflight) {
       try {
-        preflightResult = await preflight({ gpuMode: template.gpuMode === 'host', port: null });
+        preflightResult = await preflight({ gpuMode: template.gpuMode === 'host', port: null, image: template.image });
       } catch (err) {
         log.warn({ error: err?.message }, 'preflight failed during device create — reported as unknown');
         preflightResult = { overall: 'unknown', warnings: [`preflight unavailable: ${String(err?.message ?? err).slice(0, 160)}`] };
@@ -1669,6 +1692,12 @@ export function createRedroidService({
         // MD §7: privileged comes ONLY from the template.
         Privileged: Boolean(template.privileged),
       };
+      // R5 (MD §7.2.7): resource limits come ONLY from the template (validated
+      // ranges in validateRedroidTemplate); null = unlimited (honest default).
+      if (template.cpuLimit) HostConfig.NanoCpus = Math.round(template.cpuLimit * 1e9);
+      if (template.memoryLimitBytes !== null && template.memoryLimitBytes !== undefined) {
+        HostConfig.Memory = Number(template.memoryLimitBytes);
+      }
       if (template.gpuMode === 'host') {
         // 「設定 + 實測」(MD §2.4): the DeviceRequest is the configuration;
         // gpuStatus stays 'unverified' until an in-device render check exists.
@@ -2234,10 +2263,14 @@ export function createRedroidService({
 
   // ---- preflight (real host check, MD §10.1) ---------------------------------
 
-  async function getPreflight({ gpuMode, port } = {}) {
+  async function getPreflight({ gpuMode, port, image } = {}) {
     if (!preflight) throw fail('REDROID_PREFLIGHT_UNAVAILABLE', 503, 'preflight is not configured on this service');
     try {
-      return await preflight({ gpuMode: Boolean(gpuMode), port: Number.isInteger(port) ? port : null });
+      return await preflight({
+        gpuMode: Boolean(gpuMode),
+        port: Number.isInteger(port) ? port : null,
+        image: typeof image === 'string' && image.length >= 3 ? image.slice(0, 255) : undefined,
+      });
     } catch (err) {
       throw fail('REDROID_PREFLIGHT_UNAVAILABLE', 503, `preflight failed: ${String(err?.message ?? err).slice(0, 200)}`);
     }
@@ -2424,6 +2457,9 @@ function publicTemplate(t) {
     privileged: t.privileged,
     privilegedReason: t.privilegedReason,
     isEnabled: t.isEnabled,
+    // R5: limits as JSON-safe numbers (BigInt → number; ≤ 256 GiB « 2^53).
+    cpuLimit: t.cpuLimit ?? null,
+    memoryLimitBytes: t.memoryLimitBytes === null || t.memoryLimitBytes === undefined ? null : Number(t.memoryLimitBytes),
     // Stage B: proxy binding presence only (never the URL itself)
     proxy: t.proxyUrlEncrypted ? { configured: true, hasUrl: true } : { configured: false, hasUrl: false },
     createdAt: t.createdAt,

@@ -606,6 +606,9 @@ export function makeFakeDb({ users = [] } = {}) {
           privileged: data.privileged ?? false,
           privilegedReason: data.privilegedReason ?? null,
           isEnabled: data.isEnabled ?? true,
+          // R5: resource limits (null = unlimited)
+          cpuLimit: data.cpuLimit ?? null,
+          memoryLimitBytes: data.memoryLimitBytes ?? null,
           // Stage B: encrypted egress proxy (null = no fleet proxy)
           proxyUrlEncrypted: data.proxyUrlEncrypted ?? null,
           createdAt: ts,

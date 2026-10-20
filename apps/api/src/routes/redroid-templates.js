@@ -28,6 +28,9 @@ const TEMPLATE_BODY = {
     privileged: { type: 'boolean', default: false },
     privilegedReason: { type: 'string', minLength: 10, maxLength: 200 },
     isEnabled: { type: 'boolean', default: true },
+    // R5: optional resource limits (MD §7.2.7) — null/omitted = unlimited.
+    cpuLimit: { type: ['number', 'null'], exclusiveMinimum: 0, maximum: 256 },
+    memoryLimitBytes: { type: ['integer', 'null'], minimum: 1073741824, maximum: 274877906944 }, // 1 GiB .. 256 GiB
     // Stage B: optional fleet egress proxy. socks5://[user:pass@]host:port only.
     // Encrypted at rest by the service; the response never echoes the URL.
     proxyUrl: { type: ['string', 'null'], maxLength: 512 },
@@ -55,13 +58,15 @@ export function redroidTemplateRoutes(app) {
           properties: {
             gpu: { type: 'string', enum: ['true', 'false'] },
             port: { type: 'string', pattern: '^[1-9][0-9]{0,4}$' },
+            // R5: optional pinned image ref for the architecture check.
+            image: { type: 'string', minLength: 3, maxLength: 255 },
           },
         },
       },
     },
     async (req) => {
-      const { gpu, port } = req.query;
-      return app.redroidService.getPreflight({ gpuMode: gpu === 'true', port: port ? Number(port) : null });
+      const { gpu, port, image } = req.query;
+      return app.redroidService.getPreflight({ gpuMode: gpu === 'true', port: port ? Number(port) : null, image: image ?? null });
     },
   );
 
