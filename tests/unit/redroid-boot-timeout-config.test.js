@@ -12,24 +12,48 @@
  * (40min = 2× the observed worst case). The R4 live host already ran
  * REDROID_TUNNEL_BOOT_TIMEOUT_MS=2400000 via env — this just makes the
  * code default honest. Fast hosts may lower it via env.
+ *
+ * R7 (2026-10-21) CI hardening: this file was LATENTLY BROKEN off the dev
+ * host — `loadConfig(env)` merges `process.env` AND loads CWD/.env (the
+ * operator's UNTRACKED live-test artifact). On a clean checkout/CI runner
+ * neither exists → `config error: DATABASE_URL must be a postgresql://…`
+ * for every call. The new CI (R7 C5) caught this on the first run. All
+ * calls now go through the hermetic `cfg()` helper below: pinned fake
+ * secrets + `envFile: false`, so the assertions test ONLY the knob under
+ * test, deterministically, on any machine.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { loadConfig } from '../../apps/api/src/config.js';
 
+/**
+ * Hermetic loadConfig: fake-but-valid values for the unrelated required
+ * fields (DATABASE_URL / REDIS_URL shape checks, requireSecret 32+ chars)
+ * + `envFile: false` (never read CWD/.env). The values are fake on purpose
+ * — nothing here connects anywhere; loadConfig only validates.
+ */
+const base = {
+  DATABASE_URL: 'postgresql://ci:ci@127.0.0.1:5432/water_army_test',
+  REDIS_URL: 'redis://127.0.0.1:6379',
+  SESSION_SECRET: 'ci-test-session-secret-0000000000000000000000000000000',
+  APP_ENCRYPTION_KEY: 'ci-test-encryption-key-00000000000000000000000000000000',
+};
+/** @param {object} [env] knob overrides for the test */
+const cfg = (env = {}) => loadConfig({ ...base, ...env }, { envFile: false });
+
 test('redroidTunnelBootTimeoutMs: 2400s calibrated default (R6: real cold boot ≈ 24min)', () => {
-  assert.equal(loadConfig({}).redroidTunnelBootTimeoutMs, 2_400_000);
+  assert.equal(cfg().redroidTunnelBootTimeoutMs, 2_400_000);
 });
 
 test('redroidTunnelBootTimeoutMs: REDROID_TUNNEL_BOOT_TIMEOUT_MS overrides', () => {
   assert.equal(
-    loadConfig({ REDROID_TUNNEL_BOOT_TIMEOUT_MS: '1800000' }).redroidTunnelBootTimeoutMs,
+    cfg({ REDROID_TUNNEL_BOOT_TIMEOUT_MS: '1800000' }).redroidTunnelBootTimeoutMs,
     1_800_000,
   );
   // non-numeric → config fail-fast (optInt contract), never a silent default
   assert.throws(
-    () => loadConfig({ REDROID_TUNNEL_BOOT_TIMEOUT_MS: 'bogus' }),
+    () => cfg({ REDROID_TUNNEL_BOOT_TIMEOUT_MS: 'bogus' }),
     /REDROID_TUNNEL_BOOT_TIMEOUT_MS must be a positive integer/,
   );
 });
@@ -44,15 +68,15 @@ test('redroidTunnelBootTimeoutMs: REDROID_TUNNEL_BOOT_TIMEOUT_MS overrides', () 
  * identical to the old in-service fallback.
  */
 test('redroidTunnelPollMs: 5000ms default (identical to the in-service fallback)', () => {
-  assert.equal(loadConfig({}).redroidTunnelPollMs, 5_000);
+  assert.equal(cfg().redroidTunnelPollMs, 5_000);
 });
 
 test('redroidTunnelPollMs: REDROID_TUNNEL_POLL_MS overrides; non-numeric fails fast', () => {
-  assert.equal(loadConfig({ REDROID_TUNNEL_POLL_MS: '250' }).redroidTunnelPollMs, 250);
+  assert.equal(cfg({ REDROID_TUNNEL_POLL_MS: '250' }).redroidTunnelPollMs, 250);
   assert.throws(
-    () => loadConfig({ REDROID_TUNNEL_POLL_MS: 'bogus' }),
+    () => cfg({ REDROID_TUNNEL_POLL_MS: 'bogus' }),
     /REDROID_TUNNEL_POLL_MS must be a positive integer/,
   );
   // must stay positive (a 0/negative poll would spin the boot-wait loop)
-  assert.throws(() => loadConfig({ REDROID_TUNNEL_POLL_MS: '0' }), /positive integer/);
+  assert.throws(() => cfg({ REDROID_TUNNEL_POLL_MS: '0' }), /positive integer/);
 });

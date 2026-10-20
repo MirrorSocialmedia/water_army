@@ -158,9 +158,12 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: No .env file may ever be tracked (only .env.example)
         run: |
-          if git ls-files | grep -E '(^|/)\.env(\.[a-zA-Z0-9_-]+)?$'; then
-            echo "::error::A .env file is tracked. Only .env.example is allowed (MD §8.2)."
+          # a file named exactly .env or .env.<suffix> must never be tracked;
+          # .env.example is the ONLY allowed .env-family file (MD §8.2).
+          bad=$(git ls-files | grep -E '(^|/)\.env([.][a-zA-Z0-9_-]+)?$' | grep -vE '(^|/)\.env\.example$' || true)
+          if [ -n "$bad" ]; then
+            echo "::error::Tracked .env file(s) — only .env.example is allowed (MD §8.2):"
+            echo "$bad"
             exit 1
           fi
-          git ls-files | grep -E '\.env' || true
-          echo "OK: no .env files tracked"
+          echo "OK: no .env files tracked (only .env.example)"
