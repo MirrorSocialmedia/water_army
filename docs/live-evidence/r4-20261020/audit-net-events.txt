@@ -1,0 +1,50 @@
+         at          |             action              |   from_   |    to_    |              reason               |  source   |     error_code      | related_task_id |                                 detail                                 
+---------------------+---------------------------------+-----------+-----------+-----------------------------------+-----------+---------------------+-----------------+------------------------------------------------------------------------
+ 2026-10-20 13:07:54 | redroid.device.net_transition   | STOPPED   | STARTING  | provision-begin                   | create    |                     |                 | 
+ 2026-10-20 13:22:32 | redroid.device.net_transition   | STARTING  | STOPPED   | teardown-complete                 | action    |                     |                 | 
+ 2026-10-20 13:22:42 | redroid.device.net_transition   | STOPPED   | STARTING  | provision-begin                   | create    |                     |                 | 
+ 2026-10-20 13:23:05 | redroid.device.net_transition   | STARTING  | VERIFYING | tunnel-process-up                 | provision |                     |                 | 
+ 2026-10-20 13:27:44 | redroid.device.net_transition   | VERIFYING | HEALTHY   | verification-passed               | watchdog  |                     |                 | 
+ 2026-10-20 13:32:01 | redroid.device.net_transition   | HEALTHY   | BLOCKED   | definite-loss:TUNNEL_PROCESS_DEAD | watchdog  | TUNNEL_PROCESS_DEAD |                 | 
+ 2026-10-20 13:32:01 | redroid.device.net_check_failed |           |           |                                   |           |                     |                 | process=dead iface=missing route=missing rule=present effective=direct
+ 2026-10-20 13:32:11 | redroid.device.net_recovery     | BLOCKED   |           |                                   |           |                     |                 | 
+ 2026-10-20 13:32:11 | redroid.device.net_transition   | BLOCKED   | STARTING  | recovery-reprovision              | watchdog  |                     |                 | 
+ 2026-10-20 13:32:15 | redroid.device.net_transition   | STARTING  | VERIFYING | tunnel-process-up                 | provision |                     |                 | 
+ 2026-10-20 13:32:15 | redroid.device.net_transition   | VERIFYING | HEALTHY   | verification-passed               | provision |                     |                 | 
+ 2026-10-20 13:34:01 | redroid.device.net_transition   | HEALTHY   | BLOCKED   | definite-loss:TUNNEL_PROCESS_DEAD | watchdog  | TUNNEL_PROCESS_DEAD |                 | 
+ 2026-10-20 13:34:01 | redroid.device.net_check_failed |           |           |                                   |           |                     |                 | process=dead iface=missing route=missing rule=present effective=direct
+ 2026-10-20 13:34:11 | redroid.device.net_recovery     | BLOCKED   |           |                                   |           |                     |                 | 
+ 2026-10-20 13:34:11 | redroid.device.net_transition   | BLOCKED   | STARTING  | recovery-reprovision              | watchdog  |                     |                 | 
+ 2026-10-20 13:34:15 | redroid.device.net_transition   | STARTING  | VERIFYING | tunnel-process-up                 | provision |                     |                 | 
+ 2026-10-20 13:34:15 | redroid.device.net_transition   | VERIFYING | HEALTHY   | verification-passed               | provision |                     |                 | 
+ 2026-10-20 13:34:41 | redroid.device.net_transition   | HEALTHY   | DEGRADED  | consecutive-failures:1/2          | watchdog  | CANARY_FAIL         |                 | 
+ 2026-10-20 13:34:41 | redroid.device.net_check_failed |           |           |                                   |           |                     |                 | canary FAIL:connect-failed
+ 2026-10-20 13:34:46 | redroid.device.net_transition   | DEGRADED  | BLOCKED   | consecutive-failures:2/2          | watchdog  | CANARY_FAIL         |                 | 
+ 2026-10-20 13:34:56 | redroid.device.net_recovery     | BLOCKED   |           |                                   |           |                     |                 | 
+ 2026-10-20 13:34:56 | redroid.device.net_transition   | BLOCKED   | STARTING  | recovery-reprovision              | watchdog  |                     |                 | 
+ 2026-10-20 13:35:00 | redroid.device.net_transition   | STARTING  | VERIFYING | tunnel-process-up                 | provision |                     |                 | 
+ 2026-10-20 13:35:00 | redroid.device.net_transition   | VERIFYING | HEALTHY   | verification-passed               | provision |                     |                 | 
+ 2026-10-20 13:51:12 | redroid.device.net_transition   | HEALTHY   | BLOCKED   | definite-loss:TUNNEL_PROCESS_DEAD | watchdog  | TUNNEL_PROCESS_DEAD |                 | 
+ 2026-10-20 13:51:12 | redroid.device.net_check_failed |           |           |                                   |           |                     |                 | process=dead iface=missing route=missing rule=present effective=direct
+ 2026-10-20 13:51:22 | redroid.device.net_recovery     | BLOCKED   |           |                                   |           |                     |                 | 
+ 2026-10-20 13:51:22 | redroid.device.net_transition   | BLOCKED   | STARTING  | recovery-reprovision              | watchdog  |                     |                 | 
+ 2026-10-20 13:51:26 | redroid.device.net_transition   | STARTING  | VERIFYING | tunnel-process-up                 | provision |                     |                 | 
+ 2026-10-20 13:51:26 | redroid.device.net_transition   | VERIFYING | HEALTHY   | verification-passed               | provision |                     |                 | 
+ 2026-10-20 13:52:37 | redroid.device.net_transition   | HEALTHY   | BLOCKED   | definite-loss:TUNNEL_PROCESS_DEAD | watchdog  | TUNNEL_PROCESS_DEAD |                 | 
+ 2026-10-20 13:52:37 | redroid.device.net_check_failed |           |           |                                   |           |                     |                 | process=dead iface=missing route=missing rule=present effective=direct
+ 2026-10-20 13:52:52 | redroid.device.net_recovery     | BLOCKED   |           |                                   |           |                     |                 | 
+ 2026-10-20 13:52:52 | redroid.device.net_transition   | BLOCKED   | STARTING  | recovery-reprovision              | watchdog  |                     |                 | 
+ 2026-10-20 13:52:56 | redroid.device.net_transition   | STARTING  | VERIFYING | tunnel-process-up                 | provision |                     |                 | 
+ 2026-10-20 13:52:56 | redroid.device.net_transition   | VERIFYING | HEALTHY   | verification-passed               | provision |                     |                 | 
+ 2026-10-20 13:57:02 | redroid.device.net_transition   | HEALTHY   | BLOCKED   | definite-loss:TUNNEL_PROCESS_DEAD | watchdog  | TUNNEL_PROCESS_DEAD |                 | 
+ 2026-10-20 13:57:02 | redroid.device.net_check_failed |           |           |                                   |           |                     |                 | process=dead iface=missing route=missing rule=present effective=direct
+ 2026-10-20 13:57:12 | redroid.device.net_recovery     | BLOCKED   |           |                                   |           |                     |                 | 
+ 2026-10-20 13:57:12 | redroid.device.net_transition   | BLOCKED   | STARTING  | recovery-reprovision              | watchdog  |                     |                 | 
+ 2026-10-20 13:57:16 | redroid.device.net_transition   | STARTING  | VERIFYING | tunnel-process-up                 | provision |                     |                 | 
+ 2026-10-20 13:57:16 | redroid.device.net_transition   | VERIFYING | HEALTHY   | verification-passed               | provision |                     |                 | 
+ 2026-10-20 13:57:22 | redroid.device.net_transition   | HEALTHY   | DEGRADED  | consecutive-failures:1/2          | watchdog  | CANARY_FAIL         |                 | 
+ 2026-10-20 13:57:22 | redroid.device.net_check_failed |           |           |                                   |           |                     |                 | canary FAIL:connect-failed
+ 2026-10-20 13:57:27 | redroid.device.net_transition   | DEGRADED  | VERIFYING | recovery-verify                   | watchdog  |                     |                 | 
+ 2026-10-20 13:57:27 | redroid.device.net_transition   | VERIFYING | HEALTHY   | recovery-verification-passed      | watchdog  |                     |                 | 
+(46 rows)
+

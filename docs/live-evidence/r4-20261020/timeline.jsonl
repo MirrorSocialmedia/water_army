@@ -1,0 +1,21 @@
+{"at":"2026-10-20T13:27:46.827Z","phase":"P1","event":"HEALTHY","state":"HEALTHY","seenStates":["STARTING","VERIFYING","HEALTHY"],"legacy":"running","cf":0,"checks":{"binary":"PASS","process":"PASS","interface":"PASS","routePolicy":"PASS","tcpCanary":"PASS"},"networkReady":true,"adb":"unknown"}
+{"at":"2026-10-20T13:29:42.241Z","phase":"P1","event":"HEALTHY","state":"HEALTHY","seenStates":["HEALTHY"],"legacy":"running","cf":0,"checks":{"binary":"PASS","process":"PASS","interface":"PASS","routePolicy":"PASS","tcpCanary":"PASS"},"networkReady":true,"adb":"unknown"}
+{"at":"2026-10-20T13:29:42.243Z","phase":"P1","event":"worker-gate"}
+{"at":"2026-10-20T13:29:42.244Z","fatal":"worker gate must be ALLOWED on HEALTHY"}
+{"at":"2026-10-20T13:31:41.880Z","phase":"P1","event":"HEALTHY","state":"HEALTHY","seenStates":["HEALTHY"],"legacy":"running","cf":0,"checks":{"binary":"PASS","process":"PASS","interface":"PASS","routePolicy":"PASS","tcpCanary":"PASS"},"networkReady":true,"adb":"unknown"}
+{"at":"2026-10-20T13:31:41.883Z","phase":"P1","event":"worker-gate","dispatch":"ALLOWED","state":"HEALTHY"}
+{"at":"2026-10-20T13:31:59.699Z","phase":"P1","event":"screenshot","label":"01-healthy"}
+{"at":"2026-10-20T13:31:59.754Z","phase":"P2","event":"kill-t2s","killed":true,"pid":2115}
+{"at":"2026-10-20T13:32:01.766Z","phase":"P2","event":"degraded","state":"BLOCKED","seenStates":["HEALTHY","BLOCKED"],"legacy":"error","cf":1,"lastErrorCode":"TUNNEL_PROCESS_DEAD","checks":{"binary":"PASS","process":"FAIL","interface":"FAIL","routePolicy":"FAIL","tcpCanary":"PASS"}}
+{"at":"2026-10-20T13:32:19.101Z","phase":"P2","event":"worker-gate-blocked","dispatch":"ALLOWED","state":"HEALTHY"}
+{"at":"2026-10-20T13:32:19.102Z","fatal":"worker gate must be BLOCKED while not HEALTHY"}
+{"at":"2026-10-20T13:33:57.519Z","phase":"P2","event":"kill-t2s","killed":true,"pid":6650}
+{"at":"2026-10-20T13:34:02.558Z","phase":"P2","event":"degraded","state":"BLOCKED","seenStates":["HEALTHY","BLOCKED"],"legacy":"error","cf":1,"lastErrorCode":"TUNNEL_PROCESS_DEAD","checks":{"binary":"PASS","process":"FAIL","interface":"FAIL","routePolicy":"FAIL","tcpCanary":"PASS"}}
+{"at":"2026-10-20T13:34:02.560Z","phase":"P2","event":"worker-gate-check","attempt":1,"dispatch":"BLOCKED","state":"BLOCKED"}
+{"at":"2026-10-20T13:34:19.893Z","phase":"P2","event":"recovered","state":"HEALTHY","seenStates":{},"legacy":"running","cf":0,"recoveries":0,"checks":{"binary":"PASS","process":"PASS","interface":"PASS","routePolicy":"PASS","tcpCanary":"PASS"}}
+{"at":"2026-10-20T13:34:19.896Z","phase":"P2","event":"worker-gate-allowed","dispatch":"ALLOWED"}
+{"at":"2026-10-20T13:34:37.203Z","phase":"P3","event":"canary-down","echoPid":"18718"}
+{"at":"2026-10-20T13:34:41.716Z","phase":"P3","event":"degraded","state":"DEGRADED","seenStates":["HEALTHY","DEGRADED"],"cf":1,"lastErrorCode":"CANARY_FAIL","checks":{"binary":"PASS","process":"PASS","interface":"PASS","routePolicy":"PASS","tcpCanary":"FAIL"},"legacy":"stopped"}
+{"at":"2026-10-20T13:34:41.717Z","phase":"P3","event":"worker-gate-blocked","dispatch":"BLOCKED"}
+{"at":"2026-10-20T13:40:22.952Z","phase":"P3","event":"canary-up","note":"mock-echo relaunched (driver spawnSync hang — child already running; port 16090 re-bound)"}
+{"at":"2026-10-20T13:40:22.952Z","phase":"P3","event":"healed","state":"HEALTHY","cf":0,"recoveries":0,"note":"soft-failure family: NO spurious re-provision (recoveries stays 0) — live confirmation of R3 Phase B semantics"}

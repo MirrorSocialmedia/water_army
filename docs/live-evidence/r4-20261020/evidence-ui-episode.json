@@ -1,0 +1,160 @@
+{
+  "startedAt": "2026-10-20T13:56:56.493Z",
+  "timeline": [
+    {
+      "at": "2026-10-20T13:56:57.205Z",
+      "event": "ui-login",
+      "ok": true
+    },
+    {
+      "at": "2026-10-20T13:56:57.230Z",
+      "event": "HEALTHY-at-start",
+      "state": "HEALTHY",
+      "checks": {
+        "binary": "PASS",
+        "process": "PASS",
+        "interface": "PASS",
+        "routePolicy": "PASS",
+        "tcpCanary": "PASS"
+      },
+      "stale": false,
+      "checkedAt": "2026-10-20T13:56:52.603Z",
+      "networkReady": true
+    },
+    {
+      "at": "2026-10-20T13:56:58.497Z",
+      "event": "shot",
+      "label": "01-healthy"
+    },
+    {
+      "at": "2026-10-20T13:56:58.531Z",
+      "event": "kill-t2s",
+      "status": 0,
+      "err": ""
+    },
+    {
+      "at": "2026-10-20T13:57:03.046Z",
+      "event": "degraded-post-kill",
+      "state": "BLOCKED",
+      "cf": 1,
+      "lastErrorCode": "TUNNEL_PROCESS_DEAD",
+      "checks": {
+        "binary": "PASS",
+        "process": "FAIL",
+        "interface": "FAIL",
+        "routePolicy": "FAIL",
+        "tcpCanary": "PASS"
+      }
+    },
+    {
+      "at": "2026-10-20T13:57:07.096Z",
+      "event": "shot",
+      "label": "02-blocked-post-kill"
+    },
+    {
+      "at": "2026-10-20T13:57:17.131Z",
+      "event": "recovered",
+      "seen": [
+        "BLOCKED",
+        "STARTING",
+        "HEALTHY"
+      ]
+    },
+    {
+      "at": "2026-10-20T13:57:21.194Z",
+      "event": "shot",
+      "label": "03-healthy-after-recovery"
+    },
+    {
+      "at": "2026-10-20T13:57:21.222Z",
+      "event": "canary-down",
+      "echoPid": "61984"
+    },
+    {
+      "at": "2026-10-20T13:57:22.729Z",
+      "event": "degraded-canary",
+      "state": "DEGRADED",
+      "cf": 1,
+      "lastErrorCode": "CANARY_FAIL",
+      "checks": {
+        "binary": "PASS",
+        "process": "PASS",
+        "interface": "PASS",
+        "routePolicy": "PASS",
+        "tcpCanary": "FAIL"
+      }
+    },
+    {
+      "at": "2026-10-20T13:57:26.776Z",
+      "event": "shot",
+      "label": "04-degraded-canary"
+    },
+    {
+      "at": "2026-10-20T13:57:26.777Z",
+      "event": "canary-up",
+      "echoPid": 37955
+    },
+    {
+      "at": "2026-10-20T13:57:28.284Z",
+      "event": "HEALTHY-final",
+      "state": "HEALTHY",
+      "cf": 0,
+      "recoveries": 0,
+      "checks": {
+        "binary": "PASS",
+        "process": "PASS",
+        "interface": "PASS",
+        "routePolicy": "PASS",
+        "tcpCanary": "PASS"
+      }
+    },
+    {
+      "at": "2026-10-20T13:57:32.278Z",
+      "event": "shot",
+      "label": "05-healthy-final"
+    },
+    {
+      "at": "2026-10-20T13:57:33.317Z",
+      "event": "shot",
+      "label": "06-devices-list"
+    }
+  ],
+  "shots": [
+    {
+      "label": "01-healthy",
+      "file": "/tmp/wa-r4-live/ui-episode/01-healthy.png",
+      "at": "2026-10-20T13:56:58.497Z",
+      "matched": "HEALTHY"
+    },
+    {
+      "label": "02-blocked-post-kill",
+      "file": "/tmp/wa-r4-live/ui-episode/02-blocked-post-kill.png",
+      "at": "2026-10-20T13:57:07.096Z",
+      "matched": "BLOCKED"
+    },
+    {
+      "label": "03-healthy-after-recovery",
+      "file": "/tmp/wa-r4-live/ui-episode/03-healthy-after-recovery.png",
+      "at": "2026-10-20T13:57:21.194Z",
+      "matched": "HEALTHY"
+    },
+    {
+      "label": "04-degraded-canary",
+      "file": "/tmp/wa-r4-live/ui-episode/04-degraded-canary.png",
+      "at": "2026-10-20T13:57:26.776Z",
+      "matched": "DEGRADED"
+    },
+    {
+      "label": "05-healthy-final",
+      "file": "/tmp/wa-r4-live/ui-episode/05-healthy-final.png",
+      "at": "2026-10-20T13:57:32.278Z",
+      "matched": "HEALTHY"
+    },
+    {
+      "label": "06-devices-list",
+      "file": "/tmp/wa-r4-live/ui-episode/06-devices-list.png",
+      "at": "2026-10-20T13:57:33.317Z"
+    }
+  ],
+  "finishedAt": "2026-10-20T13:57:33.357Z"
+}
