@@ -402,6 +402,35 @@ export function computeRecoveryDecision({ netState, recoveries = 0, nextRecovery
 /** MD §6.2 per-check display vocabulary (one value set for API/worker/UI). */
 export const NET_CHECK_VALUES = Object.freeze(['PASS', 'FAIL', 'UNKNOWN']);
 
+// ---------------------------------------------------------------------------
+// R4 (MD §6.2): the payload CONTRACT — the exact key set buildNetPayload
+// emits. API (device view `proxy.network`), worker (redroid.get_device_status
+// projection) and UI (netStateBadge) all read THESE keys; the tests pin the
+// set here so drift on any boundary breaks the suite. MD mapping:
+//   lastSuccessAt ≙ lastSuccessfulCheckAt (existing name kept).
+// ---------------------------------------------------------------------------
+export const NET_PAYLOAD_KEYS = Object.freeze([
+  'state',
+  'stateSince',
+  'checkedAt',
+  'lastSuccessAt',
+  'consecutiveFailures',
+  'recoveries',
+  'manualIntervention',
+  'canaryConfigured',
+  'stale',
+  'networkReady',
+  'checks',
+  'lastErrorCode',
+  'nextRecoveryAt',
+  'recoveryLock',
+  'lastError',
+  'lastCanary',
+]);
+
+/** The five MD §6.2 per-check keys (one vocabulary: PASS/FAIL/UNKNOWN). */
+export const NET_CHECK_KEYS = Object.freeze(['binary', 'process', 'interface', 'routePolicy', 'tcpCanary']);
+
 function checkBinary(v) {
   const s = String(v ?? '').toLowerCase();
   if (s === 'ready') return 'PASS';
