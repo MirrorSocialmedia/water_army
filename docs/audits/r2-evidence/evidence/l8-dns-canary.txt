@@ -1,0 +1,3 @@
+device-raw-udp-response-hex: 12 34 81 80 00 01 00 01 00 00 00 00 06 63 61 6e 61 72 79 07 65 78 61 6d 70 6c 65 00 00 01 00 01 c0 0c 00 00 00 01 00 01 00 3c 00 04 5d b8 d8 22
+mock-dns-canary-lines: 47
+flags-NOERROR(8180)=true answerA(93.184.216.34)=true

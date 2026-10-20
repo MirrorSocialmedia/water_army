@@ -537,8 +537,57 @@ async function phaseL6() {
   }
 }
 
+async function phaseTuning() {
+  // tcp-auto-tuning A/B (single variable: the extra flag on the t2s argv).
+  // Production bytes from buildTunnelSetupScript; the variant is a 1-flag
+  // string patch on the nohup line, asserted below.
+  const base = buildTunnelSetupScript({ gostPort: CFG.gostPort });
+  const FLAG = '--tcp-auto-tuning';
+  const tuned = base.split('\n').map((l) => (l.includes('nohup') && l.includes('--loglevel debug')
+    ? l.replace('--loglevel debug', `${FLAG} --loglevel debug`)
+    : l)).join('\n');
+  const changed = base.split('\n').filter((l, i) => l !== tuned.split('\n')[i]);
+  const changedIdx = base.split('\n').findIndex((l, i) => l !== tuned.split('\n')[i]);
+  if (changed.length !== 1 || !tuned.split('\n')[changedIdx].includes(FLAG)) {
+    result('TUN', 'TUN0', 'variant construction', 'FAIL', `expected 1-line diff w/ ${FLAG}, got: ${JSON.stringify(changed)}`);
+    return;
+  }
+  const wait = (ms) => new Promise((x) => setTimeout(x, ms));
+  const stageAndRun = async (scriptBody, tag) => {
+    const stage = buildT2sStageScript(scriptBody);
+    const st = await devExec(stage, `stage-${tag}`);
+    const rn = await devExec(buildT2sRunScript(), `run-${tag}`);
+    const ps = await devExec('ps -ef | grep [t]un2socks', `ps-${tag}`);
+    return { ok: st.out.includes('T2S_STAGED') && rn.rc === 0 && !rn.out.includes('TUN2SOCKS_NOT_RUNNING'), ps: ps.out };
+  };
+  const probeOnce = async (tag) => {
+    const nonce = `r2-tuning-${tag}-${Date.now() % 100000}`;
+    const body = makePayload(1024, nonce);
+    return devHttpViaTunnel({ tag, nonce, body });
+  };
+  // A: default (flag OFF) — expect the known FAIL shape
+  const a = await stageAndRun(base, 'tuning-a');
+  await wait(1500);
+  const ra = a.ok ? await probeOnce('a') : null;
+  const sockA = fs.readFileSync(`${CFG.net}/socks5.jsonl`, 'utf8').split('\n').filter((l) => l && l.includes(`93.184.216.34:${CFG.echoPort}`)).slice(-2).join('\n');
+  ev('tuning-a-off', `argv: ${a.ps.trim()}\nprobe: ${ra?.p.line}\nverify: ${ra?.v.detail}\nserver=${ra?.serverOk}\ntun: ${JSON.stringify(ra?.before)} -> ${JSON.stringify(ra?.after)}\nsocks5-window: ${sockA}`);
+  result('TUN', 'TUNA', 'auto-tuning OFF (default) 1KB', (ra?.p.status === 'ok' && ra?.v.ok && ra?.serverOk === true) ? 'PASS' : 'FAIL', `probe=${ra?.p.status} ${ra?.v.detail} server=${ra?.serverOk}`, 'tuning-a-off');
+  // B: flag ON
+  const b = await stageAndRun(tuned, 'tuning-b');
+  await wait(1500);
+  const rb = b.ok ? await probeOnce('b') : null;
+  ev('tuning-b-on', `argv: ${b.ps.trim()}\nprobe: ${rb?.p.line}\nverify: ${rb?.v.detail}\nserver=${rb?.serverOk}\ntun: ${JSON.stringify(rb?.before)} -> ${JSON.stringify(rb?.after)}`);
+  result('TUN', 'TUNB', 'auto-tuning ON 1KB', (rb?.p.status === 'ok' && rb?.v.ok && rb?.serverOk === true) ? 'PASS' : 'FAIL', `probe=${rb?.p.status} ${rb?.v.detail} server=${rb?.serverOk} flagInArgv=${b.ps.includes(FLAG)}`, 'tuning-b-on');
+  // restore: production bytes (flag OFF)
+  const c = await stageAndRun(base, 'tuning-restore');
+  await wait(1500);
+  const rc2 = c.ok ? await probeOnce('restore') : null;
+  ev('tuning-restore', `argv: ${c.ps.trim()}\nprobe: ${rc2?.p.line}\nverify: ${rc2?.v.detail} server=${rc2?.serverOk}`);
+  result('TUN', 'TUNC', 'restore default after B', c.ok && rc2?.p.status ? 'PASS' : 'FAIL', `prov=${c.ok} probe=${rc2?.p.status} flagInArgv=${c.ps.includes(FLAG)}`, 'tuning-restore');
+}
+
 async function phaseL7() {
-  for (const size of [1024, 65536, 1048576]) {
+  for (const size of [1024, 16384, 65536, 1048576]) {
     const nonce = `r2-l7-${size}-${Date.now() % 100000}`;
     const body = makePayload(size, nonce);
     const r = await devHttpViaTunnel({ tag: `l7-${size}`, nonce, body, readTimeout: 60 });
@@ -556,7 +605,10 @@ async function phaseL8() {
       0x06, ...Buffer.from('canary'), 0x07, ...Buffer.from('example'), 0x00, 0x00, 0x01, 0x00, 0x01];
     const hexEsc = q.map((b) => `\\x${b.toString(16).padStart(2, '0')}`).join('');
     const blob = [
-      `printf '${hexEsc}' | nc -u -w 5 8.8.8.8 53 2>/dev/null | od -An -tx1 | tr -d '\\n'`,
+      // timeout around nc: toybox `nc -u` keeps the UDP socket open after the
+      // response (no EOF) → the pipeline hangs forever (gen2 repro: 12min+);
+      // timeout 6 kills nc after the answer has already hit the pipe.
+      `printf '${hexEsc}' | timeout 6 nc -u 8.8.8.8 53 2>/dev/null | od -An -tx1 | tr -d '\\n'`,
       '',
     ].join('\n');
     const r = await devBlob(blob, 'l8-dns');
@@ -609,7 +661,12 @@ async function phaseRedirect() {
   await new Promise((x) => setTimeout(x, 800));
   const addRule = await devExec(`iptables -t nat -A OUTPUT -p tcp --dport ${CFG.echoPort} -j REDIRECT --to-ports ${CFG.redirect.listen} 2>&1 && echo RULE_ADDED`, 'rd-add');
   if (!addRule.out.includes('RULE_ADDED')) {
-    const noIptables = /not found|No such file|not recognized/i.test(addRule.out + addRule.err);
+    // BLOCKED walls (both observed on this platform, R2 2026-10-20):
+    //  - 'Table does not exist (do you need to insmod?)' = iptable_nat module
+    //    absent (container has no /lib/modules; host-side insmod = redline)
+    //  - 'unknown option "--to-ports"' = xt_REDIRECT not compiled into the
+    //    Android netd iptables build
+    const noIptables = /not found|No such file|not recognized|Table does not exist|insmod|unknown option/i.test(addRule.out + addRule.err);
     result('RD', 'RDc', 'REDIRECT rule applied', noIptables ? 'BLOCKED' : 'FAIL', `iptables missing=${noIptables} out=${(addRule.out || addRule.err).slice(0, 160)}`);
     return;
   }
@@ -657,7 +714,7 @@ async function phaseTeardown() {
 
 const PHASES = {
   l1: phaseL1, 'tunnel-setup': phaseTunnelSetup, l2: phaseL2, l3: phaseL3,
-  l45: phaseL45, l6: phaseL6, l7: phaseL7, l8: phaseL8, redirect: phaseRedirect, teardown: phaseTeardown,
+  l45: phaseL45, l6: phaseL6, l7: phaseL7, l8: phaseL8, tuning: phaseTuning, redirect: phaseRedirect, teardown: phaseTeardown,
 };
 const fn = PHASES[CFG.phase];
 if (!fn) { console.error(`unknown phase: ${CFG.phase} (want: ${Object.keys(PHASES).join('|')})`); process.exit(2); }

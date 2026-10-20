@@ -1,4 +1,4 @@
-# R2 spike raw evidence (copied from `/tmp/r2-net/`, 2026-10-20 07:48 HKT)
+# R2 spike raw evidence (gen1: copied from `/tmp/r2-net/` 2026-10-20 07:48 HKT; gen2 additions 08:45 HKT)
 
 Preserved to protect against `/tmp` loss. All mock jsonl + per-test evidence
 from the gen1 spike run against `redroid-matrix-r2-spike` (R1 image,
@@ -11,13 +11,16 @@ Test window = 2026-10-19 20:02–21:00 UTC = 2026-10-20 04:02–05:00 HKT.
 
 | dir/file | contents |
 |---|---|
-| `evidence/*.txt` | per-test raw output captured by `scripts/wa-r2-dataspike.mjs` (L1–L6) |
-| `evidence/results.json` → `results-l6.json` | L6 driver verdicts (a–h) |
+| `evidence/*.txt` | per-test raw output captured by `scripts/wa-r2-dataspike.mjs` (L1–L8, TUN, RD) |
+| `evidence/results.json` | full driver verdicts (gen2 L7/L8/TUN/RD run) |
+| `evidence/results-l6.json` | L6 driver verdicts (a–h) |
 | `mocks/*.jsonl` | mock流水：socks5 relay (20082), reject (20083), hang (20084), rst (20085), echo (20271), echo-hang (20273), echo-rst (20274) |
 | `mocks/*.out` | mock stdout (listen lines) |
 | `captures/` | key binary captures: `pay-*` = exact request bytes pushed to device; `out-*` = device-side captured response; `out-*-zero.bin` = 0-byte captures (device received NOTHING — pulled OK, empty) |
 | `captures/out-l1b.bin` | 264B direct-path response (L1b PASS capture) |
 | `captures/out-selftest.bin` | 271B mock-chain self-test response |
+| `l8-run.log` | gen2 L8 phase console (L8a PASS / L8b FAIL / L8c FAIL + fail-open route) |
+| `rd-run2.log` | gen2 RD phase console (RDa PASS / RDc BLOCKED 雙牆) |
 
 ## Key findings encoded in this data
 
@@ -58,6 +61,21 @@ Test window = 2026-10-19 20:02–21:00 UTC = 2026-10-20 04:02–05:00 HKT.
    with exact sha256 match in `mocks/echo.jsonl` (`/r2-selftest`,
    `/r2-selftest2`) — the mock relay handles CONNECT + coalesced
    CONNECT+payload burst with zero loss. Mock chain excluded as fault.
+
+## Gen2 additions (2026-10-20 07:15–08:45 HKT = 2026-10-19 23:15–2026-10-20 00:45 UTC)
+
+- `evidence/l7-1024|16384|65536|1048576.txt` — L7 large payload (1KB/16KB/64KB/1MB):
+  all `RC=read-timeout RECV=0` (60s), **zero partial forward** (relay bytesIn=0 all sizes),
+  TUN deltas per size (see `../tcp-transport-investigation.md` §3 L7 table).
+- `evidence/tuning-a-off|b-on|restore.txt` — `--tcp-auto-tuning` A/B (flag confirmed in argv via ps):
+  OFF = read-timeout, TUN rx 112B/2pkt tx 1583B/8pkt; ON = read-timeout, TUN rx 112B/2pkt **tx 1584B**/8pkt →
+  byte-level identical → auto-tuning excluded.
+- `evidence/l8-dns-canary.txt` — L8a DNS canary PASS (NOERROR + A=93.184.216.34 via tunnel UDP <1s;
+  47 UDP DNS relay lines incl. Android's own `connectivitycheck.gstatic.com`).
+- `evidence/rd-a-baseline.txt` + `rd-run2.log` — RD line: RDa PASS; RDc BLOCKED with two independent
+  walls (`Table does not exist (do you need to insmod?)` = iptable_nat module absent; `unknown option
+  "--to-ports"` = xt_REDIRECT not compiled in the Android netd iptables build). Host firewall: zero changes.
+- `evidence/results.json` — full gen2 verdict set.
 
 ## Provenance
 

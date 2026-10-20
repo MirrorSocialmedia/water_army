@@ -1,0 +1,7 @@
+argv: root          3553     1 0 00:09:58 ?     00:00:00 tun2socks --device tun0 --proxy socks5://172.17.0.1:20082 --loglevel debug
+probe: RC=read-timeout SENT=1175 RECV=0 T_CONN_MS=0 T_TOTAL_MS=30000 SETTLE_MS=0
+verify: no header/body separator
+server=null
+tun: {"rxBytes":0,"rxPkts":0,"txBytes":48,"txPkts":1} -> {"rxBytes":112,"rxPkts":2,"txBytes":1583,"txPkts":8}
+socks5-window: {"ts":"2026-10-19T23:54:23.253Z","t":"tcp-close","dest":"93.184.216.34:20271","from":"172.17.0.3:58274","bytesIn":0,"bytesOut":51,"why":"upstream-close"}
+{"ts":"2026-10-20T00:10:04.236Z","t":"tcp-connect","dest":"93.184.216.34:20271","from":"172.17.0.3:33336"}

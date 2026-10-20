@@ -1,0 +1,5 @@
+argv: root          3617     1 0 00:10:34 ?     00:00:00 tun2socks --device tun0 --proxy socks5://172.17.0.1:20082 --tcp-auto-tuning --loglevel debug
+probe: RC=read-timeout SENT=1176 RECV=0 T_CONN_MS=0 T_TOTAL_MS=30000 SETTLE_MS=0
+verify: no header/body separator
+server=null
+tun: {"rxBytes":0,"rxPkts":0,"txBytes":48,"txPkts":1} -> {"rxBytes":112,"rxPkts":2,"txBytes":1584,"txPkts":8}

@@ -1,0 +1,17 @@
+[
+  {
+    "layer": "RD",
+    "id": "RDa",
+    "name": "REDIRECT baseline (read-only)",
+    "verdict": "PASS",
+    "detail": "teardown=true tun0=[Device \"tun0\" does not exist.] iptables=[iptables -V ==\niptables v1.8.7 (legacy)\n== ]",
+    "evidence": "rd-a-baseline"
+  },
+  {
+    "layer": "RD",
+    "id": "RDc",
+    "name": "REDIRECT rule applied",
+    "verdict": "BLOCKED",
+    "detail": "iptables missing=true out=iptables v1.8.7 (legacy): unknown option \"--to-ports\"\nTry `iptables -h' or 'iptables --help' for more information.\n"
+  }
+]
