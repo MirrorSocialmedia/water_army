@@ -1,0 +1,7 @@
+=== R5 negative test: bad image tag (live, 2026-10-20 16:09 HKT) ===
+template: water-army/redroid:99.9.9-doesnotexist (pinned format, accepted at template create)
+device create response (fail-fast, no retry):
+
+{"error":{"code":"DOCKER_ERROR","message":"(HTTP code 404) no such container - No such image: water-army/redroid:99.9.9-doesnotexist"}}
+
+Contract gap for R6: no such image should map to a dedicated IMAGE_NOT_FOUND code.

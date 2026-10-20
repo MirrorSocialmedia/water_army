@@ -1,0 +1,3 @@
+PCI_ID=10DE:2204
+PCI_SUBSYS_ID=10DE:1454
+/system/bin/sh: nvidia-smi: inaccessible or not found

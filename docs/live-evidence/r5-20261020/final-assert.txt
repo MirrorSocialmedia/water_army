@@ -1,0 +1,9 @@
+BOOT_COMPLETED: 1
+GPU_MODE: host
+MARKER:
+r5-persist-1792511279-27837
+FDROID:
+package:org.fdroid.fdroid
+SF_RENDER_FD_COUNT: 7
+FDROID_PROC:
+1961

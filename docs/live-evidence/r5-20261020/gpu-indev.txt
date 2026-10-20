@@ -1,0 +1,16 @@
+card0
+card1
+card2
+renderD128
+renderD129
+renderD130
+---
+[init.svc.gpu]: [running]
+[init.svc.surfaceflinger]: [running]
+[init.svc_debug_pid.gpu]: [106]
+[init.svc_debug_pid.surfaceflinger]: [593]
+[persist.graphics.egl]: []
+[ro.boot.redroid_gpu_mode]: [host]
+[ro.boottime.gpu]: [136251547130530]
+[ro.boottime.surfaceflinger]: [136251547833368]
+[ro.hardware.egl]: [mesa]

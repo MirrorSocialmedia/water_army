@@ -105,15 +105,27 @@ test('redroid limits: explicit null clears a previously-set limit (update)', asy
   const { app, cookies, close } = await makeApp();
   t.after(close);
   const H = { cookie: cookies.admin, 'content-type': 'application/json' };
-  const created = await app.inject({ method: 'POST', url: '/api/redroid/templates', headers: H, payload: LIMITS_TPL });
+  // host + privileged template: the R5 data-corruption regression (AJV schema
+  // defaults clobbering absent fields on a partial PUT) would flip these back
+  // to swiftshader_indirect/false — this asserts they survive a partial patch.
+  const HOST_PRIV = {
+    ...LIMITS_TPL,
+    name: 'redroid-14-hostpriv',
+    gpuMode: 'host',
+    privileged: true,
+    privilegedReason: 'test: privileged host template',
+  };
+  const created = await app.inject({ method: 'POST', url: '/api/redroid/templates', headers: H, payload: HOST_PRIV });
   assert.equal(created.statusCode, 201, created.body);
   const id = created.json().template.id;
 
-  // partial update without the fields → keep
+  // partial update without the fields → keep (gpuMode/privileged included!)
   const keep = await app.inject({ method: 'PUT', url: `/api/redroid/templates/${id}`, headers: H, payload: { fps: 60 } });
   assert.equal(keep.statusCode, 200, keep.body);
   assert.equal(keep.json().template.cpuLimit, 2);
   assert.equal(keep.json().template.memoryLimitBytes, 4294967296);
+  assert.equal(keep.json().template.gpuMode, 'host', 'partial PUT must NOT reset gpuMode (schema-default clobber)');
+  assert.equal(keep.json().template.privileged, true, 'partial PUT must NOT reset privileged (schema-default clobber)');
 
   // explicit null → clear
   const clear = await app.inject({
@@ -125,4 +137,7 @@ test('redroid limits: explicit null clears a previously-set limit (update)', asy
   assert.equal(clear.statusCode, 200, clear.body);
   assert.equal(clear.json().template.cpuLimit, null);
   assert.equal(clear.json().template.memoryLimitBytes, null);
+  // still intact after the null-clear patch
+  assert.equal(clear.json().template.gpuMode, 'host');
+  assert.equal(clear.json().template.privileged, true);
 });

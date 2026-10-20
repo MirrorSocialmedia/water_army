@@ -1,0 +1,18 @@
+root
+lrwx------ 1 system graphics 64 2026-10-20 15:48 10 -> /dev/dri/renderD128
+lrwx------ 1 system graphics 64 2026-10-20 15:48 13 -> /dev/dri/renderD128
+lrwx------ 1 system graphics 64 2026-10-20 15:48 14 -> /dev/dri/renderD128
+lrwx------ 1 system graphics 64 2026-10-20 15:48 15 -> /dev/dri/renderD128
+lrwx------ 1 system graphics 64 2026-10-20 15:48 7 -> /dev/dri/renderD128
+lrwx------ 1 system graphics 64 2026-10-20 15:48 8 -> /dev/dri/renderD128
+lrwx------ 1 system graphics 64 2026-10-20 15:48 9 -> /dev/dri/renderD128
+---
+lrwx------ 1 gpu_service graphics 64 2026-10-20 16:03 0 -> /dev/null
+lrwx------ 1 gpu_service graphics 64 2026-10-20 16:03 1 -> /dev/null
+lrwx------ 1 gpu_service graphics 64 2026-10-20 16:03 2 -> /dev/null
+lrwx------ 1 gpu_service graphics 64 2026-10-20 15:48 3 -> anon_inode:bpf-prog
+lrwx------ 1 gpu_service graphics 64 2026-10-20 15:48 4 -> /dev/binder
+lrwx------ 1 gpu_service graphics 64 2026-10-20 15:48 5 -> anon_inode:bpf-map
+lrwx------ 1 gpu_service graphics 64 2026-10-20 15:48 6 -> anon_inode:bpf-map
+l-wx------ 1 gpu_service graphics 64 2026-10-20 15:48 7 -> /sys/kernel/tracing/trace_marker
+lrwx------ 1 gpu_service graphics 64 2026-10-20 15:48 9 -> socket:[15463180]

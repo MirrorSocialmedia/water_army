@@ -1,0 +1,40 @@
+10-20 15:48:35.699   181   181 D nativeloader: InitDefaultPublicLibraries for_preload=0: libandroid.so:libaaudio.so:libamidi.so:libbinder_ndk.so:libc.so:libcamera2ndk.so:libclang_rt.hwasan-aarch64-android.so:libdl.so:libEGL.so:libGLESv1_CM.so:libGLESv2.so:libGLESv3.so:libjnigraphics.so:liblog.so:libmediandk.so:libm.so:libnativewindow.so:libOpenMAXAL.so:libOpenSLES.so:libRS.so:libstdc++.so:libsync.so:libvulkan.so:libwebviewchromium_plat_support.so:libz.so
+10-20 15:48:35.704   181   181 D libEGL  : loaded /vendor/lib64/egl/libEGL_mesa.so
+10-20 15:48:35.704   181   181 D libEGL  : loaded /vendor/lib64/egl/libGLESv1_CM_mesa.so
+10-20 15:48:35.705   181   181 D libEGL  : loaded /vendor/lib64/egl/libGLESv2_mesa.so
+10-20 15:48:36.160   180   180 D nativeloader: InitDefaultPublicLibraries for_preload=0: libandroid.so:libaaudio.so:libamidi.so:libbinder_ndk.so:libc.so:libcamera2ndk.so:libdl.so:libEGL.so:libGLESv1_CM.so:libGLESv2.so:libGLESv3.so:libjnigraphics.so:liblog.so:libmediandk.so:libm.so:libnativewindow.so:libOpenMAXAL.so:libOpenSLES.so:libRS.so:libstdc++.so:libsync.so:libvulkan.so:libwebviewchromium_plat_support.so:libz.so
+10-20 15:48:36.165   180   180 D libEGL  : loaded /vendor/lib/egl/libEGL_mesa.so
+10-20 15:48:36.165   180   180 D libEGL  : loaded /vendor/lib/egl/libGLESv1_CM_mesa.so
+10-20 15:48:36.166   180   180 D libEGL  : loaded /vendor/lib/egl/libGLESv2_mesa.so
+10-20 15:48:39.885   252   439 E WifiActiveModeWarden: Something is wrong, no client mode toggles enabled
+10-20 15:48:39.936   199   199 I Gralloc4: mapper 4.x is not supported
+10-20 15:48:39.936   199   199 W Gralloc3: mapper 3.x is not supported
+10-20 15:48:39.949   575   575 F DEBUG   :       #00 pc 00000000000067dd  /vendor/lib64/hw/gralloc.gbm.so (gralloc_gbm_bo_create+621)
+10-20 15:48:39.949   575   575 F DEBUG   :       #01 pc 00000000000061e6  /vendor/lib64/hw/gralloc.gbm.so
+10-20 15:48:39.949   575   575 F DEBUG   :       #02 pc 00000000000042e7  /vendor/lib64/hw/android.hardware.graphics.allocator@2.0-impl.so (android::hardware::graphics::allocator::V2_0::passthrough::detail::Gralloc0HalImpl<android::hardware::graphics::allocator::V2_0::hal::AllocatorHal>::allocateBuffers(android::hardware::hidl_vec<unsigned int> const&, unsigned int, unsigned int*, std::__1::vector<native_handle const*, std::__1::allocator<native_handle const*> >*)+279) (BuildId: d02cf6b349c5495cd66b7d3399f85bf7)
+10-20 15:48:40.470   593   593 I SurfaceFlinger: Enabling backpressure for GPU composition
+10-20 15:48:40.471   593   593 D RenderEngine: RenderEngine with GLES Backend
+10-20 15:48:40.471   593   593 D libEGL  : loaded /vendor/lib64/egl/libEGL_mesa.so
+10-20 15:48:40.472   593   593 D libEGL  : loaded /vendor/lib64/egl/libGLESv1_CM_mesa.so
+10-20 15:48:40.472   593   593 D libEGL  : loaded /vendor/lib64/egl/libGLESv2_mesa.so
+10-20 15:48:40.473   593   593 W MESA    : Using gralloc header from libdrm/android/gralloc_handle.h.  This is not recommended for new distributions.  Initializing a fallback gralloc as a helper:
+10-20 15:48:40.473   593   593 I MESA    : Using fallback gralloc implementation
+10-20 15:48:40.473   593   593 W EGL-MAIN: failed to open /dev/dri/renderD130: Permission denied
+10-20 15:48:40.473   593   593 W EGL-MAIN: droid_open_device() Failed to open DRM device /dev/dri/renderD130
+10-20 15:48:40.473   593   593 W EGL-MAIN: failed to open /dev/dri/renderD129: Permission denied
+10-20 15:48:40.473   593   593 W EGL-MAIN: droid_open_device() Failed to open DRM device /dev/dri/renderD129
+Build configuration: [sf PRESENT_TIME_OFFSET=0 FORCE_HWC_FOR_RBG_TO_YUV=0 MAX_VIRT_DISPLAY_DIM=0 RUNNING_WITHOUT_SYNC_FRAMEWORK=0 NUM_FRAMEBUFFER_SURFACE_BUFFERS=2]
+Display identification data:
+Display 0 (HWC display 1): no identification data
+DisplayColorSetting: Managed
+Display 0 color modes:
+Sync configuration: [using: EGL_ANDROID_native_fence_sync EGL_KHR_wait_sync]
+    pacesetterDisplayId=0
+    displayPowerTimer=nullopt
+    Pacesetter Display 0
+        GPU missed frame count: 0
+debugDisplayModeSetByBackdoor=false
+app: state=Idle VSyncState={displayId=0, count=450}
+* Layer 0x7487b06108c0 (Display 0 name="Built-in Screen"#1)
+      isSecure=false geomUsesSourceCrop=false geomBufferUsesDisplayInverseTransform=false geomLayerTransform (ROT_0) (IDENTITY)
+      isSecure=false geomUsesSourceCrop=false geomBufferUsesDisplayInverseTransform=false geomLayerTransform (ROT_0) (IDENTITY)

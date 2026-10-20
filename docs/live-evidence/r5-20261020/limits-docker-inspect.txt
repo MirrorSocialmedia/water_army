@@ -1,0 +1,8 @@
+=== R5 resource limits: docker inspect after recreate (2026-10-20 16:17 HKT) ===
+template: matrix-r5-fresh cpuLimit=2 memoryLimitBytes=4294967296 gpuMode=host privileged=true
+
+Privileged=true Memory=4294967296 NanoCpus=2000000000 GPU=[{"Capabilities":[["gpu"]],"Count":-1,"Driver":"nvidia"}]
+
+=== First recreate (before privileged restore) — platform finding ===
+redroid-binder-init: mount binderfs at /mnt/redroid-binder: Operation not permitted (exit 126)
+cause: template had been silently clobbered to privileged=false by the AJV-default PATCH bug (see r5-summary)

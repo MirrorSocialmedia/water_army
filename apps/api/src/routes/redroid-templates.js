@@ -37,11 +37,24 @@ const TEMPLATE_BODY = {
   },
 };
 
+// PATCH must NOT carry create-schema `default` values: AJV applies defaults
+// to absent properties, which would silently clobber current values on a
+// partial update (e.g. PUT {fps:60} would reset gpuMode→swiftshader and
+// privileged→false — live-observed data corruption, R5). Strip them: absent
+// stays absent, and updateTemplate's `?? current` merge then preserves it.
+const stripDefaults = (props) =>
+  Object.fromEntries(
+    Object.entries(props).map(([k, v]) => {
+      const { default: _d, ...rest } = v;
+      return [k, rest];
+    }),
+  );
+
 const TEMPLATE_PATCH_BODY = {
   type: 'object',
   additionalProperties: false,
   minProperties: 1,
-  properties: { ...TEMPLATE_BODY.properties },
+  properties: stripDefaults(TEMPLATE_BODY.properties),
 };
 
 export function redroidTemplateRoutes(app) {
