@@ -9,6 +9,8 @@ import {
   zoneBadge,
   deviceActionsForState,
   adbPortLabel,
+  netStateBadge,
+  netCheckBadge,
 } from '../components/redroid-utils';
 
 /**
@@ -86,6 +88,22 @@ export function DeviceDetail({ deviceId }) {
     }
   }
 
+  // R4 (MD §6.3): manual intervention for the network recovery policy.
+  // Allowed by the API only from FAILED/BLOCKED/DEGRADED; the attempt still
+  // ends in VERIFYING + canary (never a blind HEALTHY).
+  async function runNetworkRetry() {
+    setErrors((m) => ({ ...m, netRetry: null }));
+    setBusy((m) => ({ ...m, netRetry: true }));
+    try {
+      await api.post(`/api/devices/redroid/${encodeURIComponent(deviceId)}/proxy/retry`);
+      detail.reload();
+    } catch (err) {
+      setErrors((m) => ({ ...m, netRetry: `${err.code ?? 'ERROR'} — ${err.message}` }));
+    } finally {
+      setBusy((m) => ({ ...m, netRetry: false }));
+    }
+  }
+
   async function fetchLogcat() {
     setLogcatLoading(true);
     setLogcatError(null);
@@ -115,6 +133,10 @@ export function DeviceDetail({ deviceId }) {
 
   const acts = device ? deviceActionsForState(device.containerState) : null;
   const zones = diag?.diagnostics ?? null;
+  // R4: the authoritative network payload (R3 state machine projection) —
+  // the ONLY source for everything in the Network card.
+  const net = device?.proxy?.network ?? null;
+  const netBadge = netStateBadge(net);
 
   return (
     <div className="stack">
@@ -152,6 +174,68 @@ export function DeviceDetail({ deviceId }) {
                   <dt>GPU health</dt><dd><span className={`pill ${gpuStatusBadge(device.gpuStatus).cls}`}>{gpuStatusBadge(device.gpuStatus).label}</span></dd>
                 </dl>
               </div>
+            </div>
+
+            {/* ------- R4 (MD §6.3): authoritative network state card -------
+                The R3 state machine is the ONLY network truth. Everything
+                here is TEXT (state names, not just colours); a stale check
+                is shown as STALE and treated as unhealthy; "recovering"
+                (VERIFYING) is never rendered as the old green badge. The
+                dispatch line mirrors the worker gate (networkReady) so the
+                console and the task dispatcher can never disagree. */}
+            <div className="card">
+              <div className="card-head">
+                <h3>Network / egress (fail-closed)</h3>
+                {net ? <span className={`pill ${netBadge.cls}`}>{netBadge.label}</span> : <span className="pill">no egress proxy bound</span>}
+              </div>
+              {net ? (
+                <div className="net-card">
+                  <dl className="kv">
+                    <dt>State (authoritative)</dt>
+                    <dd className="mono">{net.state}</dd>
+                    <dt>Worker dispatch gate</dt>
+                    <dd>
+                      <span className={`pill ${netBadge.dispatch === 'ALLOWED' ? 'pill-up' : 'pill-down'}`}>
+                        {netBadge.dispatch === 'ALLOWED' ? 'ALLOWED (networkReady)' : 'BLOCKED (not usable for network tasks)'}
+                      </span>
+                    </dd>
+                    <dt>Last check</dt>
+                    <dd title={net.checkedAt ?? 'never'}>{net.checkedAt ? `${timeAgo(net.checkedAt)} (${formatDateTime(net.checkedAt)})` : 'never'}</dd>
+                    <dt>Last success</dt>
+                    <dd title={net.lastSuccessAt ?? 'never'}>{net.lastSuccessAt ? `${timeAgo(net.lastSuccessAt)} (${formatDateTime(net.lastSuccessAt)})` : 'never'}</dd>
+                    <dt>Consecutive failures</dt><dd className="mono">{net.consecutiveFailures}</dd>
+                    <dt>Auto recoveries</dt><dd className="mono">{net.recoveries}</dd>
+                    {net.nextRecoveryAt ? <><dt>Next auto attempt</dt><dd className="mono" title={net.nextRecoveryAt}>{formatDateTime(net.nextRecoveryAt)}</dd></> : null}
+                    {net.recoveryLock ? <><dt>Recovery lock</dt><dd>{net.recoveryLock.held ? `held — until ${formatDateTime(net.recoveryLock.until)}` : 'released (expired)'}</dd></> : null}
+                    <dt>Checks (last pass)</dt>
+                    <dd>
+                      <span className="net-checks">
+                        <span className="net-check"><span className="muted">binary</span> <span className={`pill ${netCheckBadge(net.checks?.binary).cls}`}>{netCheckBadge(net.checks?.binary).label}</span></span>
+                        <span className="net-check"><span className="muted">process</span> <span className={`pill ${netCheckBadge(net.checks?.process).cls}`}>{netCheckBadge(net.checks?.process).label}</span></span>
+                        <span className="net-check"><span className="muted">interface</span> <span className={`pill ${netCheckBadge(net.checks?.interface).cls}`}>{netCheckBadge(net.checks?.interface).label}</span></span>
+                        <span className="net-check"><span className="muted">routePolicy</span> <span className={`pill ${netCheckBadge(net.checks?.routePolicy).cls}`}>{netCheckBadge(net.checks?.routePolicy).label}</span></span>
+                        <span className="net-check"><span className="muted">tcpCanary</span> <span className={`pill ${netCheckBadge(net.checks?.tcpCanary).cls}`}>{netCheckBadge(net.checks?.tcpCanary).label}</span></span>
+                      </span>
+                    </dd>
+                    {net.lastError ? <>
+                      <dt>Last error</dt>
+                      <dd className="mono">{net.lastError.code}{net.lastError.detail ? ` — ${net.lastError.detail}` : ''} {net.lastError.at ? `(at ${formatDateTime(net.lastError.at)})` : ''}</dd>
+                    </> : null}
+                  </dl>
+                  {net.stale ? <p className="pf-warn">STALE: the last health check is older than the freshness window — this device is treated as UNHEALTHY until a new check passes.</p> : null}
+                  {net.manualIntervention ? <p className="pf-warn">Manual intervention is required — auto recovery is exhausted for this failure episode.</p> : null}
+                  {canWrite && ['FAILED', 'BLOCKED', 'DEGRADED'].includes(String(net.state).toUpperCase()) ? (
+                    <div className="toolbar-group">
+                      <button className="btn" onClick={runNetworkRetry} disabled={busy.netRetry}>
+                        {busy.netRetry ? 'Retrying…' : 'Manual network retry (resets episode + forced attempt)'}
+                      </button>
+                      <span className="muted">The attempt still ends in VERIFYING + canary — never a blind green.</span>
+                    </div>
+                  ) : null}
+                </div>
+              ) : (
+                <p className="muted">This device has no egress proxy bound — there is no network state to display (container-only).</p>
+              )}
             </div>
 
             {canWrite ? (

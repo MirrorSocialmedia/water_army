@@ -92,6 +92,10 @@ h2 { font-size: 15px; margin: 0 0 10px; }
 .status-ok { color: var(--ok); }
 .status-degraded { color: var(--warn); }
 
+/* R4: network card check row */
+.net-checks { display: inline-flex; flex-wrap: wrap; gap: 10px; }
+.net-check { display: inline-flex; align-items: center; gap: 4px; }
+
 /* --- tables --- */
 .list-table { width: 100%; border-collapse: collapse; margin: 12px 0; }
 .list-table th, .list-table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }

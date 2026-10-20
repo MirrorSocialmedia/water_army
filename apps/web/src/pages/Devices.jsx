@@ -6,6 +6,7 @@ import { timeAgo, stateBadgeClass } from '../components/container-utils';
 import {
   gpuStatusBadge,
   adbStateBadge,
+  netStateBadge,
   deviceActionsForState,
   adbPortLabel,
 } from '../components/redroid-utils';
@@ -176,6 +177,7 @@ export function Devices() {
                 <th>Android</th>
                 <th>ADB (localhost only)</th>
                 <th>Container</th>
+                <th>Network (fail-closed)</th>
                 <th>ADB state</th>
                 <th>Resolution</th>
                 <th>DPI</th>
@@ -201,6 +203,9 @@ export function Devices() {
                     <td>{item.androidVersion}</td>
                     <td className="mono" title="ADB is published on 127.0.0.1 only — never public">{adbPortLabel(item.adbPort, item.adbBind)}</td>
                     <td><span className={`pill state-badge ${stateBadgeClass(item.containerState)}`}>{item.containerState}</span></td>
+                    <td title={item.proxy?.network ? `state=${item.proxy.network.state} · checked ${item.proxy.network.checkedAt ?? 'never'} · ${item.proxy.network.stale ? 'STALE (treated as unhealthy)' : 'fresh'}` : 'no egress proxy bound'}>
+                      {(() => { const nb = netStateBadge(item.proxy?.network ?? null); return <span className={`pill ${nb.cls}`}>{nb.label}</span>; })()}
+                    </td>
                     <td><span className={`pill ${adb.cls}`}>{adb.label}</span></td>
                     <td className="mono">{item.width}×{item.height}</td>
                     <td className="mono">{item.dpi}</td>
