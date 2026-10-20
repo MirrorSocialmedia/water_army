@@ -287,7 +287,12 @@ export function buildGostContainerBody({ deviceName, gostPort, proxyUrl }) {
   return {
     Image: GOST_IMAGE,
     ExposedPorts: { [`${GOST_LISTEN_PORT}/tcp`]: {} },
-    Cmd: ['start', '-L', `socks5://:${GOST_LISTEN_PORT}`, '-F', p.raw],
+    // 2026-10-20 R3 live-found (container exited 73ms with fatal
+    // 'Config File "gost" Not Found'): the pinned image's ENTRYPOINT is
+    // ["/bin/gost"] — the old extra 'start' arg was parsed by the gost CLI as
+    // a CONFIG FILE NAME, not a subcommand. Correct invocation (verified
+    // against the pinned digest): gost -L socks5://:1080 -F <upstream>.
+    Cmd: ['-L', `socks5://:${GOST_LISTEN_PORT}`, '-F', p.raw],
     Env: [],
     Labels: {
       'app.managed': 'true',

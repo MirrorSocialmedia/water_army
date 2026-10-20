@@ -115,7 +115,9 @@ test('stageb proxy: buildGostContainerBody — pinned image, 172.17.0.1 bind, em
   assert.equal(body.Image, GOST_IMAGE);
   assert.match(GOST_IMAGE, /^gogost\/gost@sha256:[a-f0-9]{64}$/);
   assert.deepEqual(body.Env, []);
-  assert.deepEqual(body.Cmd, ['start', '-L', `socks5://:${GOST_LISTEN_PORT}`, '-F', PROXY_A]);
+  // R3 live-found 2026-10-20: no 'start' — the image ENTRYPOINT is
+  // ["/bin/gost"]; 'start' was parsed as a config-file name (fatal).
+  assert.deepEqual(body.Cmd, ['-L', `socks5://:${GOST_LISTEN_PORT}`, '-F', PROXY_A]);
   assert.deepEqual(body.HostConfig.NetworkMode, 'bridge');
   assert.deepEqual(body.HostConfig.PortBindings, {
     [`${GOST_LISTEN_PORT}/tcp`]: [{ HostIP: GOST_HOST_BIND, HostPort: '20082' }],
@@ -278,7 +280,7 @@ test('stageb proxy: device create inherits template proxy — gost up + tunnel p
   assert.equal(gostCreates.length, 1, 'exactly one gost container');
   assert.equal(gostCreates[0].cfg._query.name, 'redroid-matrix-b-gost-redroid-p1');
   assert.equal(gostCreates[0].cfg._body.Image, GOST_IMAGE);
-  assert.deepEqual(gostCreates[0].cfg._body.Cmd, ['start', '-L', `socks5://:${GOST_LISTEN_PORT}`, '-F', PROXY_A]);
+  assert.deepEqual(gostCreates[0].cfg._body.Cmd, ['-L', `socks5://:${GOST_LISTEN_PORT}`, '-F', PROXY_A]);
   assert.deepEqual(gostCreates[0].cfg._body.Env, []);
   const started = redroidMock.docker.client.__calls.filter((c) => c.method === 'start');
   assert.ok(started.length >= 2, 'redroid + gost containers started');
@@ -313,7 +315,7 @@ test('stageb proxy: device-level proxyUrl override wins over template', async (t
   assert.equal(res.statusCode, 201, res.body);
   const gostCreates = redroidMock.docker.client.__calls.filter((c) => c.cfg?._body?.Labels?.['app.kind'] === 'redroid-gost');
   assert.equal(gostCreates.length, 1);
-  assert.deepEqual(gostCreates[0].cfg._body.Cmd, ['start', '-L', `socks5://:${GOST_LISTEN_PORT}`, '-F', PROXY_B], 'override URL must be the forward target');
+  assert.deepEqual(gostCreates[0].cfg._body.Cmd, ['-L', `socks5://:${GOST_LISTEN_PORT}`, '-F', PROXY_B], 'override URL must be the forward target');
   assert.ok(!res.body.includes(CRED), 'credentials leaked (override test)');
   await waitProxyState(app, cookies.operator, 'redroid-p2', 'running');
 });
