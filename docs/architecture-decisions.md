@@ -689,3 +689,129 @@ ADR §13.6 話明 MVP 未強制執行 → P6 實裝（唔 defer）：
 5. **gen 交接**（P6 實際經歷：gen1 死喺 threat-model 編集中）：接手第一步 = 核舊 session
    mtime（防鬼活）→ `git status` → 全測 → commit WIP → **push**（relay 保命：未 push = 冇）
    → 先繼續新工作。
+
+## 16. 網絡修復鏈（R0–R6，2026-10-19/21）架構決定 — 全部有 test/live 證據
+
+> 施工 MD = `water_army_repair_*.md`（P0 Phases 0–6）。逐 phase 證據：
+> `docs/audits/repair-baseline.md`（R0）/ `tcp-transport-investigation.md`（R2）/
+> `fail-closed-validation.md`（R3/R4）/ `redroid-host-validation.md`（R5）/
+> `r4-state-sources.md`（R4 狀態盤點）。
+
+### 16.1 健康狀態單一權威 = `Device.netState`（7 狀態機）
+`STOPPED/STARTING/VERIFYING/HEALTHY/DEGRADED/BLOCKED/FAILED`（`redroid-health.js`
+pure state machine）。**HEALTHY 唯一入口 = VERIFYING + fresh 雙向 TCP canary
+PASS 證據**（`isCanaryPassEvidence` 結構校驗 — 無證據 = 轉移拒 = no blind
+HEALTHY）。process alive / DNS OK 單獨唔夠（hermetic §6.4-1/2 實錚）；stale
+（> `REDROID_HEALTH_STALE_MS` 60s）按不健康處理。Legacy `proxy.state` 降級為
+**derived 投影**（保守映射、唔做輸入）— 根因：R0 盤點發現多邊界各自判斷
+（API/worker/UI/DB）= 假 HEALTHY 結構性來源。審計：每次轉移落 audit row
+（前/新狀態、原因、時間、source watchdog|manual|provision）。
+
+### 16.2 Watchdog + fail-closed 紀律（唔係「重試到成功」）
+獨立 sweep（`REDROID_HEALTH_POLL_MS` 30s）查 control plane（container/process/
+tun0/table-100/rule-5000/effective route）+ data plane（nonce+sha256 雙向
+canary）。definite protection loss（process dead / interface missing / route
+loss / proxy leg dead）= **立即 BLOCKED**（唔候 threshold）；soft fail =
+consecutiveFailures → DEGRADED(1) → BLOCKED(`REDROID_CANARY_FAIL_THRESHOLD` 2)。
+Recovery 紀律：**DB lease 單飛 lock**（跨 crash，contention = WAIT 唔係第二
+recovery）+ **persisted backoff anchor**（每個 attempt 含 #1 都等過錨 — 唔 spin）
++ 每 episode `REDROID_RECOVERY_MAX_RETRIES` 3 次 → 超限 **FAILED +
+manualIntervention**（manual door `POST /proxy/retry`）。stall signature
+（process alive + canary dead = R2 形狀）= 小預算（1 次 re-provision 即 manual —
+R2 實錚 re-provision 對佢無效）。恢復後**必須重走 VERIFYING + 全套 canary**
+（transition table 無 BLOCKED→HEALTHY 直達邊）。Live 實錚：kill -9 → BLOCKED
++2s；9 episodes 全部 exactly-one attempt（`fail-closed-validation.md` §2）。
+
+### 16.3 Binary 可重現性契約（tun2socks）
+Single source = `docker/redroid-matrix/tun2socks.env`（VERSION + inner-binary
+SHA256；URL derived — floating `latest` 結構性唔可能；fetch script 拒
+`latest` URL）。sha256/arch 唔符 = **build fail-fast**。`redroid-service.js`
+嘅 `TUN2SOCKS_PIN` 同 env 檔由 `redroid-t2s-pin.test.js` 靜態掃描鎖同步
+（drift = test 爆）。**CI 每次 push 真重建 image + smoke-assert 兩個落點
+（canonical `/data/local/tmp/tun2socks` + fallback `/usr/local/bin/tun2socks`）
+sha256 == pin**（R7 CI `images-redroid` job）。
+
+### 16.4 gost pin 修復（R3 live 發現嘅 production bug — a34baad）
+Stage B（ffe800f）起 **所有 provisioned gost 容器 ~73ms 內 Exited(1)**：
+pin 咗嘅 `gogost/gost` image ENTRYPOINT = `["/bin/gost"]`，舊 Cmd 多咗
+`start` arg → gost CLI 當 config filename 解析 → `fatal: Config File "gost"
+Not Found`。**mock E2E 喺 docker 層 mock 咗所以冇捉到** — 教訓：pin 第三方
+image 要 pin ENTRYPOINT 契約（fixture pin test 已加）；「mock 綠」唔等於
+「runtime 綠」。
+
+### 16.5 Boot-timeout 校準（2400s）+ poll knob wiring（R7）
+R5 live：真 fresh cold boot **~24 min**（23:17:24 → 23:41 boot_completed=1；
+R6 記錄範圍 14–20 min + margin）；RECREATE ≈ cold boot。舊 default 600s 會
+hard-fail 健康但慢嘅 boot（R3 live 實錚事故）→ `REDROID_TUNNEL_BOOT_TIMEOUT_MS`
+default 校準 **2400s**（40 min = 2× 最差實測）。R7（handoff #1）：
+`REDROID_TUNNEL_POLL_MS` 同類 unmapped-knob 缺陷（service 讀
+`config?.redroidTunnelPollMs ?? 5000` 但 config.js 冇 map）→ **wire 晒**
+（default 5000 行為一致 + optInt fail-fast + test）。
+
+### 16.6 TCP data-plane 定位（誠實邊界 — 唔吹、唔瞞）
+R2 spike 拓撲（t2s 第一跳 = **裸** mock relay）：SYN 過、payload 唔過，14+
+flows 可重現（`docs/audits/r2-evidence/`）。R3/R4 live（**產品拓撲** = t2s →
+**per-device gost 容器** → upstream）：雙向 TCP canary（nonce+sha256）**PASS**
+（~1s）— spike stall 喺產品鏈**未重現**。機制裁定 **open**（R2 §8 restapi
+instrument 未做；host runtime = runc 唔改 t2s **內嵌** gVisor netstack 事實 —
+R3「mechanism-level wrong」口徑已被 R7 addendum 修正）。產品**唔存在**裸
+第一跳配置（gost 永遠第一跳）→ 現行 fleet 無影響；引入非 gost 第一跳 =
+必須重跑 R2 矩陣。常規防線 = 30s watchdog canary（任何回歸 → DEGRADED/
+BLOCKED — 唔會假 HEALTHY）。
+
+### 16.7 模板 PATCH 唔可以 clobber absent 字段（AJV default 陷阱）+ 資源限制
+Live 事故（R5）：partial `PUT /api/redroid/templates/:id`（例 `{fps:60}`）靜默
+reset `gpuMode→swiftshader_indirect` + `privileged→false`（AJV create-schema
+default 套到 absent PATCH field + service merge 寫入）→ recreate 後
+`Privileged=false` → binderfs mount 126。修復：`TEMPLATE_PATCH_BODY` strip
+`default`（absent 保持 absent）+ regression lock
+（`redroid-resource-limits.test.js`）。同 phase：`RedroidTemplate.cpuLimit /
+memoryLimitBytes`（nullable = 無限；migration `20261020235900` additive）+
+live `docker inspect` 實錚（Memory/NanoCpus/DeviceRequests）。
+
+### 16.8 adbd recreate-stall：decide-and-document（R6 決定、R7 入文檔）
+delete+recreate 後 framework 完全 boot 但 adbd 停答 host protocol（recreate
+特有；stop/start 唔中招；產品診斷 honest：`running + adbState=offline`，無假
+陽性）。image/內核層 root cause 未定位 → **記錄為已知限制 + 追索方向**
+（redroid image adbd auth relay on recreate / binder transport 重掛時序），
+唔喺修復鏈範圍定位到；backlog 另開單（`redroid-host-validation.md` §5）。
+
+## 17. R7 架構決定（2026-10-21 — CI、release gate、decide-and-defer）
+
+### 17.1 GitHub Actions CI 採用（repo 之前無 CI — MD §9.2）
+5 jobs 全綠先算綠：test（`npm ci` lockfile 一致安裝 + 全 hermetic suite
+Node 24 + compose config validation）/ web-build（vite prod + artifact）/
+images-app（api+web+worker docker build）/ images-redroid（R1 pin 每次 push
+真驗）/ secrets（gitleaks 全 history + tracked-.env check）。**誠實邊界**：
+真 Redroid/GPU + Playwright E2E 唔可以喺 GitHub-hosted runner（runc VM，無
+binder/GPU/live stack）跑 — workflow 明文標記，CI 綠**唔包含**呢兩項；佢哋嘅
+證據 = `docs/live-evidence/`（manual，本 host）。lint/typecheck = N/A by
+design（plain ESM JS，無 eslint/biome/TS）；static guard 喺 suite 內
+（patch-default-guard、t2s-pin）。
+
+### 17.2 Real-redis test 喺 CI 真跑（skip 唔好當覆蓋 — ADR §15.8 rule 3 升級）
+`SCHEDULES_REDIS_URL` 設咗 job-level service（redis:7.4.5）→ gated test
+喺 CI **真跑**（627/627/0/0 — 零 skip）。hermetic-only 嘅 1 skip 只存在於
+無 redis 嘅本地 quick run；CI 永遠跑真。
+
+### 17.3 Hermetic config test 規則（第一次 CI run 捉到嘅 latent 缺陷）
+`loadConfig(env)` 會 merge `process.env` **並且** load `CWD/.env` — dev host
+repo root 嘅 untracked operator `.env`（真 DATABASE_URL/REDIS_URL）會**靜態
+mask** 任何 env 隔離缺陷（R6 嘅 config test 喺 clean checkout 全紅）。規則：
+config test 一律行 `cfg()` helper（pinned fake secrets ≥32 char +
+`envFile: false`）— 任何機器、任何 shell 環境都 deterministic。
+
+### 17.4 Kernel 層 fail-open 殘留：decide-and-defer（唔實裝 iptables 兜底）
+平台層 fail-closed 已實錚（16.1/16.2）；殘留 = tunnel 死後 Android app
+kernel 層 egress 可經 eth0 直連（routing shadow 消失）。**唔喺 R7 實裝**
+netns DROP：Android netd 擁有容器 netns 嘅 iptables 規則（產品級 default-DROP
+會同 netd 互踩）+ R2 已實錚容器 iptables build 係阉割版（無 nat 表/
+xt_REDIRECT）— 需要獨立 spike（netd 行為實測）+ ADR + 安全評審 = 另開 P0
+單。過渡 = **operator 守則**（runbook：BLOCKED/FAILED 期間視設備 egress 為
+untrusted；需硬隔離 = host 層 firewall 限 redroid 容器 egress 只過 proxy
+leg）+ README K12 文檔化。
+
+### 17.5 Release gate 紀律（MD §9.3 八項）
+`docs/audits/release-gate-r7.md`：八項逐項 verdict + 證據引用（只收
+PASS/FAIL/BLOCKED；誠實註唔影響判定但要寫出邊界）。release 聲明 = 證據鏈
+（4 審計檔 + live-evidence + CI run 連結），唔係自我宣稱。

@@ -300,9 +300,9 @@ sg docker -c "docker exec <dev> sh -c 'ip addr show tun0; ip route show table 10
 | `proxyState=error`，create 失敗 | `docker inspect redroid-matrix-b-gost-<dev>` / api log | 端口撞（DB unique 已防）→ 重試（會重分配）；image pull 失敗 → 檢查 host 網絡 |
 | `proxyState=error` + view `proxy.binaryState=missing|invalid` | view 已有 `binaryState` + `binaryVersion`；device 內核 `/data/local/tmp/tun2socks`（存在？0755？`--version` 得唔得？） | image 唔係 R1 契約 build 或 binary 被改壞 → 用 `docker/redroid-matrix/Dockerfile` 重新 build wrapper image（pin 唔變）再重建 device。臨時手動補 binary 唔鼓勵 — 部署契約 = image 內 binary（§10.1） |
 | `proxyState=running` 但 device 冇出域 | device 內 `docker exec <dev> sh -c 'tail -20 /data/local/tmp/tun2socks.log'` | t2s 死咗 → 重跑 start action（會重 provision）；log 見 `connection reset by peer`（dial 172.17.0.1:<gostPort>）→ **table 100 缺 gateway exception**（見 10.5 #2）— 重跑 provision script 會重建 |
-| `proxyState=error` + netState `FAILED` + `netLastErrorCode=TUNNEL_START_TIMEOUT` / api 曾回 `REDROID_TUNNEL_BOOT_TIMEOUT`(504) | view `proxy.network.lastErrorDetail`（「boot_completed not seen within N s」）＋ host adb 親驗 `getprop sys.boot_completed` | boot 慢（cold/recreate 常 14–24min）：先確認 device 仲喺 boot（container running、`sys.boot_completed` 尚未 =1）→ 唔使做嘢，重跑 start action 再 provision（boot 完即好）；真係 boot 唔到（卡 init / GPU 掛）→ 睇 `docker logs <dev>` 頭 13 秒 crash 口徑（§10.2）；快嘅 host 可以調低 `REDROID_TUNNEL_BOOT_TIMEOUT_MS` |
+| `proxyState=error` + netState `FAILED` + `netLastErrorCode=TUNNEL_START_TIMEOUT` / api 曾回 `REDROID_TUNNEL_BOOT_TIMEOUT`(504) | view `proxy.network.lastErrorDetail`（「boot_completed not seen within N s」）＋ host adb 親驗 `getprop sys.boot_completed` | boot 慢（cold/recreate 常 14–24min）：先確認 device 仲喺 boot（container running、`sys.boot_completed` 尚未 =1）→ 唔使做嘢，重跑 start action 再 provision（boot 完即好）；真係 boot 唔到（卡 init / GPU 掛）→ 睇 `docker logs <dev>` 頭 13 秒 crash 口徑（§10.2）；快嘅 host 可以調低 `REDROID_TUNNEL_BOOT_TIMEOUT_MS`（poll 節奏 = `REDROID_TUNNEL_POLL_MS`，default 5s，R7 起可調） |
 | t2s log 見 `TUNSETIFF` 錯 | `ip link show` 睇 tun0 有冇殘留 | provision script 本身冪等（pkill + del 先）→ 直接重跑 start |
-| tunnel 死咗之後流量「似乎 OK」 | `ip route get 8.8.8.8` | **fail-open 行為**：tun0 消失 → 路由影消失 → 直連漏出。**安全上唔等於阻断**；監控 proxyState +（跟進項）fail-closed monitor（iptables 兜底，另開單） |
+| tunnel 死咗之後流量「似乎 OK」 | `ip route get 8.8.8.8` + `GET /api/redroid/devices/:id`（`proxy.network.netState`） | **平台層已 fail-closed（R3/R4 實錚）**：watchdog 即刻將 `netState` 置 BLOCKED（definite loss 唔候 threshold）→ worker 唔再派網絡任務、UI 顯示 BLOCKED、audit 有記錄。**kernel 層殘留**（Android app 自己開嘅 socket 可經 eth0 直連）= 已 decide-and-document（§10.9 + README K12）— 見 §10.9 operator 守則 |
 
 ### 10.4 Teardown（單 device）
 
@@ -318,7 +318,7 @@ sg docker -c "docker rm -f redroid-matrix-b-gost-<devName>"
 
 1. **Android netd 間中 block RTM_NEWLINK**（container netns 內 `ip link add` → EOPNOTSUPP；ioctl TUNSETIFF 一直 OK）。provision script 已用 netd-safe 序列：`ip link add` 係 best-effort，tun2socks 自己經 ioctl 建 tun0（兩路都實錚過）。如果 netd 狀態變化令 `ip link add` 又得返，都唔使改 code（兩路兼容）。
 2. **gateway exception 唔可以省**：table 100 冇 `172.17.0.1 dev eth0 scope link` 時，gVisor→gost handshake hairpin 返 tun0 → RST → **proxy 零流量但 routing 睇落「正常」**（dev2 實測事故；`ip route get 8.8.8.8` 照常顯示 via tun0）。
-3. **TCP-over-TUN 平台限制（升級項，未解）**：tun2socks v2.7.0 內置 gVisor — UDP/DNS 全通，**TCP payload 唔過**（SYN 過、payload 唔過，mock sink 證實）。DNS canary = 出口驗證基線；TCP 級證明要等 gVisor 替換（rebuild tun2socks 唔用 gVisor，另開單）。
+3. **TCP-over-TUN：產品鏈已成立、spike 拓撲根因 open（R7 修訂口徑 — 2026-10-21）**：R3/R4 live（真鏈 device→t2s→**gost 容器**→upstream）雙向 TCP canary（nonce+sha256 回顯）**PASS** + watchdog 30s 常規 gate（HEALTHY 唯一入口 = fresh canary PASS）— 見 `docs/audits/fail-closed-validation.md` + `docs/live-evidence/r3|r4-20261020/`。⚠️ 邊界：R2 spike 拓撲（t2s 第一跳 = **裸** mock relay，無 gost）實錚過 forward-stall（SYN 過 payload 唔過），根因未完全裁定（`docs/audits/tcp-transport-investigation.md` R7 addendum §C）— 產品唔存在裸第一跳配置（gost 永遠第一跳）→ 現行 fleet 無影響；**引入任何非 gost 第一跳拓撲 = 必須先重跑 R2 八層矩陣**（README K1）。
 4. **mock 用舊 code 起過 → 靜默 RST**：`tests/mocks/mock-socks5.js` 修過 UDP ASSOCIATE / gVisor relay framing（commit `18f8139`）；起 mock 前確認系修後版本，否則 device 端只見到 `connection reset by peer` 而 mock 零記錄。
 5. **rule 5000 要兜底**：netd 只為佢「註冊過」嘅 TUN 建 rule 5000；ioctl 建嘅 TUN netd 唔知 → script 有 EEXIST-safe 兜底（`ip rule add priority 5000 from all lookup 100`）。
 
@@ -327,6 +327,7 @@ sg docker -c "docker rm -f redroid-matrix-b-gost-<devName>"
 - dev1(172.17.0.3) → mock1(172.17.0.1:20082)：`canary.example` = NOERROR + A 93.184.216.34
 - dev2(172.17.0.4) → mock2(172.17.0.1:20084)：`canary.example` = NOERROR + A 93.184.216.34；`other.example` = NXDOMAIN
 - 各 mock 只見到自己嗰部 device 嘅源 IP（路由隔離成立）。詳細 log / 過程：`logs/redroid-matrix-B-progress.md`。
+- **TCP 級實錚（R3/R4，2026-10-20 — 上列 DNS 實錚之後）**：雙向 TCP payload canary（nonce+sha256 回顯，~1s）行完整真鏈 PASS + kill/canary-down 故障注入全循環（DEGRADED/BLOCKED/recovery → HEALTHY，recovery ledger 9 episodes 全部 exactly-one）— `docs/live-evidence/r3-20261020/summary.md`（時間線）+ `docs/audits/fail-closed-validation.md` §2（全矩陣）。
 
 ### 10.7 adbd recreate stall（R5 live 實測 — 2026-10-20；R6 decide-and-document）
 
@@ -368,3 +369,35 @@ sg docker -c "docker rm -f redroid-matrix-b-gost-<devName>"
 3. 原明文 URL 唔喺手 = 要喺上游重發憑證（同 §3.4 provider 口徑）。
 
 **測試 fixture 紀律（§8.2）**：所有 test 嘅 proxy URL 係假 target（`proxy-a.example` / `10.9.9.9` / `fixture-user:fixture-pass`），零真憑證；`.env` 永唔提交（`.env.example` 只列 program 真讀嘅變數 + 佔位符）。
+
+### 10.9 Kernel 層 fail-open 殘留風險 + operator 守則（R7 decide-and-document — 2026-10-21）
+
+**平台層（已實錚，R3/R4）＝ 有效防線**：tunnel/process/data-plane 任何失效 →
+watchdog 將 `netState` 置 **BLOCKED**（definite loss 立即；soft 路徑 threshold 2）或
+**FAILED**（max retry 3 次後 + manual door）→ worker 網絡任務 gate
+（`networkReady=false`）**唔派發**任何依賴網絡嘅任務；UI 文字 badge + audit row 全透明。
+「设备唔會繼續執行依賴網絡嘅任務」= 平台管嘅任務 — 實錚成立
+（`docs/audits/fail-closed-validation.md`）。
+
+**殘留（誠實項）＝ kernel 層 egress**：tunnel 死 → tun0 消失 → routing shadow
+消失 → **Android app 自己開嘅 socket**（平台 task 以外）可以經 eth0（docker
+bridge）直連出去 — 平台層 BLOCKED 唔阻斷呢條路。窗口 = 失效到 watchdog 下一次
+tick（≤ `REDROID_HEALTH_POLL_MS` 30s；definite loss 下實測 +2s 已 BLOCKED）。
+
+**點解唔喺修復鏈內實裝 iptables 兜底（R7 決定，同 R6 adbd stall 口徑）**：
+1. Android **netd 擁有**容器 netns 嘅 iptables 規則 — 產品級 default-DROP 會同
+   netd 嘅 connectivity 管理互踩（規則被 flush = 假安全）；netd 行為未 spike。
+2. R2 已實錚容器內 iptables build 係阉割版（無 `nat` 表、無 `xt_REDIRECT`）—
+   可用面比想像窄。
+3. 正確做法 = 獨立 spike（netd 互踩實測）→ ADR → 安全評審 → 實裝 — **另開 P0
+   單**（backlog；README K12）。
+
+**Operator 守則（而家生效）**：
+- `netState = BLOCKED/FAILED` 嘅 device = **視其 egress 為 untrusted/unmanaged**：
+  唔好畀佢任何外向功能（webhook 回調、第三方 API 推送等）；需要硬隔離嘅部署，
+  喺 **host 層 firewall**（docker 網絡/ufw/nftables — host 層唔受 netd 影響）限
+  redroid 容器 egress 只准去本 device 嘅 gost 容器（`172.17.0.1:<gostPort>`）+
+  host loopback（ADB）。
+- audit 有完整時間線（每次 netState 轉移 = audit row，source + 原因 + 時間）—
+  事後審計窗口內嘅流量暴露可用 `netLastChangeAt` 收窄。
+- 長期 = 等 P0 單（netns DROP + netd spike）落地。
