@@ -168,7 +168,14 @@ export function loadConfig(env = process.env, opts = {}) {
     // this knob (R3 live-found 2026-10-20: fresh-/data first boot on a loaded
     // host took >14 min — the unmapped 600s default killed healthy boots). A
     // slow-but-healthy boot must not be mistaken for a stuck one.
-    redroidTunnelBootTimeoutMs: optInt(e, 'REDROID_TUNNEL_BOOT_TIMEOUT_MS', 600_000),
+    // R6 calibration (R5 live evidence): a REAL fresh boot took ~24min on the
+    // live host (2026-10-20, 23:17:24 → 23:41 adb 'device' + boot_completed=1;
+    // documented range 14–20min + margin), and a RECREATE boots ≈ cold boot
+    // (R5 finding). The old 600s default hard-failed healthy-but-slow boots
+    // with REDROID_TUNNEL_BOOT_TIMEOUT; the R4 live host already ran
+    // REDROID_TUNNEL_BOOT_TIMEOUT_MS=2400000 via env, so 2400s becomes the
+    // honest default. Fast hosts may lower it via env.
+    redroidTunnelBootTimeoutMs: optInt(e, 'REDROID_TUNNEL_BOOT_TIMEOUT_MS', 2_400_000),
     // Data-plane canary: TCP bidirectional payload probe target. UNCONFIGURED
     // (empty host) = the data plane is unverifiable = the device can never be
     // (stay) HEALTHY (fail-closed — MD §5.3/§5.5).

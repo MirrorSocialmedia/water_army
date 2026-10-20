@@ -279,7 +279,7 @@ stat -c '%U:%G %a' /var/lib/water-army         # node:node 750
   - **pre-provision binary check（fail-closed）**：每次 tunnel provision 前，service 喺 device 內跑 read-only check（存在 → 可執行 → ELF magic → `--version` canary），machine-readable：`BINARY_STATE=missing|ready|invalid|error` + `BINARY_VERSION` / `BINARY_DETAIL`（rc 0/3/4）。missing/invalid → apiCode `BINARY_MISSING` / `BINARY_INVALID`（seam 失敗 = `BINARY_CHECK_ERROR`）+ `proxyState=error`，**device 絕唔會入 proxy `running`**；診斷持久化 + view 暴露 `proxy.binaryState` / `proxy.binaryVersion`（**零憑證**）。
   - **F-B（R1 P0 修復）**：tunnel script 先 **stage 做 file**（base64 → `/data/local/tmp/.t2s-setup.sh` 0700 → `sh <file>`）先執行 — exec seam 嘅 runner cmdline 唔含 script text，in-file `pkill -f "[t]un2socks"` 只會匹配真 daemon。舊 code 嘅 inline script + `pkill -f tun2socks` = **自殺式**（runner 自身被殺 rc=143，隧道永遠 provision 唔到；重現記錄 `docs/audits/repair-baseline.md` §5.4）。
 - 代理 URL 加密存 DB（`proxyUrlEncrypted`，`v1:` 前綴）；API view 只暴露 `hasProxyUrl` / `gostPort` / `proxyState`（`off|provisioning|running|stopped|error`），**永遠唔輸出明文**。
-- tunnel 係 **背景 provision**（等 `sys.boot_completed`，5s poll，10min timeout）；gost 係 **同步**（create 時起，失敗 = rollback 連 device 一齊）。
+- tunnel 係 **背景 provision**（等 `sys.boot_completed`，5s poll，**40min timeout** — knob `REDROID_TUNNEL_BOOT_TIMEOUT_MS`，R6 由 600s 校準到 2400s，因為真實 cold/recreate boot 實測 ~24min，舊 10min default 會把健康但慢嘅 boot 硬 fail 成 `REDROID_TUNNEL_BOOT_TIMEOUT`）；gost 係 **同步**（create 時起，失敗 = rollback 連 device 一齊）。
 
 ### 10.2 正常狀態驗證（host，`sg docker -c`）
 
@@ -300,6 +300,7 @@ sg docker -c "docker exec <dev> sh -c 'ip addr show tun0; ip route show table 10
 | `proxyState=error`，create 失敗 | `docker inspect redroid-matrix-b-gost-<dev>` / api log | 端口撞（DB unique 已防）→ 重試（會重分配）；image pull 失敗 → 檢查 host 網絡 |
 | `proxyState=error` + view `proxy.binaryState=missing|invalid` | view 已有 `binaryState` + `binaryVersion`；device 內核 `/data/local/tmp/tun2socks`（存在？0755？`--version` 得唔得？） | image 唔係 R1 契約 build 或 binary 被改壞 → 用 `docker/redroid-matrix/Dockerfile` 重新 build wrapper image（pin 唔變）再重建 device。臨時手動補 binary 唔鼓勵 — 部署契約 = image 內 binary（§10.1） |
 | `proxyState=running` 但 device 冇出域 | device 內 `docker exec <dev> sh -c 'tail -20 /data/local/tmp/tun2socks.log'` | t2s 死咗 → 重跑 start action（會重 provision）；log 見 `connection reset by peer`（dial 172.17.0.1:<gostPort>）→ **table 100 缺 gateway exception**（見 10.5 #2）— 重跑 provision script 會重建 |
+| `proxyState=error` + netState `FAILED` + `netLastErrorCode=TUNNEL_START_TIMEOUT` / api 曾回 `REDROID_TUNNEL_BOOT_TIMEOUT`(504) | view `proxy.network.lastErrorDetail`（「boot_completed not seen within N s」）＋ host adb 親驗 `getprop sys.boot_completed` | boot 慢（cold/recreate 常 14–24min）：先確認 device 仲喺 boot（container running、`sys.boot_completed` 尚未 =1）→ 唔使做嘢，重跑 start action 再 provision（boot 完即好）；真係 boot 唔到（卡 init / GPU 掛）→ 睇 `docker logs <dev>` 頭 13 秒 crash 口徑（§10.2）；快嘅 host 可以調低 `REDROID_TUNNEL_BOOT_TIMEOUT_MS` |
 | t2s log 見 `TUNSETIFF` 錯 | `ip link show` 睇 tun0 有冇殘留 | provision script 本身冪等（pkill + del 先）→ 直接重跑 start |
 | tunnel 死咗之後流量「似乎 OK」 | `ip route get 8.8.8.8` | **fail-open 行為**：tun0 消失 → 路由影消失 → 直連漏出。**安全上唔等於阻断**；監控 proxyState +（跟進項）fail-closed monitor（iptables 兜底，另開單） |
 

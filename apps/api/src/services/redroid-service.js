@@ -781,7 +781,7 @@ export function createRedroidService({
       maxRetries: Math.max(1, config?.redroidRecoveryMaxRetries ?? 3),
       stallMaxRetries: Math.max(0, config?.redroidRecoveryStallMaxRetries ?? 1),
       lockLeaseMs: config?.redroidRecoveryLockLeaseMs ?? 900_000,
-      startingTimeoutMs: config?.redroidTunnelBootTimeoutMs ?? 600_000,
+      startingTimeoutMs: config?.redroidTunnelBootTimeoutMs ?? 2_400_000,
     };
   }
 
@@ -1411,7 +1411,7 @@ export function createRedroidService({
       if (!mid) return { started: false, reason: 'transition-refused' };
       row = mid;
     }
-    const bootTimeoutMs = config?.redroidTunnelBootTimeoutMs ?? 600_000;
+    const bootTimeoutMs = config?.redroidTunnelBootTimeoutMs ?? 2_400_000;
     const pollMs = config?.redroidTunnelPollMs ?? 5000;
     const deadline = Date.now() + bootTimeoutMs;
     const target = `127.0.0.1:${row.adbPort}`;
