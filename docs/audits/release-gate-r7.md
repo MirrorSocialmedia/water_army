@@ -177,7 +177,7 @@
 |---|-----|------|------|
 | 1 | `redroidTunnelPollMs` 未 map | **WIRE**（`REDROID_TUNNEL_POLL_MS`，default 5000 行為一致） | config.js + .env.example + test（commit `a872fda`）— .env.example 只列程式真讀嘅變數（MD §9.1），文檔一個唔存在嘅 env = 違規 |
 | 2 | tunnel 死 = fail-open 直連恢復（kernel 層） | **decide-and-document（唔實裝 iptables 兜底）**：平台層 fail-closed 已實錚（gate 4）；kernel 層 DROP 規則同 Android netd 互踩風險未 spike，屬另開 P0 單範圍 | `fail-closed-validation.md` §3 邊界段 + `redroid-host-validation.md` §5 + README K12 + runbook operator 守則 + gate 4 誠實註 + backlog |
-| 3 | adbd recreate-stall 根因未定位 | **記錄為已知限制 + 追索方向**（唔使呢段定位到 — 同 R6 口徑） | `redroid-host-validation.md` §5（recreate 特有、非產品回歸、診斷 honest 嘅證據鏈 + 追索方向）+ README K13 + backlog |
+| 3 | adbd recreate-stall 根因未定位 | **記錄為已知限制 + 追索方向**（唔使呢段定位到 — 同 R6 口徑） | `redroid-host-validation.md` §5（recreate 特有、非產品回歸、診斷 honest 嘅證據鏈 + 追索方向）+ README K14 + backlog |
 | 4 | FlowSession 孤兒累積 | **N/A（cross-project 帶入項）**：water_army 無 FlowSession 表（呢項由 clinic-workforce 上下文帶入）；對應物 = `task_run_events` 無 retention（README K4 既有 backlog）— 唔喺 R7 做 DB hygiene（範圍外，另開單） | backlog（README K4 註明） |
 | 5 | `.next` loadManifest race | **保持「重跑即好」口徑入文檔**（N/A 精化）：water_army web = Vite（無 Next.js/.next）；dev manifest race 係跨項目通用 flake 签名 — runbook §5 既有行（「Next/Vite dev manifest race（已知 flake）…重跑即好」）保留 + R7 註明本 repo prod build = vite static（CI 每次 push 真 build — 該路徑無此 flake） | runbook §5（R7 註）+ gate 1（CI web-build 綠） |
 
