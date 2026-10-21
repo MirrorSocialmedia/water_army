@@ -15,7 +15,7 @@
 import crypto from 'node:crypto';
 import Fastify from 'fastify';
 
-import { PINO_REDACT_PATHS, SESSION_COOKIE, API_ERROR } from '@water-army/shared';
+import { PINO_REDACT_PATHS, SESSION_COOKIE, API_ERROR, createLeaseService } from '@water-army/shared';
 
 import { loadConfig } from './config.js';
 import { createDb, closeDb } from './plugins/db.js';
@@ -27,6 +27,7 @@ import { requireRole } from './security/rbac.js';
 import { createServiceAuthHook } from './security/service-auth.js';
 import { createRateLimiter } from './security/rate-limit.js';
 import { createAuditService } from './services/audit.js';
+import { createBatchLifecycleService } from './services/batch-lifecycle-service.js';
 import { createSessionService } from './services/session.js';
 import { createDockerService } from './services/docker-service.js';
 import { createBatchMetricsService } from './services/batch-metrics-service.js';
@@ -47,6 +48,7 @@ import { scheduleNotificationRoutes } from './routes/schedule-notifications.js';
 import { taskDefinitionRoutes } from './routes/task-definitions.js';
 import { dashboardRoutes } from './routes/dashboard.js';
 import { batchMonitorRoutes } from './routes/batch-monitor.js';
+import { batchContainerRoutes } from './routes/batch-containers.js';
 
 /** Public (unauthenticated) route prefixes — everything else may need a session. */
 const PUBLIC_PREFIXES = ['/api/health', '/api/auth/login'];
@@ -67,6 +69,7 @@ function publicPath(url) {
  * @param {object} [opts.batchMetricsFsProbe]  {stat,statfs} (test seam)
  * @param {string} [opts.batchMetricsDiskPath] statfs path override (test seam)
  * @param {object} [opts.batchMetricsLimits]  alert limit overrides (test seam)
+ * @param {object} [opts.batchLifecycleHealthProbe] (host,port,timeoutMs)=>Promise<{healthy,detail,version?}> canned ADB probe (test seam)
  * @returns {Promise<import('fastify').FastifyInstance>}
  */
 export async function buildApp(opts = {}) {
@@ -96,6 +99,22 @@ export async function buildApp(opts = {}) {
 
   const sessions = createSessionService({ db, config });
   const audit = createAuditService({ db, log: app.log });
+
+  // BR-B3 (MD Phase 3, lane A): batch container lifecycle. The API owns the
+  // Docker socket for batch containers (worker never holds it — threat T1);
+  // the S4 worker container adapter reaches this surface via service-token
+  // routes, and B6's UI via session routes. Faults fail closed (MD §9.1).
+  const batchLifecycle = createBatchLifecycleService({
+    db,
+    docker,
+    config,
+    lease: createLeaseService({ db }),
+    audit,
+    log: app.log,
+    // test seam: hermetic suites inject a canned ADB probe (the default is a
+    // real node:net handshake to 127.0.0.1 — no container in the test host).
+    healthProbe: opts.batchLifecycleHealthProbe,
+  });
   const rateLimiter = createRateLimiter({ limit: 5, windowMs: 60_000 });
   const dockerService = createDockerService({ docker, db, config, log: app.log, audit });
 
@@ -194,6 +213,7 @@ export async function buildApp(opts = {}) {
   app.decorate('rateLimiter', rateLimiter);
   app.decorate('requireRole', requireRole);
   app.decorate('dockerService', dockerService);
+  app.decorate('batchLifecycle', batchLifecycle);
   app.decorate('batchMetrics', batchMetrics);
   app.decorate('redroidService', redroidService);
   app.decorate('taskQueue', taskQueue);
@@ -336,6 +356,7 @@ export async function buildApp(opts = {}) {
   taskDefinitionRoutes(app);
   dashboardRoutes(app);
   batchMonitorRoutes(app);
+  batchContainerRoutes(app);
 
   // --- lifecycle ---------------------------------------------------------------
   app.addHook('onClose', async () => {
