@@ -1,0 +1,163 @@
+{
+  "results": [
+    {
+      "id": "C1a",
+      "desc": "operator create run → 202",
+      "expect": 202,
+      "got": 202,
+      "pass": true,
+      "body": "{\"taskRun\":{\"id\":\"7339930a-c0b9-4697-b39d-3662ac800d0d\",\"status\":\"queued\",\"attempt\":1,\"provider\":\"mock\",\"title\":\"r8-c1\",\"mode\":\"analysis_only\",\"promptPreview\":\"R8 regression C1\",\"tools\":null,\"timeoutM"
+    },
+    {
+      "id": "C1b",
+      "desc": "run1 → succeeded",
+      "expect": "succeeded",
+      "got": "succeeded",
+      "pass": true
+    },
+    {
+      "id": "C1c",
+      "desc": "result recorded (output content present)",
+      "expect": true,
+      "got": true,
+      "pass": true,
+      "snip": "{\"run\":{\"id\":\"7339930a-c0b9-4697-b39d-3662ac800d0d\",\"status\":\"succeeded\",\"attempt\":1,\"provider\":\"mock\",\"title\":\"r8-c1\",\"mode\":\"analysis_only\",\"promptPreview\":\"R8 regression C1\",\"tools\":null,\"timeoutMs"
+    },
+    {
+      "id": "C1d",
+      "desc": "run events readable → 200",
+      "expect": 200,
+      "got": 200,
+      "pass": true,
+      "body": "retry: 1500\n\nevent: run_snapshot\ndata: {\"id\":\"7339930a-c0b9-4697-b39d-3662ac800d0d\",\"status\":\"succeeded\",\"attempt\":1,\"pr"
+    },
+    {
+      "id": "C2a",
+      "desc": "first create with idem key → 202",
+      "expect": 202,
+      "got": 202,
+      "pass": true
+    },
+    {
+      "id": "C2a2",
+      "desc": "first create replay=false",
+      "expect": false,
+      "got": false,
+      "pass": true,
+      "replay": false
+    },
+    {
+      "id": "C2b",
+      "desc": "dup idem key → 202 with replay=true",
+      "expect": "replay",
+      "got": "replay",
+      "pass": true,
+      "body": "{\"taskRun\":{\"id\":\"d091dcfe-f7a3-466f-b45e-96bae7e4f07a\",\"status\":\"running\",\"attempt\":1,\"provider\":\"mock\",\"title\":\"r8-c2-first\",\"mode\":\"analysis_only\","
+    },
+    {
+      "id": "C2c",
+      "desc": "replay returns same runId",
+      "expect": "d091dcfe-f7a3-466f-b45e-96bae7e4f07a",
+      "got": "d091dcfe-f7a3-466f-b45e-96bae7e4f07a",
+      "pass": true
+    },
+    {
+      "id": "C3a",
+      "desc": "create slow run → 202",
+      "expect": 202,
+      "got": 202,
+      "pass": true,
+      "body": "{\"taskRun\":{\"id\":\"14382249-7db0-42f1-804e-0e5e9eec9675\",\"status\":\"queued\",\"attempt\":1,\"provider\":\"mock\",\"title\":\"r8-c3-slow\",\"mode\":\"analysis_only\",\"p"
+    },
+    {
+      "id": "C3b",
+      "desc": "cancel mid-run → 2xx",
+      "expect": 200,
+      "got": 200,
+      "pass": true,
+      "body": "{\"taskRun\":{\"id\":\"14382249-7db0-42f1-804e-0e5e9eec9675\",\"status\":\"cancel_requested\",\"attempt\":1,\"provider\":\"mock\",\"title\":\"r8-c3-slow\",\"mode\":\"analysi"
+    },
+    {
+      "id": "C3c",
+      "desc": "run3 → cancelled",
+      "expect": "cancelled",
+      "got": "cancelled",
+      "pass": true,
+      "json": "{\"run\":{\"id\":\"14382249-7db0-42f1-804e-0e5e9eec9675\",\"status\":\"cancelled\",\"attempt\":1,\"provider\":\"mock\",\"title\":\"r8-c3-slow\",\"mode\":\"analysis_only\",\"promptPreview\":\"R8 regression C3 slow\",\"tools\":null,"
+    },
+    {
+      "id": "C3d",
+      "desc": "cancelled run has NO output content (clean cancel)",
+      "expect": false,
+      "got": false,
+      "pass": true
+    },
+    {
+      "id": "C4a",
+      "desc": "create failing run → 202",
+      "expect": 202,
+      "got": 202,
+      "pass": true,
+      "body": "{\"taskRun\":{\"id\":\"036ac6fe-0c43-4181-8aa2-49f64c8c6d22\",\"status\":\"queued\",\"attempt\":1,\"provider\":\"mock\",\"title\":\"r8-c4-fail\",\"mode\":\"analysis_only\",\"p"
+    },
+    {
+      "id": "C4b",
+      "desc": "run4 → failed (AUTH, maxAttempts=1)",
+      "expect": "failed",
+      "got": "failed",
+      "pass": true
+    },
+    {
+      "id": "C4c",
+      "desc": "failure reason recorded (AUTH)",
+      "expect": true,
+      "got": true,
+      "pass": true,
+      "snip": "{\"run\":{\"id\":\"036ac6fe-0c43-4181-8aa2-49f64c8c6d22\",\"status\":\"failed\",\"attempt\":1,\"provider\":\"mock\",\"title\":\"r8-c4-fail\",\"mode\":\"analysis_only\",\"promptPreview\":\"R8 regression C4 fail\",\"tools\":null,\"timeoutMs\":120000,\"maxAttempts\":1,\"errorCode\":\"PROVI"
+    },
+    {
+      "id": "C4d",
+      "desc": "manual retry → 2xx",
+      "expect": 200,
+      "got": 200,
+      "pass": true,
+      "body": "{\"taskRun\":{\"id\":\"036ac6fe-0c43-4181-8aa2-49f64c8c6d22\",\"status\":\"queued\",\"attempt\":2,\"provider\":\"mock\",\"title\":\"r8-c4-fail\",\"mode\":\"analysis_only\",\"p"
+    },
+    {
+      "id": "C4e",
+      "desc": "run4 after retry → failed again (same script)",
+      "expect": "failed",
+      "got": "failed",
+      "pass": true
+    },
+    {
+      "id": "C4f",
+      "desc": "attempt count advanced (>=2 attempts recorded)",
+      "expect": true,
+      "got": true,
+      "pass": true,
+      "snip": "{\"run\":{\"id\":\"036ac6fe-0c43-4181-8aa2-49f64c8c6d22\",\"status\":\"failed\",\"attempt\":2,\"provider\":\"mock\",\"title\":\"r8-c4-fail\",\"mode\":\"analysis_only\",\"promptPreview\":\"R8 regression C4 fail\",\"tools\":null,\"timeoutMs\":120000,\"maxAttempts\":1,\"errorCode\":\"PROVI"
+    },
+    {
+      "id": "C5a",
+      "desc": "unauthenticated create run → 401",
+      "expect": 401,
+      "got": 401,
+      "pass": true
+    },
+    {
+      "id": "C5b",
+      "desc": "admin list runs → 200 with entries",
+      "expect": true,
+      "got": true,
+      "pass": true,
+      "count": 12
+    }
+  ],
+  "runIds": {
+    "run1": "7339930a-c0b9-4697-b39d-3662ac800d0d",
+    "run2a": "d091dcfe-f7a3-466f-b45e-96bae7e4f07a",
+    "run3": "14382249-7db0-42f1-804e-0e5e9eec9675",
+    "run4": "036ac6fe-0c43-4181-8aa2-49f64c8c6d22"
+  }
+}

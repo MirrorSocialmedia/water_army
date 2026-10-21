@@ -1,0 +1,117 @@
+{
+  "checkedAt": "2026-10-20T22:34:09.489Z",
+  "host": {
+    "platform": "linux",
+    "isLinux": true,
+    "kernel": "6.8.0-117-generic",
+    "kernelSource": "uname -r",
+    "arch": "x64"
+  },
+  "docker": {
+    "available": false,
+    "error": "connect ENOENT /nonexistent-docker.sock"
+  },
+  "binder": {
+    "modules": {
+      "binder_linux": "present",
+      "ashmem_linux": "absent"
+    },
+    "devices": {
+      "/dev/binder": true,
+      "/dev/binder_hwbinder": false,
+      "/dev/ashmem": false
+    },
+    "deviceVisibility": "direct",
+    "binderFstype": "binder",
+    "memfd": {
+      "available": true,
+      "kernel": "6.8",
+      "note": "memfd_create available (kernel ≥ 3.17) — ashmem_linux module not required"
+    },
+    "dmesg": {
+      "readable": false,
+      "relevantLines": [],
+      "note": "dmesg: read kernel buffer failed: Operation not permitted\n"
+    },
+    "supported": true,
+    "suggestions": [
+      "Official docs: https://github.com/remote-android/redroid-doc — verify the exact procedure for this kernel before booting Redroid."
+    ]
+  },
+  "disk": {
+    "dataRoot": "/var/lib/water-army/redroid",
+    "exists": true,
+    "writable": true,
+    "freeBytes": 1179840331776
+  },
+  "ports": {
+    "port": 16150,
+    "state": "free",
+    "vantage": "direct"
+  },
+  "exposure": {
+    "range": {
+      "start": 16100,
+      "end": 16199
+    },
+    "vantage": "direct",
+    "scanned": true,
+    "listenersInRange": [
+      {
+        "addr": "127.0.0.1",
+        "port": 16100
+      }
+    ],
+    "exposed": []
+  },
+  "imageArch": null,
+  "gpu": null,
+  "checks": [
+    {
+      "id": "docker-daemon",
+      "status": "FAIL",
+      "detail": "docker daemon unavailable: connect ENOENT /nonexistent-docker.sock",
+      "fix": "Start the docker daemon (systemctl start docker) and re-run"
+    },
+    {
+      "id": "binder-module",
+      "status": "PASS",
+      "detail": "binder_linux loaded"
+    },
+    {
+      "id": "binderfs-mount",
+      "status": "PASS",
+      "detail": "/dev/binder is a binderfs mount"
+    },
+    {
+      "id": "shared-memory",
+      "status": "PASS",
+      "detail": "memfd available (kernel 6.8)"
+    },
+    {
+      "id": "kernel-compat",
+      "status": "PASS",
+      "detail": "kernel 6.8.0-117-generic (x86_64) — meets the redroid floor"
+    },
+    {
+      "id": "adb-port",
+      "status": "PASS",
+      "detail": "127.0.0.1:16150 free (direct vantage)"
+    },
+    {
+      "id": "adb-exposure",
+      "status": "PASS",
+      "detail": "no non-loopback listener in 16100-16199 (host scan)"
+    },
+    {
+      "id": "data-volume",
+      "status": "PASS",
+      "detail": "/var/lib/water-army/redroid writable, 1099 GiB free"
+    }
+  ],
+  "verdict": "FAIL",
+  "overall": "unknown",
+  "warnings": [
+    "Docker daemon unavailable: connect ENOENT /nonexistent-docker.sock"
+  ]
+}

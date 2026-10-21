@@ -1,0 +1,118 @@
+{
+  "results": [
+    {
+      "id": "D0a",
+      "desc": "interval 5s below minimum → 400",
+      "expect": 400,
+      "got": 400,
+      "pass": true,
+      "body": "{\"error\":{\"code\":\"VALIDATION_ERROR\",\"message\":\"intervalMs must be an integer >= 10000 (minimum run frequency, MD §12.2)\",\"requestId\":\"42b9d4b4-1dc7-4f"
+    },
+    {
+      "id": "D1a",
+      "desc": "create schedule → 201",
+      "expect": 201,
+      "got": 201,
+      "pass": true,
+      "body": "{\"schedule\":{\"id\":\"8903f9f1-7dd1-441a-90fb-8ebcd6e0984c\",\"name\":\"r8-sched\",\"scheduleType\":\"interval\",\"cronExpression\":null,\"intervalMs\":15000,\"timezone\":\"Asia/Hong_Kong\",\"overlapPolicy\":\"skip_if_runni"
+    },
+    {
+      "id": "D1b",
+      "desc": "schedule detail → 200 + enabled + nextRunAt",
+      "expect": "ok",
+      "got": "ok",
+      "pass": true
+    },
+    {
+      "id": "D2a",
+      "desc": "≥2 auto-fired runs after 38s",
+      "expect": true,
+      "got": true,
+      "pass": true,
+      "count": 3
+    },
+    {
+      "id": "D2b",
+      "desc": "all runs succeeded",
+      "expect": "all-succeeded",
+      "got": "all-succeeded",
+      "pass": true
+    },
+    {
+      "id": "D2c",
+      "desc": "no overlapping runs (duplicate-trigger guard)",
+      "expect": false,
+      "got": false,
+      "pass": true,
+      "runs": [
+        [
+          "2026-10-20T23:10:12.334Z",
+          "succeeded"
+        ],
+        [
+          "2026-10-20T23:10:27.366Z",
+          "succeeded"
+        ],
+        [
+          "2026-10-20T23:10:42.395Z",
+          "succeeded"
+        ]
+      ]
+    },
+    {
+      "id": "D2d",
+      "desc": "schedule.lastRunAt set + lastStatus succeeded",
+      "expect": "ok",
+      "got": "ok",
+      "pass": true
+    },
+    {
+      "id": "D3a",
+      "desc": "pause → 200 + isEnabled=false",
+      "expect": "ok",
+      "got": "ok",
+      "pass": true
+    },
+    {
+      "id": "D3b",
+      "desc": "no runs while paused (35s ≥ 2 intervals)",
+      "expect": 3,
+      "got": 3,
+      "pass": true
+    },
+    {
+      "id": "D4a",
+      "desc": "resume → 200 + isEnabled=true",
+      "expect": "ok",
+      "got": "ok",
+      "pass": true
+    },
+    {
+      "id": "D4b",
+      "desc": "runs resumed after resume",
+      "expect": true,
+      "got": true,
+      "pass": true,
+      "before": 3,
+      "after": 5
+    },
+    {
+      "id": "D5a",
+      "desc": "unauthenticated pause → 401",
+      "expect": 401,
+      "got": 401,
+      "pass": true
+    },
+    {
+      "id": "D5b",
+      "desc": "list schedules (operator) → 200",
+      "expect": 200,
+      "got": 200,
+      "pass": true,
+      "count": 1
+    }
+  ],
+  "schedId": "8903f9f1-7dd1-441a-90fb-8ebcd6e0984c",
+  "defId": "d85ed070-c4a7-42b7-bb47-613fba59d401",
+  "totalRuns": 5
+}

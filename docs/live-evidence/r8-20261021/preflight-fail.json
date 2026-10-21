@@ -1,0 +1,129 @@
+{
+  "checkedAt": "2026-10-20T22:32:03.548Z",
+  "host": {
+    "platform": "linux",
+    "isLinux": true,
+    "kernel": "6.8.0-117-generic",
+    "kernelSource": "uname -r",
+    "arch": "x64"
+  },
+  "docker": {
+    "available": true,
+    "error": null
+  },
+  "binder": {
+    "modules": {
+      "binder_linux": "present",
+      "ashmem_linux": "absent"
+    },
+    "devices": {
+      "/dev/binder": true,
+      "/dev/binder_hwbinder": false,
+      "/dev/ashmem": false
+    },
+    "deviceVisibility": "direct",
+    "binderFstype": "binder",
+    "memfd": {
+      "available": true,
+      "kernel": "6.8",
+      "note": "memfd_create available (kernel ≥ 3.17) — ashmem_linux module not required"
+    },
+    "dmesg": {
+      "readable": false,
+      "relevantLines": [],
+      "note": "dmesg: read kernel buffer failed: Operation not permitted\n"
+    },
+    "supported": true,
+    "suggestions": [
+      "Official docs: https://github.com/remote-android/redroid-doc — verify the exact procedure for this kernel before booting Redroid."
+    ]
+  },
+  "disk": {
+    "dataRoot": "/var/lib/water-army/redroid",
+    "exists": true,
+    "writable": true,
+    "freeBytes": 1179840536576
+  },
+  "ports": {
+    "port": 16100,
+    "state": "occupied",
+    "vantage": "direct"
+  },
+  "exposure": {
+    "range": {
+      "start": 16100,
+      "end": 16199
+    },
+    "vantage": "direct",
+    "scanned": true,
+    "listenersInRange": [
+      {
+        "addr": "127.0.0.1",
+        "port": 16100
+      }
+    ],
+    "exposed": []
+  },
+  "imageArch": {
+    "image": "water-army/redroid:99.9.9-doesnotexist",
+    "imageArch": null,
+    "imageArchNorm": null,
+    "hostArch": "x64",
+    "hostArchNorm": "x86_64",
+    "mismatch": false,
+    "error": null
+  },
+  "gpu": null,
+  "checks": [
+    {
+      "id": "docker-daemon",
+      "status": "PASS",
+      "detail": "docker daemon answered ping"
+    },
+    {
+      "id": "binder-module",
+      "status": "PASS",
+      "detail": "binder_linux loaded"
+    },
+    {
+      "id": "binderfs-mount",
+      "status": "PASS",
+      "detail": "/dev/binder is a binderfs mount"
+    },
+    {
+      "id": "shared-memory",
+      "status": "PASS",
+      "detail": "memfd available (kernel 6.8)"
+    },
+    {
+      "id": "kernel-compat",
+      "status": "PASS",
+      "detail": "kernel 6.8.0-117-generic (x86_64) — meets the redroid floor"
+    },
+    {
+      "id": "image-arch",
+      "status": "WARN",
+      "detail": "image architecture not determined (image not local or inspect unavailable)",
+      "fix": "docker pull/build the pinned image before creating devices from it"
+    },
+    {
+      "id": "adb-port",
+      "status": "FAIL",
+      "detail": "127.0.0.1:16100 already bound",
+      "fix": "Free the port or pick another ADB port"
+    },
+    {
+      "id": "adb-exposure",
+      "status": "PASS",
+      "detail": "no non-loopback listener in 16100-16199 (host scan)"
+    },
+    {
+      "id": "data-volume",
+      "status": "PASS",
+      "detail": "/var/lib/water-army/redroid writable, 1099 GiB free"
+    }
+  ],
+  "verdict": "FAIL",
+  "overall": "supported",
+  "warnings": []
+}

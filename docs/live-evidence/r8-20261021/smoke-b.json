@@ -1,0 +1,217 @@
+{
+  "results": [
+    {
+      "id": "B1a",
+      "desc": "list containers → 200",
+      "expect": 200,
+      "got": 200,
+      "pass": true,
+      "count": 17
+    },
+    {
+      "id": "B1b",
+      "desc": "list includes r8-sacrificial",
+      "expect": true,
+      "got": true,
+      "pass": true,
+      "names": [
+        "admiring_bouman",
+        "clinic-pg",
+        "condescending_poincare",
+        "eloquent_diffie",
+        "r8-pg",
+        "r8-redis",
+        "r8-sacrificial",
+        "r8-unmanaged",
+        "redroid-matrix-b-gost-redroid-matrix-r8-live",
+        "redroid-matrix-r8-live",
+        "sglang-fixed-run",
+        "sleepy_shtern",
+        "water-army-api-1",
+        "water-army-postgres-1",
+        "water-army-redis-1",
+        "water-army-web-1",
+        "water-army-worker-1"
+      ]
+    },
+    {
+      "id": "B1c",
+      "desc": "list includes r8-pg (non-managed, visible)",
+      "expect": true,
+      "got": true,
+      "pass": true
+    },
+    {
+      "id": "B1d",
+      "desc": "managed=true filter: sacrificial in, unmanaged out",
+      "expect": true,
+      "got": true,
+      "pass": true,
+      "mnames": [
+        "r8-sacrificial",
+        "redroid-matrix-b-gost-redroid-matrix-r8-live",
+        "redroid-matrix-r8-live",
+        "water-army-api-1",
+        "water-army-web-1",
+        "water-army-worker-1"
+      ]
+    },
+    {
+      "id": "B1e",
+      "desc": "managed=true filter: r8 device (labeled) in",
+      "expect": true,
+      "got": true,
+      "pass": true
+    },
+    {
+      "id": "B2a",
+      "desc": "container detail (full id) → 200",
+      "expect": 200,
+      "got": 200,
+      "pass": true
+    },
+    {
+      "id": "B2b",
+      "desc": "container logs tail=5 → 200",
+      "expect": 200,
+      "got": 200,
+      "pass": true,
+      "logLines": 1
+    },
+    {
+      "id": "B3a",
+      "desc": "detail nonexistent → 404",
+      "expect": 404,
+      "got": 404,
+      "pass": true,
+      "code": "CONTAINER_NOT_FOUND"
+    },
+    {
+      "id": "B3b",
+      "desc": "logs nonexistent → 404",
+      "expect": 404,
+      "got": 404,
+      "pass": true,
+      "code": "CONTAINER_NOT_FOUND"
+    },
+    {
+      "id": "B3c",
+      "desc": "stop nonexistent → 404",
+      "expect": 404,
+      "got": 404,
+      "pass": true,
+      "code": "CONTAINER_NOT_FOUND"
+    },
+    {
+      "id": "B4a",
+      "desc": "stop UNMANAGED container → 403",
+      "expect": 403,
+      "got": 403,
+      "pass": true,
+      "code": "NOT_MANAGED"
+    },
+    {
+      "id": "B5a",
+      "desc": "stop managed → 200",
+      "expect": 200,
+      "got": 200,
+      "pass": true
+    },
+    {
+      "id": "B5b",
+      "desc": "docker state = exited",
+      "expect": "exited",
+      "got": "exited",
+      "pass": true
+    },
+    {
+      "id": "B5c",
+      "desc": "start managed → 200",
+      "expect": 200,
+      "got": 200,
+      "pass": true
+    },
+    {
+      "id": "B5d",
+      "desc": "docker state = running",
+      "expect": "running",
+      "got": "running",
+      "pass": true
+    },
+    {
+      "id": "B5e",
+      "desc": "restart managed → 200",
+      "expect": 200,
+      "got": 200,
+      "pass": true
+    },
+    {
+      "id": "B5f",
+      "desc": "pause managed → 200",
+      "expect": 200,
+      "got": 200,
+      "pass": true,
+      "note": ""
+    },
+    {
+      "id": "B5g",
+      "desc": "docker state = paused",
+      "expect": "paused",
+      "got": "paused",
+      "pass": true
+    },
+    {
+      "id": "B5h",
+      "desc": "unpause managed → 200",
+      "expect": 200,
+      "got": 200,
+      "pass": true
+    },
+    {
+      "id": "B6a",
+      "desc": "grant exception (admin) → 201",
+      "expect": 201,
+      "got": 201,
+      "pass": true,
+      "body": "{\"exception\":{\"containerId\":\"b354fbc0617bb0e7d89b704984df2ce8ec8e76fcbbbc8c4d6d98046c3c54363d\",\"name\":\"r8-unmanaged\",\"note\":\"r8 regression probe\",\"gra"
+    },
+    {
+      "id": "B6b",
+      "desc": "stop via exception → 200",
+      "expect": 200,
+      "got": 200,
+      "pass": true,
+      "body": "{\"id\":\"b354fbc0617bb0e7d89b704984df2ce8ec8e76fcbbbc8c4d6d98046c3c54363d\",\"name\":\"r8-unmanaged\",\"state\":\"exited\",\"idempotent\":false,\"action\":\"stop\",\"by"
+    },
+    {
+      "id": "B6c",
+      "desc": "revoke exception → 204",
+      "expect": 204,
+      "got": 204,
+      "pass": true,
+      "body": ""
+    },
+    {
+      "id": "B6d",
+      "desc": "post-revoke mutation → 403 again",
+      "expect": 403,
+      "got": 403,
+      "pass": true,
+      "code": "NOT_MANAGED"
+    },
+    {
+      "id": "B7",
+      "desc": "operator grant exception (admin-only) → 403",
+      "expect": 403,
+      "got": 403,
+      "pass": true
+    },
+    {
+      "id": "B8",
+      "desc": "sacrificial containers removed (cleanup)",
+      "expect": "",
+      "got": "",
+      "pass": true
+    }
+  ]
+}

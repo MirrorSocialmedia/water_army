@@ -291,6 +291,7 @@ sg docker -c "docker exec <dev> sh -c 'ip addr show tun0; ip route show table 10
 #    table 100 必有兩條：default via 10.8.0.2 onlink + 172.17.0.1 dev eth0 scope link（gateway exception）
 #    必有 rule 5000: from all lookup 100
 # 3) canary（tests/mocks/mock-socks5.js 或真 proxy）：device 內 dnsping canary.example → NOERROR
+#    ⚠️ R8 實錚（2026-10-21）：`REDROID_CANARY_HOST` 唔可以係 device 直連 segment 內嘅位址（尤其 172.17.0.1 gateway）— table 100 嘅 gateway exception 會令 canary 永遠 direct via eth0，結構性 bypass tunnel（canary 綠 ≠ tunnel 綠）。mock 測試 stack 用 host 嘅非 bridge IP（例 LAN IP，mock-echo bind 0.0.0.0）做 target 先係真 tunnel-forcing；另 canary probe 已改用 FIFO seam（toybox nc stdin-EOF 會 half-close，見 audits/tcp-transport-investigation.md R8 addendum）
 ```
 
 ### 10.3 故障排檢（症狀 → 診斷 → 處理）

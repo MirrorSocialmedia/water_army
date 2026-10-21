@@ -128,3 +128,68 @@ R3/R4 code（state machine + watchdog + UI + worker gate + audit）回滾 = reve
 R3（6 commits：33d629c/08c89a4/6001983/a34baad/a23779a/c48a49f）+ R4
 （7f2d666..e4db185 系列）；DB migration `20261018000000-net-health`（net_* 13 欄）
 為 additive nullable — 回滾 code 後欄保留無害（principle：migration 只前向）。
+
+---
+
+## R8 live 驗證矩陣（2026-10-21）— fresh device + 真 fault injection + 重啟重建
+
+R8 喺隔離 16xxx stack（r8-pg@16543 / r8-redis@16379 / API@16300 / worker@16200 /
+mock-echo@16090 / mock-socks5@16095 / gost sidecar@20080 / ADB 16100）跑 fresh
+device（`redroid-matrix-r8-live`，image r3 pin）全量回歸。canary 已按
+tcp-transport-investigation R8 addendum 修正（真 tunnel-forcing target + FIFO probe
++ 10B mock）— 本矩陣全部 canary 係**真 tunnel 路徑**證據。
+
+### 1. 三種 fault injection（全 audit 關聯，80 條 redroid events 存檔）
+
+| # | 注入 | 偵測（audit） | 狀態鏈 | 恢復 | 結果 |
+|---|------|---------------|--------|------|------|
+| 1 | kill tun2socks（23:22:50） | +0s `TUNNEL_PROCESS_DEAD`（detail: process=dead iface=missing route=missing rule=present **effective=direct**） | HEALTHY→**BLOCKED**（definite-loss，watchdog，冇候 threshold） | 自動 recovery attempt 1 → STARTING→VERIFYING→**HEALTHY**（~36s，new canary） | ✅ 正路 |
+| 2 | kill mock-socks5（proxy 死）（00:38:47） | +20s canary=FAIL `CANARY_FAIL`（re-provision 中）；+30s **FAILED** `STALL_REPROVISION_USELESS`（re-provision 救唔返死 proxy = 誠實判定） | HEALTHY→DEGRADED→**BLOCKED**→FAILED（fails=6，backoff nextRecoveryAt 排程） | 還原 proxy 後 +15s **仍 FAILED**（唔假自癒 — stall 需人工）→ 設計內 `POST /proxy/retry` → STARTING→VERIFYING→**HEALTHY**（**新 nonce f8b6bd1a**，非 stale） | ✅ 正路（fail-closed + 誠實 stall + 人工介入路徑全實錚） |
+| 3 | `ip link delete tun0`（00:42:00） | +4s `TUNNEL_IFACE_MISSING`（detail: process=**alive** iface=missing route=missing rule=present **effective=direct** — fail-open 面被捉住） | HEALTHY→**BLOCKED**（definite-loss） | 自動 recovery（re-provision 重建 tun0 — 設計內可自動）→ STARTING→VERIFYING→**HEALTHY**（總 18s，new canary） | ✅ 正路 |
+
+### 2. 重啟後狀態重建（唔沿用舊 HEALTHY）— 兩面
+- **Negative**：proxy 死 → FAILED（00:46:54）→ 重啟 API（pid 25415）+ worker（pid 25718）
+  → **t+2s/4s/6s 查詢全部 FAILED**（persisted 狀態重建，零 stale HEALTHY）。
+- **Positive**：HEALTHY 時重啟 API → 新 process 10s 內 fresh canary（新 nonce）先保
+  HEALTHY（23:38 實錚）— 重啟後嘅 HEALTHY = 重新驗證嚟，非沿用。
+
+### 3. Device lifecycle（fresh device，operator/admin RBAC 實錚）
+- create（22:30）→ boot → 手動 retry（boot 慢 + 我漏 REDROID_ADB_BINARY 之 env 修正，
+  K14 範圍）→ **HEALTHY 23:17:58**（真 canary 前 — 當時 canary 係 direct 路徑，見
+  tcp-transport R8-A；boot 鏈本身正路）。
+- **stop**（00:49）：container Exited(137)、view containerState=exited/adbState=unknown、
+  gost sidecar 照 Up（設計：sidecar 持久）。
+- **start**（00:50:20）：warm boot → **HEALTHY 00:50:40（20s）**，fresh canary
+  nonce=01d10d263e0e516e（≠ stop 前 4e47db11f4c81ac0）= 真重新驗證。
+- **restart**（00:52:51）：立即 STARTING（唔沿用舊 HEALTHY）→ **HEALTHY 00:53:31**
+  （fresh nonce b43d1e285c3da4ce）。
+- **delete**（admin，`{confirm, removeData:true}`）：DB row 刪（GET→REDROID_DEVICE_NOT_FOUND）、
+  container+sidecar 移除、adb port 16100 釋放、**dataDir 部分刪失敗 = 誠實回報**
+  `dataRemoved:false, DATA_DIR_PERM_DENIED`（service 非 root，container 寫入 root-owned
+  子目錄）→ 殘留由 root container 清（測試環境操作；生產部署若 service 有 dataDir
+  權限則全自動）。**零假綠**。
+
+### 4. 管理平台（同 stack，API/worker 真實環境，76 項 live smoke 全綠）
+- auth/RBAC 13（admin/operator 登入登出、401/403 矩陣、logout 後 session 死）
+- Docker 容器 25（list/detail/logs、404 錯路、NOT_MANAGED allowlist gate、managed
+  五動作 start/stop/restart/pause/unpause、admin exception grant/revoke、operator 403、
+  殘留核對）
+- AI 任務 20（create/execute succeeded 結果紀錄、idempotency replay、slow+cancel、
+  fail-auth failed 紀錄、retry 路徑）
+- Scheduler 13（create、interval<10s 400、auto-fire ≥2 全 succeeded、**零 overlap
+  = duplicate-trigger guard 實錚**、pause 35s 零 fire、resume、unauth 401）
+- Audit 5（admin 200 84 events、operator 403、**遮罩實錚**：全 SECRET/PASSWORD/TOKEN/
+  KEY/DATABASE_URL + 2 明文密碼 grep 整份 payload 零洩漏、regression actions 齊）
+
+### 5. 已知邊界（本環境，唔係產品缺陷）
+- **DNS canary（輔助）結構性無法喺本 mock 鏈 PASS**：gost `-L socks5://:1080` 無 UDP
+  relay（`socks5: UDP relay is disabled` 實錚）→ device UDP ASSOCIATE（DNS）被拒。
+  產品語義：DNS canary 僅輔助、唔單獨決定 HEALTHY（MD §10 要求滿足）；真 proxy（有 UDP）
+  下 DNS canary 會正常。
+- GPU 面：host 無 GPU → `gpuStatus=unverified` + preflight 誠實 WARN（9/10 PASS）—
+  預期，唔係回歸。
+
+### 6. Minor finding（非阻塞，落 release-gate 觀察項）
+- `RUN_ID_PARAM`（GET /api/tasks/runs/:runId 等）只 minLength 8 無 pattern → 手造怪 id
+  穿 Prisma → 500 INTERNAL 而唔係 404/400。auth 都有（無 security 影響）= 純
+  error-hygiene。R8 唔改 code（scope 外），建議下單。

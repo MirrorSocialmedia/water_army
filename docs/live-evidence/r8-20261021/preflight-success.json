@@ -1,0 +1,155 @@
+{
+  "checkedAt": "2026-10-20T22:32:03.448Z",
+  "host": {
+    "platform": "linux",
+    "isLinux": true,
+    "kernel": "6.8.0-117-generic",
+    "kernelSource": "uname -r",
+    "arch": "x64"
+  },
+  "docker": {
+    "available": true,
+    "error": null
+  },
+  "binder": {
+    "modules": {
+      "binder_linux": "present",
+      "ashmem_linux": "absent"
+    },
+    "devices": {
+      "/dev/binder": true,
+      "/dev/binder_hwbinder": false,
+      "/dev/ashmem": false
+    },
+    "deviceVisibility": "direct",
+    "binderFstype": "binder",
+    "memfd": {
+      "available": true,
+      "kernel": "6.8",
+      "note": "memfd_create available (kernel ≥ 3.17) — ashmem_linux module not required"
+    },
+    "dmesg": {
+      "readable": false,
+      "relevantLines": [],
+      "note": "dmesg: read kernel buffer failed: Operation not permitted\n"
+    },
+    "supported": true,
+    "suggestions": [
+      "Official docs: https://github.com/remote-android/redroid-doc — verify the exact procedure for this kernel before booting Redroid."
+    ]
+  },
+  "disk": {
+    "dataRoot": "/var/lib/water-army/redroid",
+    "exists": true,
+    "writable": true,
+    "freeBytes": 1179840540672
+  },
+  "ports": {
+    "port": 16100,
+    "state": "occupied",
+    "vantage": "direct"
+  },
+  "exposure": {
+    "range": {
+      "start": 16100,
+      "end": 16199
+    },
+    "vantage": "direct",
+    "scanned": true,
+    "listenersInRange": [
+      {
+        "addr": "127.0.0.1",
+        "port": 16100
+      }
+    ],
+    "exposed": []
+  },
+  "imageArch": {
+    "image": "water-army/redroid:14.0.0-240527-matrixa-r3",
+    "imageArch": "amd64",
+    "imageArchNorm": "x86_64",
+    "hostArch": "x64",
+    "hostArchNorm": "x86_64",
+    "mismatch": false,
+    "error": null
+  },
+  "gpu": {
+    "available": true,
+    "driverVersion": "580.178.04",
+    "gpus": [
+      {
+        "name": "NVIDIA GeForce RTX 3090",
+        "memory": "24576 MiB",
+        "driverVersion": "580.178.04"
+      },
+      {
+        "name": "NVIDIA GeForce RTX 3090",
+        "memory": "24576 MiB",
+        "driverVersion": "580.178.04"
+      }
+    ],
+    "verified": false,
+    "source": "nvidia-smi",
+    "detail": "nvidia-smi: NVIDIA GeForce RTX 3090 ×2, driver 580.178.04",
+    "note": "nvidia-smi success ≠ Redroid GPU verified (MD §2.4). Status stays 未驗證 until the in-device render check passes."
+  },
+  "checks": [
+    {
+      "id": "docker-daemon",
+      "status": "PASS",
+      "detail": "docker daemon answered ping"
+    },
+    {
+      "id": "binder-module",
+      "status": "PASS",
+      "detail": "binder_linux loaded"
+    },
+    {
+      "id": "binderfs-mount",
+      "status": "PASS",
+      "detail": "/dev/binder is a binderfs mount"
+    },
+    {
+      "id": "shared-memory",
+      "status": "PASS",
+      "detail": "memfd available (kernel 6.8)"
+    },
+    {
+      "id": "kernel-compat",
+      "status": "PASS",
+      "detail": "kernel 6.8.0-117-generic (x86_64) — meets the redroid floor"
+    },
+    {
+      "id": "image-arch",
+      "status": "PASS",
+      "detail": "image 'water-army/redroid:14.0.0-240527-matrixa-r3' arch 'x86_64' matches host"
+    },
+    {
+      "id": "adb-port",
+      "status": "FAIL",
+      "detail": "127.0.0.1:16100 already bound",
+      "fix": "Free the port or pick another ADB port"
+    },
+    {
+      "id": "adb-exposure",
+      "status": "PASS",
+      "detail": "no non-loopback listener in 16100-16199 (host scan)"
+    },
+    {
+      "id": "data-volume",
+      "status": "PASS",
+      "detail": "/var/lib/water-army/redroid writable, 1099 GiB free"
+    },
+    {
+      "id": "gpu-visibility",
+      "status": "WARN",
+      "detail": "nvidia-smi: NVIDIA GeForce RTX 3090 ×2, driver 580.178.04",
+      "fix": "Rendering is proven only by the in-device diagnostics check (device → diagnostics → gpu zone)"
+    }
+  ],
+  "verdict": "FAIL",
+  "overall": "supported",
+  "warnings": [
+    "GPU is NOT verified for Redroid rendering — nvidia-smi success does not prove Android EGL/WebGL works (MD §2.4)."
+  ]
+}

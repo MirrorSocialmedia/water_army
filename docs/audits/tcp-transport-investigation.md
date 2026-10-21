@@ -370,3 +370,52 @@ recovery→HEALTHY 全循環 canary PASS）。
 - R4 live（UI 文字驗證 + audit row 實抽）：`docs/live-evidence/r4-20261020/`（6 截圖 + `audit-net-events.txt`）
 - fail-closed 全矩陣（hermetic + live）：`docs/audits/fail-closed-validation.md`
 - gost Cmd bug 修復：commit `a34baad`（message 內有 73ms Exited(1) 證據 + 全鏈 curl 200 nonce+sha256）
+
+---
+
+## R8 Addendum（2026-10-21）— canary 有效性三層缺陷（全破案、全修復、全 live 實錚）
+
+R8 全量回歸（fresh device + 真 fault injection）發現：**R2–R7 的 live "canary PASS"
+從未有過一次真正經 tunnel**。三層獨立缺陷互掩（任層單修都唔夠）：
+
+### R8-A（配置層）：canary target 結構性 bypass tunnel
+- 實錚：table 100 = `default via 10.8.0.2 dev tun0` + **`172.17.0.1 dev eth0 scope link`**
+  （gateway exception 係必須的 anti-loop — tun2socks upstream 本身喺 172.17.0.1:<gostPort>）。
+  `ip route get 172.17.0.1` → `dev eth0 table 100 src 172.17.0.5`。
+- R4 同 R8（舊）環境 `REDROID_CANARY_HOST=172.17.0.1` → canary 永遠 direct via eth0
+  （echo 見 source=172.17.0.5 = device 直連 IP，非 relay 鏈）→ **canary 綠 ≠ tunnel 綠**。
+- 修正：R8 環境 target = host LAN IP（192.168.31.144:16090，mock-echo bind 0.0.0.0）=
+  真 tunnel-forcing；runbook §10.2 已加 operator 指引（target 唔可係 device 直連 segment）。
+- 定性：產品 canary 係 admin-configured target，產品唔會驗證 target 係咪 tunnel-forcing —
+  加 runbook 指引 + 本 addendum；state machine 嘅 netcheck `effective` probe（8.8.8.8）
+  係真 tunnel-forcing，routing 面保護完整（fail-open 時 `effective=direct` 有實錚，見
+  fail-closed-validation R8 addendum #3）。
+
+### R8-B（test fixture 層）：mock-socks5 CONNECT reply 截斷（RFC1928）
+- mock 只寫 8B reply（`05 00 00 01 00 00 00 00`）— atyp=IPv4 要有 BND.PORT 共 10B。
+- GOST 3.3.0（= 產品 sidecar image gogost/gost:3.3.0）嚴格 parser 等齊 10B → **stall ~62s**
+  → canary（TO 內）必 timeout。松寫法 client probe 收 8B 當 OK（假綠來源）。
+- 對照：strict-socks5（10B）= **3ms**；mock（8B）= 62s stall — 同 GOST 3.3.0。
+- 修復：commit `2b891d8`（mock-socks5.js 成功/reject 兩處 + diag 變體）。
+
+### R8-C（產品層，最重）：canary script 嘅 toybox-nc stdin-EOF half-close
+- 原 probe：`printf "POST ..." | timeout $TO nc -w $TO $HOST $PORT`。
+- toybox nc（0.8.9-android，`-q` 說明 = "Quit SECONDS after EOF on stdin"）：stdin EOF →
+  即 half-close（FIN）。printf pipe 即刻 EOF → **FIN 喺 POST 後 ~1ms 發出** → relay 鏈被拆
+  → echo response 未返回 → OUT 永遠空 → **tunnel 路徑 canary 結構性必 FAIL**。
+- live 矩陣（同 device 同鏈）：printf|nc → len=0 ×2；`-q 10` → 仍 len=0（排除 process 退出）；
+  `{printf; sleep;}|nc`（stdin 開住）→ len=260；同形態 direct target → len=260（sub-ms race 假綠）；
+  stdin-open + 1024B 隨機 body → **sha256+nonce 雙向 PASS**（真 tunnel）。
+- runc 重現（ubuntu + 同 sha-pin tun2socks + 同 GOST 3.3.0 + 同 mock）：全鏈 260B 回 —
+  排除 tun2socks/GOST/mock，鎖定 gVisor 環境 + toybox-nc 組合。
+- 修復：commit `c6c859d` — FIFO seam（nc 由 FIFO 讀 request，write end fd 3 持有至 nc 退出，
+  永無 EOF → 永無 FIN；probe 真 RTT ms=0 非 TO-long；`timeout TO+1` 保底，reason 語義不變）。
+- 生產驗證：重啟 API + retry → HEALTHY `tcpCanary=PASS latencyMs=0`（新 nonce，每周期真回顯）。
+
+### 對 R7 addendum 結論嘅修訂
+- R7「產品鏈 canary 持續綠 = 產品鏈成立」— **scope 再限縮**：R2–R7 所有 live canary 綠
+  均喺 direct-bridge 路徑（R8-A 盲點）；R8 修後（真 target + FIFO probe + 10B mock）
+  **第一次有真 tunnel 雙向 payload 實錚**（nonce+sha256，ms=0）— 產品鏈 canary 語義由
+  「bridge egress 綠」升級為「tunnel egress 綠」。R2 spike 拓撲根因（§C）維持 open 唔變。
+- 證據：`docs/live-evidence/r8-20261021/`（socks5/echo jsonl 含三輪注入窗口、boot-poll、
+  final-full-run.log、audit-net-events-r8.txt 80 條 transition 全鏈）。

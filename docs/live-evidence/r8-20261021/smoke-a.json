@@ -1,0 +1,103 @@
+{
+  "results": [
+    {
+      "id": "A1",
+      "desc": "admin login",
+      "expect": 200,
+      "got": 200,
+      "pass": true
+    },
+    {
+      "id": "A2",
+      "desc": "admin /auth/me",
+      "expect": 200,
+      "got": 200,
+      "pass": true,
+      "role": "admin"
+    },
+    {
+      "id": "A3",
+      "desc": "operator login",
+      "expect": 200,
+      "got": 200,
+      "pass": true
+    },
+    {
+      "id": "A4",
+      "desc": "operator /auth/me",
+      "expect": 200,
+      "got": 200,
+      "pass": true,
+      "role": "operator"
+    },
+    {
+      "id": "A5",
+      "desc": "unauthenticated /containers → 401",
+      "expect": 401,
+      "got": 401,
+      "pass": true
+    },
+    {
+      "id": "A6",
+      "desc": "bad password → 401",
+      "expect": 401,
+      "got": 401,
+      "pass": true
+    },
+    {
+      "id": "A7",
+      "desc": "operator create template (admin-only) → 403",
+      "expect": 403,
+      "got": 403,
+      "pass": true
+    },
+    {
+      "id": "A8a",
+      "desc": "admin /audit-events → 200",
+      "expect": 200,
+      "got": 200,
+      "pass": true,
+      "count": 19
+    },
+    {
+      "id": "A8b",
+      "desc": "operator /audit-events (admin-only) → 403",
+      "expect": 403,
+      "got": 403,
+      "pass": true
+    },
+    {
+      "id": "A9",
+      "desc": "admin list templates → 200",
+      "expect": 200,
+      "got": 200,
+      "pass": true,
+      "count": 1
+    },
+    {
+      "id": "A10a",
+      "desc": "admin logout",
+      "expect": 204,
+      "got": 204,
+      "pass": true,
+      "body": "",
+      "note": ""
+    },
+    {
+      "id": "A10b",
+      "desc": "post-logout /auth/me → 401 (session dead)",
+      "expect": 401,
+      "got": 401,
+      "pass": true
+    },
+    {
+      "id": "A11",
+      "desc": "admin re-login",
+      "expect": 200,
+      "got": 200,
+      "pass": true
+    }
+  ],
+  "adminSession": "session=mBBL2V0Zwo-Cf3PA_k39S6soNuFzdfbw0Synov1Yy98",
+  "operatorSession": "session=qCOGOPkZco1i5HibJue0wFY-MphcVRiXdnmVX3mMZuE"
+}

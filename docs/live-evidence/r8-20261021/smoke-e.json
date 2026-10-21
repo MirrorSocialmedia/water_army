@@ -1,0 +1,59 @@
+{
+  "results": [
+    {
+      "id": "E1",
+      "desc": "admin /audit-events → 200 with entries",
+      "pass": true,
+      "status": 200,
+      "count": 84,
+      "total": 84
+    },
+    {
+      "id": "E2",
+      "desc": "operator /audit-events → 403",
+      "pass": true,
+      "status": 403
+    },
+    {
+      "id": "E3",
+      "desc": "no secret values leak into audit payload",
+      "pass": true,
+      "leaks": [],
+      "checkedCount": 6
+    },
+    {
+      "id": "E4",
+      "desc": "audit trail covers regression actions",
+      "pass": true,
+      "missing": [],
+      "sample": [
+        "auth.login_success",
+        "schedule.resume",
+        "schedule.pause",
+        "schedule.create",
+        "redroid.device.net_transition",
+        "schedule.delete",
+        "task.retry",
+        "task.create",
+        "task.cancel",
+        "container.start",
+        "docker.exception.revoke",
+        "container.stop",
+        "docker.exception.grant",
+        "container.unpause",
+        "container.pause",
+        "container.restart",
+        "auth.logout",
+        "auth.login_failed",
+        "redroid.device.create",
+        "redroid.template.create"
+      ]
+    },
+    {
+      "id": "E5",
+      "desc": "audit event has id + createdAt + actorUserId",
+      "pass": true,
+      "sample": "{\"id\":\"bfeeecfc-9c39-42e9-8dca-421818c943ae\",\"actorUserId\":\"077976ef-6406-4c70-b1a2-e9daa0036dfc\",\"action\":\"auth.login_success\",\"resourceType\":null,\"resourceId\":null,\"status\":\"success\",\"createdAt\":\"20"
+    }
+  ]
+}
