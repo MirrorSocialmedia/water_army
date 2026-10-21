@@ -408,8 +408,9 @@ async function main() {
     // stage-1 per-device VRAM delta: end free vs start free (1 device)
     if (stage === 1) {
       const end = vramRaw();
-      const d0 = Number(anchor0.gpus[0][2]) - Number(end.gpus[0][0]?.[2] ?? end.gpus[0][2]);
-      perDeviceMiB = Math.max(64, Math.round(d0)); // 1 device on GPU0; floor 64MiB to avoid div-by-~0
+      // 1 device on GPU0: free-at-start minus free-at-end = per-device cost.
+      const d0 = Number(anchor0.gpus[0][2]) - Number(end.gpus[0][2]);
+      perDeviceMiB = Math.max(64, Math.round(d0)); // floor 64MiB to avoid div-by-~0
       console.log(`[S1] measured per-device VRAM delta ≈ ${perDeviceMiB} MiB`);
     }
 
