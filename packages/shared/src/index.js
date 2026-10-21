@@ -130,6 +130,20 @@ export {
 /** BatchService — single owner of batch/identity state (BR-B1, MD §6/§9). */
 export { createBatchService } from './batch-service.js';
 
+/** Batch Rotation metrics + alert evaluation (BR-B5, MD §13 — pure core). */
+export {
+  BATCH_METRIC_NAMES,
+  DEFAULT_ALERT_LIMITS,
+  durationStatsMs,
+  maxConcurrentFromIntervals,
+  computeBatchMetrics,
+  evaluateAlerts,
+  alertFingerprint,
+} from './batch-metrics.js';
+
+/** Batch cycle audit report (BR-B5, MD §11.4 — zero-secrets export). */
+export { REPORT_SCHEMA, buildCycleReport, renderCycleReportCsv, assertNoSecrets } from './batch-report.js';
+
 /** LeaseService — cross-process resource leases (BR-B1, MD §9.6). */
 export { createLeaseService } from './lease-service.js';
 
