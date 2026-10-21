@@ -379,11 +379,29 @@ export function batchRoutes(app) {
     async (req, reply) => {
       rateGuard(writeLimiter, req, reply, 'batch writes');
       const body = req.body;
+      // Plan with the REAL identity statuses (MD §14.1 + preview parity): a
+      // DISABLED/terminal identity must be SKIPPED at planning time with an
+      // explicit reason, not scheduled into a doomed run. The preview route
+      // already loads rows for exactly this reason — create must match it
+      // (a preview that promises 4 skips while create schedules 4 doomed
+      // runs is a contract lie; found in BR-B6 E2E preflight, 2026-10-22).
+      // Unknown ids are still rejected here (strict write path — preview is
+      // the only surface that tolerates unknowns, and it reports them).
+      const ids = [...new Set(body.identities)];
+      const found = await db.identity.findMany({ where: { id: { in: ids } } });
+      const statusById = new Map(found.map((f) => [f.id, f.status]));
+      const unknown = ids.filter((id) => !statusById.has(id));
+      if (unknown.length) {
+        return reply.code(400).send({
+          error: { code: 'VALIDATION_ERROR', message: `Unknown identities in cycle: ${unknown.join(', ')}` },
+        });
+      }
+      const rows = ids.map((id) => ({ id, status: statusById.get(id) }));
       const res = await batchSvc.createCycle(
         {
           name: body.name,
           idempotencyKey: body.idempotencyKey,
-          identities: body.identities.map((id) => ({ id })),
+          identities: rows,
           batchSize: body.batchSize,
           maxActiveContainers: body.maxActiveContainers,
           failurePolicy: body.failurePolicy,

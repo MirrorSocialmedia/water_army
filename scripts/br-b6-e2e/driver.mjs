@@ -287,15 +287,44 @@ async function phase0() {
 }
 
 // --------------------------------------------------------------------- P1
+async function ensureBatchStarted(batchId, label) {
+  // Race-tolerant start: the worker scheduler AUTO-STARTS PLANNED batches
+  // within a tick (progressCycles — B2-verified behavior). An explicit POST
+  // start is the fallback for scheduler-off environments. Both paths must
+  // converge on RUNNING. startBatch is CAS PLANNED→RUNNING, so a lost race
+  // returns 200 {started:false, reason:'already-running'} (contract: batches
+  // -api.test.js "already-running no-op"), NEVER a second dispatch.
+  const CONVERGED = ['RUNNING', 'PAUSED', 'COMPLETED', 'COMPLETED_WITH_ERRORS', 'CANCELLED'];
+  for (let i = 0; i < 60; i += 1) {
+    const b = await db.batch.findUnique({ where: { id: batchId } });
+    if (b && CONVERGED.includes(b.status)) return { auto: true, status: b.status };
+    const r = await api('POST', `/api/batches/${batchId}/start`);
+    if (r.status === 202) return { auto: false, status: 'RUNNING' };
+    if (r.status === 200) {
+      // scheduler won the race (or the batch converged between read and POST)
+      const b2 = await db.batch.findUnique({ where: { id: batchId } });
+      if (b2 && CONVERGED.includes(b2.status)) return { auto: true, status: b2.status };
+      await sleep(500); continue;
+    }
+    if (r.status === 409) { await sleep(500); continue; } // scheduler mid-race — recheck
+    throw new Error(`${label} start failed: ${r.status} ${r.text.slice(0, 200)}`);
+  }
+  throw new Error(`${label}: batch never left PLANNED`);
+}
+
 async function startMainCycle(cycleId) {
   const b1 = (await allBatchesOf(cycleId))[0];
-  const start = await api('POST', `/api/batches/${b1.id}/start`);
-  if (start.status !== 202) throw new Error(`P1 start failed: ${start.status} ${start.text.slice(0, 300)}`);
-  // duplicate start → idempotent no-op (never a second dispatch)
-  await sleep(300);
+  const res = await ensureBatchStarted(b1.id, 'main cycle batch 1');
+  record('P1', 'main cycle batch 1 running (explicit start or scheduler auto-start)', ['RUNNING', 'PAUSED'].includes(res.status),
+    `via=${res.auto ? 'scheduler auto-start' : 'explicit start'} status=${res.status}`);
+  // duplicate start on a RUNNING batch → 200 {started:false} idempotent no-op
+  // (contract: batches-api.test.js "already-running no-op"), never a 2nd dispatch
+  await sleep(500);
   const start2 = await api('POST', `/api/batches/${b1.id}/start`);
-  record('P1', 'duplicate start → idempotent (no double dispatch)', [200, 202].includes(start2.status),
-    `status=${start2.status} ${start2.json?.message ?? ''}`.slice(0, 120));
+  const stillOne = await db.taskRun.count({ where: { batchId: b1.id } }) <= 50;
+  const dupOk = (start2.status === 200 && start2.json?.started === false) || start2.status === 409;
+  record('P1', 'duplicate start → idempotent no-op (no double dispatch)', dupOk && stillOne,
+    `status=${start2.status} started=${start2.json?.started} reason=${start2.json?.reason ?? ''}`.slice(0, 120));
 }
 
 async function phase1(cycleId) {
@@ -322,8 +351,9 @@ async function phase1(cycleId) {
   // wait until the main cycle actually has live containers, THEN start the
   // overlap (guarantees a real overlap window, not sequential execution).
   await waitFor('main cycle live containers', async () => (await runningManagedCount()) >= 2, { timeoutMs: 120_000 });
-  const os = await api('POST', `/api/batches/${(await allBatchesOf(overlapCycleId))[0].id}/start`);
-  record('P1', 'overlap cycle started while main cycle running', os.status === 202, `status=${os.status}`);
+  const osRes = await ensureBatchStarted((await allBatchesOf(overlapCycleId))[0].id, 'overlap cycle batch 1');
+  record('P1', 'overlap cycle running while main cycle running', ['RUNNING', 'PAUSED', 'COMPLETED', 'COMPLETED_WITH_ERRORS'].includes(osRes.status),
+    `via=${osRes.auto ? 'auto-start' : 'explicit'} status=${osRes.status}`);
   console.log(`[P1] overlap window open (main=${String(cycleId).slice(0, 8)}… overlap=${String(overlapCycleId).slice(0, 8)}…)`);
 
   const { timedOut } = await waitFor('both cycles terminal', async () =>
@@ -699,8 +729,7 @@ async function main() {
   });
   if (rc.status !== 201) throw new Error(`P3 restart-wave create failed: ${rc.status} ${rc.text.slice(0, 300)}`);
   const rcCycle = rc.json.cycleId;
-  const rs = await api('POST', `/api/batches/${(await allBatchesOf(rcCycle))[0].id}/start`);
-  if (rs.status !== 202) throw new Error(`P3 restart-wave start failed: ${rs.status} ${rs.text.slice(0, 300)}`);
+  await ensureBatchStarted((await allBatchesOf(rcCycle))[0].id, 'P3 restart-wave batch 1');
 
   // wait until the wave is genuinely in-flight (≥2 live containers) BEFORE
   // touching the API — the restart must hit a running cycle
@@ -763,8 +792,7 @@ async function runPhase4With(brokenIds) {
     },
   });
   if (bc.status !== 201) throw new Error(`P4 create failed: ${bc.status} ${bc.text.slice(0, 300)}`);
-  const start = await api('POST', `/api/batches/${(await allBatchesOf(bc.json.cycleId))[0].id}/start`);
-  if (start.status !== 202) throw new Error(`P4 start failed: ${start.status} ${start.text.slice(0, 300)}`);
+  await ensureBatchStarted((await allBatchesOf(bc.json.cycleId))[0].id, 'P4 broken cycle batch 1');
   const { timedOut } = await waitFor('broken cycle terminal', () => cycleTerminal(bc.json.cycleId), { timeoutMs: 900_000, intervalMs: 1_000 });
   const batch = (await allBatchesOf(bc.json.cycleId))[0];
   const runs = await db.taskRun.findMany({ where: { batchId: batch.id } });

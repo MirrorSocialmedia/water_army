@@ -352,7 +352,15 @@ test('BR-B2 batches API (G7) — §10 contract over the real HTTP path', async (
     const batch = await db.batch.findUnique({ where: { id: b2.id } });
     assert.equal(batch.status, 'CANCELLED');
     const members = await db.batchIdentity.findMany({ where: { batchId: b2.id } });
-    assert.ok(members.every((m) => m.status === 'CANCELLED'), 'PENDING memberships cancelled');
+    // MD §3.3: SKIPPED is an APPROVED terminal state — cancelling a PLANNED
+    // batch flips only PENDING memberships. b2's BLOCKED identity (ID4) was
+    // planned as SKIPPED (create/preview parity fix, BR-B6 gen2) and must
+    // stay SKIPPED with its reason, not be re-cast as CANCELLED.
+    assert.ok(members.every((m) => ['CANCELLED', 'SKIPPED'].includes(m.status)), 'no PENDING memberships remain');
+    assert.equal(members.filter((m) => m.status === 'CANCELLED').length, 1, 'READY membership cancelled');
+    const skipped = members.filter((m) => m.status === 'SKIPPED');
+    assert.equal(skipped.length, 1, 'BLOCKED identity membership stays SKIPPED');
+    assert.ok(skipped.every((m) => m.skipReason), 'skip carries a reason');
   });
 
   // ----------------------------------------------------- task-run batch ops
