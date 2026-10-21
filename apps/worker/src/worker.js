@@ -27,6 +27,7 @@ import Redis from 'ioredis';
 import pino from 'pino';
 import { PINO_REDACT_PATHS, buildRedisConnection, createTaskRunService, TASK_QUEUE_NAME, createTaskQueue, enqueueTaskRun, enqueueAnyRun, closeTaskQueue, SCHEDULE_FIRE_JOB_NAME, createNetworkPolicyGate, BATCH_RUN_JOB_NAME, createBatchService, createLeaseService, createBatchScheduler, createBatchSchedulerLoop } from '@water-army/shared';
 import { createAdapterRegistry } from './adapter-registry.js';
+import { createContainerAdapter } from './container-adapter.js';
 import { createBatchEngine, makeInspectEffects } from './batch-engine.js';
 
 import { loadWorkerConfig } from './config.js';
@@ -346,7 +347,24 @@ export function createWorkerApp({
       leaseSvcRef.impl = createLeaseService({ db: dbRef.client });
     }
     if (!adapterRegistryRef.impl) {
-      adapterRegistryRef.impl = createAdapterRegistry({ env: process.env, log });
+      const registry = createAdapterRegistry({ env: process.env, log });
+      // BR-B3: the container adapter drives containers through the API's
+      // lifecycle routes with the service token (the worker has no docker
+      // socket, MD §4). Fail closed: without the API credentials the
+      // adapter is NOT registered — container batches hit the registry's
+      // ADAPTER_NOT_CONFIGURED path instead of guessing.
+      if (config.apiInternalUrl && config.workerApiToken) {
+        registry.register('container', () =>
+          createContainerAdapter({
+            env: process.env,
+            log,
+            api: createApiClient({ baseUrl: config.apiInternalUrl, serviceToken: config.workerApiToken, log }),
+          }),
+        );
+      } else {
+        log.warn?.('adapter registry: container adapter NOT registered (API_INTERNAL_URL/WORKER_API_TOKEN unset) — container batches fail closed (ADAPTER_NOT_CONFIGURED)');
+      }
+      adapterRegistryRef.impl = registry;
     }
     if (!batchSchedulerRef.impl) {
       batchSchedulerRef.impl = createBatchScheduler({

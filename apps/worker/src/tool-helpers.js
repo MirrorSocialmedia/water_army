@@ -54,7 +54,7 @@ export function createApiClient({ baseUrl, serviceToken, timeoutMs = 15_000, fet
       throw new ToolExecutionError(
         aborted ? 'TOOL_TIMEOUT' : 'TOOL_UNAVAILABLE',
         aborted ? `tool request timed out after ${timeoutMs}ms` : `API unreachable: ${err?.message ?? err}`,
-        aborted ? 504 : 503,
+        { statusCode: aborted ? 504 : 503 },
       );
     } finally {
       clearTimeout(timer);
@@ -65,12 +65,12 @@ export function createApiClient({ baseUrl, serviceToken, timeoutMs = 15_000, fet
     try {
       data = text ? JSON.parse(text) : null;
     } catch {
-      if (!res.ok) throw new ToolExecutionError('TOOL_BAD_RESPONSE', `API returned non-JSON (${res.status})`, res.status);
+      if (!res.ok) throw new ToolExecutionError('TOOL_BAD_RESPONSE', `API returned non-JSON (${res.status})`, { statusCode: res.status });
     }
     if (!res.ok) {
       const code = data?.error?.code ?? `HTTP_${res.status}`;
       const message = data?.error?.message ?? `API error ${res.status}`;
-      throw new ToolExecutionError(code, message, res.status);
+      throw new ToolExecutionError(code, message, { statusCode: res.status });
     }
     return data;
   }
@@ -99,6 +99,22 @@ export function createApiClient({ baseUrl, serviceToken, timeoutMs = 15_000, fet
     /** GET /api/devices/redroid/:id — redroid.get_device_status (R4 MD §6.3). */
     async redroidDeviceStatus(idOrName) {
       return request('GET', `/api/devices/redroid/${encodeURIComponent(idOrName)}`);
+    },
+    // BR-B3: batch container lifecycle (the worker drives containers through
+    // these routes with the service token — the worker has no docker socket,
+    // MD §4 / threat T1). The API error envelope's stable codes ride the
+    // ToolExecutionError status for the engine's retry policy mapping.
+    /** POST /api/task-runs/:runId/containers/start (create-or-adopt, idempotent) */
+    async batchContainersStart(runId) {
+      return request('POST', `/api/task-runs/${encodeURIComponent(runId)}/containers/start`, { body: {} });
+    },
+    /** GET /api/task-runs/:runId/containers/health (app-layer ADB probe) */
+    async batchContainersHealth(runId) {
+      return request('GET', `/api/task-runs/${encodeURIComponent(runId)}/containers/health`);
+    },
+    /** POST /api/task-runs/:runId/containers/stop (reversible — volume kept) */
+    async batchContainersStop(runId) {
+      return request('POST', `/api/task-runs/${encodeURIComponent(runId)}/containers/stop`, { body: {} });
     },
   };
 }

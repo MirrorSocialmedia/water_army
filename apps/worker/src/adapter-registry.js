@@ -38,8 +38,10 @@ function clampInt(raw, min, max, dflt) {
 /**
  * Abortable sleep: resolves after `ms` unless the signal fires first
  * (cancel / timeout / slot-lost all converge on `abort()`).
+ * Exported: the container adapter (B3) holds containers with the same
+ * abort semantics.
  */
-function abortableSleep(ms, signal) {
+export function abortableSleep(ms, signal) {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
       reject(Object.assign(new Error('aborted'), { name: 'AbortError', reason: signal.abortReason ?? 'aborted' }));
@@ -109,6 +111,23 @@ export function createAdapterRegistry({ env = process.env, log = console } = {})
   const factories = new Map([[ 'noop', () => createNoopAdapter({ env, log }) ]]);
   const instances = new Map();
 
+  /**
+   * Late-binding registration for the real adapters (B3 container). Only
+   * names already on the allowlist may be registered (fail closed — the
+   * allowlist is the security boundary, registration is plumbing).
+   * @returns {boolean} true when registered
+   */
+  function register(name, factory) {
+    if (typeof name !== 'string' || !allowed.has(name)) {
+      log.warn?.({ name: String(name ?? '').slice(0, 64) }, 'adapter registry: register refused — name not on the allowlist');
+      return false;
+    }
+    if (typeof factory !== 'function') return false;
+    factories.set(name, factory);
+    instances.delete(name);
+    return true;
+  }
+
   function getInstance(name) {
     if (!instances.has(name)) {
       const factory = factories.get(name);
@@ -121,6 +140,7 @@ export function createAdapterRegistry({ env = process.env, log = console } = {})
   return {
     allowed: () => [...allowed],
     isAllowed: (name) => typeof name === 'string' && name.length > 0 && allowed.has(name),
+    register,
 
     /**
      * Run the named adapter (fail-closed error mapping above).
