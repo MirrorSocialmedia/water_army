@@ -71,7 +71,7 @@ Progress log：`logs/waterarmy-repair-R8-progress.md`（S0–S9 全程）。
 
 | # | 項 | 結果 |
 |---|----|------|
-| CI1 | Actions 5 jobs（push `21fef27` 後） | **見 §3（push 後實核，唔預先宣稱）** |
+| CI1 | Actions 5 jobs（push `ca24128` 後） | **PASS** — Run 39526212464 completed success，5/5 jobs、零 failed step（§3） |
 
 ---
 
@@ -101,9 +101,25 @@ gost 無 UDP relay = 結構性阻斷；真 proxy 下才可驗證 — 產品語�
 
 ---
 
-## 3. CI 實核（push 後補記）
+## 3. CI 實核（push 後）
 
-_push 後 5 jobs 結果喺 progress log S9 補記；唔預先宣稱。_
+| Push SHA | Run | 結果 |
+|----------|-----|------|
+| `21fef27` | 39526122602 | completed/cancelled（被 `ca24128` push 取代 — 正常 supersede） |
+| `ca24128`（最終） | **39526212464** | **completed success** |
+
+Run 39526212464 逐 job 核（API jobs endpoint，零 failed step）：
+
+| Job | 結果 |
+|-----|------|
+| lockfile install + unit + integration + compose config | success（全 suite，real-redis service 真跑 — gated test 喺 CI 真執行） |
+| docker image build — redroid-matrix（R1 pin + sha256 fail-fast） | success |
+| docker image build — api + web + worker | success |
+| frontend production build (vite) | success |
+| secret scan + tracked .env check | success（gitleaks 對 R8 全 diff 乾淨） |
+
+**CI 5/5 jobs 真綠**。CI 只跑 hermetic 全 suite + 映像 build + secret scan；
+Redroid/GPU/live-network = 明確 manual/self-hosted 範圍（workflow header 明文），CI 唔宣稱 Redroid 綠（接口常規）。
 
 ---
 
