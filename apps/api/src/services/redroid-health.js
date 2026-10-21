@@ -284,8 +284,32 @@ export function buildT2sCanaryScript({ host, port, timeoutMs, nonce }) {
     'BODY=$(head -c 512 /dev/urandom | od -An -v -tx1 | tr -d " \\n")',
     'REQSHA=$(printf "%s" "$BODY" | sha256sum | cut -d" " -f1)',
     'START=$(date +%s)',
-    'OUT=$(printf "POST /canary HTTP/1.1\\r\\nHost: canary\\r\\nX-Nonce: $NONCE\\r\\nContent-Type: application/octet-stream\\r\\nContent-Length: ${#BODY}\\r\\nConnection: close\\r\\n\\r\\n%s" "$BODY" | timeout "$TO" nc -w "$TO" "$HOST" "$PORT" 2>/dev/null)',
+    // Keep nc's stdin OPEN (no EOF) while waiting for the response. toybox nc
+    // (redroid's netcat) half-closes — sends FIN — the moment stdin hits EOF,
+    // and a plain `printf | nc` pipe EOFs immediately: on a real tunnel that
+    // FIN tears the proxy relay down before the echo response can return, so
+    // the probe always reads an empty OUT and the canary can only ever PASS on
+    // a directly-routable target by a sub-ms race — never on the tunnel path
+    // it is supposed to validate (R8 live regression, 2026-10-21: printf|nc
+    // empty vs stdin-held-open full sha+nonce PASS on the same tunnel).
+    // FIFO seam: nc reads its request from a FIFO whose write end we hold on
+    // fd 3 until nc exits — no EOF is ever seen, so no FIN is sent; the probe
+    // takes the true RTT (tens of ms), not a TO-long sleep. `timeout TO+1`
+    // backstops a stalled relay (RC>=124 → reason=timeout, unchanged).
+    'TMPD=/data/local/tmp',
+    'IN=$TMPD/wa_canary_in.$$',
+    'OUTF=$TMPD/wa_canary_out.$$',
+    'rm -f "$IN" "$OUTF"',
+    'mkfifo "$IN" 2>/dev/null',
+    'timeout $((TO + 1)) nc -w "$TO" "$HOST" "$PORT" < "$IN" > "$OUTF" 2>/dev/null &',
+    'NCP=$!',
+    'exec 3>"$IN"',
+    'printf "POST /canary HTTP/1.1\\r\\nHost: canary\\r\\nX-Nonce: $NONCE\\r\\nContent-Type: application/octet-stream\\r\\nContent-Length: ${#BODY}\\r\\nConnection: close\\r\\n\\r\\n%s" "$BODY" >&3',
+    'wait $NCP',
     'RC=$?',
+    'exec 3>&-',
+    'OUT=$(cat "$OUTF" 2>/dev/null)',
+    'rm -f "$IN" "$OUTF"',
     'END=$(date +%s)',
     'MS=$(( (END-START) * 1000 ))',
     'if [ "$RC" -ge 124 ]; then echo "CANARY=FAIL nonce=$NONCE reason=timeout"; exit 1; fi',
