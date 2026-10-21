@@ -116,6 +116,14 @@ model TaskRun {
   id               String        @id @default(uuid()) @db.Uuid
   taskDefinitionId String?       @map("task_definition_id") @db.Uuid // nullable: ad-hoc runs
   scheduleId       String?       @map("schedule_id") @db.Uuid
+  // Batch rotation (BR-B1, 施工 MD §9.4): batch/identity lineage (null = ad-hoc).
+  batchId          String?       @map("batch_id") @db.Uuid
+  identityId       String?       @map("identity_id") @db.Uuid
+  // Lease + heartbeat (MD §6.2/§9.6): worker-owned execution lease.
+  leaseOwner       String?       @map("lease_owner") // worker instance id (e.g. worker-abc123)
+  leaseExpiresAt   DateTime?     @map("lease_expires_at")
+  heartbeatAt      DateTime?     @map("heartbeat_at") // last worker heartbeat
+  maxAttempts      Int           @default(3) @map("max_attempts") // columnized for batch runs (inputJson remains runtime source)
   status           TaskRunStatus @default(queued)
   inputJson        Json?         @map("input_json")
   resultJson       Json?         @map("result_json")
@@ -134,6 +142,8 @@ model TaskRun {
 
   taskDefinition TaskDefinition? @relation(fields: [taskDefinitionId], references: [id])
   events         TaskRunEvent[]
+  batch          Batch?          @relation(fields: [batchId], references: [id])
+  identity       Identity?       @relation(fields: [identityId], references: [id])
 
   // MD §7: status / created_at / schedule_id query indexes
   @@index([status])
@@ -141,6 +151,10 @@ model TaskRun {
   @@index([scheduleId])
   @@index([taskDefinitionId])
   @@index([requestedBy])
+  // Batch rotation (BR-B1): batch/identity lookup + lease expiry scanning
+  @@index([batchId])
+  @@index([identityId])
+  @@index([leaseExpiresAt])
   @@map("task_runs")
 }
 
@@ -352,6 +366,132 @@ model ScheduleNotification {
   @@index([scheduleId])
   @@index([isRead, createdAt])
   @@map("schedule_notifications")
+}
+
+// ---------------------------------------------------------------- identities (BR-B1, MD §9.1)
+// One row per approved test identity (200 total in the default cycle). The
+// row is the STABLE anchor — purge_identity_data (MD §4.2) removes the data
+// volume, never this row.
+// metadataJson MUST NOT hold passwords/cookies/tokens (MD §9.1) — secrets go
+// through the existing encryption path; the service layer rejects a
+// credential-shaped key set before write (see batch-service sanitizeMetadata).
+model Identity {
+  id           String   @id @default(uuid()) @db.Uuid
+  externalRef  String?  @unique @map("external_ref") // operator-supplied stable ref, e.g. "qa-042"
+  displayName  String   @map("display_name")
+  identityType String   @map("identity_type") // registry allowlist: qa_device | staging_user
+  status       String   @default("READY") // DISABLED|READY|RESERVED|RUNNING|CANCELLING|COMPLETED|RETRY_WAIT|RECOVERING|FAILED_FINAL|CANCELLED|SKIPPED
+  dataPath     String   @unique @map("data_path") // canonical host dir, UNIQUE = no two identities share a writable path (MD §4.1)
+  metadataJson Json     @default("{}") @map("metadata_json")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  batchMemberships BatchIdentity[]
+  runs               TaskRun[]
+
+  @@index([status])
+  @@index([identityType])
+  @@map("identities")
+}
+
+// ---------------------------------------------------------------- batches (BR-B1, MD §9.2)
+// One cycle = one full rotation over all identities (default 200 → 4×50).
+// cycleId + batchNo is unique: a cycle can never contain two "batch 2" rows.
+// idempotencyKey: POST /api/batches requires it (MD §10) — replays return
+// the original cycle, never a second one.
+model Batch {
+  id                  String    @id @default(uuid()) @db.Uuid
+  name                String
+  cycleId             String    @map("cycle_id") // stable per planning run (uuid)
+  batchNo             Int       @map("batch_no") // 1-based, ascending = execution order (MD §3.2)
+  status              String    @default("PLANNED") // PLANNED|RUNNING|PAUSED|CANCELLING|COMPLETED|COMPLETED_WITH_ERRORS|CANCELLED
+  batchSize           Int       @map("batch_size") // actual membership count for this batch
+  maxActiveContainers Int       @map("max_active_containers") // per-batch cap; global cap is min(batch cap, AppSetting, host budget) (MD §3.1)
+  failurePolicy       String    @map("failure_policy") // stop_batch | continue_and_report (MD §3.3)
+  configJson          Json      @default("{}") @map("config_json") // inter_batch_cooldown_seconds, timeouts, adapter, ...
+  idempotencyKey      String?   @unique @map("idempotency_key")
+  createdBy           String?   @map("created_by") @db.Uuid
+  createdAt           DateTime  @default(now()) @map("created_at")
+  startedAt           DateTime? @map("started_at")
+  finishedAt          DateTime? @map("finished_at")
+
+  identities BatchIdentity[]
+  runs       TaskRun[]
+
+  @@unique([cycleId, batchNo])
+  @@index([status])
+  @@index([cycleId])
+  @@map("batches")
+}
+
+// ---------------------------------------------------------------- batch_identities (BR-B1, MD §9.3)
+// Position is the identity's slot WITHIN this batch (1-based). Disabled
+// identities occupy their position with status=SKIPPED + skipReason (MD §3.2:
+// never silently rebind other identities).
+model BatchIdentity {
+  batchId    String   @map("batch_id") @db.Uuid
+  identityId String   @map("identity_id") @db.Uuid
+  position   Int // 1-based order inside the batch
+  status     String   @default("PENDING") // PENDING|ACTIVE|COMPLETED|FAILED_FINAL|CANCELLED|SKIPPED — mirrors the identity FSM terminal set
+  skipReason String?  @map("skip_reason")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  batch    Batch    @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  identity Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+
+  @@id([batchId, identityId])
+  @@unique([batchId, position])
+  @@index([identityId])
+  @@map("batch_identities")
+}
+
+// ---------------------------------------------------------------- resource_leases (BR-B1, MD §9.6)
+// Cross-process leases for: container slots (resource_key 'slot-0'..'slot-N'),
+// host ports (if host-port ADB workflows return) and identity reservations.
+// CAS semantics live in lease-service.js: create (P2002 → refetch) + expired
+// takeover via single-statement updateMany(lease_expires_at <= now) — the
+// loser's update matches 0 rows. No table is ever dropped at boot (MD §9.6).
+model ResourceLease {
+  id             String   @id @default(uuid()) @db.Uuid
+  resourceType   String   @map("resource_type") // container_slot | port | identity_reservation
+  resourceKey    String   @map("resource_key") // e.g. "slot-7", "172.17.0.1:20080", identity uuid
+  ownerRunId     String?  @map("owner_run_id") @db.Uuid // the task run holding the lease (null allowed at acquire, bound at start)
+  ownerLabel     String?  @map("owner_label") // worker instance id (ops/reconciliation visibility)
+  leaseExpiresAt DateTime @map("lease_expires_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@unique([resourceType, resourceKey])
+  @@index([leaseExpiresAt])
+  @@index([ownerRunId])
+  @@map("resource_leases")
+}
+
+// ---------------------------------------------------------------- state_events (BR-B1, MD §9.5)
+// Append-only from/to state event store, GENERIC over entity type
+// (identity | batch | task_run | lease). Kept separate from task_run_events
+// on purpose: (a) task_run_events cascade-delete with the run, while
+// identity/batch state outlives runs; (b) MD §9.5 asks for entity
+// type/ID + correlation id, which a run-scoped table cannot carry.
+// Append-only is enforced at the service layer (same convention as
+// audit_events — this repo has no DB triggers): there is NO API surface
+// that updates or deletes these rows.
+model StateEvent {
+  id            String   @id @default(uuid()) @db.Uuid
+  entityType    String   @map("entity_type") // identity | batch | task_run | lease
+  entityId      String   @map("entity_id")
+  fromState     String?  @map("from_state") // null = birth event
+  toState       String   @map("to_state")
+  reason        String? // human-readable, scrubbed (MD §9.5)
+  actor         String? // user uuid | 'worker:<label>' | 'scheduler' | 'system'
+  correlationId String?  @map("correlation_id") // groups a causal chain (cycle id / batch id / request id)
+  detailsJson   Json?    @map("details_json") // secrets scrubbed before write
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([entityType, entityId, createdAt])
+  @@index([correlationId])
+  @@index([toState])
+  @@map("state_events")
 }
 
 // ---------------------------------------------------------------- app_settings
