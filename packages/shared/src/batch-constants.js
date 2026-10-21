@@ -88,6 +88,108 @@ export const BATCH_TRANSITIONS = Object.freeze({
 /** MD §3.3 failure policies. */
 export const FAILURE_POLICY = Object.freeze(['stop_batch', 'continue_and_report']);
 
+// ---------------------------------------------------------------- batch config
+/**
+ * Adapter registry allowlist (MD §2/§6.3: 真實 adapter 必須明確啟用 — no
+ * silent fallback). B3 appends real adapter types here; the worker's adapter
+ * registry only instantiates types in this list.
+ */
+export const BATCH_ADAPTER_REGISTRY = Object.freeze(['noop']);
+
+/** Batch runs reuse the task-run attempt cap (MD §11.8 bounded retry). */
+export const BATCH_MAX_ATTEMPTS_CAP = 5;
+
+/** Defaults applied when a cycle's configJson omits a knob. */
+export const BATCH_CONFIG_DEFAULTS = Object.freeze({
+  /** Per-identity execution deadline (seconds). */
+  timeoutSeconds: 900,
+  /** Auto-retry attempts per identity (capped at BATCH_MAX_ATTEMPTS_CAP). */
+  maxAttempts: 3,
+  /** Seconds to wait after a batch completes before its successor starts. */
+  interBatchCooldownSeconds: 0,
+});
+
+/** AppSetting key holding the global container cap (MD §3.1, admin-managed). */
+export const APP_SETTING_BATCH_GLOBAL_MAX_ACTIVE = 'batch.global_max_active_containers';
+
+/** BullMQ job name for batch runs (same queue as task runs; dispatch by name). */
+export const BATCH_RUN_JOB_NAME = 'batch-run';
+
+/**
+ * Deterministic job id per batch run + attempt → idempotent enqueue
+ * (BullMQ forbids ':' in custom job ids — joiner is '-', same lesson as
+ * taskJobId; live-accepted 2026-10-15).
+ */
+export function batchJobId(runId, attempt) {
+  return `batch-${runId}-${Number(attempt)}`;
+}
+
+/**
+ * Validate a cycle/batch config object (MD §12: config is validated at the
+ * API boundary AND re-checked by the worker before execution — hostile input
+ * is assumed on both sides). Returns an error list (empty = valid).
+ *
+ * @param {object} config the cycle configJson (optional knobs only)
+ * @returns {string[]}
+ */
+export function validateBatchConfig(config) {
+  const errors = [];
+  if (config == null) return errors; // no config = all defaults (valid)
+  if (typeof config !== 'object' || Array.isArray(config)) {
+    return ['config must be a plain object'];
+  }
+  if (config.interBatchCooldownSeconds !== undefined) {
+    if (!Number.isInteger(config.interBatchCooldownSeconds) || config.interBatchCooldownSeconds < 0 || config.interBatchCooldownSeconds > 86_400) {
+      errors.push('config.interBatchCooldownSeconds must be an integer 0..86400 (seconds)');
+    }
+  }
+  if (config.timeoutSeconds !== undefined) {
+    if (!Number.isInteger(config.timeoutSeconds) || config.timeoutSeconds < 1 || config.timeoutSeconds > 3_600) {
+      errors.push('config.timeoutSeconds must be an integer 1..3600 (per-identity deadline)');
+    }
+  }
+  if (config.maxAttempts !== undefined) {
+    if (!Number.isInteger(config.maxAttempts) || config.maxAttempts < 1 || config.maxAttempts > BATCH_MAX_ATTEMPTS_CAP) {
+      errors.push(`config.maxAttempts must be an integer 1..${BATCH_MAX_ATTEMPTS_CAP}`);
+    }
+  }
+  if (config.adapter !== undefined) {
+    const a = config.adapter;
+    if (typeof a !== 'object' || a === null || Array.isArray(a)) {
+      errors.push('config.adapter must be a plain object { type, ... }');
+    } else {
+      if (typeof a.type !== 'string' || !BATCH_ADAPTER_REGISTRY.includes(a.type)) {
+        errors.push(`config.adapter.type must be one of ${BATCH_ADAPTER_REGISTRY.join(' | ')} (MD §2: 明確啟用)`);
+      }
+      if (a.type === 'noop') {
+        if (a.durationMs !== undefined && (!Number.isInteger(a.durationMs) || a.durationMs < 0 || a.durationMs > 3_600_000)) {
+          errors.push('config.adapter.durationMs must be an integer 0..3600000 (noop)');
+        }
+        if (a.outcome !== undefined && !['ok', 'fail', 'fail_retryable'].includes(a.outcome)) {
+          errors.push("config.adapter.outcome must be 'ok' | 'fail' | 'fail_retryable' (noop)");
+        }
+        if (a.failures !== undefined) {
+          if (typeof a.failures !== 'object' || a.failures === null || Array.isArray(a.failures)) {
+            errors.push('config.adapter.failures must be a { identityId: outcome } object (noop)');
+          } else {
+            for (const [k, v] of Object.entries(a.failures)) {
+              if (typeof v !== 'string' || !['ok', 'fail', 'fail_retryable'].includes(v)) {
+                errors.push(`config.adapter.failures['${k}'] must be 'ok' | 'fail' | 'fail_retryable'`);
+                break;
+              }
+              if (k.length > 64) {
+                errors.push('config.adapter.failures keys must be identity ids (<=64 chars)');
+                break;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return errors;
+}
+
 // ---------------------------------------------------------------- capacity
 /**
  * MD §3.1: TOTAL_IDENTITIES >= 0, BATCH_SIZE >= 1, MAX_ACTIVE_CONTAINERS >= 1.
@@ -372,3 +474,14 @@ export class BatchError extends Error {
 
 /** idempotencyKey contract (MD §10: POST /api/batches requires it). */
 export const IDEMPOTENCY_KEY_RE = /^[A-Za-z0-9_-]{8,64}$/;
+
+/**
+ * Run-level idempotency key for batch runs (MD §12.3 防重複派發).
+ * `<batchId>:<identityId>:a<seq>` — the sequence suffix lets a re-dispatched
+ * run (e.g. after a pause-stop cancel + resume) get a FRESH run row without
+ * colliding on the unique idempotency_key column. seq = 1 for the first run
+ * of the (batch, identity) pair.
+ */
+export function runIdempotencyKey(batchId, identityId, seq = 1) {
+  return `${batchId}:${identityId}:a${Number(seq)}`;
+}
