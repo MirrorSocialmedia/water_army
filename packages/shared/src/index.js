@@ -131,6 +131,14 @@ export {
   newUuid,
   BatchError,
   IDEMPOTENCY_KEY_RE,
+  // BR-B3 (Phase 3): container adapter spec contract (MD Phase 3 item 3/5).
+  PINNED_IMAGE_RE,
+  CONTAINER_HEALTH_KINDS,
+  CONTAINER_WORK_KINDS,
+  validateContainerAdapterConfig,
+  ADB_CONTAINER_PORT_DEFAULT,
+  effectiveHealthProbe,
+  effectiveWorkSpec,
   // BR-B2 (gen1): scheduler/queue constants + helpers.
   BATCH_ADAPTER_REGISTRY,
   BATCH_MAX_ATTEMPTS_CAP,
@@ -169,6 +177,26 @@ export {
 
 /** Batch cycle audit report (BR-B5, MD §11.4 — zero-secrets export). */
 export { REPORT_SCHEMA, buildCycleReport, renderCycleReportCsv, assertNoSecrets, maskCredentialShapedValues } from './batch-report.js';
+
+/**
+ * Batch container lifecycle — pure decision helpers (BR-B3, MD Phase 3):
+ * error codes, naming, port allocation, the label×DB ownership double
+ * check, reconcile classification, ADB handshake parsing.
+ */
+export {
+  BATCH_LIFECYCLE_ERROR,
+  BATCH_LIFECYCLE_ERROR_STATUS,
+  BatchLifecycleError,
+  APP_SETTING_BATCH_CONTAINER_IMAGE_ALLOWLIST,
+  containerNameForRun,
+  parsePortRange,
+  pickAvailablePort,
+  ownershipVerdict,
+  RECONCILE_STATES,
+  reconcileVerdict,
+  ADB_HOST_VERSION_CMD,
+  parseAdbVersionReply,
+} from './batch-lifecycle.js';
 
 /** LeaseService — cross-process resource leases (BR-B1, MD §9.6). */
 export { createLeaseService } from './lease-service.js';

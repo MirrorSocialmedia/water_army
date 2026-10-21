@@ -91,10 +91,10 @@ export const FAILURE_POLICY = Object.freeze(['stop_batch', 'continue_and_report'
 // ---------------------------------------------------------------- batch config
 /**
  * Adapter registry allowlist (MD §2/§6.3: 真實 adapter 必須明確啟用 — no
- * silent fallback). B3 appends real adapter types here; the worker's adapter
- * registry only instantiates types in this list.
+ * silent fallback). B3 appends the real container adapter type here; the
+ * worker's adapter registry only instantiates types in this list.
  */
-export const BATCH_ADAPTER_REGISTRY = Object.freeze(['noop']);
+export const BATCH_ADAPTER_REGISTRY = Object.freeze(['noop', 'container']);
 
 /** Batch runs reuse the task-run attempt cap (MD §11.8 bounded retry). */
 export const BATCH_MAX_ATTEMPTS_CAP = 5;
@@ -184,6 +184,11 @@ export function validateBatchConfig(config) {
             }
           }
         }
+      }
+      if (a.type === 'container') {
+        // BR-B3: real container adapter — shape validated by the shared
+        // lifecycle module (single source of truth for image/health/work).
+        for (const e of validateContainerAdapterConfig(a)) errors.push(e);
       }
     }
   }
@@ -482,6 +487,103 @@ export class BatchError extends Error {
 
 /** idempotencyKey contract (MD §10: POST /api/batches requires it). */
 export const IDEMPOTENCY_KEY_RE = /^[A-Za-z0-9_-]{8,64}$/;
+
+// ---------------------------------------------------------------- container adapter spec (BR-B3, MD Phase 3)
+/**
+ * Image refs must be explicitly pinned (tag or digest), never implicit
+ * latest — same rule as the P2 template validator (MD §2-2/§12).
+ * (Lives here — next to the noop spec validation — because
+ * validateBatchConfig above must stay synchronous and this module keeps
+ * its zero-intra-package-imports invariant.)
+ */
+export const PINNED_IMAGE_RE =
+  /^[a-z0-9][a-z0-9._/-]*(:[a-z0-9][a-z0-9._-]*)?(@sha256:[a-f0-9]{64})?$/;
+
+export const CONTAINER_HEALTH_KINDS = Object.freeze(['adb-tcp', 'tcp', 'none']);
+export const CONTAINER_WORK_KINDS = Object.freeze(['hold', 'none']);
+
+/**
+ * Validate a `container` adapter spec (MD Phase 3: start/health contract).
+ * @param {object} spec { image, health?, work? }
+ * @returns {string[]} error list (empty = valid)
+ */
+export function validateContainerAdapterConfig(spec) {
+  const errors = [];
+  if (spec == null || typeof spec !== 'object' || Array.isArray(spec)) {
+    return ['adapter config must be a plain object'];
+  }
+  const image = spec.image;
+  if (typeof image !== 'string' || image.length === 0 || image.length > 512) {
+    errors.push('adapter.image must be a non-empty string (<=512 chars)');
+  } else if (!PINNED_IMAGE_RE.test(image)) {
+    errors.push('adapter.image must be a valid explicitly-pinned image reference');
+  } else {
+    const tail = image.slice(image.lastIndexOf('/') + 1);
+    if (!/[:@]/.test(tail)) {
+      errors.push('adapter.image must be explicitly tagged (e.g. foo/bar:1.2.3) or digest-pinned');
+    } else if (/(^|:)latest$/i.test(tail)) {
+      errors.push('adapter.image tag "latest" is not allowed — pin an explicit version');
+    }
+  }
+  if (spec.health !== undefined) {
+    const h = spec.health;
+    if (typeof h !== 'object' || h === null || Array.isArray(h)) {
+      errors.push('adapter.health must be a plain object { kind, port? }');
+    } else {
+      if (!CONTAINER_HEALTH_KINDS.includes(h.kind)) {
+        errors.push(`adapter.health.kind must be one of ${CONTAINER_HEALTH_KINDS.join(' | ')}`);
+      }
+      if (h.port !== undefined && (!Number.isInteger(h.port) || h.port < 1 || h.port > 65535)) {
+        errors.push('adapter.health.port must be an integer 1..65535 (the container port)');
+      }
+    }
+  }
+  if (spec.work !== undefined) {
+    const w = spec.work;
+    if (typeof w !== 'object' || w === null || Array.isArray(w)) {
+      errors.push("adapter.work must be a plain object { kind: 'hold', durationMs? } or { kind: 'none' }");
+    } else if (w.kind === 'hold') {
+      if (w.durationMs !== undefined && (!Number.isInteger(w.durationMs) || w.durationMs < 0 || w.durationMs > 3_600_000)) {
+        errors.push('adapter.work.durationMs must be an integer 0..3600000 (hold work, ms)');
+      }
+    } else if (w.kind !== 'none') {
+      errors.push(`adapter.work.kind must be one of ${CONTAINER_WORK_KINDS.join(' | ')}`);
+    }
+  }
+  return errors;
+}
+
+/** The container-side ADB port for redroid-class images (fixed by the image). */
+export const ADB_CONTAINER_PORT_DEFAULT = 5555;
+
+/**
+ * Effective health probe for a container adapter spec.
+ * @returns {{kind:'adb-tcp'|'tcp'|'none', containerPort:number}}
+ */
+export function effectiveHealthProbe(spec) {
+  const h = spec?.health ?? {};
+  const kind = CONTAINER_HEALTH_KINDS.includes(h.kind) ? h.kind : 'adb-tcp';
+  const port = Number.isInteger(h.port) && h.port >= 1 && h.port <= 65535
+    ? h.port
+    : ADB_CONTAINER_PORT_DEFAULT;
+  return { kind, containerPort: port };
+}
+
+/**
+ * Effective work spec. B3 has no real QA workload yet — 'hold' (bounded
+ * wall-clock, the B2 noop's semantics) and 'none' (a healthy boot IS the
+ * run) are the honest options; B6 adds scripted device work behind the
+ * same seam.
+ * @returns {{kind:'hold'|'none', durationMs:number}}
+ */
+export function effectiveWorkSpec(spec) {
+  const w = spec?.work ?? {};
+  if (w.kind === 'none') return { kind: 'none', durationMs: 0 };
+  const durationMs = Number.isInteger(w.durationMs) && w.durationMs >= 0
+    ? Math.min(w.durationMs, 3_600_000)
+    : 0;
+  return { kind: 'hold', durationMs };
+}
 
 /**
  * Run-level idempotency key for batch runs (MD §12.3 防重複派發).

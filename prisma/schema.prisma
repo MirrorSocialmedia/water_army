@@ -130,6 +130,12 @@ model TaskRun {
   resultText       String?       @map("result_text")
   errorCode        String?       @map("error_code")
   errorMessage     String?       @map("error_message")
+  // BR-B3 (MD §9.4/§4.3): the Docker container this run owns (docker id after
+  // create; null = not yet created / ad-hoc run). DB half of the double
+  // ownership check — the container's water-army labels are the other half;
+  // every lifecycle op requires BOTH to agree (CONTAINER_OWNERSHIP_MISMATCH
+  // on disagreement). The lifecycle service owns writes; no UI mutates it.
+  containerId      String?       @map("container_id")
   attempt          Int           @default(1)
   queuedAt         DateTime?     @map("queued_at")
   startedAt        DateTime?     @map("started_at")
@@ -155,6 +161,7 @@ model TaskRun {
   @@index([batchId])
   @@index([identityId])
   @@index([leaseExpiresAt])
+  @@index([containerId]) // BR-B3: reconcile reverse lookup (container → run)
   @@map("task_runs")
 }
 
