@@ -397,7 +397,7 @@ async function injectTransientFailure(target, stopIf) {
 }
 async function assertTransientRecovery(phase, inj) {
   if (!inj?.killed) {
-    record(phase, 'transient failure injected (docker kill mid-hold)', false, 'window missed on both targets');
+    record(phase, 'transient failure injected (docker kill mid-hold)', false, `window missed on all targets (lateAll=${inj?.lateAll ?? 'n/a'})`);
     return false;
   }
   const run = await waitFor('transient run terminal', async () => {
@@ -683,20 +683,35 @@ async function main() {
 
   // P2 — transient failure: the injector runs CONCURRENTLY with phase1 (its
   // window is batch 1, the first minutes of the cycle — it must not be
-  // launched after phase1's terminal wait). Targets: brb6-007 then brb6-017
-  // (both batch 1). The injector gives up on a target once its run is
-  // terminal (window passed) and aborts when the main cycle is terminal.
-  const t0 = seed.main.find((m) => m.ref === 'brb6-007');
-  const t1 = seed.main.find((m) => m.ref === 'brb6-017');
+  // The injector IIFE is launched BEFORE phase1 is awaited below, so it races
+  // the live main cycle (stopIf = main cycle terminal).
+  // Targets: brb6-007/017/027/037 (all batch 1). A kill is only USEFUL if it
+  // lands while the run is still in-flight: the hold is 10s with 2s probes, so
+  // a kill in the final probe gap (~2s before the deadline) can be missed —
+  // the run succeeds on the same attempt. In that case move on to the next
+  // target instead of recording a false PASS/FAIL (P(miss all 4) ≈ 0.2^4).
+  // The injector gives up on a target once its run is terminal (window passed)
+  // and aborts when the main cycle is terminal.
+  const targets = ['brb6-007', 'brb6-017', 'brb6-027', 'brb6-037'].map((ref) => seed.main.find((m) => m.ref === ref));
   const injP = (async () => {
-    const targets = [t0, t1];
     for (const target of targets) {
       const r = await injectTransientFailure(target, () => (cycleTerminal(cycleId)));
-      if (r.killed) return r;
-      if (r.windowPassed) continue;
-      return r; // hard abort (cycle terminal)
+      if (!r.killed) {
+        if (r.windowPassed) continue;
+        return r; // hard abort (cycle terminal)
+      }
+      // The kill landed — but did it hit in-flight work? If the run already
+      // succeeded on the SAME attempt, the kill was too late (probe gap near
+      // the deadline): try the next target.
+      const chk = await waitFor('kill-effect check', async () => {
+        const run = await db.taskRun.findUnique({ where: { id: r.runId } });
+        return TERMINAL_RUN.includes(run?.status) ? run : null;
+      }, { timeoutMs: 90_000 });
+      const term = chk.v;
+      if (term?.status === 'succeeded' && term.attempt <= r.attemptAtKill) continue;
+      return r; // effective: retry (attempt+1) or hard failure
     }
-    return { killed: false };
+    return { killed: false, lateAll: true };
   })();
 
   const phase1Res = await phase1(cycleId);

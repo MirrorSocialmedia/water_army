@@ -75,7 +75,7 @@ log "prisma migrate deploy (scratch DB)"
 npx prisma migrate deploy --schema prisma/schema.prisma 2>&1 | tail -2
 
 # --- seed (admin + 200 + 10 identities; deterministic + idempotent) -----------
-log "seeding admin + 210 identities"
+log "seeding admin + 216 identities (200 main / 10 overlap / 6 restart-wave)"
 BRB6_DATA_ROOT="$RUN/data" node scripts/br-b6-e2e/seed.js
 
 # --- env files (fresh secrets each run; .dev is gitignored) -------------------
@@ -111,18 +111,24 @@ API_INTERNAL_URL=http://127.0.0.1:16343
 # (loopback) — allowlist it. Zero public entries (deny-all for public).
 QA_ENDPOINT_ALLOWLIST_INTERNAL=http://127.0.0.1:16343
 LOG_LEVEL=info
-# One BullMQ job per worker at a time: with cap 6 the concurrency shape is
-# fully visible in the lease sampler (B2 G8 pattern).
-TASK_MAX_CONCURRENCY=1
+# BullMQ concurrency = global cap: the sampler must be able to SEE 6 live
+# slots (B2 G8 pattern). (B6 gen2 run-2: concurrency=1 serialized every run
+# → the cap was never exercised and P1's binding check could never pass.)
+TASK_MAX_CONCURRENCY=6
 BATCH_SCHEDULER_INTERVAL_MS=2000
 BATCH_HEARTBEAT_MS=2000
-BATCH_SLOT_TTL_MS=8000
+# TTL must outlive the longest run (10s hold + boot) or the reconciler
+# isolates healthy runs mid-hold (B6 gen2 run-2: 8s TTL < 10s hold).
+BATCH_SLOT_TTL_MS=30000
 BATCH_CANCEL_POLL_MS=500
 BATCH_SLOT_WAIT_MS=1000
 BATCH_MAX_SLOT_DEFERS=60
 BATCH_DEFAULT_TIMEOUT_MS=60000
-# container adapter: 2s hold = the sandbox "work window"; health re-probe 2s
-CONTAINER_ADAPTER_HOLD_MS=2000
+# container adapter: 10s hold = the sandbox "work window" — wide enough that
+# the P2 mid-hold docker kill reliably lands in-flight (2s probes × 5), and
+# the P3b worker SIGKILL has ≥2 live containers to orphan.
+# (B6 gen2 run-2: 2s hold let the kill race the success commit.)
+CONTAINER_ADAPTER_HOLD_MS=10000
 CONTAINER_ADAPTER_HEALTH_POLL_MS=2000
 EOF
 

@@ -1,7 +1,8 @@
 /**
  * BR-B6 E2E seed — 200 main identities (MD §14.3) + 10 overlap-cycle
- * identities + admin. Deterministic ids, idempotent (upsert by externalRef /
- * dataPath — a re-run of setup.sh never double-seeds).
+ * identities + 6 restart-wave identities + admin. Deterministic ids,
+ * idempotent (upsert by externalRef / dataPath — a re-run of setup.sh never
+ * double-seeds).
  *
  *   - brb6-001..brb6-200 : the 200-identity cycle. 196 READY + 4 DISABLED
  *     (one per batch: 004/054/104/154) → creation must SKIP them with an
@@ -9,6 +10,11 @@
  *     subtask's "disable/skipped 要有明確原因").
  *   - brb6-x01..brb6-x10 : the overlap cycle (proves the GLOBAL cap binds
  *     across simultaneously-running cycles).
+ *   - brb6-f01..brb6-f06 : the P3 RESTART WAVE — a dedicated 6-identity set,
+ *     READY, NEVER part of the main 200 (main's ids are terminal + re-rotation
+ *     is illegal by design, so P3's API/worker restart is proven against a
+ *     fresh live cycle). Must stay OUT of `main` or the P5 200-id audit
+ *     counts them and sees them without a main-cycle terminal.
  */
 import { createRequire } from 'node:module';
 import path from 'node:path';
@@ -48,6 +54,7 @@ const identities = [];
 const refs = [];
 for (let i = 1; i <= 200; i += 1) refs.push(`brb6-${String(i).padStart(3, '0')}`);
 for (let i = 1; i <= 10; i += 1) refs.push(`brb6-x${String(i).padStart(2, '0')}`);
+for (let i = 1; i <= 6; i += 1) refs.push(`brb6-f${String(i).padStart(2, '0')}`); // P3 restart wave
 
 for (const ref of refs) {
   const id = uuidFor(`brb6-${ref}`);
@@ -86,12 +93,14 @@ for (const ref of refs) {
 
 const out = {
   admin: { id: admin.id, username: admin.username, password },
-  main: identities.filter((i) => !i.ref.startsWith('brb6-x')),
+  // main = the 200-id cycle ONLY (exclude overlap x + restart-wave f).
+  main: identities.filter((i) => !i.ref.startsWith('brb6-x') && !i.ref.startsWith('brb6-f')),
   overlap: identities.filter((i) => i.ref.startsWith('brb6-x')),
+  restartWave: identities.filter((i) => i.ref.startsWith('brb6-f')),
   disabledRefs: [...DISABLED_SET],
 };
 const { writeFileSync } = await import('node:fs');
 writeFileSync('.dev/br-b6-e2e/identities.json', JSON.stringify(out, null, 2));
-console.log(`[br-b6-e2e-seed] ${identities.length} identities upserted (${out.main.length} main / ${out.overlap.length} overlap / ${out.disabledRefs.length} DISABLED)`);
+console.log(`[br-b6-e2e-seed] ${identities.length} identities upserted (${out.main.length} main / ${out.overlap.length} overlap / ${out.restartWave.length} restart-wave / ${out.disabledRefs.length} DISABLED)`);
 console.log(`[br-b6-e2e-seed] admin=brb6admin pw written to .dev/br-b6-e2e/identities.json`);
 await db.$disconnect();
