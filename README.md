@@ -1,6 +1,6 @@
 # water_army
 
-Docker 容器 + AI 任務自動化平台（**7 階段 MVP 全部完成** — P0–P6 ＋ security patch ＋ Redroid 實機矩陣 Stage A/B ＋ **網絡修復鏈 R0–R7**；本 README = P6 最終版 + 2026-10-19 更新 + 2026-10-21 R7 文檔同步）。
+Docker 容器 + AI 任務自動化平台（**7 階段 MVP 全部完成** — P0–P6 ＋ security patch ＋ Redroid 實機矩陣 Stage A/B ＋ **網絡修復鏈 R0–R7** ＋ **Batch Rotation BR-B1–B6**；本 README = P6 最終版 + 2026-10-19 更新 + 2026-10-21 R7 文檔同步 + **2026-10-22 BR-B6 收口**）。
 本地單一部署：一個 UI、一個 API、一個 worker、Postgres 17、Redis 7，全部跑喺同一部主機嘅 Docker 入面。
 
 - **api** — Fastify 5：auth（argon2id + session cookie）、RBAC、health、容器 API（P2）、AI 任務/批准/provider 管理 API（P3）、排程 API（P4）、Redroid device API（P5）、dashboard + 排程通知（P6）
@@ -21,7 +21,7 @@ Docker 容器 + AI 任務自動化平台（**7 階段 MVP 全部完成** — P0�
 - **Security patch**（`27cc558`）：SSRF guard（provider baseUrl → 400 `BLOCKED_URL`）＋ per-account 登入限流（rate key = 客戶端 IP × 帳號）＋ proxy anti-spoof ＋ `trustProxy` — 見 §安全模型
 - **Stage A Redroid 實機矩陣**（`f8e2986`/`cf6b2d9`）：本機真 host boot（kernel 6.8 + RTX 3090，redroid 14.0.0-240527 → `boot_completed=1`／ADB `device`／SDK 34／boot 後 18+ 分鐘零 crash）、preflight memfd 語義 + containerized vantage、容器內 binderfs wrapper image（`docker/redroid-matrix/`）、root host setup script（`scripts/redroid-host-setup.sh`）— 見 §Redroid 實機矩陣
 - **Stage B per-device egress proxy**（`18f8139`/`ffe800f`/`bd88571`/`351983a`）：per-device gost container（digest pin）＋ tun2socks v2.7.0 bake 入 wrapper image、port 段 20080–20179、`proxyUrl` 加密 data model — 見 §Per-device egress proxy
-- 測試套：465 → **492**（491 pass + 1 env-gated skip，0 fail）
+- 測試套：465 → **492**（491 pass + 1 env-gated skip，0 fail）→ BR-B1–B6 收口後 **1054**（1053 pass + 1 env-gated skip，0 fail）
 
 ---
 
@@ -462,6 +462,25 @@ P5「mock 驗證主路徑」升級為**真機 boot**：本機（kernel 6.8.0-117
 
 **clean install 實跑**（`docs/evidence/p6-cleaninstall/`）：`down -v` → 嚴格照本 README 由零起 → 5/5 healthy → 首 admin 建立 → 登入 200 → 還原 dev 狀態。
 
+## Batch Rotation（BR-B1–B6 — 2026-10-21/22）
+
+Identity 批次輪換：一組 identity（例如 200 個）排入 cycle，每批（batch）並行跑固定數量嘅容器（global cap 控制 fleet 總量），一個 identity 一次一個 run，跑完釋放。
+
+**核心保證（MD §14，全部有測試/E2E 證據）**：
+- **PG-first**：PostgreSQL = source of truth；BullMQ 係 derived index（worker boot + 每 5 分鐘 reconcile 對齊）— Redis 斷 = 派工停（唔 blind 派），復原自動收斂
+- **唔雙跑唔漏單**：(batch, identity) 一列 `task_run`；重試 = 新 attempt（事件流 lineage，`attempt_started` unique）；worker 重啟後 adopt 舊容器而唔係建第二個；port/slot 用 `resource_lease` CAS 認領
+- **容量**：`effective = min(batch.maxActiveContainers, globalCap ?? ∞)`；global cap = admin-only 寫（`/api/batches/capacity`）
+- **fail-closed**：Docker 任何 error 唔會當成功；image 404 = 第一次即 FAILED_FINAL（唔燒重試）；port 池用盡 = bounded retry；429（rate limit）對 scheduler = retryable
+- **data 保留**：stop/remove/cancel 全部保留 identity data；唯一抹 data = `POST /api/identities/:id/purge`（admin+human only、dryRun、confirm token）
+- **零秘密**：所有 read surface = allow-list 投影 + scrub；report 匯出有 secret 硬門（漏 = 500 `REPORT_SECRET_TRIP`）
+
+**運行**（operator+）：`POST /api/batches/preview`（純讀、unknown id 報告）→ `POST /api/batches`（strict、unknown id = 400、DISABLED = SKIPPED 帶原因、idempotencyKey 冪等）→ `POST /api/batches/:id/start`（冪等；scheduler 會 auto-start）。停止：pause/resume/cancel。事故：`POST /api/batch-containers/reconcile`（`fix=true` 清 orphan）。詳見 `docs/api-reference.md`（Batch Rotation 控制節）+ `docs/runbook.md` §11（監控/告警/故障應變）+ ADR §18。
+
+**測試 harness（BR-B6）**：
+- `scripts/br-b6-e2e/` — MD §14.3 sandbox E2E：fresh scratch（16341–16344 + ADB 16360–16400、`br-b6-*` 前綴、ADB-mock image）→ 200 identities / 4 batches 全 cycle + 重複 API 請求 + worker SIGKILL + API 重啟 + transient/permanent 故障 → P5 200 終態 audit。`bash scripts/br-b6-e2e/run.sh`（自帶 teardown；port pre-flight + listener identity 驗證防 orphan 撞口）
+- `scripts/br-b6-e2e/fault-driver.mjs` — 跨組件故障注入：Redis 斷 15s / PG 斷 15s / worker kill + Redis 斷（組合）；斷言 = 每 identity 一個終態 + `attempt_started` 全局 unique + 零殘留容器（`bash scripts/br-b6-e2e/fault-run.sh`）
+- `scripts/br-b6lt/` — 真機階梯壓測（165xx scratch、`br-b6lt-*` 前綴、pinned digest `matrixa-r3`、`gpu_mode=host`）：1→5→10→25→50，每階段 5s VRAM+host sampler + SGLang 共卡 halt monitor（衝突先縮 batch/等）— `logs/br-b6-loadtest/`（plan + 每階段 report）
+
 ## 功能清單（MD §18 三類分列 — 交付誠實項）
 
 ### A. 實際可用（真環境實測過，非 mock）
@@ -477,6 +496,7 @@ P5「mock 驗證主路徑」升級為**真機 boot**：本機（kernel 6.8.0-117
 - **Redroid 實機矩陣 Stage A（2026-10-19）**：真 redroid 容器 boot（redroid 14.0.0-240527 + binderfs wrapper image，本機 kernel 6.8 + RTX 3090，GPU host mode）→ `boot_completed=1`／ADB `device`／SDK 34／3 條 shell 實測／boot 後 18+ 分鐘零 crash；真 ADB 連通 + 真 logcat/getprop 對接；4 區診斷對真 device 實跑（host 視角 / offline 誠實披露）
 - **Per-device egress proxy DNS 隔離（Stage B，2026-10-19）**：2 device 走 2 條獨立 proxy 路，**DNS 100% 經 proxy**（canary NOERROR + NXDOMAIN 負例實錚），每個 proxy 只見到自己嗰部 device 嘅源 IP（路由隔離成立）— TCP 路徑係明列限制（見 C 類第 1 項）
 - 部署/運維：clean install（P6 實跑）、backup/restore（P6 實跑 14 表全對）、health/ready 依賴分級、Redroid host 一次性 setup（Stage A，冪等 script + undo）
+- **Batch Rotation 全 cycle（BR-B6 sandbox E2E，2026-10-22）**：200 identities / 4 batches × 50 全 cycle（163xx scratch、ADB-mock image）— 重複 create/start 冪等（同 idempotencyKey = 同 cycle；已 RUNNING start = `started:false` no-op）、DISABLED identity = SKIPPED 帶原因（preview/create 一致）、worker SIGKILL / API 重啟 / transient+permanent 故障注入後零雙跑零漏單（`attempt_started` 全局 unique）、active container 任何時刻 ≤ 全局 cap、容器移除後 data 保留 — evidence `logs/br-b6-e2e/`（BR-B6 收口）
 
 ### B. Mock 驗證（API/邏輯層全過，外部真體未接）
 
@@ -513,7 +533,7 @@ P5「mock 驗證主路徑」升級為**真機 boot**：本機（kernel 6.8.0-117
 | K13 | **removeData 清唔到 root-owned data 目錄殘留**（Stage A） | 實 boot 後 per-device `/data` 內容 root-owned（容器 root 寫入、無 uid remap）；api（uid 1000 非 root）刪除失敗報 `dataRemoved:false`，目錄 skeleton 留喺 host | root 層定期清理 job 或 privileged cleanup sidecar（backlog 項） |
 | K14 | **adbd recreate-stall**（R5 live 發現；image/內核層 root cause open） | delete+recreate 後 framework 完全 boot 但 adbd 停答 host protocol（recreate 特有；stop/start 唔中招）；產品診斷 honest（`running + adbState=offline`，無假陽性）但該 device 嘅 ADB 路徑不可用，要等容器生命周期重來 | 追索方向：redroid image adbd auth relay on recreate / binder transport 重掛時序（`redroid-host-validation.md` §5）；R7 決定 = 記錄為已知限制（R6 口徑），backlog 另開單 |
 
-**未完成項目總計**：C 類剩 **3 項**（GPU `verified`／映像自動 pull／removeData root 殘留 — TCP 經 proxy 同 fail-closed monitor 兩項已由 R3–R7 收結，見 K1/K12 新口徑）+ K3/K5/K6/K9（小工單，P7 候選）+ K4/K7/K8/K10/K11/K14 + K1（open 根因，產品鏈無影響）— 其餘 P0–P6 + 2026-10-19 security patch + Stage A/B + 修復鏈 R0–R7 scope 全部收貨（證據鏈：每 phase ADR §13–§17 + `docs/audits/` 4 審計檔 + `docs/live-evidence/` + runbook §9.5/§10 + CI run）。
+**未完成項目總計**：C 類剩 **3 項**（GPU `verified`／映像自動 pull／removeData root 殘留 — TCP 經 proxy 同 fail-closed monitor 兩項已由 R3–R7 收結，見 K1/K12 新口徑）+ K3/K5/K6/K9（小工單，P7 候選）+ K4/K7/K8/K10/K11/K14 + K1（open 根因，產品鏈無影響）— 其餘 P0–P6 + 2026-10-19 security patch + Stage A/B + 修復鏈 R0–R7 + **BR-B1–B6（Batch Rotation，見 §Batch Rotation）** scope 全部收貨（證據鏈：每 phase ADR §13–§18 + `docs/audits/` 4 審計檔 + `docs/live-evidence/` + runbook §9.5/§10/§11 + CI run + `logs/br-b6-e2e/` + `logs/br-b6-loadtest/`）。
 
 ## 疑難排解
 

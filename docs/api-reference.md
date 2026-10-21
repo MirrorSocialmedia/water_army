@@ -175,7 +175,7 @@ proxy.network = null（無 proxy 綁定）或：
 
 ## Batch Rotation 監控／匯出（BR-B5 — MD Phase 5 lane B）
 
-只讀監控 + 報告匯出面。batch 控制路由（`POST /api/batches`、`/preview`、`/:id/start|pause|resume|cancel`、task-run retry/cancel/logs）屬 **BR-B2**，未落 main 前無效（本檔案只註冊 read/monitor/report；literal-segment 路由與 B2 嘅 `/api/batches/:id` 由 find-my-way static-segment 排序安全共存）。
+只讀監控 + 報告匯出面。batch 控制路由（`POST /api/batches`、`/preview`、`/:id/start|pause|resume|cancel`、task-run retry/cancel/logs、container 生命週期）見下面嘅 **Batch Rotation 控制（BR-B2）** 節。literal-segment 路由（`/api/batches/capacity`）與 dynamic `/api/batches/:id` 由 find-my-way static-segment 排序安全共存。
 
 **零秘密鐵律**：所有 response 係 allow-list 投影（非 DB row 透傳）+ `scrubObject`/`maskCredentialShapedValues` 雙重遮罩；identity `metadata`、task `error`、report 匯出體（JSON/CSV）全部經硬門 — 任何 credential 形狀值漏過 = 500 `REPORT_SECRET_TRIP`（fail-closed，寧可唔出報告都唔出秘密）。
 
@@ -190,6 +190,35 @@ proxy.network = null（無 proxy 綁定）或：
 
 **Alert 落地（MD §13）**：無獨立 alert channel（repo 無既有機制）→ 可查詢狀態（`/api/batches/metrics` + summary 嘅 `alerts[]`：severity/code/message/detail/fingerprint/firstSeen）+ pino（critical = `error`、其餘 = `warn`）+ audit event（每 alert 首次 fire 寫 `batch_alert_raised`；恢復寫 `batch_alert_cleared`；同 fingerprint 每小時最多 re-audit 一次）。條件：active 超 `batch.global_max_active_containers`、worker 無心跳（`worker_heartbeat_age_seconds` 超時）、DB/Redis 不可用、磁碟低、連續容器啟動失敗、task 持續 UNKNOWN、無 label 孤兒 managed 容器、network policy 不可用。
 
+## Batch Rotation 控制（BR-B2 — MD Phase 2–4 lane A/C）
+
+**Cycle 契約（preview parity，2026-10-22 B6 修復）**：`POST /api/batches/preview` 係唯一容忍 unknown identity id 嘅 surface（報告而唔拒絕）；`POST /api/batches`（strict write path）對 unknown id 一律 400 `VALIDATION_ERROR`。兩者都用 identity **實際 status** 做計劃：DISABLED / terminal 嘅 identity 喺 plan 時就係 `SKIPPED` membership **帶 `skipReason`**（例如 `identity disabled`），唔會排入 doomed run — preview 話跳幾多、create 就跳幾多（E2E 200-id 實測：4 DISABLED → 4 SKIPPED 帶原因）。
+
+**冪等**：同 `idempotencyKey` 重複 create → 200 + 同一 `cycleId`（replay flag，無第二個 cycle）。`POST /api/batches/:id/start` 冪等：batch 已 RUNNING → 200 `{started:false, reason:'already-running'}`（唔會雙派工）。
+
+**Rate budget（MD §13.2）**：人工 operator 嘅 batch 寫操作（create/start/stop/remove 等）限 20/60s/actor，超 = 429 `RATE_LIMITED`；**service lane**（`x-wa-service-token`，worker→API 內部調用）豁免呢個人 budget — 佢受 global container cap 支配（B6 修復：單一 service actor 唔再同 4 個 batch 搶同一個 20-req budget 導致派工被 429 誤判為永久失敗；429 亦已改為 retryable，park RETRY_WAIT 等下個 scheduler tick）。purge 另有獨立 admin+human 門（service token 一律拒）。
+
+| Method | Path | Role | 參數 | 錯誤碼 / 備註 |
+|--------|------|------|------|--------------|
+| GET | `/api/identities` | viewer+ | `status`（11-state FSM）/ `q` / `page` / `pageSize` | 200 `{items,total,...}`；allow-list 投影、無 credential 欄 |
+| POST | `/api/batches/preview` | operator+ | 同 create body | 200 計劃：逐 batch 逐 identity 嘅預測結果（READY 入 batch / SKIPPED+原因 / unknown 報告）— 純讀、無副作用 |
+| POST | `/api/batches` | operator+ | `{name, idempotencyKey(8–64 `[A-Za-z0-9_-]`), identities[](UUID, 1–1000, 去重), batchSize, maxActiveContainers(1–100), failurePolicy: stop_batch\|continue_and_report, config?}` | 201 `{cycleId, batches[]}`；重 key replay = 200 同 cycleId；unknown id = 400 `VALIDATION_ERROR`；DISABLED/terminal → SKIPPED 帶 `skipReason` |
+| GET | `/api/batches/capacity` | **admin** | — | 200 `{globalCap, key, formula}`：`effective = min(batch.maxActiveContainers, globalCap ?? ∞)` |
+| POST | `/api/batches/capacity` | **admin** | `{maxActiveContainers: int≥1 \| null}` | 200；null = 清除全局上限（各 batch 只受自己嘅 cap 約束） |
+| GET | `/api/batches/:id` | viewer+ | — | 200 batch 詳情（status、計數、membership 摘要）；404 `BATCH_NOT_FOUND` |
+| POST | `/api/batches/:id/start` | operator+ | — | 200 `{started, batch}`；已 RUNNING = `{started:false, reason:'already-running'}`；terminal = 409 |
+| POST | `/api/batches/:id/pause` `\|resume` `\|cancel` | operator+ | — | 狀態過渡 + audit；cancel：未開跑 membership → SKIPPED（`batch cancelled`），已入 run → CANCELLED，容器 best-effort stop（volume 保留） |
+| POST | `/api/task-runs/:id/retry` | operator+ | — | terminal failed/timed_out → 開新 attempt（attempt 計數 +1，重用同一 run row 語義見 MD §11）；succeeded/cancelled = 409 |
+| POST | `/api/task-runs/:id/cancel` | operator+ | — | running/queued → CANCELLED（容器 stop、lease release、volume 保留） |
+| GET | `/api/task-runs/:id/logs` | viewer+ | — | 200 `{events[]}`（`attempt_started`/`container_started`/… 時間線） |
+| GET | `/api/batch-containers` | operator+ | — | 200 active managed container 列表（label 反查 + DB lease 對賬；allow-list 投影） |
+| POST | `/api/batch-containers/reconcile` | operator+ | `{fix?: bool}` | orphan 掃描（無 label managed 容器、stale lease、DB 有 run 無容器）。`fix=true`：stop+remove orphan 容器、release 死 lease、孤立 run → FAILED_FINAL（`ORPHAN_RECLAIMED`）；全部動作有 audit row |
+| POST | `/api/task-runs/:runId/containers/start` | operator+（service 可用） | — | 為 run 啟容器（adopt 已存在同名容器；port lease CAS）；失敗 = 結構化 error code（`IMAGE_NOT_FOUND`/`PORT_POOL_EXHAUSTED`/…） |
+| POST | `/api/task-runs/:runId/containers/health` | operator+（service 可用） | — | 200 即時探測（ADB TCP handshake）；容器唔喺 = 明確 404/409（唔會假 OK） |
+| POST | `/api/task-runs/:runId/containers/stop` | operator+（service 可用） | — | **可逆 stop**（MD Phase 3 item 4）：容器退出、**volume + data 原封**、port lease 釋放；可再 start |
+| POST | `/api/task-runs/:runId/containers/remove` | operator+（service 可用） | — | **volume-retention remove**：容器走、identity data 留（冪等，已冇 = no-op）。**唯一**可以抹 data 嘅路徑係 purge |
+| POST | `/api/identities/:id/purge` | **admin + human only**（service 拒） | `{dryRun?: bool, confirm?: string}` | dryRun=true → 預覽（size/files/containers）零改動；dryRun=false → `confirm` 必須 = identity id（防錯字 token）→ ownership-gated stop/remove 容器 → 抹 data dir → 全動作 audit |
+
 ## 端點總計
 
-**75 條路由**（逐檔案計；BR-B5 實核 2026-10-21）：health 2 + auth 3 + containers 15（含 5 個 action + exceptions 3 條 + create-from-template）+ container templates 2 + dashboard 1 + tasks 15（runs 6 + approvals 3 + tools 1 + providers 4 + audit 1）+ task definitions 1 + schedules 10（含 POST preview）+ schedule notifications 4 + redroid templates/preflight 5 + redroid devices 11（含 3 個 action + proxy/retry）+ **batch monitor 6（BR-B5：identities 2 + monitor summary + metrics + reports 2）**。所有寫操作（POST/PATCH/PUT/DELETE，`/auth/login` 除外）：RBAC + audit row（actor、request_id、IP、status、details scrub）+ Origin 檢查（browser mutating 請求）。
+**96 條路由**（逐檔案計；BR-B6 實核 2026-10-22）：health 2 + auth 3 + containers 15（含 5 個 action + exceptions 3 條 + create-from-template）+ container templates 2 + dashboard 1 + tasks 15（runs 6 + approvals 3 + tools 1 + providers 4 + audit 1）+ task definitions 1 + schedules 10（含 POST preview）+ schedule notifications 4 + redroid templates/preflight 5 + redroid devices 11（含 3 個 action + proxy/retry）+ **batch monitor 5（BR-B5：identities/:id + monitor summary + metrics + reports 2）** + **batch control 21（BR-B2：identities list + preview + create + capacity 2 + batch get + start/pause/resume/cancel 4 + task-run retry/cancel/logs 3 + batch-containers list + reconcile + container start/health/stop/remove 4 + purge 1）**。所有寫操作（POST/PATCH/PUT/DELETE，`/auth/login` 除外）：RBAC + audit row（actor、request_id、IP、status、details scrub）+ Origin 檢查（browser mutating 請求）。

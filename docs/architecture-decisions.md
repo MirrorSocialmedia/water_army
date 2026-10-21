@@ -815,3 +815,41 @@ leg）+ README K12 文檔化。
 `docs/audits/release-gate-r7.md`：八項逐項 verdict + 證據引用（只收
 PASS/FAIL/BLOCKED；誠實註唔影響判定但要寫出邊界）。release 聲明 = 證據鏈
 （4 審計檔 + live-evidence + CI run 連結），唔係自我宣稱。
+
+## 18. BR Batch Rotation 架構決定（B1–B6，2026-10-21/22 — 全部有 test/live 證據）
+
+> 前面 17 節冇 BR 是因為 B1–B5 隨 MD phase 落 main 而 ADR 欠更新（B6 文檔收口補齊，2026-10-22）。以下係 lane 嘅核心決定 + 點喺邊。
+
+### 18.1 PG-first，BullMQ 係 derived index（唔係 source of truth）
+排程／run／membership 全部以 PostgreSQL 為準；BullMQ（Redis）只做「邊個 job 應該即刻跑」嘅派工索引。worker boot + 每 5 分鐘 reconciler 由 PG 原地 upsert 對齊 queue（清 orphan、自愈 `sync_status`）。**後果**：Redis 斷 = 派工停（scheduler 唔 blind 派）但狀態零損；Redis 復原 / worker 重啟 = 自動收斂。BR-B6 live 故障注入實測（Redis 15s 中斷：中斷窗口 `attempt_started` 零增加；復原後全收斂，evidence `logs/br-b6-e2e/fault-summary.json`）。
+
+### 18.2 單 run row + attempt 事件 = 唔雙跑嘅結構性保證
+每個 (batch, identity) 一列 `task_run`；重試唔開新 row、唔覆蓋 — `task_run_events.attempt_started`（unique per `(runId, attempt)`，DB 層冪等）做 lineage。adopt 語義：worker 重啟後對同一 run 嘅再 dispatch 先 inspect 已存在容器（同 run label）→ adopt 而唔係 create 第二個（S4② hermetic 實測：一 create、一容器、run 完成）。**BR-B6 E2E 硬斷言**：200 identity 全部 `attempt_started` unique、零雙跑零漏單。
+
+### 18.3 Resource lease CAS（port/slot，TTL 8s）
+ADB host port 同 container slot 用 `resource_lease` 表 + atomic claim（CAS on `leaseId`）— 冇 distributed lock。TTL 短 = worker 死咗 lease 快到期、reconciler 快收斂。port pool 163xx（batch）與 15000–15999（device，user 保留）hard 隔離。port 池用盡 = 503 `PORT_POOL_EXHAUSTED` = RETRY_WAIT（bounded 指數 backoff），唔係永久失敗。
+
+### 18.4 Rate budget：human lane vs service lane（B6 修復）
+MD §13.2 嘅 per-actor 寫 budget（20/60s）係為**人工誤操作**設嘅；worker→API 嘅 service lane（`x-wa-service-token`）**豁免** — 佢嘅真正節流器係 global container cap（`effective = min(batch cap, globalCap)`）。**B6 E2E 發現**：單一 service actor 派 4 個 batch 時搶同一個 20-req budget → 第一波派工 burst 429 → 而 429 當時被 engine 分類為 non-retryable → 首個 429 = FAILED_FINAL = 漏單。**修復**（`16a7e3e`）：①service actor 豁免 write budget（human budget 原封、purge 照要 admin+human）②429 加入 retryable（park RETRY_WAIT 等下 tick）。E2E 重跑後 0 個 429 相關 FAILED_FINAL。
+
+### 18.5 失敗分類：fail-closed + 唔燒重試
+- Docker 層任何 error（daemon down / create fail）→ **fail-closed**：冇 op 會被當成功（S4③ hermetic 實測）；container 狀態以 Docker 實查為準，DB 永唔假完成。
+- `IMAGE_NOT_FOUND`（404）= **第一次即 FAILED_FINAL**（永久性，重試只會再 404，唔燒）；`PORT_POOL_EXHAUSTED`（503）/ health 中斷（transient）= RETRY_WAIT bounded retry → 達 cap 先 FAILED_FINAL（S4① 實測）。
+- 永久失敗**唔偽裝成功**（MD DoD 6）：FAILED_FINAL 帶 `errorCode`，report 匯出照樣出（誠實列失敗）。
+
+### 18.6 Volume retention 三級語義（MD Phase 3 item 4）
+`stop`（可逆）/ `remove`（容器走、data 留、冪等）/ `cancel`（best-effort stop）**全部保留 identity data**；**唯一**抹 data 路徑 = `POST /api/identities/:id/purge`（admin + **human** only、service token 拒、`dryRun` 預覽、`confirm` 必須 = identity id 防錯字）。不同 identity 嘅 data 各自獨立 data dir（`<dataRoot>/<identityId>/`）= 結構隔離（E2E P5 斷言）。
+
+### 18.7 Reconcile 三軌 + manual 口
+①worker boot 全量對齊 ②每 5 分鐘 scheduler tick ③`POST /api/batch-containers/reconcile`（manual，`fix=true` 先動手）。orphan 定義：無 label 嘅 managed 容器 / stale lease / DB 有 run 無容器。fix 動作（stop+remove orphan、release 死 lease、孤立 run → FAILED_FINAL `ORPHAN_RECLAIMED`）全部有 audit row。
+
+### 18.8 零秘密報告硬門
+所有 batch 面向嘅 read surface（identities、monitor、report JSON/CSV）= allow-list 投影 + `scrubObject` + `maskCredentialShapedValues`；report builder 入場 `assertNoSecrets`，任何 credential 形狀漏過 = **500 `REPORT_SECRET_TRIP`**（fail-closed：寧缺毋漏）。E2E/audit 用 admin 帳號（`brb6admin`）行 API，secret 只喺 scratch env file（收工即拆）。
+
+### 18.9 Preview parity（B6 修復）
+`POST /api/batches/preview` 與 `POST /api/batches` 必須用同一套 identity 實際 status 做計劃：DISABLED/terminal = plan 時就 SKIPPED 帶 `skipReason`（唔排 doomed run）；unknown id：preview 報告、create 400（strict write）。E2E 實測：4 DISABLED → 4 SKIPPED 帶原因，preview/create 計數一致。
+
+### 18.10 BR-B6 測試層（200-id E2E + 故障注入 + 真機階梯）
+- **Sandbox E2E**（`scripts/br-b6-e2e/`，163xx scratch、`br-b6-*` 前綴、ADB-mock image）：200 identities / 4 batches 全 cycle + 重複 create/start、worker SIGKILL、API 重啟、transient/permanent 故障、200 終態 audit。
+- **故障注入**（`scripts/br-b6-e2e/fault-driver.mjs`）：Redis 斷 15s / PG 斷 15s / worker kill + Redis 斷（組合）— 斷言 = 每 identity 一個終態 + `attempt_started` 全局 unique + 零殘留容器。Docker daemon 斷 = hermetic only（shared daemon 有 user compose = 紅線；S4③ fail-closed 已實錚）。
+- **真機階梯**（`scripts/br-b6lt/`，165xx scratch、`br-b6lt-*` 前綴、pinned digest `matrixa-r3`）：1→5→10→25→50（**絕唔一開始開 50**）；5s VRAM+host sampler（`nvidia-smi`）+ halt monitor（SGLang 30000 共卡 — 任何 GPU free < 1500MiB / SGLang creep / health fail / host RAM-load-disk 超線 → cancel + 縮下一階）；每階段 report → `logs/br-b6-loadtest/`。

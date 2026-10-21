@@ -441,3 +441,35 @@ tick（≤ `REDROID_HEALTH_POLL_MS` 30s；definite loss 下實測 +2s 已 BLOCKE
 - `GET /api/batch-reports/:cycleId?format=json|csv`（**operator+**；viewer = 403）。
 - 匯出體 = 各 identity 終態、成功/失敗/跳過統計、嘗試次數、失敗原因（`errorMessage` 經 `maskCredentialShapedValues` 遮罩）、資源峰值、時間範圍 — **零秘密硬門**：builder 入場先 `scrubObject` + `assertNoSecrets`，觸發 = 500 `REPORT_SECRET_TRIP`（寧缺毋漏）；每次匯出寫 audit（`batch_report_export`：cycleId、format、actor、requestId）。
 - CSV = 每行一 identity（stable ID、終態、attempt、失敗碼、錯誤摘要遮罩）— 供 Excel 分析；JSON = 完整結構（UI 下載 + 檔案歸檔）。
+
+### 11.5 Batch 操作與故障應變（BR-B6 實測補齊，2026-10-22）
+
+**開 cycle（正常流）**：
+1. `POST /api/batches/preview`（operator+）— 純讀；看每一 batch 的預測結果（unknown id 只喺呢度報告）。
+2. `POST /api/batches`（同 body）— strict：unknown id = 400；DISABLED/terminal identity = SKIPPED 帶 `skipReason`（同 preview 一致）。`idempotencyKey` 冪等：重打 = 200 同 cycleId。
+3. `POST /api/batches/:id/start` — 冪等（已 RUNNING = `{started:false, reason:'already-running'}`，唔會雙派工）。scheduler 都會 auto-start，兩者競合安全。
+
+**容量**：`GET/POST /api/batches/capacity`（**admin only**）— 全局 `maxActiveContainers`；`effective = min(batch 自己嘅 cap, globalCap ?? ∞)`。`POST {maxActiveContainers: null}` = 清除全局上限。
+
+**停止語義（三級，data 保留铁律 — MD Phase 3 item 4）**：
+| 動作 | 容器 | port lease | **identity data** |
+|---|---|---|---|
+| `POST /api/batches/:id/cancel` / task-run cancel | best-effort stop | 釋放 | **保留** |
+| `containers/stop`（可逆） | exit | 釋放 | **保留**（可再 start） |
+| `containers/remove` | 刪除 | 已釋放 | **保留**（冪等） |
+| `POST /api/identities/:id/purge`（**admin+human only**，service token 拒） | ownership-gated stop+remove | 已釋放 | **唯一抹 data 嘅路徑**；`dryRun=true` 預覽零改動；實抹要 `confirm` = identity id |
+
+**Reconcile（orphan 清理）**：`POST /api/batch-containers/reconcile`（operator+）— 掃 ①無 label 嘅 managed 容器 ②stale lease ③DB 有 run 無容器。`fix=true` 先會動手（stop+remove orphan、release 死 lease、孤立 run → FAILED_FINAL `ORPHAN_RECLAIMED`）；所有動作有 audit row。worker 正常運行時每 5 分鐘 scheduler 自帶一轮，手動 reconcile 主要係事故後核對。
+
+**故障應變（按組件）**：
+| 故障 | 觀測 | 應變 | 收斂 |
+|---|---|---|---|
+| worker 重啟 / SIGKILL | active run 心跳斷 → `worker_heartbeat_stale` | 重啟 worker（compose restart 或新 process） | lease 到期（TTL 8s）→ 下個 tick reconciler 重新指派；已 running 容器由新 worker **adopt**（S4② hermetic 實測：一 create、一容器、run 完成）— 唔會雙跑 |
+| API 重啟 | 短時間 503/拒連 | 重啟 | DB 係 source of truth；queue job 照喺 Redis；worker 唔受影響；重啟後 scheduler auto-start 繼續 |
+| Redis 斷 | queue 唔可用 → scheduler **停止派新工**（唔會 blind 派）；在跑容器照跑完 | 修復 Redis（AOF 損壞 → §1 第 5 條） | 復原後 queue drain + scheduler 繼續；BR-B6 live 故障注入實測（15s 中斷）：中斷窗口內 `attempt_started` 計數零增加（派工真停），無漏單無雙跑（evidence: `logs/br-b6-e2e/fault-summary.json`） |
+| Postgres 斷 | API `/api/health/ready` = 503（誠實，唔假 200）；worker 心跳失敗 → 在跑 run **fail-closed**（slot lease lost → 容器 best-effort stop、volume 保留） | 修復 PG（`pg_ctl` / volume 檢查） | 復原後 reconciler 收斂：retryable 失敗自動重派、終態失敗誠實 FAILED_FINAL；BR-B6 live 實測（15s 中斷）：每 identity 有且只有一個終態結果（evidence: 同上） |
+| worker kill + Redis 斷（組合） | 雙重 | 同時復原（先 Redis 再起 worker） | reconciler 收斂，零漏單零雙跑（BR-B6 F3 live 實測） |
+| Docker daemon 斷 | 所有容器操作 fail-closed（**冇任何 op 會被當成功**） | 重啟 daemon（**注意：shared daemon 上 user compose 會一齊停 — 生產要獨立 daemon 或者接受全停**） | 復原後 adopt + reconcile；hermetic 實測 S4③（daemon-down fail-closed）。BR-B6 未 live 停 daemon（shared daemon = user compose 紅線） |
+| image 404 / port 池用盡 | `IMAGE_NOT_FOUND`（404）/ `PORT_POOL_EXHAUSTED`（503） | 404 = 永久失敗（第一次即 FAILED_FINAL，唔會重試耗）；503 = RETRY_WAIT 指數 backoff 到上限 | S4① hermetic 實測 |
+
+**Rate limit（429）**：人工 operator 20 寫/60s（batch 寫 + purge 獨立 budget）；**service lane（`x-wa-service-token`）豁免**（受 global cap 支配）；429 對 scheduler 係 retryable（park RETRY_WAIT，下 tick 重派）— 唔會誤判永久失敗。
