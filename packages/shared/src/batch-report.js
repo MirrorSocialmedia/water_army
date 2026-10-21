@@ -197,6 +197,32 @@ function csvRow(fields) {
 
 // ------------------------------------------------------------------ scanning
 /**
+ * Replace credential-shaped VALUES in a plain string (JWT / PEM header /
+ * `label: value` assignments). scrubObject only scrubs sensitive KEYS — this
+ * is the value-level companion for free-text fields (error messages, logs)
+ * that the UI/API may display (MD §12 masking). Pure + export for tests.
+ *
+ * @param {unknown} value any value; only strings are transformed
+ * @returns {unknown}
+ */
+export function maskCredentialShapedValues(value) {
+  if (typeof value !== 'string') return value;
+  // NOTE: the replacement value is '***' (3 chars) on purpose — the report's
+  // hard gate (assertNoSecrets) treats `label=<6+ non-space chars>` as a
+  // credential, so the marker must be too short to re-trip it.
+  return value
+    .replace(/\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g, '***redacted-jwt***')
+    // PEM: header + rest of the line (the base64 body is the actual leak
+    // vector; a multi-line remnant still trips the report's hard gate —
+    // fail-closed by construction).
+    .replace(/-----BEGIN [A-Z ]*PRIVATE KEY-----[^\n]*/g, '***redacted-pem***')
+    // Bearer scheme first — the label-value mask alone would stop at the
+    // scheme word and leave the real token intact.
+    .replace(/\bBearer\s+[A-Za-z0-9\-._~+/]{8,}={0,2}/gi, 'Bearer ***')
+    .replace(/\b(password|passwd|secret|token|api_?key|authorization|cookie)(\s*[:=]\s*)\S{6,}/gi, '$1$2***');
+}
+
+/**
  * Hard zero-secret gate. Scans:
  *  - every object key against the shared sensitive-key pattern (same
  *    over-approximating regex as scrub.js — parity, no drift);

@@ -116,6 +116,7 @@ export {
   CONTAINER_LABEL_PREFIX,
   CONTAINER_LABELS,
   buildContainerLabels,
+  APP_SETTING_BATCH_GLOBAL_MAX_ACTIVE,
   IDENTITY_DATA_ROOT_DEFAULT,
   identityDataPaths,
   validateIdentityDataPath,
@@ -142,7 +143,7 @@ export {
 } from './batch-metrics.js';
 
 /** Batch cycle audit report (BR-B5, MD §11.4 — zero-secrets export). */
-export { REPORT_SCHEMA, buildCycleReport, renderCycleReportCsv, assertNoSecrets } from './batch-report.js';
+export { REPORT_SCHEMA, buildCycleReport, renderCycleReportCsv, assertNoSecrets, maskCredentialShapedValues } from './batch-report.js';
 
 /** LeaseService — cross-process resource leases (BR-B1, MD §9.6). */
 export { createLeaseService } from './lease-service.js';

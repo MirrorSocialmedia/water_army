@@ -18,7 +18,7 @@
  * Injectable for tests: the `docker` wrapper (plugin shape
  * {disabled, client, ping}) may carry a fake dockerode-shaped client.
  */
-import { DOCKER_ERROR, DOCKER_ERROR_STATUS, SENSITIVE_ENV_KEY, APP_LABELS } from '@water-army/shared';
+import { DOCKER_ERROR, DOCKER_ERROR_STATUS, SENSITIVE_ENV_KEY, APP_LABELS, CONTAINER_LABELS } from '@water-army/shared';
 
 /**
  * Service-level error carrying a stable API code + HTTP status.
@@ -1181,6 +1181,12 @@ function summarizeListItem(r) {
     managed: String(labels[APP_LABELS.MANAGED]) === 'true',
     template: labels[APP_LABELS.TEMPLATE] ?? null,
     createdBy: labels[APP_LABELS.CREATED_BY] ?? null,
+    // Batch Rotation labels (MD §4.3) — BR-B5 monitor/report identity→container
+    // mapping (Identity Detail §11.3, orphan detection §13). Null when the
+    // container is not a batch-run container (pre-existing fleet).
+    identityId: labels[CONTAINER_LABELS.IDENTITY_ID] ?? null,
+    batchId: labels[CONTAINER_LABELS.BATCH_ID] ?? null,
+    taskRunId: labels[CONTAINER_LABELS.TASK_RUN_ID] ?? null,
     createdAt: typeof r.Created === 'number' ? new Date(r.Created * 1000).toISOString() : null,
   };
 }

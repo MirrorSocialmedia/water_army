@@ -9,7 +9,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildCycleReport, renderCycleReportCsv, assertNoSecrets, REPORT_SCHEMA } from '@water-army/shared';
+import { buildCycleReport, renderCycleReportCsv, assertNoSecrets, maskCredentialShapedValues, REPORT_SCHEMA } from '@water-army/shared';
 
 const T0 = Date.parse('2026-10-21T00:00:00Z');
 const at = (min) => new Date(T0 + min * 60_000);
@@ -162,4 +162,37 @@ test('report: non-terminal cycle reports nonTerminal count (no fake success)', (
   assert.equal(report.totals.nonTerminal, 1);
   const m2 = report.batches.find((b) => b.batchNo === 1).members.find((m) => m.identityId === 'id-2');
   assert.equal(m2.finalStatus, 'RUNNING');
+});
+
+// ---------------------------------------------------------------------------
+// maskCredentialShapedValues (MD §12 — value-level masking for free text)
+// ---------------------------------------------------------------------------
+
+test('mask: credential-shaped label=value assignments are erased, label kept', () => {
+  assert.equal(maskCredentialShapedValues('docker login failed: password=hunter2-s3cret-value'), 'docker login failed: password=***');
+  const bearer = maskCredentialShapedValues('header Authorization: Bearer abcdef1234567890');
+  assert.ok(!bearer.includes('abcdef1234567890'), `bearer token must be gone: ${bearer}`);
+  assert.ok(bearer.includes('***'));
+  assert.equal(maskCredentialShapedValues('token :  abcdef1234567890'), 'token :  ***');
+  assert.equal(maskCredentialShapedValues('api_key=short'), 'api_key=short', 'values < 6 chars are not credential-shaped');
+});
+
+test('mask: JWT + PEM shapes are redacted', () => {
+  const jwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U';
+  const masked = maskCredentialShapedValues(`session=${jwt}`);
+  assert.ok(!masked.includes('eyJhbGciOiJIUzI1NiJ9'), 'jwt payload gone');
+  assert.ok(masked.includes('***redacted-jwt***'));
+  assert.equal(maskCredentialShapedValues('cert: -----BEGIN RSA PRIVATE KEY-----MIIEpAIB'), 'cert: ***redacted-pem***');
+});
+
+test('mask: redacted output never re-trips the hard gate (marker too short)', () => {
+  const masked = maskCredentialShapedValues('docker login failed: password=hunter2-s3cret-value');
+  assert.doesNotThrow(() => assertNoSecrets({ failure: { summary: masked } }), 'gate must accept the redacted marker');
+  assert.doesNotThrow(() => assertNoSecrets(maskCredentialShapedValues('Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U')));
+});
+
+test('mask: non-string values pass through untouched', () => {
+  assert.equal(maskCredentialShapedValues(42), 42);
+  assert.equal(maskCredentialShapedValues(null), null);
+  assert.deepEqual(maskCredentialShapedValues({ a: 1 }), { a: 1 });
 });
