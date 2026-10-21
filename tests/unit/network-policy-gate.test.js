@@ -59,6 +59,18 @@ async function seedRun(db, { id = 'run-1', provider = 'mock', baseUrl = 'https:/
   return id;
 }
 
+/**
+ * BR-B6 G3: the allow verdict now carries the pin payload (pins + entries +
+ * resolve) that the provider's pinned transport needs. Assert the contract
+ * shape instead of an exact object match.
+ */
+function assertAllowed(v, msg = 'verdict must allow') {
+  assert.equal(v.allowed, true, msg);
+  assert.ok(Array.isArray(v.pins), 'allow verdict carries the pin set');
+  assert.ok(v.entries && Array.isArray(v.entries.public) && Array.isArray(v.entries.internal), 'allow verdict carries the policy entries');
+  assert.equal(typeof v.resolve, 'function', 'allow verdict carries the resolver');
+}
+
 const CTX = { runId: 'run-1', attempt: 1, identityId: 'ident-1', batchId: 'batch-1', taskType: 'adhoc' };
 
 // ---------------------------------------------------------------------------
@@ -175,7 +187,8 @@ test('policy unavailable: DB read error → POLICY_UNAVAILABLE (cannot prove the
 test('allow: db==null + env policy + no egress targets (mock provider, no api url) → allow (env-only path)', async () => {
   const { gate } = makeGate({ db: null, env: GOOD_ENV });
   const v = await gate(CTX);
-  assert.deepEqual(v, { allowed: true });
+  assertAllowed(v);
+  assert.equal(v.pins.length, 0, 'no egress targets → empty pin set');
 });
 
 test('allow: env + AppSetting union — an entry living ONLY in AppSetting is honored', async () => {
@@ -188,7 +201,9 @@ test('allow: env + AppSetting union — an entry living ONLY in AppSetting is ho
   const { gate } = makeGate({ db, env: GOOD_ENV });
   const runId = await seedRun(db, { provider: 'dbonly', baseUrl: 'https://only-in-db.example.com' });
   const v = await gate({ ...CTX, runId });
-  assert.deepEqual(v, { allowed: true }, 'AppSetting-only entry must be part of the policy');
+  assertAllowed(v, 'AppSetting-only entry must be part of the policy');
+  assert.equal(v.pins.length, 1);
+  assert.deepEqual(v.pins[0].pinnedIps, [PUB], 'the pin carries the validated IP (G3 payload)');
 });
 
 // ---------------------------------------------------------------------------
@@ -209,7 +224,7 @@ test('taskType policy: adhoc disabled in AppSetting → adhoc runs denied, ai ru
   assert.equal(vAdhoc.code, NETWORK_GATE_ERROR.TARGET_DENIED);
   assert.match(vAdhoc.reason, /adhoc/);
   const vAi = await gate({ ...CTX, runId, taskType: 'ai' });
-  assert.deepEqual(vAi, { allowed: true });
+  assertAllowed(vAi);
 });
 
 // ---------------------------------------------------------------------------
@@ -221,7 +236,10 @@ test('allow: mock provider + api internal target on the internal list', async ()
   const { gate } = makeGate({ db, env: GOOD_ENV, config: { apiInternalUrl: 'http://api:3000' } });
   const runId = await seedRun(db); // provider mock
   const v = await gate({ ...CTX, runId });
-  assert.deepEqual(v, { allowed: true });
+  assertAllowed(v);
+  assert.equal(v.pins.length, 1, 'the api-internal target is pinned');
+  assert.equal(v.pins[0].host, 'api');
+  assert.deepEqual(v.pins[0].pinnedIps, ['172.18.0.2']);
 });
 
 test('deny: provider baseUrl NOT on the allowlist → TARGET_DENIED + redacted audit target', async () => {
@@ -258,7 +276,7 @@ test('allow (no target): provider row MISSING → gate passes; the provider reso
   const run = await db.taskRun.create({ data: { id: 'run-ghost', inputJson: { provider: 'ghost' } } });
   const runId = run.id;
   const v = await gate({ ...CTX, runId });
-  assert.deepEqual(v, { allowed: true }, 'nothing to fence — run fails at provider resolution, not at the gate');
+  assertAllowed(v, 'nothing to fence — run fails at provider resolution, not at the gate');
 });
 
 test('allow (no target): provider DISABLED → skipped (the resolver would reject it pre-network)', async () => {
@@ -266,7 +284,7 @@ test('allow (no target): provider DISABLED → skipped (the resolver would rejec
   const { gate } = makeGate({ db, env: GOOD_ENV });
   const runId = await seedRun(db, { provider: 'off', baseUrl: 'https://notlisted.example.com', isEnabled: false });
   const v = await gate({ ...CTX, runId });
-  assert.deepEqual(v, { allowed: true });
+  assertAllowed(v);
 });
 
 test('deny: apiInternalUrl off the internal list → TARGET_DENIED (the tool path is fenced too)', async () => {

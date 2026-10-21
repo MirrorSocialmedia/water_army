@@ -155,7 +155,11 @@ export function createTaskEngine({ db, taskSvc, config = {}, log = console, prov
     } catch (err) {
       verdict = { allowed: false, code: NETWORK_GATE_ERROR.POLICY_UNAVAILABLE, reason: `network gate crashed: ${err.message}` };
     }
-    if (verdict?.allowed !== false) return { outcome: 'proceed' };
+    if (verdict?.allowed !== false) {
+      // BR-B6 G3: the allow verdict carries the pin set (pinnedIps per target)
+      // that the provider's pinned transport must dial — no re-resolve.
+      return { outcome: 'proceed', verdict };
+    }
 
     const code = typeof verdict.code === 'string' && verdict.code.length > 0
       ? verdict.code
@@ -377,6 +381,12 @@ export function createTaskEngine({ db, taskSvc, config = {}, log = console, prov
             messages,
             tools: openAITools,
             signal: ac.signal,
+            // BR-B6 G3: pass the gate's validated pin set to the provider —
+            // with the real policy gate this is what dials only the
+            // gate-validated IPs (TOCTOU closed at the transport layer).
+            net: net.verdict && Array.isArray(net.verdict.pins) && net.verdict.pins.length > 0
+              ? { pins: net.verdict.pins, entries: net.verdict.entries, resolve: net.verdict.resolve }
+              : undefined,
             onEvent: (e) => {
               if (e.type === 'provider_retry') {
                 log.info?.({ runId, round: rounds, delayMs: e.delayMs }, 'provider-level retry (inside adapter)');

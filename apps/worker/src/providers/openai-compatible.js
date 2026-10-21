@@ -29,6 +29,7 @@ import {
   ProviderError,
   safeStringify,
 } from '@water-army/shared';
+import { createPinnedFetch, pinnedErrorFrom } from '../net/pinned-fetch.js';
 
 const DEFAULT_MAX_RETRIES = 2;
 const DEFAULT_BASE_DELAY_MS = 500;
@@ -81,8 +82,7 @@ function toOpenAITools(tools) {
  * @param {number} [opts.requestTimeoutMs] per-request cap (default 120000)
  * @param {(input: Request) => Promise<Response>} [opts.fetchImpl] injectable for tests
  * @param {object} [opts.log]
- */
-export function createOpenAICompatibleProvider({
+ */export function createOpenAICompatibleProvider({
   baseUrl,
   apiKey,
   model,
@@ -107,7 +107,7 @@ export function createOpenAICompatibleProvider({
   const url = trimmedBase.endsWith('/chat/completions') ? trimmedBase : `${trimmedBase}/chat/completions`;
   const maxAttempts = 1 + Math.max(0, Math.floor(maxRetries));
 
-  async function attemptOnce({ messages, tools, signal }) {
+  async function attemptOnce({ messages, tools, signal, fetchFn: fn }) {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(new Error('request timeout')), requestTimeoutMs);
     let onAbort = null;
@@ -118,7 +118,7 @@ export function createOpenAICompatibleProvider({
     }
     let res;
     try {
-      res = await fetchFn(url, {
+      res = await fn(url, {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
         body: JSON.stringify({
@@ -130,6 +130,21 @@ export function createOpenAICompatibleProvider({
         signal: ctrl.signal,
       });
     } catch (err) {
+      // BR-B6 G3: pinned-transport failures get an honest classification —
+      // policy violations (off-pin dial, rejected redirect) are NOT transient;
+      // unreachable-but-validated endpoints are transport-class.
+      const pinned = pinnedErrorFrom(err);
+      if (pinned) {
+        if (pinned.code === 'ABORTED' || signal?.aborted === true) {
+          throw new ProviderError(PROVIDER_ERROR.ABORTED, 'request aborted (cancel/timeout)', { cause: err });
+        }
+        const transportClass = pinned.code === 'PIN_DIAL_FAILED' || pinned.code === 'PIN_CONNECT_TIMEOUT';
+        throw new ProviderError(
+          transportClass ? PROVIDER_ERROR.NETWORK : PROVIDER_ERROR.NETWORK_POLICY,
+          `pinned transport: ${pinned.message}`,
+          { cause: err },
+        );
+      }
       const abortedByCaller = signal?.aborted === true;
       throw new ProviderError(
         abortedByCaller ? PROVIDER_ERROR.ABORTED : PROVIDER_ERROR.NETWORK,
@@ -233,15 +248,43 @@ export function createOpenAICompatibleProvider({
     name: 'openai-compatible',
     kind: 'openai-compatible',
     model,
-    /** One completion round. The agentic tool loop lives in the engine. */
-    async chat({ messages, tools = [], signal, onEvent } = {}) {
+    /**
+     * One completion round. The agentic tool loop lives in the engine.
+     *
+     * @param {object} params
+     * @param {object} [params.net] BR-B6 G3 — the gate's allow verdict payload
+     *        `{ pins, entries, resolve }`. When `net.pins` is non-empty the
+     *        request goes through the PINNED transport (dials only the
+     *        gate-validated IPs; redirects re-validated per hop). A malformed
+     *        pin set is a hard NETWORK_POLICY failure — it NEVER falls back
+     *        to an unpinned fetch.
+     */
+    async chat({ messages, tools = [], signal, onEvent, net } = {}) {
+      let pf = null;
+      let fn = fetchFn;
+      if (net && Array.isArray(net.pins)) {
+        if (net.pins.length > 0) {
+          try {
+            pf = createPinnedFetch({ pins: net.pins, entries: net.entries, resolve: net.resolve, log });
+            fn = pf.fetch;
+          } catch (err) {
+            throw new ProviderError(
+              PROVIDER_ERROR.NETWORK_POLICY,
+              `pinned transport unavailable: ${err?.message ?? err}`,
+              { cause: err },
+            );
+          }
+        }
+        // net.pins empty = the gate allowed this run without egress pins
+        // (e.g. no configured provider target) — plain fetch path.
+      }
       let lastErr;
       for (let i = 1; i <= maxAttempts; i += 1) {
         if (signal?.aborted) {
           throw new ProviderError(PROVIDER_ERROR.ABORTED, 'aborted before provider attempt', { cause: signal.reason });
         }
         try {
-          const result = await attemptOnce({ messages, tools, signal });
+          const result = await attemptOnce({ messages, tools, signal, fetchFn: fn });
           if (i > 1) log?.debug?.({ attempt: i }, 'provider succeeded after internal retries');
           return result;
         } catch (err) {

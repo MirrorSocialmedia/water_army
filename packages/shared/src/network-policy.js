@@ -806,11 +806,32 @@ export function createNetworkPolicyGate(deps = {}) {
         return deny(NETWORK_GATE_ERROR.TARGET_DENIED, `taskType '${ctx.taskType}' is not permitted by network policy`);
       }
       const targets = await collectEgressTargets({ db: getDb(), ctx, config });
+      const pins = [];
       for (const t of targets) {
         const v = await assessTarget(t.url, { resolve, entries: policy.entries });
         if (!v.ok) return deny(v.code, v.reason, t.url);
+        // BR-B6 G3: the allow verdict carries the validated pin set. The
+        // connecting client MUST dial these IPs (no re-resolve — that is
+        // where DNS rebinding wins). Backward compatible: consumers that
+        // only check `allowed` (engine, batch engine) ignore the extras.
+        pins.push({
+          name: t.name,
+          url: t.url,
+          scheme: v.scheme,
+          host: v.host,
+          port: v.port,
+          zone: v.zone,
+          pinnedIps: v.pinnedIps,
+        });
       }
-      return { allowed: true };
+      return {
+        allowed: true,
+        pins,
+        // The pinned transport needs the SAME policy + resolver to re-validate
+        // redirect hops per hop (shared assessRedirect contract).
+        entries: policy.entries,
+        resolve,
+      };
     } catch (err) {
       // Fail closed on ANY internal error — including a broken run-row read:
       // "cannot prove this run is safe" must equal "do not let it out".

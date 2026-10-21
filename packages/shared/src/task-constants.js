@@ -118,6 +118,9 @@ export const PROVIDER_ERROR = Object.freeze({
   INVALID_RESPONSE: 'PROVIDER_INVALID_RESPONSE',
   /** cancellation requested (engine handles; not a provider fault). */
   ABORTED: 'PROVIDER_ABORTED',
+  /** network policy violation (off-pin dial / rejected redirect) — a policy
+   *  fact, NOT transient: never auto-retry (MD Phase 6 G3). */
+  NETWORK_POLICY: 'PROVIDER_NETWORK_POLICY',
   /** provider not configured / missing config row. */
   NOT_CONFIGURED: 'PROVIDER_NOT_CONFIGURED',
   /** anything else — not retryable by default. */
