@@ -5,7 +5,7 @@
  * (the repo has no frontend test toolchain — see P0 ADR lockfile rule),
  * and the pages are thin renderers over these functions.
  */
-import { planCycle } from '@water-army/shared';
+import { planCycle } from '@water-army/shared/batch-constants';
 
 // ------------------------------------------------------------------ pills ---
 /** Batch status → pill class (MD §3.2 batch state machine). */
@@ -29,6 +29,21 @@ export const RUN_STATUS_PILL = {
   timed_out: 'pill-down',
   cancelled: 'pill-disabled',
   unknown: 'pill-disabled',
+};
+
+/** Identity status → pill class (MD §6.1 identity state machine). */
+export const IDENTITY_PILL = {
+  READY: 'pill-up',
+  RUNNING: 'pill-up',
+  RESERVED: 'pill-up',
+  RETRY_WAIT: 'pill-disabled',
+  RECOVERING: 'pill-disabled',
+  CANCELLING: 'pill-disabled',
+  COMPLETED: 'pill-up',
+  SKIPPED: 'pill-disabled',
+  CANCELLED: 'pill-disabled',
+  FAILED_FINAL: 'pill-down',
+  DISABLED: 'pill-down',
 };
 
 /** Cycle status (derived by the API) → pill class. */
@@ -98,7 +113,8 @@ export function fmtBytes(n) {
     v /= 1024;
     u += 1;
   }
-  return `${v >= 100 || u === 0 ? Math.round(v) : v.toFixed(1)} ${units[u]}`;
+  const shown = v >= 100 || u === 0 ? Math.round(v) : Number.isInteger(v) ? v : v.toFixed(1);
+  return `${shown} ${units[u]}`;
 }
 
 /** Milliseconds → human duration, null-safe. */

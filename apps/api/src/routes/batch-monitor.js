@@ -96,7 +96,7 @@ export function batchMonitorRoutes(app) {
         const needle = String(q).toLowerCase();
         rows = rows.filter(
           (r) =>
-            r.displayName.toLowerCase().includes(needle) ||
+            (r.displayName ?? '').toLowerCase().includes(needle) ||
             (r.externalRef ?? '').toLowerCase().includes(needle) ||
             r.id.toLowerCase().includes(needle),
         );

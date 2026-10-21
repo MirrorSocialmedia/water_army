@@ -378,3 +378,27 @@ input:focus { outline: 1px solid var(--accent); }
 .recent-failed a { color: var(--text); text-decoration: none; font-family: ui-monospace, monospace; }
 .recent-failed a:hover { color: var(--accent); }
 .recent-failed time { margin-left: auto; font-size: 12px; }
+
+/* --- BR-B5: batch rotation (planner / monitor / reports) ---------------- */
+.alert-banner {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 14px;
+  border: 1px solid var(--warn);
+  border-left-width: 4px;
+  border-radius: 8px;
+  background: var(--bg-card);
+}
+.alert-banner.critical { border-color: var(--err); }
+.alert-banner p, .alert-banner .muted { margin: 2px 0 0; }
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 8, 14, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
