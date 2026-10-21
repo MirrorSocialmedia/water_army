@@ -1,0 +1,16 @@
+{
+  "note": "G8 live smoke — container_slot lease sampler (150ms point-in-time DB count, whole run incl. kill -9 phases). Hard req 1: maxConcurrent must be <= 2.",
+  "intervalMs": 150,
+  "samples": 415,
+  "maxConcurrent": 2,
+  "samplesAtCap2": 133,
+  "first": {
+    "t": 1792580450377,
+    "n": 2
+  },
+  "last": {
+    "t": 1792580512502,
+    "n": 0
+  },
+  "fullSeries": "/home/kenneth/.openclaw/workspace/logs/br-b2-g8-evidence/lease-sampler.json"
+}
