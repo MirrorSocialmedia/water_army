@@ -15,7 +15,7 @@
 import crypto from 'node:crypto';
 import Fastify from 'fastify';
 
-import { PINO_REDACT_PATHS, SESSION_COOKIE, API_ERROR, createLeaseService } from '@water-army/shared';
+import { PINO_REDACT_PATHS, SESSION_COOKIE, API_ERROR, createLeaseService, BatchLifecycleError } from '@water-army/shared';
 
 import { loadConfig } from './config.js';
 import { createDb, closeDb } from './plugins/db.js';
@@ -55,6 +55,31 @@ const PUBLIC_PREFIXES = ['/api/health', '/api/auth/login'];
 
 function publicPath(url) {
   return (url ?? '/').split('?')[0];
+}
+
+/**
+ * BR-B3: fail-closed stand-in for the container lifecycle service when the db
+ * has no batch surface (partial test fakes / legacy schemas). Every op throws
+ * a 503 BATCH_LIFECYCLE_UNAVAILABLE — the routes degrade honestly instead of
+ * crashing boot or claiming success (MD §9.1 fail-closed).
+ */
+function createUnavailableBatchLifecycle() {
+  const unavailable = () => {
+    throw new BatchLifecycleError(
+      'BATCH_LIFECYCLE_UNAVAILABLE',
+      'batch container lifecycle unavailable — this deployment has no batch data surface',
+      { status: 503 },
+    );
+  };
+  return {
+    startForRun: unavailable,
+    healthForRun: unavailable,
+    stopForRun: unavailable,
+    removeForRun: unavailable,
+    purgeIdentity: unavailable,
+    reconcile: unavailable,
+    list: unavailable,
+  };
 }
 
 /**
@@ -104,17 +129,28 @@ export async function buildApp(opts = {}) {
   // Docker socket for batch containers (worker never holds it — threat T1);
   // the S4 worker container adapter reaches this surface via service-token
   // routes, and B6's UI via session routes. Faults fail closed (MD §9.1).
-  const batchLifecycle = createBatchLifecycleService({
-    db,
-    docker,
-    config,
-    lease: createLeaseService({ db }),
-    audit,
-    log: app.log,
-    // test seam: hermetic suites inject a canned ADB probe (the default is a
-    // real node:net handshake to 127.0.0.1 — no container in the test host).
-    healthProbe: opts.batchLifecycleHealthProbe,
-  });
+  //
+  // The wiring is conditional on the db exposing the batch surface: a
+  // non-batch db (partial test fakes, legacy schemas) must keep buildApp
+  // alive — boot must never crash on a missing table (BR-B5 "non-batch db"
+  // contract). With the stub, every B3 route fails closed with
+  // 503 BATCH_LIFECYCLE_UNAVAILABLE instead.
+  const hasBatchSurface = Boolean(
+    db?.batch && db?.identity && db?.taskRun && typeof db?.resourceLease?.create === 'function',
+  );
+  const batchLifecycle = hasBatchSurface
+    ? createBatchLifecycleService({
+        db,
+        docker,
+        config,
+        lease: createLeaseService({ db }),
+        audit,
+        log: app.log,
+        // test seam: hermetic suites inject a canned ADB probe (the default is a
+        // real node:net handshake to 127.0.0.1 — no container in the test host).
+        healthProbe: opts.batchLifecycleHealthProbe,
+      })
+    : createUnavailableBatchLifecycle();
   const rateLimiter = createRateLimiter({ limit: 5, windowMs: 60_000 });
   const dockerService = createDockerService({ docker, db, config, log: app.log, audit });
 
