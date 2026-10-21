@@ -27,7 +27,9 @@ PG_IMAGE="postgres:17.6"
 DB_A="water_army"            # fresh path
 DB_B="water_army_upgrade"    # existing-db path
 PG_USER="app"
-PG_PASS="scratchb1"
+# Random per-run scratch password (never a literal — gitleaks-clean; the scratch
+# container is ephemeral and torn down by the trap, so no rotation concern).
+PG_PASS="$(openssl rand -hex 12)"
 B1_DIR="$(ls -d prisma/migrations/*_batch_rotation_b1 | head -1)"
 B1_NAME="$(basename "$B1_DIR")"
 PRE_B1="$(ls -d prisma/migrations/*/ | grep -v "$B1_NAME" | sort)"
