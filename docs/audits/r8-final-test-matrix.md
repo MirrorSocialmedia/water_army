@@ -1,7 +1,7 @@
 # R8 Final Test Matrix — water_army 全量回歸（Phase 8，2026-10-21）
 
-**最終 commit**：`008d5ce`（R8 共 4 commits：`2b891d8` mock-socks5 RFC1928 / `c6c859d`
-canary FIFO seam / `8b980b3` audits+evidence / `008d5ce` evidence logs；基線 `6ff45f2`）。
+**最終 commit**：`21fef27`（R8 共 5 commits：`2b891d8` mock-socks5 RFC1928 / `c6c859d`
+canary FIFO seam / `8b980b3` audits+evidence / `008d5ce` evidence logs / `21fef27` 本總表；基線 `6ff45f2`）。
 
 **環境**：隔離 16xxx stack（r8-pg@16543 / r8-redis@16379 / API@16300 / worker@16200 /
 mock-echo@16090 / mock-socks5@16095 / tcp-logger@16097 / strict-socks5@16096 /
@@ -71,13 +71,13 @@ Progress log：`logs/waterarmy-repair-R8-progress.md`（S0–S9 全程）。
 
 | # | 項 | 結果 |
 |---|----|------|
-| CI1 | Actions 5 jobs（push `008d5ce` 後） | **見 §3（push 後實核，唔預先宣稱）** |
+| CI1 | Actions 5 jobs（push `21fef27` 後） | **見 §3（push 後實核，唔預先宣稱）** |
 
 ---
 
 ## 2. MD §12 最終驗收清單（17 項逐項回答）
 
-1. **最新 commit SHA + 未覆蓋使用者變更** — ✅ `008d5ce`（R8 4 commits 於 `6ff45f2` 上）。S0 開工核 worktree clean（無使用者未提交變更）；R8 全程只動自己嘅 3 個源文件 + docs；`.r8-tmp/` 係 R8 自建 untracked helper（收尾已清）。
+1. **最新 commit SHA + 未覆蓋使用者變更** — ✅ `21fef27`（R8 5 commits 於 `6ff45f2` 上）。S0 開工核 worktree clean（無使用者未提交變更）；R8 全程只動自己嘅 3 個源文件 + docs；`.r8-tmp/` 係 R8 自建 untracked helper（收尾已清）。
 2. **重跑原始測試並保存結果** — ✅ 基線（6ff45f2）627/626/0/1 + 改動後 627/626/0/1，兩份完整 log 存檔（hermetic-baseline-run.txt / final-full-run.txt）。
 3. **tun2socks binary 來源/版本/checksum/架構/runtime 路徑明確** — ✅ 來源 = `docker/redroid-matrix` image 內 R1 契約 build（pin 不變）；版本 2.7.0（`--version` 實錚）；sha256 對 R1 pin（N3）；架構 = device 內 gVisor/arm 鏈實錚；runtime 路徑 `/data/local/tmp/tun2socks`（staging 由產品 provision script 做，非手動）。
 4. **fresh build 唔依賴開發者本機臨時檔案/手動 adb push** — ✅ R8 零手動 push；binary 由產品 staged-binary 路徑（fail-closed pre-check：存在→可執行→ELF magic→`--version` canary）落 device（N3 + redroid-host-validation.md）。
@@ -121,9 +121,9 @@ _push 後 5 jobs 結果喺 progress log S9 補記；唔預先宣稱。_
 
 ## 5. 回滾步驟（程式碼/映像/設定/migration）
 
-### 5.1 程式碼（R8 = `6ff45f2` 之上 4 commits）
+### 5.1 程式碼（R8 = `6ff45f2` 之上 5 commits）
 - **已 push 前**：`git reset --hard 6ff45f2`（worktree 即刻回 R7 狀態）。
-- **已 push 後（現行）**：`git revert --no-edit 008d5ce 8b980b3 c6c859d 2b891d8`
+- **已 push 後（現行）**：`git revert --no-edit 21fef27 008d5ce 8b980b3 c6c859d 2b891d8`
   （新 commit 反向；R8 零 migration，revert 無 DB 風險）。
 - 回滾後影響：mock-socks5 重退 8B CONNECT reply（严格 SOCKS5 client 會 stall — 只影響
   mock 測試環境）、canary 退回 printf|nc（tunnel 路徑 canary 失效 — 即 R2–R7 舊行為）。
