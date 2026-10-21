@@ -26,6 +26,7 @@ import {
   truncateText,
   backoffDelay,
   CONCURRENCY_ACTIVE_RUN_STATUSES,
+  NETWORK_GATE_ERROR,
 } from '@water-army/shared';
 
 import { toolGate } from './tool-helpers.js';
@@ -50,7 +51,7 @@ const SYSTEM_PROMPT = (tools) =>
  * @param {Object<string,Function>} deps.toolHandlers name → async (args) => result
  * @param {object} [deps.env] process env (provider selection)
  */
-export function createTaskEngine({ db, taskSvc, config = {}, log = console, providerResolver, toolHandlers, env = process.env }) {
+export function createTaskEngine({ db, taskSvc, config = {}, log = console, providerResolver, toolHandlers, env = process.env, networkGate = null }) {
   const taskDefaultTimeoutMs = config.taskDefaultTimeoutMs ?? 120_000;
   const taskMaxTimeoutMs = config.taskMaxTimeoutMs ?? 900_000;
   const taskDefaultAttempts = config.taskDefaultAttempts ?? 3;
@@ -123,6 +124,58 @@ export function createTaskEngine({ db, taskSvc, config = {}, log = console, prov
   }
 
   /**
+   * BR-B1 network policy gate (施工 MD §5.1) — the SINGLE policy-check point
+   * on the execution path, called after the concurrency gate and BEFORE
+   * startAttempt (before any provider/external contact).
+   *
+   * Contract (B4 implements the real allowlist/fail-closed policy):
+   *   networkGate(ctx) => { allowed: true }
+   *                      | { allowed: false, code?: string, reason?: string }
+   *   ctx = { runId, attempt, identityId, batchId, taskType }
+   *
+   * FAIL CLOSED: a missing gate, a gate that crashes, or a deny without a
+   * stable code all map to NETWORK_POLICY_UNAVAILABLE and the run is marked
+   * failed — the engine NEVER falls back to an unrestricted connection
+   * (MD §5.1/§12). B2's batch engine must call the identical gate before
+   * dispatching identity work (interface: packages/shared batch-constants
+   * NETWORK_GATE_ERROR + createAllowAllNetworkGate).
+   */
+  async function gateNetwork(runId, job) {
+    if (typeof networkGate !== 'function') return { outcome: 'proceed' }; // no policy configured = allow (default mock)
+    let verdict;
+    try {
+      const run = await taskSvc.loadRun(runId, { mustExist: false });
+      verdict = await networkGate({
+        runId,
+        attempt: job?.data?.attempt ?? null,
+        identityId: run?.identityId ?? null,
+        batchId: run?.batchId ?? null,
+        taskType: run?.taskDefinitionId ? 'ai' : 'adhoc',
+      });
+    } catch (err) {
+      verdict = { allowed: false, code: NETWORK_GATE_ERROR.POLICY_UNAVAILABLE, reason: `network gate crashed: ${err.message}` };
+    }
+    if (verdict?.allowed !== false) return { outcome: 'proceed' };
+
+    const code = typeof verdict.code === 'string' && verdict.code.length > 0
+      ? verdict.code
+      : NETWORK_GATE_ERROR.POLICY_UNAVAILABLE;
+    const why = String(verdict.reason ?? 'network policy denied').slice(0, 500);
+    try {
+      // The run is still 'queued' (pre-startAttempt) — queued→failed is a
+      // legal terminal edge; finishRun records the FAILED event + error code.
+      await taskSvc.finishRun(runId, { status: 'failed', errorCode: code, errorMessage: `network gate: ${why}` });
+      log.warn?.({ runId, code }, 'engine: network gate denied run (fail-closed)');
+      return { outcome: 'network-denied', runId, code };
+    } catch (err) {
+      // Race: the run moved on (retry/cancel) while the gate decided. Log +
+      // consume the job honestly — never retry the external call.
+      log.error?.({ runId, code, error: err.message }, 'engine: network gate deny could not be applied (run moved on)');
+      return { outcome: 'network-denied-unapplied', runId, code };
+    }
+  }
+
+  /**
    * Process one BullMQ job { runId, attempt }. Returns an outcome descriptor
    * (for worker metrics/logging) — the DB is the source of truth either way.
    */
@@ -132,6 +185,10 @@ export function createTaskEngine({ db, taskSvc, config = {}, log = console, prov
     // P6 flag #5: concurrency_key gate — BEFORE the run starts.
     const gate = await gateConcurrency(runId, job);
     if (gate.outcome !== 'proceed') return gate;
+
+    // BR-B1: network policy gate (MD §5.1) — fail-closed, before ANY external contact.
+    const net = await gateNetwork(runId, job);
+    if (net.outcome !== 'proceed') return net;
 
     const started = await taskSvc.startAttempt(runId, attempt);
     if (started.status === 'stale') {

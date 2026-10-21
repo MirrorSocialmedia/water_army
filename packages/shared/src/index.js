@@ -98,6 +98,41 @@ export {
   describeRun,
 } from './task-run-service.js';
 
+/** Batch Rotation domain constants (BR-B1, 施工 MD §3/§4/§6/§9). */
+export {
+  IDENTITY_STATUS,
+  IDENTITY_TERMINAL,
+  IDENTITY_TRANSITIONS,
+  IDENTITY_TYPE_REGISTRY,
+  BATCH_STATUS,
+  BATCH_TERMINAL,
+  BATCH_TRANSITIONS,
+  FAILURE_POLICY,
+  validateCapacityInput,
+  planCycle,
+  LEASE_RESOURCE_TYPE,
+  slotKey,
+  IDENTITY_ACTIVE_RUN_STATUSES,
+  CONTAINER_LABEL_PREFIX,
+  CONTAINER_LABELS,
+  buildContainerLabels,
+  IDENTITY_DATA_ROOT_DEFAULT,
+  identityDataPaths,
+  validateIdentityDataPath,
+  findDuplicateMountSources,
+  NETWORK_GATE_ERROR,
+  createAllowAllNetworkGate,
+  newUuid,
+  BatchError,
+  IDEMPOTENCY_KEY_RE,
+} from './batch-constants.js';
+
+/** BatchService — single owner of batch/identity state (BR-B1, MD §6/§9). */
+export { createBatchService } from './batch-service.js';
+
+/** LeaseService — cross-process resource leases (BR-B1, MD §9.6). */
+export { createLeaseService } from './lease-service.js';
+
 /** Secret scrubbing for persisted payloads (MD §13.3). */
 export { scrubObject } from './scrub.js';
 

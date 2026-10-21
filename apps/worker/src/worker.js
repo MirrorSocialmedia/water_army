@@ -25,7 +25,7 @@ import { pathToFileURL } from 'node:url';
 import { Worker as BullMQWorker } from 'bullmq';
 import Redis from 'ioredis';
 import pino from 'pino';
-import { PINO_REDACT_PATHS, buildRedisConnection, createTaskRunService, TASK_QUEUE_NAME, createTaskQueue, enqueueTaskRun, closeTaskQueue, SCHEDULE_FIRE_JOB_NAME } from '@water-army/shared';
+import { PINO_REDACT_PATHS, buildRedisConnection, createTaskRunService, TASK_QUEUE_NAME, createTaskQueue, enqueueTaskRun, closeTaskQueue, SCHEDULE_FIRE_JOB_NAME, createAllowAllNetworkGate } from '@water-army/shared';
 
 import { loadWorkerConfig } from './config.js';
 import { createSchedulerReconciler } from './scheduler-reconciler.js';
@@ -312,6 +312,10 @@ export function createWorkerApp({
           taskConcurrencyDeferMs: config.taskConcurrencyDeferMs,
           taskConcurrencyMaxDefers: config.taskConcurrencyMaxDefers,
         },
+        // BR-B1: network policy gate seam (MD §5.1). Allow-all mock = default
+        // pass; B4 swaps this for the real allowlist/fail-closed policy gate
+        // (same interface: packages/shared NETWORK_GATE_ERROR contract).
+        networkGate: createAllowAllNetworkGate(),
         log,
         providerResolver: (args) => resolveProviderForRun({ ...args, env: process.env }),
         toolHandlers: createToolHandlers({
