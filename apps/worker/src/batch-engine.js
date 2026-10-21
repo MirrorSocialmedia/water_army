@@ -255,9 +255,33 @@ export function createBatchEngine({
       });
 
       // 5) identity → RUNNING (the run now genuinely owns the identity) --
-      if (identity.status !== 'RUNNING') {
+      //    RETRY_WAIT is a parking state (reconciler / engine auto-retry):
+      //    the matrix only allows RETRY_WAIT→RESERVED→RUNNING, so re-reserve
+      //    first. (Claiming straight to RUNNING throws
+      //    ILLEGAL_IDENTITY_TRANSITION, which the divergence catch below
+      //    misreads as "already moved" and proceeds anyway — success sync
+      //    then no-ops (it only fires from RUNNING) and the batch never
+      //    completes. G8 live smoke, kill -9 scenario: retry succeeded but
+      //    the identity sat in RETRY_WAIT forever.)
+      let claimed = identity;
+      if (claimed.status === 'RETRY_WAIT') {
         try {
-          await batchSvc.transitionIdentity(identity.id, 'RUNNING', {
+          await batchSvc.transitionIdentity(claimed.id, 'RESERVED', {
+            reason: `re-reserving for attempt ${attempt} (retry path)`,
+            actor: 'engine',
+            correlationId: batch.id,
+          });
+          claimed = { ...claimed, status: 'RESERVED' };
+        } catch (e) {
+          // Divergent (concurrent cancel / manual move) — the run must not
+          // proceed on an identity that is not ours to reserve.
+          await stopQueuedRun(runId, `identity re-reserve failed: ${e.message}`);
+          return { outcome: 'identity-claim-failed' };
+        }
+      }
+      if (claimed.status !== 'RUNNING') {
+        try {
+          await batchSvc.transitionIdentity(claimed.id, 'RUNNING', {
             reason: `run ${runId} attempt ${attempt} claimed`,
             actor: 'engine',
             correlationId: batch.id,

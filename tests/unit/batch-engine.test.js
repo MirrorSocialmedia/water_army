@@ -398,3 +398,52 @@ test('inspect seam: object spec → sideEffects=false (noop); malformed non-empt
   const none = await inspect({ inputJson: {} });
   assert.equal(none.sideEffects, false);
 });
+
+test('engine: executor-lost retry — RETRY_WAIT identity is re-reserved before claim (REGRESSION: G8 live smoke, kill -9 → retry succeeded but identity stuck in RETRY_WAIT, batch never completed)', async () => {
+  const w = makeEngineWorld();
+  const { batch, identities, runs } = await seedBatchRun(w, { identities: 1, maxAttempts: 3 });
+  const run = runs[0];
+  const identity = identities[0];
+
+  // Simulate an executor that died mid-run: run row 'running', identity
+  // RUNNING, and a lease already expired — exactly what reconcile sees.
+  await w.db.taskRun.update({ where: { id: run.id }, data: { status: 'running', startedAt: new Date('2026-10-21T00:00:05Z') } });
+  await w.db.identity.update({ where: { id: identity.id }, data: { status: 'RUNNING' } });
+  const { acquired, lease } = await w.leaseSvc.acquireSlot({ totalSlots: 2, ownerRunId: run.id, ttlMs: 60_000 });
+  assert.equal(acquired, true);
+  w.setClock(61_000); // lease now expired
+
+  // Reconciliation: side-effect-free (noop) → honest terminal + RETRY_WAIT +
+  // auto-retry (attempt 2 re-queued).
+  const res = await w.scheduler.reconcileExpiredLeases();
+  assert.equal(res.retried, 1);
+  assert.equal(res.errors.length, 0);
+  let after = await w.taskSvc.loadRun(run.id);
+  assert.equal(after.status, 'queued');
+  assert.equal(after.attempt, 2);
+  assert.equal((await w.db.identity.findUnique({ where: { id: identity.id } })).status, 'RETRY_WAIT');
+  const job = w.queue.jobs.get(batchJobId(run.id, 2));
+  assert.ok(job, 'attempt-2 job re-dispatched to the queue');
+
+  // The surviving executor consumes the retry. Before the fix, the claim
+  // threw ILLEGAL_IDENTITY_TRANSITION (RETRY_WAIT→RUNNING is not a legal
+  // edge), the divergence catch let the run proceed on a stale identity,
+  // the success sync no-opped (fires only from RUNNING), and the batch
+  // never completed. Now: RETRY_WAIT→RESERVED→RUNNING→COMPLETED.
+  const outcome = await w.engine.handleBatchJob(job);
+  assert.equal(outcome.outcome, 'succeeded');
+  after = await w.taskSvc.loadRun(run.id);
+  assert.equal(after.status, 'succeeded');
+  assert.equal(after.attempt, 2);
+  assert.equal((await w.db.identity.findUnique({ where: { id: identity.id } })).status, 'COMPLETED');
+
+  // The re-reservation is visible in the honest event stream (2 hops).
+  const idEvents = await w.db.stateEvent.findMany({ where: { entityType: 'identity', entityId: identity.id }, orderBy: { createdAt: 'asc' } });
+  const hops = idEvents.map((e) => e.toState);
+  assert.ok(hops.includes('RESERVED'), `re-reserve hop recorded (hops: ${hops.join('→')})`);
+  assert.ok(hops.includes('COMPLETED'));
+
+  // And the batch actually completes (the whole point).
+  await w.scheduler.tick();
+  assert.equal((await w.db.batch.findUnique({ where: { id: batch.id } })).status, 'COMPLETED');
+});

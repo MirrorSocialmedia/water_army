@@ -118,6 +118,11 @@ async function createAndStartCycle(phase, group, batchSize, maxActive) {
       batchSize,
       maxActiveContainers: maxActive,
       failurePolicy: 'continue_and_report',
+      // Live contract: the adapter spec is an object { type, ... } (API
+      // validation). Duration/outcome come from the worker env (NOOP_DURATION_MS
+      // = 2500, NOOP_OUTCOME = ok) — the spec object is the explicit-enable
+      // switch (MD §2: no implicit default adapter).
+      config: { adapter: { type: 'noop' } },
     },
   });
   if (create.status !== 201) throw new Error(`${phase} create failed: ${create.status} ${create.text.slice(0, 300)}`);
@@ -388,8 +393,12 @@ const main = async () => {
     if (!snap) throw new Error('B never got a running run');
     const runningAtPause = snap.runs.filter((r) => r.status === 'running').map((r) => r.id);
     const queuedAtPause = snap.runs.filter((r) => r.status === 'queued').map((r) => r.id);
-    const pauseTs = Date.now();
     const pause = await api('POST', `/api/batches/${batchId}/pause`, { body: { stopExisting: false } });
+    // Hard dispatch-stop boundary = the pause RESPONSE: any run starting
+    // after the pause has fully processed is a genuine 停派 violation. (Using
+    // the request ts with a negative skew window false-positives on the
+    // running runs' OWN pre-pause claim events, which are legitimate.)
+    const pauseRespTs = Date.now();
     record('B', 'pause(stopExisting=false) accepted (202)', pause.status === 202, `${pause.status} ${pause.text.slice(0, 120)}`);
     const pausedState = await waitFor('B paused', async () => {
       const d = await batchDetail(batchId);
@@ -404,9 +413,9 @@ const main = async () => {
     record('B', 'running at pause NOT killed (all finished succeeded)', runningAtPause.every((id) => byId.get(id) === 'succeeded'), `runningAtPause=${runningAtPause.length} → ${runningAtPause.map((id) => byId.get(id)).join(',')}`);
     record('B', 'queued at pause stopped (settled cancelled/succeeded, none running)', queuedAtPause.every((id) => ['cancelled', 'succeeded'].includes(byId.get(id))), `queuedAtPause=${queuedAtPause.length} → ${queuedAtPause.map((id) => byId.get(id)).join(',')}`);
     const postPauseStarts = await db.taskRunEvent.count({
-      where: { taskRunId: { in: [...runningAtPause, ...queuedAtPause] }, eventType: 'attempt_started', createdAt: { gt: new Date(pauseTs - 2000) } },
+      where: { taskRunId: { in: [...runningAtPause, ...queuedAtPause] }, eventType: 'attempt_started', createdAt: { gt: new Date(pauseRespTs) } },
     });
-    record('B', 'queued 停派: zero attempt_started after pause (hard dispatch-stop proof)', postPauseStarts === 0, `post-pause events=${postPauseStarts} (pause ts ${new Date(pauseTs).toISOString()})`);
+    record('B', 'queued 停派: zero attempt_started after the pause response (hard dispatch-stop proof)', postPauseStarts === 0, `post-pause events=${postPauseStarts} (pause resp ts ${new Date(pauseRespTs).toISOString()})`);
     const resume = await api('POST', `/api/batches/${batchId}/resume`);
     record('B', 'resume accepted (202)', resume.status === 202, `${resume.status} ${resume.text.slice(0, 120)}`);
     const end = await waitCycleTerminal('B', batchId, 120_000);
@@ -454,7 +463,9 @@ const main = async () => {
     // Deterministic orphan: only ONE prior worker survives C; stop it, run solo
     // on W3 (batchSize 1 ⇒ 3 sequential batches — progressCycles auto-progression
     // exercised live), kill -9 W3 mid-run, boot W4 to reconcile.
-    const survivors = ['1', '2'].filter((n) => workers.get(n)?.proc.exitCode === null);
+    // A SIGKILL'd process has exitCode=null AND signalCode set — count it
+    // as dead (run 2 miscounted the killed W2 as a survivor).
+    const survivors = ['1', '2'].filter((n) => { const p = workers.get(n)?.proc; return p && p.exitCode === null && !p.signalCode; });
     record('D', 'exactly one prior worker alive (other was kill -9 in C)', survivors.length === 1, `alive=${survivors.join(',') || 'none'}`);
     await stopWorker(survivors[0]);
     const drained = await waitFor('D drain', async () => ((await liveRuns()) === 0 ? true : null), { timeoutMs: 25_000 });
@@ -477,7 +488,7 @@ const main = async () => {
     const statuses = res.all.map((d) => d.batch.status).join(',');
     record('D', 'full 3-batch cycle reaches terminal after reconcile', !res.timedOut, `statuses=[${statuses}] elapsed=${Math.round(res.elapsedMs / 1000)}s`);
     record('D', 'all 3 batches COMPLETED', res.all.every((d) => d.batch.status === 'COMPLETED'), statuses);
-    const dRuns = await db.taskRun.findMany({ where: { batchId: batchIds } , orderBy: { createdAt: 'asc' } });
+    const dRuns = await db.taskRun.findMany({ where: { batchId: { in: batchIds } }, orderBy: { createdAt: 'asc' } });
     const orphanRun = dRuns.find((r) => r.batchId === batchId);
     record('D', 'orphan run re-executed: attempt=2 succeeded (EXECUTOR_LOST → retry → success)', orphanRun?.status === 'succeeded' && orphanRun?.attempt === 2, orphanRun ? `attempt=${orphanRun.attempt} status=${orphanRun.status}` : 'missing');
     const dEvs = await db.taskRunEvent.findMany({ where: { taskRunId: { in: dRuns.map((r) => r.id) } } });
