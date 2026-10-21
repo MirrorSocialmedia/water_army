@@ -18,17 +18,7 @@
  */
 import { scrubObject, maskCredentialShapedValues, BatchError } from '@water-army/shared';
 
-const PAGE_MAX = 200;
 const DETAIL_METADATA_MAX = 2000;
-
-function safePage(query, def = 1) {
-  const v = Number(query.page ?? def);
-  return Number.isInteger(v) && v >= 1 ? v : def;
-}
-function safePageSize(query) {
-  const v = Number(query.pageSize ?? 50);
-  return Number.isInteger(v) && v >= 1 && v <= PAGE_MAX ? v : 50;
-}
 
 /**
  * Mask a free-text/error payload for API responses (MD §12): redact
@@ -61,51 +51,9 @@ function identityShape(i) {
 export function batchMonitorRoutes(app) {
   const metrics = app.batchMetrics; // decorated in app.js
 
-  // ------------------------------------------------------------ identities --
-  /** GET /api/identities — paginated + status filter (MD §10, viewer). */
-  app.get(
-    '/api/identities',
-    {
-      preHandler: app.requireRole('viewer'),
-      schema: {
-        querystring: {
-          type: 'object',
-          additionalProperties: false,
-          properties: {
-            status: { type: 'string', maxLength: 32 },
-            q: { type: 'string', maxLength: 100 },
-            // querystring values arrive as strings (app ajv: coerceTypes false) —
-            // pattern here, range enforced in the handler (repo convention).
-            page: { type: 'string', pattern: '^[1-9][0-9]*$' },
-            pageSize: { type: 'string', pattern: '^[1-9][0-9]*$' },
-          },
-        },
-      },
-    },
-    async (req) => {
-      const { status, q } = req.query;
-      const page = safePage(req.query);
-      const pageSize = safePageSize(req.query);
-
-      // the fake + prisma both support {status}; q is applied in JS (small
-      // table: 200 identities) to keep the query shape identical on both.
-      const where = {};
-      if (status) where.status = status;
-      let rows = await app.db.identity.findMany({ where, orderBy: { createdAt: 'asc' } });
-      if (q) {
-        const needle = String(q).toLowerCase();
-        rows = rows.filter(
-          (r) =>
-            (r.displayName ?? '').toLowerCase().includes(needle) ||
-            (r.externalRef ?? '').toLowerCase().includes(needle) ||
-            r.id.toLowerCase().includes(needle),
-        );
-      }
-      const total = rows.length;
-      const items = rows.slice((page - 1) * pageSize, page * pageSize).map(identityShape);
-      return { items, total, page, pageSize };
-    },
-  );
+  // NOTE: GET /api/identities (list, with q-search + statusCounts) lives in
+  // routes/batches.js (BR-B2 G6) — the BR-B5 duplicate was removed at the
+  // B5→main merge (FST_ERR_DUPLICATED_ROUTE). Only :id detail stays here.
 
   /** GET /api/identities/:id — detail (MD §11.3, viewer; zero secrets). */
   app.get('/api/identities/:id', { preHandler: app.requireRole('viewer') }, async (req) => {

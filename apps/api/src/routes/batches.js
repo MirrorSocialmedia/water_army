@@ -238,6 +238,7 @@ export function batchRoutes(app) {
           additionalProperties: false,
           properties: {
             status: { type: 'string', maxLength: 32 },
+            q: { type: 'string', maxLength: 100 },
             page: { type: 'string', pattern: POSINT_RE },
             pageSize: { type: 'string', pattern: POSINT_RE },
           },
@@ -249,6 +250,23 @@ export function batchRoutes(app) {
       const where = q.status ? { status: q.status } : {};
       const page = parsePosInt(q.page, 1);
       const pageSize = parsePosInt(q.pageSize, 50, 200);
+      const needle = q.q ? String(q.q).toLowerCase() : null;
+      if (needle) {
+        // Text search over the small identity table (≤200 rows) — JS filter
+        // keeps the query shape identical for prisma + fake (BR-B5 merge: q
+        // was BR-B5's, statusCounts was BR-B2's; one route serves both).
+        const rows = (await db.identity.findMany({ where, orderBy: { createdAt: 'asc' } })).filter(
+          (r) =>
+            (r.displayName ?? '').toLowerCase().includes(needle) ||
+            (r.externalRef ?? '').toLowerCase().includes(needle) ||
+            r.id.toLowerCase().includes(needle),
+        );
+        const counts = {};
+        for (const r of rows) counts[r.status] = (counts[r.status] ?? 0) + 1;
+        const total = rows.length;
+        const items = rows.slice((page - 1) * pageSize, page * pageSize).map(publicIdentity);
+        return { items, page, pageSize, total, statusCounts: counts };
+      }
       const [items, total, counts] = await Promise.all([
         db.identity.findMany({ where, orderBy: { createdAt: 'asc' }, skip: (page - 1) * pageSize, take: pageSize }),
         db.identity.count({ where }),
