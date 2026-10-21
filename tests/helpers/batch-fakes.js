@@ -381,6 +381,8 @@ export function makeBatchFakeDb({ identities = [], batches = [], batchIdentities
           durationMs: data.durationMs ?? null,
           requestedBy: data.requestedBy ?? null,
           idempotencyKey: data.idempotencyKey ?? null,
+          // BR-B3: the DB half of the double-ownership check (MD §4.3/§9.4).
+          containerId: data.containerId ?? null,
           createdAt: data.createdAt ?? clock(),
           updatedAt: clock(),
         };
@@ -637,6 +639,17 @@ export function makeBatchFakeDb({ identities = [], batches = [], batchIdentities
       } else if (r.status !== where.status) return false;
     }
     if (where.attempt !== undefined && r.attempt !== where.attempt) return false;
+    if (where.containerId !== undefined) {
+      // BR-B3: Prisma shape — string exact, `null` = IS NULL, or { in/not/notIn }.
+      if (where.containerId === null) {
+        if (r.containerId != null) return false;
+      } else if (typeof where.containerId === 'object') {
+        if (where.containerId.in && !where.containerId.in.includes(r.containerId)) return false;
+        if (where.containerId.not === null && r.containerId == null) return false;
+        if (where.containerId.not != null && where.containerId.not !== null && r.containerId === where.containerId.not) return false;
+        if (where.containerId.notIn && where.containerId.notIn.includes(r.containerId)) return false;
+      } else if (r.containerId !== where.containerId) return false;
+    }
     if (where.updatedAt?.lt && !(new Date(r.updatedAt).getTime() < new Date(where.updatedAt.lt).getTime())) return false;
     return true;
   }

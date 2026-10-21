@@ -7,6 +7,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 
+import { IDENTITY_DATA_ROOT_DEFAULT, parsePortRange } from '@water-army/shared';
+
 function loadDotEnv(file) {
   const target = path.resolve(file);
   if (!fs.existsSync(target)) return;
@@ -46,6 +48,38 @@ function optInt(env, name, fallback) {
     throw new Error(`config error: ${name} must be a positive integer (got ${String(raw)})`);
   }
   return value;
+}
+
+/**
+ * BR-B3: parse the env image-allowlist fallback. JSON array (strings or
+ * entry objects) or comma-separated image refs. Absent → [] (the AppSetting
+ * is then authoritative; NEITHER present → fail closed at create time).
+ * Garbage → hard fail at boot (a typo must not silently open the door).
+ */
+function parseContainerImageAllowlist(raw) {
+  if (raw === undefined || raw === '') return [];
+  let list;
+  const trimmed = raw.trim();
+  if (trimmed.startsWith('[')) {
+    try {
+      list = JSON.parse(trimmed);
+    } catch {
+      throw new Error('config error: BATCH_CONTAINER_ALLOWED_IMAGES must be a JSON array or comma-separated image refs');
+    }
+  } else {
+    list = trimmed.split(',').map((s) => s.trim()).filter(Boolean);
+  }
+  if (!Array.isArray(list)) throw new Error('config error: BATCH_CONTAINER_ALLOWED_IMAGES must be an array');
+  for (const entry of list) {
+    if (typeof entry === 'string') {
+      if (entry.length === 0 || entry.length > 512) throw new Error('config error: BATCH_CONTAINER_ALLOWED_IMAGES entry must be a 1..512 char image ref');
+    } else if (entry && typeof entry === 'object' && typeof entry.image === 'string') {
+      if (entry.image.length === 0 || entry.image.length > 512) throw new Error('config error: BATCH_CONTAINER_ALLOWED_IMAGES entry.image must be a 1..512 char image ref');
+    } else {
+      throw new Error('config error: BATCH_CONTAINER_ALLOWED_IMAGES entries must be image-ref strings or { image, ... } objects');
+    }
+  }
+  return list;
 }
 
 function requireSecret(env, name) {
@@ -196,6 +230,36 @@ export function loadConfig(env = process.env, opts = {}) {
     redroidRecoveryBackoffMaxMs: optInt(e, 'REDROID_RECOVERY_BACKOFF_MAX_MS', 600_000),
     redroidRecoveryMaxRetries: optInt(e, 'REDROID_RECOVERY_MAX_RETRIES', 3),
     redroidRecoveryLockLeaseMs: optInt(e, 'REDROID_RECOVERY_LOCK_LEASE_MS', 900_000),
+    // BR-B3 batch container lifecycle (MD Phase 3 — lane A).
+    // Data root: B1 identity dataPath rows are written under this root, so
+    // the default must stay aligned with IDENTITY_DATA_ROOT_DEFAULT.
+    batchContainerDataRoot: e.BATCH_CONTAINER_DATA_ROOT ?? IDENTITY_DATA_ROOT_DEFAULT,
+    // env fallback for the admin image allowlist (AppSetting wins). JSON
+    // array of "image" strings or { image, privileged?, reason?, memoryBytes?,
+    // nanoCpus?, cmd? } objects; garbage = hard fail (fail closed, MD §12).
+    batchContainerAllowedImages: parseContainerImageAllowlist(e.BATCH_CONTAINER_ALLOWED_IMAGES),
+    // ADB host-port pool (127.0.0.1 only; MD §5.2 bounded range).
+    batchAdbHostPortRange: (() => {
+      const raw = e.BATCH_ADB_HOST_PORT_RANGE ?? '16370-16419';
+      if (!parsePortRange(raw)) {
+        throw new Error(`config error: BATCH_ADB_HOST_PORT_RANGE must be 'start-end' (got '${raw}')`);
+      }
+      return raw;
+    })(),
+    batchPortLeaseTtlMs: optInt(e, 'BATCH_PORT_LEASE_TTL_MS', 1_800_000),
+    batchContainerStopTimeoutSec: optInt(e, 'BATCH_CONTAINER_STOP_TIMEOUT_SEC', 10),
+    // container name prefix (docker-name-safe; br-b3- is the smoke prefix).
+    batchContainerNamePrefix: (() => {
+      const p = e.BATCH_CONTAINER_NAME_PREFIX ?? 'wa-batch-';
+      if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,31}$/.test(p)) {
+        throw new Error(`config error: BATCH_CONTAINER_NAME_PREFIX must be docker-name-safe (got '${p}')`);
+      }
+      return p;
+    })(),
+    // boot health = ADB handshake wait (MD §8.2: app layer, not docker state).
+    batchContainerHealthTimeoutMs: optInt(e, 'BATCH_CONTAINER_HEALTH_TIMEOUT_MS', 60_000),
+    batchContainerHealthPollMs: optInt(e, 'BATCH_CONTAINER_HEALTH_POLL_MS', 1_000),
+    batchContainerHealthProbeTimeoutMs: optInt(e, 'BATCH_CONTAINER_HEALTH_PROBE_TIMEOUT_MS', 3_000),
     // P3 service identity: worker→API token (empty = service auth disabled).
     serviceToken: e.WORKER_API_TOKEN ?? '',
     // P3 provider default when POST /api/tasks/runs omits body.provider.

@@ -62,7 +62,7 @@ export function makeFakeDockerClient({ mode = 'ok', containers = [], networks = 
         HostConfig: {
           NetworkMode: inspectRow.network ?? 'bridge',
           Privileged: Boolean(inspectRow.privileged),
-          PortBindings: null,
+          PortBindings: inspectRow.portBindings ?? null,
         },
         NetworkSettings: { Ports: inspectRow.ports ?? null },
         Mounts: inspectRow.mounts ?? [],
