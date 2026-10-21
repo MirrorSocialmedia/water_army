@@ -1,0 +1,4023 @@
+
+> water-army@0.1.0 test
+> node --test tests/unit/*.test.js tests/integration/*.test.js
+
+TAP version 13
+# Subtest: dashboard summary API (P6 — MD §6.1 real counters)
+    # Subtest: unauthenticated → 401
+    ok 1 - unauthenticated → 401
+      ---
+      duration_ms: 2.155847
+      type: 'test'
+      ...
+    # Subtest: viewer gets the full real shape
+    ok 2 - viewer gets the full real shape
+      ---
+      duration_ms: 19.358552
+      type: 'test'
+      ...
+    1..2
+ok 1 - dashboard summary API (P6 — MD §6.1 real counters)
+  ---
+  duration_ms: 388.532767
+  type: 'test'
+  ...
+# Subtest: dashboard summary: Docker down degrades, does not 500
+ok 2 - dashboard summary: Docker down degrades, does not 500
+  ---
+  duration_ms: 122.455321
+  type: 'test'
+  ...
+# Error: connect ECONNREFUSED 127.0.0.1:1
+#     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16) {
+#   errno: -111,
+#   code: 'ECONNREFUSED',
+#   syscall: 'connect',
+#   address: '127.0.0.1',
+#   port: 1
+# }
+# Subtest: container API: unauthenticated → 401 on all guarded routes
+    # Subtest: all guarded routes → 401 + envelope
+    ok 1 - all guarded routes → 401 + envelope
+      ---
+      duration_ms: 216.74051
+      type: 'test'
+      ...
+    1..1
+ok 3 - container API: unauthenticated → 401 on all guarded routes
+  ---
+  duration_ms: 315.28351
+  type: 'test'
+  ...
+# Error: connect ECONNREFUSED 127.0.0.1:1
+#     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16) {
+#   errno: -111,
+#   code: 'ECONNREFUSED',
+#   syscall: 'connect',
+#   address: '127.0.0.1',
+#   port: 1
+# }
+# Subtest: container API: viewer = read-only
+    # Subtest: GET list → 200 with §6.2 columns + managed flag
+    ok 1 - GET list → 200 with §6.2 columns + managed flag
+      ---
+      duration_ms: 9.2862
+      type: 'test'
+      ...
+    # Subtest: filters: state / managed / q + pagination
+    ok 2 - filters: state / managed / q + pagination
+      ---
+      duration_ms: 5.997443
+      type: 'test'
+      ...
+    # Subtest: query validation: bad pageSize → 400
+    ok 3 - query validation: bad pageSize → 400
+      ---
+      duration_ms: 1.516066
+      type: 'test'
+      ...
+    # Subtest: inspect → 200, env masked, managed=false for unmanaged
+    ok 4 - inspect → 200, env masked, managed=false for unmanaged
+      ---
+      duration_ms: 1.953614
+      type: 'test'
+      ...
+    # Subtest: logs → 200 lines; bad tail/since → 400
+    ok 5 - logs → 200 lines; bad tail/since → 400
+      ---
+      duration_ms: 5.080428
+      type: 'test'
+      ...
+    # Subtest: stats running → 200 numbers; non-running → 502 DOCKER_ERROR (engine 500 classified)
+    ok 6 - stats running → 200 numbers; non-running → 502 DOCKER_ERROR (engine 500 classified)
+      ---
+      duration_ms: 2.714566
+      type: 'test'
+      ...
+    # Subtest: viewer mutation attempts → 403 FORBIDDEN (role) — start/stop/delete/create/templates/exceptions
+    ok 7 - viewer mutation attempts → 403 FORBIDDEN (role) — start/stop/delete/create/templates/exceptions
+      ---
+      duration_ms: 8.16597
+      type: 'test'
+      ...
+    1..7
+ok 4 - container API: viewer = read-only
+  ---
+  duration_ms: 172.410178
+  type: 'test'
+  ...
+# Error: connect ECONNREFUSED 127.0.0.1:1
+#     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16) {
+#   errno: -111,
+#   code: 'ECONNREFUSED',
+#   syscall: 'connect',
+#   address: '127.0.0.1',
+#   port: 1
+# }
+# Subtest: P6 flag\#1: exception grant makes unlabelled container managed in list + inspect (gate consistency)
+    # Subtest: baseline: legacy (no label) unmanaged — list filter + inspect agree
+    ok 1 - baseline: legacy (no label) unmanaged — list filter + inspect agree
+      ---
+      duration_ms: 2.201118
+      type: 'test'
+      ...
+    # Subtest: admin grants exception by name → list + inspect show managed (by exception)
+    ok 2 - admin grants exception by name → list + inspect show managed (by exception)
+      ---
+      duration_ms: 6.016993
+      type: 'test'
+      ...
+    # Subtest: revoke → back to label-only behaviour
+    ok 3 - revoke → back to label-only behaviour
+      ---
+      duration_ms: 3.635783
+      type: 'test'
+      ...
+    1..3
+ok 5 - P6 flag\#1: exception grant makes unlabelled container managed in list + inspect (gate consistency)
+  ---
+  duration_ms: 108.3954
+  type: 'test'
+  ...
+# Error: connect ECONNREFUSED 127.0.0.1:1
+#     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16) {
+#   errno: -111,
+#   code: 'ECONNREFUSED',
+#   syscall: 'connect',
+#   address: '127.0.0.1',
+#   port: 1
+# }
+# Subtest: container API: operator mutations + managed gate + idempotency
+    # Subtest: start exited → 200 running (engine called)
+    ok 1 - start exited → 200 running (engine called)
+      ---
+      duration_ms: 1.692409
+      type: 'test'
+      ...
+    # Subtest: start already-running → 200 idempotent:true (NOT a failure)
+    ok 2 - start already-running → 200 idempotent:true (NOT a failure)
+      ---
+      duration_ms: 0.807974
+      type: 'test'
+      ...
+    # Subtest: stop → exited; stop again → idempotent; pause → paused; unpause → running; restart → running
+    ok 3 - stop → exited; stop again → idempotent; pause → paused; unpause → running; restart → running
+      ---
+      duration_ms: 4.420096
+      type: 'test'
+      ...
+    # Subtest: unmanaged container mutation → 403 NOT_MANAGED + failure audit
+    ok 4 - unmanaged container mutation → 403 NOT_MANAGED + failure audit
+      ---
+      duration_ms: 0.886966
+      type: 'test'
+      ...
+    # Subtest: pause exited container → 409 (clear guidance, no fake success)
+    ok 5 - pause exited container → 409 (clear guidance, no fake success)
+      ---
+      duration_ms: 1.77484
+      type: 'test'
+      ...
+    # Subtest: operator delete → 403 (admin only)
+    ok 6 - operator delete → 403 (admin only)
+      ---
+      duration_ms: 1.320683
+      type: 'test'
+      ...
+    1..6
+ok 6 - container API: operator mutations + managed gate + idempotency
+  ---
+  duration_ms: 108.373109
+  type: 'test'
+  ...
+# Error: connect ECONNREFUSED 127.0.0.1:1
+#     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16) {
+#   errno: -111,
+#   code: 'ECONNREFUSED',
+#   syscall: 'connect',
+#   address: '127.0.0.1',
+#   port: 1
+# }
+# Subtest: container API: admin delete (two-step confirm) + NOT_MANAGED guard
+    # Subtest: wrong confirm → 400, container survives
+    ok 1 - wrong confirm → 400, container survives
+      ---
+      duration_ms: 2.522733
+      type: 'test'
+      ...
+    # Subtest: correct confirm (name) → deleted; gone from list; audited
+    ok 2 - correct confirm (name) → deleted; gone from list; audited
+      ---
+      duration_ms: 1.666888
+      type: 'test'
+      ...
+    # Subtest: delete by id works (force while running); second delete → 404 CONTAINER_NOT_FOUND
+    ok 3 - delete by id works (force while running); second delete → 404 CONTAINER_NOT_FOUND
+      ---
+      duration_ms: 7.099221
+      type: 'test'
+      ...
+    1..3
+ok 7 - container API: admin delete (two-step confirm) + NOT_MANAGED guard
+  ---
+  duration_ms: 121.185606
+  type: 'test'
+  ...
+# Error: connect ECONNREFUSED 127.0.0.1:1
+#     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16) {
+#   errno: -111,
+#   code: 'ECONNREFUSED',
+#   syscall: 'connect',
+#   address: '127.0.0.1',
+#   port: 1
+# }
+# Subtest: container API: 404 classification through HTTP
+    # Subtest: inspect/logs/stats unknown container → 404 (viewer); mutate unknown → 404 (operator)
+    ok 1 - inspect/logs/stats unknown container → 404 (viewer); mutate unknown → 404 (operator)
+      ---
+      duration_ms: 2.913
+      type: 'test'
+      ...
+    1..1
+ok 8 - container API: 404 classification through HTTP
+  ---
+  duration_ms: 108.349626
+  type: 'test'
+  ...
+# Error: connect ECONNREFUSED 127.0.0.1:1
+#     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16) {
+#   errno: -111,
+#   code: 'ECONNREFUSED',
+#   syscall: 'connect',
+#   address: '127.0.0.1',
+#   port: 1
+# }
+# Subtest: container API: daemon failure modes surface with distinct codes (MD §9.1)
+    # Subtest: daemon down → 503 DOCKER_DAEMON_UNAVAILABLE (list + inspect)
+    ok 1 - daemon down → 503 DOCKER_DAEMON_UNAVAILABLE (list + inspect)
+      ---
+      duration_ms: 96.30352
+      type: 'test'
+      ...
+# Error: connect ECONNREFUSED 127.0.0.1:1
+#     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16) {
+#   errno: -111,
+#   code: 'ECONNREFUSED',
+#   syscall: 'connect',
+#   address: '127.0.0.1',
+#   port: 1
+# }
+    # Subtest: permission denied → 502 DOCKER_PERMISSION_DENIED
+    ok 2 - permission denied → 502 DOCKER_PERMISSION_DENIED
+      ---
+      duration_ms: 64.151339
+      type: 'test'
+      ...
+# Error: connect ECONNREFUSED 127.0.0.1:1
+#     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16) {
+#   errno: -111,
+#   code: 'ECONNREFUSED',
+#   syscall: 'connect',
+#   address: '127.0.0.1',
+#   port: 1
+# }
+    # Subtest: timeout → 504 DOCKER_TIMEOUT
+    ok 3 - timeout → 504 DOCKER_TIMEOUT
+      ---
+      duration_ms: 59.013131
+      type: 'test'
+      ...
+# Error: connect ECONNREFUSED 127.0.0.1:1
+#     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16) {
+#   errno: -111,
+#   code: 'ECONNREFUSED',
+#   syscall: 'connect',
+#   address: '127.0.0.1',
+#   port: 1
+# }
+    # Subtest: daemon-down mutation → 503 (never a fake success, failure audited)
+    ok 4 - daemon-down mutation → 503 (never a fake success, failure audited)
+      ---
+      duration_ms: 78.313861
+      type: 'test'
+      ...
+    1..4
+ok 9 - container API: daemon failure modes surface with distinct codes (MD §9.1)
+  ---
+  duration_ms: 298.361991
+  type: 'test'
+  ...
+# Error: connect ECONNREFUSED 127.0.0.1:1
+#     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16) {
+#   errno: -111,
+#   code: 'ECONNREFUSED',
+#   syscall: 'connect',
+#   address: '127.0.0.1',
+#   port: 1
+# }
+# Subtest: SSE over real HTTP: headers, preamble, forwarding, filtering, robustness, disconnect
+    # Subtest: connect: 200 + text/event-stream + no-cache + x-accel-buffering + retry preamble
+    ok 1 - connect: 200 + text/event-stream + no-cache + x-accel-buffering + retry preamble
+      ---
+      duration_ms: 9.623526
+      type: 'test'
+      ...
+    # Subtest: container start event → forwarded as `event: container` with §9.4 payload
+    ok 2 - container start event → forwarded as `event: container` with §9.4 payload
+      ---
+      duration_ms: 1.793991
+      type: 'test'
+      ...
+    # Subtest: non-container type (image) + non-whitelisted action (exec_create) → NOT forwarded
+    ok 3 - non-container type (image) + non-whitelisted action (exec_create) → NOT forwarded
+      ---
+      duration_ms: 304.081817
+      type: 'test'
+      ...
+    # Subtest: malformed frame lines → skipped, stream stays alive for later events
+    ok 4 - malformed frame lines → skipped, stream stays alive for later events
+      ---
+      duration_ms: 201.27335
+      type: 'test'
+      ...
+    # Subtest: abort → server releases the docker event stream (active back to 0)
+    ok 5 - abort → server releases the docker event stream (active back to 0)
+      ---
+      duration_ms: 251.946077
+      type: 'test'
+      ...
+# Error: connect ECONNREFUSED 127.0.0.1:1
+#     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16) {
+#   errno: -111,
+#   code: 'ECONNREFUSED',
+#   syscall: 'connect',
+#   address: '127.0.0.1',
+#   port: 1
+# }
+# Error: connect ECONNREFUSED 127.0.0.1:1
+#     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16) {
+#   errno: -111,
+#   code: 'ECONNREFUSED',
+#   syscall: 'connect',
+#   address: '127.0.0.1',
+#   port: 1
+# }
+# Error: connect ECONNREFUSED 127.0.0.1:1
+#     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16) {
+#   errno: -111,
+#   code: 'ECONNREFUSED',
+#   syscall: 'connect',
+#   address: '127.0.0.1',
+#   port: 1
+# }
+# Error: connect ECONNREFUSED 127.0.0.1:1
+#     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16) {
+#   errno: -111,
+#   code: 'ECONNREFUSED',
+#   syscall: 'connect',
+#   address: '127.0.0.1',
+#   port: 1
+# }
+    1..5
+ok 10 - SSE over real HTTP: headers, preamble, forwarding, filtering, robustness, disconnect
+  ---
+  duration_ms: 4844.64838
+  type: 'test'
+  ...
+# Error: connect ECONNREFUSED 127.0.0.1:1
+#     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16) {
+#   errno: -111,
+#   code: 'ECONNREFUSED',
+#   syscall: 'connect',
+#   address: '127.0.0.1',
+#   port: 1
+# }
+# Subtest: SSE: concurrency cap → 503 SSE_LIMIT (not hijacked)
+    # Subtest: third stream at cap → 503 + envelope (plain JSON response)
+    ok 1 - third stream at cap → 503 + envelope (plain JSON response)
+      ---
+      duration_ms: 3.661463
+      type: 'test'
+      ...
+    # Subtest: abandoning one stream frees the slot
+    ok 2 - abandoning one stream frees the slot
+      ---
+      duration_ms: 251.91
+      type: 'test'
+      ...
+    1..2
+ok 11 - SSE: concurrency cap → 503 SSE_LIMIT (not hijacked)
+  ---
+  duration_ms: 297.373623
+  type: 'test'
+  ...
+# Subtest: SSE service: release() is idempotent + destroys the docker stream
+    # Subtest: active count tracks open/release; double release is a no-op
+    ok 1 - active count tracks open/release; double release is a no-op
+      ---
+      duration_ms: 0.203343
+      type: 'test'
+      ...
+    # Subtest: over-cap open → SSE_LIMIT (service level)
+    ok 2 - over-cap open → SSE_LIMIT (service level)
+      ---
+      duration_ms: 0.311076
+      type: 'test'
+      ...
+    1..2
+ok 12 - SSE service: release() is idempotent + destroys the docker stream
+  ---
+  duration_ms: 26.835348
+  type: 'test'
+  ...
+# Error: connect ECONNREFUSED 127.0.0.1:1
+#     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16) {
+#   errno: -111,
+#   code: 'ECONNREFUSED',
+#   syscall: 'connect',
+#   address: '127.0.0.1',
+#   port: 1
+# }
+# Subtest: SSE: daemon down → 503 DOCKER_DAEMON_UNAVAILABLE (plain response, no hijack)
+ok 13 - SSE: daemon down → 503 DOCKER_DAEMON_UNAVAILABLE (plain response, no hijack)
+  ---
+  duration_ms: 32.979122
+  type: 'test'
+  ...
+# Error: connect ECONNREFUSED 127.0.0.1:1
+#     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16) {
+#   errno: -111,
+#   code: 'ECONNREFUSED',
+#   syscall: 'connect',
+#   address: '127.0.0.1',
+#   port: 1
+# }
+# Subtest: template upsert: admin lifecycle + validation
+    # Subtest: valid template → 201 created + audit template.create
+    ok 1 - valid template → 201 created + audit template.create
+      ---
+      duration_ms: 3.659382
+      type: 'test'
+      ...
+    # Subtest: re-post same id → 200 created:false (idempotent upsert, not a duplicate)
+    ok 2 - re-post same id → 200 created:false (idempotent upsert, not a duplicate)
+      ---
+      duration_ms: 2.021865
+      type: 'test'
+      ...
+    # Subtest: GET list → 200 for viewer (read); POST → 403 for operator and viewer
+    ok 3 - GET list → 200 for viewer (read); POST → 403 for operator and viewer
+      ---
+      duration_ms: 12.513925
+      type: 'test'
+      ...
+    # Subtest: validation rejections (each → 400 VALIDATION_ERROR)
+    ok 4 - validation rejections (each → 400 VALIDATION_ERROR)
+      ---
+      duration_ms: 12.060437
+      type: 'test'
+      ...
+    # Subtest: privileged WITH reason (redroid class) → accepted
+    ok 5 - privileged WITH reason (redroid class) → accepted
+      ---
+      duration_ms: 3.47228
+      type: 'test'
+      ...
+    # Subtest: custom network must exist on the daemon → 400 when missing
+    ok 6 - custom network must exist on the daemon → 400 when missing
+      ---
+      duration_ms: 1.691189
+      type: 'test'
+      ...
+    1..6
+ok 14 - template upsert: admin lifecycle + validation
+  ---
+  duration_ms: 262.018446
+  type: 'test'
+  ...
+# Error: connect ECONNREFUSED 127.0.0.1:1
+#     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16) {
+#   errno: -111,
+#   code: 'ECONNREFUSED',
+#   syscall: 'connect',
+#   address: '127.0.0.1',
+#   port: 1
+# }
+# Subtest: create from template: allowlist-only, labels, idempotency, 409s
+    # Subtest: valid create → 201, running, labels set, audited with env KEYS only
+    ok 1 - valid create → 201, running, labels set, audited with env KEYS only
+      ---
+      duration_ms: 7.460108
+      type: 'test'
+      ...
+    # Subtest: idempotent replay: same key → header idempotent-replay, NO second container
+    ok 2 - idempotent replay: same key → header idempotent-replay, NO second container
+      ---
+      duration_ms: 4.626099
+      type: 'test'
+      ...
+    # Subtest: env key outside allowlist → 400
+    ok 3 - env key outside allowlist → 400
+      ---
+      duration_ms: 1.557596
+      type: 'test'
+      ...
+    # Subtest: port not in template / hostPort outside range → 400
+    ok 4 - port not in template / hostPort outside range → 400
+      ---
+      duration_ms: 2.109825
+      type: 'test'
+      ...
+    # Subtest: command override on a template that forbids it → 400
+    ok 5 - command override on a template that forbids it → 400
+      ---
+      duration_ms: 13.498972
+      type: 'test'
+      ...
+    # Subtest: unknown templateId → 404 TEMPLATE_NOT_FOUND
+    ok 6 - unknown templateId → 404 TEMPLATE_NOT_FOUND
+      ---
+      duration_ms: 1.518166
+      type: 'test'
+      ...
+    # Subtest: name collision → 409 NAME_TAKEN (durable backstop, independent of idempotency key)
+    ok 7 - name collision → 409 NAME_TAKEN (durable backstop, independent of idempotency key)
+      ---
+      duration_ms: 1.185281
+      type: 'test'
+      ...
+    # Subtest: host port already published → 409 PORT_IN_USE
+    ok 8 - host port already published → 409 PORT_IN_USE
+      ---
+      duration_ms: 1.841822
+      type: 'test'
+      ...
+    1..8
+ok 15 - create from template: allowlist-only, labels, idempotency, 409s
+  ---
+  duration_ms: 171.450451
+  type: 'test'
+  ...
+# Error: connect ECONNREFUSED 127.0.0.1:1
+#     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16) {
+#   errno: -111,
+#   code: 'ECONNREFUSED',
+#   syscall: 'connect',
+#   address: '127.0.0.1',
+#   port: 1
+# }
+# Subtest: managed exceptions: admin grant/revoke flips the gate
+    # Subtest: unmanaged → operator stop 403 NOT_MANAGED
+    ok 1 - unmanaged → operator stop 403 NOT_MANAGED
+      ---
+      duration_ms: 1.063788
+      type: 'test'
+      ...
+    # Subtest: non-admin grant attempts → 403
+    ok 2 - non-admin grant attempts → 403
+      ---
+      duration_ms: 10.47876
+      type: 'test'
+      ...
+    # Subtest: admin grant by name → 201 + audit; operator can now stop (byException:true)
+    ok 3 - admin grant by name → 201 + audit; operator can now stop (byException:true)
+      ---
+      duration_ms: 1.701759
+      type: 'test'
+      ...
+    # Subtest: exceptions list (admin) shows the entry; revoke → 204 + audit; gate closes again
+    ok 4 - exceptions list (admin) shows the entry; revoke → 204 + audit; gate closes again
+      ---
+      duration_ms: 1.911993
+      type: 'test'
+      ...
+    # Subtest: grant by containerId resolves to id key; unknown exception key → 404
+    ok 5 - grant by containerId resolves to id key; unknown exception key → 404
+      ---
+      duration_ms: 1.469225
+      type: 'test'
+      ...
+    1..5
+ok 16 - managed exceptions: admin grant/revoke flips the gate
+  ---
+  duration_ms: 120.125392
+  type: 'test'
+  ...
+# Subtest: ready: all up → 200 ok
+ok 17 - ready: all up → 200 ok
+  ---
+  duration_ms: 284.001433
+  type: 'test'
+  ...
+# Subtest: ready: docker down → 200 degraded (work-order contract)
+ok 18 - ready: docker down → 200 degraded (work-order contract)
+  ---
+  duration_ms: 88.595471
+  type: 'test'
+  ...
+# Subtest: ready: docker disabled → 200 ok (opt-out, not a failure)
+ok 19 - ready: docker disabled → 200 ok (opt-out, not a failure)
+  ---
+  duration_ms: 95.294355
+  type: 'test'
+  ...
+# Subtest: ready: redis down → 503 degraded
+ok 20 - ready: redis down → 503 degraded
+  ---
+  duration_ms: 71.487187
+  type: 'test'
+  ...
+# Subtest: ready: db down → 503 degraded
+ok 21 - ready: db down → 503 degraded
+  ---
+  duration_ms: 85.395216
+  type: 'test'
+  ...
+# Subtest: ready: multiple deps down still bounded (resolves, no hang)
+ok 22 - ready: multiple deps down still bounded (resolves, no hang)
+  ---
+  duration_ms: 68.638258
+  type: 'test'
+  ...
+# Subtest: live: always 200 even with all deps down
+ok 23 - live: always 200 even with all deps down
+  ---
+  duration_ms: 52.559672
+  type: 'test'
+  ...
+# Subtest: ready: response is machine-readable and has no secret leakage
+ok 24 - ready: response is machine-readable and has no secret leakage
+  ---
+  duration_ms: 55.747166
+  type: 'test'
+  ...
+# Subtest: §6.4-1: process alive + TCP canary FAIL → DEGRADED then BLOCKED, never HEALTHY; checks{process=PASS, tcpCanary=FAIL} persisted
+ok 25 - §6.4-1: process alive + TCP canary FAIL → DEGRADED then BLOCKED, never HEALTHY; checks{process=PASS, tcpCanary=FAIL} persisted
+  ---
+  duration_ms: 285.386907
+  type: 'test'
+  ...
+# Subtest: §6.4-2: DNS resolves + TCP connect fails (from provisioning) → the device never becomes HEALTHY
+ok 26 - §6.4-2: DNS resolves + TCP connect fails (from provisioning) → the device never becomes HEALTHY
+  ---
+  duration_ms: 309.800926
+  type: 'test'
+  ...
+# Subtest: §6.4-3: stale HEALTHY (aged last check, nobody re-verified) → stale=true + networkReady=false → UI shows STALE; the watchdog tick then degrades it
+ok 27 - §6.4-3: stale HEALTHY (aged last check, nobody re-verified) → stale=true + networkReady=false → UI shows STALE; the watchdog tick then degrades it
+  ---
+  duration_ms: 388.97857
+  type: 'test'
+  ...
+# Subtest: §6.4-4: the LIVE API view carries exactly the contract key set; worker + UI badge agree with it; zero secrets
+ok 28 - §6.4-4: the LIVE API view carries exactly the contract key set; worker + UI badge agree with it; zero secrets
+  ---
+  duration_ms: 113.599526
+  type: 'test'
+  ...
+# Subtest: §6.4-5: duplicate/late events + a restarted process cannot push BLOCKED→HEALTHY; all audited transitions are legal
+ok 29 - §6.4-5: duplicate/late events + a restarted process cannot push BLOCKED→HEALTHY; all audited transitions are legal
+  ---
+  duration_ms: 361.28486
+  type: 'test'
+  ...
+# Subtest: idempotency: delete then re-create with the SAME key → fresh device (201, new id, GET 200) — no phantom view
+ok 30 - idempotency: delete then re-create with the SAME key → fresh device (201, new id, GET 200) — no phantom view
+  ---
+  duration_ms: 87.814304
+  type: 'test'
+  ...
+# t2s check ready-case: skipped (no gcc)
+# t2s check fallback-case: skipped (no gcc)
+# Subtest: t2s binary check: script is read-only (no F-B hazard) and machine-readable
+ok 31 - t2s binary check: script is read-only (no F-B hazard) and machine-readable
+  ---
+  duration_ms: 1.241341
+  type: 'test'
+  ...
+# Subtest: t2s binary check: output parser (pure)
+ok 32 - t2s binary check: output parser (pure)
+  ---
+  duration_ms: 0.774423
+  type: 'test'
+  ...
+# Subtest: t2s binary check: real execution (sh) — all four outcomes
+ok 33 - t2s binary check: real execution (sh) — all four outcomes
+  ---
+  duration_ms: 153.792559
+  type: 'test'
+  ...
+# Subtest: binary ready: provision proceeds; diagnosis surfaces in the view (no credentials)
+ok 34 - binary ready: provision proceeds; diagnosis surfaces in the view (no credentials)
+  ---
+  duration_ms: 310.809653
+  type: 'test'
+  ...
+# Subtest: binary missing → BINARY_MISSING fail-closed: never running, state=missing
+ok 35 - binary missing → BINARY_MISSING fail-closed: never running, state=missing
+  ---
+  duration_ms: 148.452517
+  type: 'test'
+  ...
+# Subtest: binary invalid → BINARY_INVALID fail-closed with detail
+ok 36 - binary invalid → BINARY_INVALID fail-closed with detail
+  ---
+  duration_ms: 106.948454
+  type: 'test'
+  ...
+# Subtest: check seam failure → binaryState=error, still fail-closed
+ok 37 - check seam failure → binaryState=error, still fail-closed
+  ---
+  duration_ms: 98.205403
+  type: 'test'
+  ...
+# Subtest: diagnostics: five INDEPENDENT zones, all executed, host GPU = unverified (never fake-verified)
+    # Subtest: zone 1 kernel: executed + supported (mock-labelled) + suggestions/supported detail
+    ok 1 - zone 1 kernel: executed + supported (mock-labelled) + suggestions/supported detail
+      ---
+      duration_ms: 0.502148
+      type: 'test'
+      ...
+    # Subtest: zone 2 containerLogs: executed + ok + lines (bounded)
+    ok 2 - zone 2 containerLogs: executed + ok + lines (bounded)
+      ---
+      duration_ms: 0.124142
+      type: 'test'
+      ...
+    # Subtest: zone 3 adbConnectivity: executed + online via the loopback whitelist op
+    ok 3 - zone 3 adbConnectivity: executed + online via the loopback whitelist op
+      ---
+      duration_ms: 0.235424
+      type: 'test'
+      ...
+    # Subtest: zone 4 gpuVerification: host mode = unverified (MD §2.4 hard rule)
+    ok 4 - zone 4 gpuVerification: host mode = unverified (MD §2.4 hard rule)
+      ---
+      duration_ms: 0.162263
+      type: 'test'
+      ...
+    # Subtest: zone 5 network (R3): no-proxy device = unconfigured (nothing to verify, no fake pass)
+    ok 5 - zone 5 network (R3): no-proxy device = unconfigured (nothing to verify, no fake pass)
+      ---
+      duration_ms: 0.101102
+      type: 'test'
+      ...
+    # Subtest: lastDiagnosedAt is stamped + diagnostics audited
+    ok 6 - lastDiagnosedAt is stamped + diagnostics audited
+      ---
+      duration_ms: 1.925924
+      type: 'test'
+      ...
+    1..6
+ok 38 - diagnostics: five INDEPENDENT zones, all executed, host GPU = unverified (never fake-verified)
+  ---
+  duration_ms: 335.425346
+  type: 'test'
+  ...
+# Subtest: diagnostics: swiftshader device → gpuVerification "software" (honest 軟體/降級 label)
+ok 39 - diagnostics: swiftshader device → gpuVerification "software" (honest 軟體/降級 label)
+  ---
+  duration_ms: 197.626931
+  type: 'test'
+  ...
+# Subtest: diagnostics: stopped device → adb zone NOT executed = unverified (never a fake pass)
+ok 40 - diagnostics: stopped device → adb zone NOT executed = unverified (never a fake pass)
+  ---
+  duration_ms: 133.43782
+  type: 'test'
+  ...
+# Subtest: diagnostics: adb offline (mock) → connect attempted once, still offline is reported honestly
+ok 41 - diagnostics: adb offline (mock) → connect attempted once, still offline is reported honestly
+  ---
+  duration_ms: 110.326413
+  type: 'test'
+  ...
+# Subtest: logcat: tail default + explicit tail + SERVER-SIDE cap (huge tail clamped, truncation flagged)
+    # Subtest: no tail → default (200)
+    ok 1 - no tail → default (200)
+      ---
+      duration_ms: 1.802311
+      type: 'test'
+      ...
+    # Subtest: explicit tail=50 → 50 lines (the TAIL of the buffer)
+    ok 2 - explicit tail=50 → 50 lines (the TAIL of the buffer)
+      ---
+      duration_ms: 0.887616
+      type: 'test'
+      ...
+    # Subtest: tail=999999 → clamped to the tail cap (5000): line-cap enforced server-side (工單 硬驗收 5)
+    ok 3 - tail=999999 → clamped to the tail cap (5000): line-cap enforced server-side (工單 硬驗收 5)
+      ---
+      duration_ms: 2.536344
+      type: 'test'
+      ...
+    # Subtest: byte cap backstop: a huge single response is byte-clipped + truncated flagged (never silent)
+    ok 4 - byte cap backstop: a huge single response is byte-clipped + truncated flagged (never silent)
+      ---
+      duration_ms: 96.500433
+      type: 'test'
+      ...
+    # Subtest: invalid tail values → 400
+    ok 5 - invalid tail values → 400
+      ---
+      duration_ms: 3.430989
+      type: 'test'
+      ...
+    1..5
+ok 42 - logcat: tail default + explicit tail + SERVER-SIDE cap (huge tail clamped, truncation flagged)
+  ---
+  duration_ms: 251.778936
+  type: 'test'
+  ...
+# Subtest: diagnostics + logcat RBAC: viewer → 403, unauthenticated → 401
+ok 43 - diagnostics + logcat RBAC: viewer → 403, unauthenticated → 401
+  ---
+  duration_ms: 100.843838
+  type: 'test'
+  ...
+# Subtest: diagnostics: create with failing start (mock boot crash) → container created but adb unverified, logs still executable
+ok 44 - diagnostics: create with failing start (mock boot crash) → container created but adb unverified, logs still executable
+  ---
+  duration_ms: 89.88565
+  type: 'test'
+  ...
+# Subtest: error contract: device create with a missing image → 404 IMAGE_NOT_FOUND (R5 handoff \#3)
+ok 45 - error contract: device create with a missing image → 404 IMAGE_NOT_FOUND (R5 handoff \#3)
+  ---
+  duration_ms: 435.944461
+  type: 'test'
+  ...
+# Subtest: error contract: refresh with an unrunnable adb engine → adbError ADB_UNAVAILABLE (never a false state)
+ok 46 - error contract: refresh with an unrunnable adb engine → adbError ADB_UNAVAILABLE (never a false state)
+  ---
+  duration_ms: 167.893991
+  type: 'test'
+  ...
+# Subtest: error contract: diagnostics adb zone with an unrunnable engine → status error + ADB_UNAVAILABLE (NOT a false offline)
+ok 47 - error contract: diagnostics adb zone with an unrunnable engine → status error + ADB_UNAVAILABLE (NOT a false offline)
+  ---
+  duration_ms: 104.245528
+  type: 'test'
+  ...
+# Subtest: error contract: delete with removeData + permission failure → 200 + dataRemoved:false + DATA_DIR_PERM_DENIED (R5 handoff \#5: surface, never silent)
+ok 48 - error contract: delete with removeData + permission failure → 200 + dataRemoved:false + DATA_DIR_PERM_DENIED (R5 handoff \#5: surface, never silent)
+  ---
+  duration_ms: 126.386859
+  type: 'test'
+  ...
+# Subtest: error contract: recreate-stall signature → suspectedHostProtocolStall in diagnostics (R5 handoff \#2: surface, no auto-recovery)
+ok 49 - error contract: recreate-stall signature → suspectedHostProtocolStall in diagnostics (R5 handoff \#2: surface, no auto-recovery)
+  ---
+  duration_ms: 118.269278
+  type: 'test'
+  ...
+# Subtest: error contract: tunnel stage failure persists TUNNEL_SETUP_FAILED (was undefined → silently dropped)
+ok 50 - error contract: tunnel stage failure persists TUNNEL_SETUP_FAILED (was undefined → silently dropped)
+  ---
+  duration_ms: 101.210354
+  type: 'test'
+  ...
+# Subtest: redroid API: unauthenticated → 401 on all guarded routes
+ok 51 - redroid API: unauthenticated → 401 on all guarded routes
+  ---
+  duration_ms: 305.218897
+  type: 'test'
+  ...
+# Subtest: redroid API: RBAC — viewer read-only, operator lifecycle, admin-only deletes/templates
+    # Subtest: viewer can list templates and devices
+    ok 1 - viewer can list templates and devices
+      ---
+      duration_ms: 2.143447
+      type: 'test'
+      ...
+    # Subtest: viewer cannot create template / create device / run actions
+    ok 2 - viewer cannot create template / create device / run actions
+      ---
+      duration_ms: 5.473074
+      type: 'test'
+      ...
+    # Subtest: operator cannot delete device or write templates
+    ok 3 - operator cannot delete device or write templates
+      ---
+      duration_ms: 14.652052
+      type: 'test'
+      ...
+    1..3
+ok 52 - redroid API: RBAC — viewer read-only, operator lifecycle, admin-only deletes/templates
+  ---
+  duration_ms: 190.261295
+  type: 'test'
+  ...
+# Subtest: template image pinning: latest / nightly / untagged / bad shape all rejected
+ok 53 - template image pinning: latest / nightly / untagged / bad shape all rejected
+  ---
+  duration_ms: 108.073255
+  type: 'test'
+  ...
+# Subtest: privileged template requires a reason label (MD §9.2)
+ok 54 - privileged template requires a reason label (MD §9.2)
+  ---
+  duration_ms: 138.502006
+  type: 'test'
+  ...
+# Subtest: device create: template-only inputs, 127.0.0.1 bind, androidboot.* as START ARGS, data dir, GPU honesty
+    # Subtest: swiftshader template → gpuStatus "software" (honest, not verified)
+    ok 1 - swiftshader template → gpuStatus "software" (honest, not verified)
+      ---
+      duration_ms: 2.36276
+      type: 'test'
+      ...
+    1..1
+ok 55 - device create: template-only inputs, 127.0.0.1 bind, androidboot.* as START ARGS, data dir, GPU honesty
+  ---
+  duration_ms: 101.117704
+  type: 'test'
+  ...
+# Subtest: device create: client cannot inject Docker fields (0.0.0.0 / privileged / hostConfig all 400)
+ok 56 - device create: client cannot inject Docker fields (0.0.0.0 / privileged / hostConfig all 400)
+  ---
+  duration_ms: 101.093892
+  type: 'test'
+  ...
+# Subtest: device create: idempotency — same key replays, different name with same key returns original
+ok 57 - device create: idempotency — same key replays, different name with same key returns original
+  ---
+  duration_ms: 83.316217
+  type: 'test'
+  ...
+# Subtest: device create: name taken → 409 (fresh key)
+ok 58 - device create: name taken → 409 (fresh key)
+  ---
+  duration_ms: 88.974135
+  type: 'test'
+  ...
+# Subtest: adb port allocation: real 127.0.0.1 collision → next port (工單 硬驗收 2 collision case)
+ok 59 - adb port allocation: real 127.0.0.1 collision → next port (工單 硬驗收 2 collision case)
+  ---
+  duration_ms: 92.531875
+  type: 'test'
+  ...
+# Subtest: adb port allocation: exhausted range → 503 REDROID_PORT_UNAVAILABLE
+ok 60 - adb port allocation: exhausted range → 503 REDROID_PORT_UNAVAILABLE
+  ---
+  duration_ms: 69.619403
+  type: 'test'
+  ...
+# Subtest: lifecycle: start (idempotent) → stop → start → restart → refresh (adb state) with state transitions + audit
+    # Subtest: start on running = idempotent success (no fake re-start)
+    ok 1 - start on running = idempotent success (no fake re-start)
+      ---
+      duration_ms: 1.933113
+      type: 'test'
+      ...
+    # Subtest: stop → exited
+    ok 2 - stop → exited
+      ---
+      duration_ms: 1.126739
+      type: 'test'
+      ...
+    # Subtest: start again → running
+    ok 3 - start again → running
+      ---
+      duration_ms: 0.904275
+      type: 'test'
+      ...
+    # Subtest: restart → running (always performs)
+    ok 4 - restart → running (always performs)
+      ---
+      duration_ms: 1.499945
+      type: 'test'
+      ...
+    # Subtest: refresh syncs container state + adb state via the whitelist op (127.0.0.1:<port>)
+    ok 5 - refresh syncs container state + adb state via the whitelist op (127.0.0.1:<port>)
+      ---
+      duration_ms: 3.000762
+      type: 'test'
+      ...
+    # Subtest: every mutation is audited
+    ok 6 - every mutation is audited
+      ---
+      duration_ms: 0.191893
+      type: 'test'
+      ...
+    # Subtest: list + get views expose the MD §6.4 columns
+    ok 7 - list + get views expose the MD §6.4 columns
+      ---
+      duration_ms: 3.954398
+      type: 'test'
+      ...
+    1..7
+ok 61 - lifecycle: start (idempotent) → stop → start → restart → refresh (adb state) with state transitions + audit
+  ---
+  duration_ms: 89.397532
+  type: 'test'
+  ...
+# Subtest: delete: two-step confirm, container removed, data dir kept unless removeData
+    # Subtest: wrong confirm → 400
+    ok 1 - wrong confirm → 400
+      ---
+      duration_ms: 1.14662
+      type: 'test'
+      ...
+    # Subtest: delete without removeData keeps the data dir (persistence)
+    ok 2 - delete without removeData keeps the data dir (persistence)
+      ---
+      duration_ms: 1.682309
+      type: 'test'
+      ...
+    # Subtest: delete with removeData=true removes ONLY the device dir (strict scope)
+    ok 3 - delete with removeData=true removes ONLY the device dir (strict scope)
+      ---
+      duration_ms: 2.862918
+      type: 'test'
+      ...
+    1..3
+ok 62 - delete: two-step confirm, container removed, data dir kept unless removeData
+  ---
+  duration_ms: 88.307133
+  type: 'test'
+  ...
+# Subtest: no arbitrary-command endpoint: POST /exec is 404 by construction (工單 硬驗收 4)
+ok 63 - no arbitrary-command endpoint: POST /exec is 404 by construction (工單 硬驗收 4)
+  ---
+  duration_ms: 80.685433
+  type: 'test'
+  ...
+# Subtest: template delete: in-use → 409; after device gone → 200
+ok 64 - template delete: in-use → 409; after device gone → 200
+  ---
+  duration_ms: 114.891409
+  type: 'test'
+  ...
+# Subtest: disabled template cannot create devices (409) but can be re-enabled (admin)
+ok 65 - disabled template cannot create devices (409) but can be re-enabled (admin)
+  ---
+  duration_ms: 71.687448
+  type: 'test'
+  ...
+# Subtest: mock adapter honesty: mock is labelled mock everywhere it appears
+ok 66 - mock adapter honesty: mock is labelled mock everywhere it appears
+  ---
+  duration_ms: 53.539558
+  type: 'test'
+  ...
+# Subtest: r3 happy path: proxied device reaches HEALTHY via canary PASS; view + DB + audit consistent; zero secrets
+ok 67 - r3 happy path: proxied device reaches HEALTHY via canary PASS; view + DB + audit consistent; zero secrets
+  ---
+  duration_ms: 321.833582
+  type: 'test'
+  ...
+# Subtest: r3 fail-closed: no canary target configured → device can never reach HEALTHY; ends FAILED + manual intervention
+ok 68 - r3 fail-closed: no canary target configured → device can never reach HEALTHY; ends FAILED + manual intervention
+  ---
+  duration_ms: 1184.047129
+  type: 'test'
+  ...
+# Subtest: r3 soft failure path: HEALTHY → DEGRADED (1 fail) → BLOCKED (threshold) → 3 recovery attempts → FAILED + manual
+ok 69 - r3 soft failure path: HEALTHY → DEGRADED (1 fail) → BLOCKED (threshold) → 3 recovery attempts → FAILED + manual
+  ---
+  duration_ms: 1108.384608
+  type: 'test'
+  ...
+# Subtest: r3 definite loss: kill t2s (process dead + fail-open effective=direct) → BLOCKED on the very next tick
+ok 70 - r3 definite loss: kill t2s (process dead + fail-open effective=direct) → BLOCKED on the very next tick
+  ---
+  duration_ms: 45.60159
+  type: 'test'
+  ...
+# Subtest: r3 gVisor stall budget: process alive + canary dead → exactly ONE auto re-provision, then FAILED + manual flag
+ok 71 - r3 gVisor stall budget: process alive + canary dead → exactly ONE auto re-provision, then FAILED + manual flag
+  ---
+  duration_ms: 243.524154
+  type: 'test'
+  ...
+# Subtest: r3 recovery lock: while a lease is held by another holder, ticks do NOT start a second recovery
+ok 72 - r3 recovery lock: while a lease is held by another holder, ticks do NOT start a second recovery
+  ---
+  duration_ms: 43.673356
+  type: 'test'
+  ...
+# Subtest: r3 stale health: HEALTHY whose last check is older than the TTL → stale=true, networkReady=false; a fresh tick cures it
+ok 73 - r3 stale health: HEALTHY whose last check is older than the TTL → stale=true, networkReady=false; a fresh tick cures it
+  ---
+  duration_ms: 45.707561
+  type: 'test'
+  ...
+# Subtest: r3 operator stop: HEALTHY → STOPPED pre-claim; legacy stopped; NO recovery trigger; restart re-provisions to HEALTHY
+ok 74 - r3 operator stop: HEALTHY → STOPPED pre-claim; legacy stopped; NO recovery trigger; restart re-provisions to HEALTHY
+  ---
+  duration_ms: 39.570866
+  type: 'test'
+  ...
+# Subtest: r3 proxy leg: gost listener unreachable + canary dead → BLOCKED with PROXY_UNREACHABLE (a canary PASS would excuse a probe artifact)
+ok 75 - r3 proxy leg: gost listener unreachable + canary dead → BLOCKED with PROXY_UNREACHABLE (a canary PASS would excuse a probe artifact)
+  ---
+  duration_ms: 44.357687
+  type: 'test'
+  ...
+# Subtest: r3 retry guards: HEALTHY → 409 invalid state; non-proxied device → 409 no proxy
+ok 76 - r3 retry guards: HEALTHY → 409 invalid state; non-proxied device → 409 no proxy
+  ---
+  duration_ms: 46.240799
+  type: 'test'
+  ...
+# Subtest: r3 diagnostics zone 5: proxied healthy device → executed+pass with check breakdown; zero secrets on every endpoint
+ok 77 - r3 diagnostics zone 5: proxied healthy device → executed+pass with check breakdown; zero secrets on every endpoint
+  ---
+  duration_ms: 42.602218
+  type: 'test'
+  ...
+# Subtest: stageb proxy: parseProxyUrl accepts socks5 with/without credentials, rejects everything else
+ok 78 - stageb proxy: parseProxyUrl accepts socks5 with/without credentials, rejects everything else
+  ---
+  duration_ms: 1.428574
+  type: 'test'
+  ...
+# Subtest: stageb proxy: buildGostContainerBody — pinned image, 172.17.0.1 bind, empty Env, credentials only in Cmd
+ok 79 - stageb proxy: buildGostContainerBody — pinned image, 172.17.0.1 bind, empty Env, credentials only in Cmd
+  ---
+  duration_ms: 0.932736
+  type: 'test'
+  ...
+# Subtest: stageb proxy: tunnel scripts — verified netd sequence (table 100 + onlink) + idempotency
+ok 80 - stageb proxy: tunnel scripts — verified netd sequence (table 100 + onlink) + idempotency
+  ---
+  duration_ms: 0.329605
+  type: 'test'
+  ...
+# Subtest: stageb proxy: gostContainerName — redroid-matrix-b- prefix, docker-length safe
+ok 81 - stageb proxy: gostContainerName — redroid-matrix-b- prefix, docker-length safe
+  ---
+  duration_ms: 0.097502
+  type: 'test'
+  ...
+# Subtest: stageb proxy: constants — port range + state machine are frozen
+ok 82 - stageb proxy: constants — port range + state machine are frozen
+  ---
+  duration_ms: 0.250584
+  type: 'test'
+  ...
+# Subtest: stageb proxy: template create/update — encrypted at rest, masked in views, no plaintext leak
+ok 83 - stageb proxy: template create/update — encrypted at rest, masked in views, no plaintext leak
+  ---
+  duration_ms: 312.631024
+  type: 'test'
+  ...
+# Subtest: stageb proxy: device create inherits template proxy — gost up + tunnel provisioned → running
+ok 84 - stageb proxy: device create inherits template proxy — gost up + tunnel provisioned → running
+  ---
+  duration_ms: 180.412876
+  type: 'test'
+  ...
+# Subtest: stageb proxy: device-level proxyUrl override wins over template
+ok 85 - stageb proxy: device-level proxyUrl override wins over template
+  ---
+  duration_ms: 157.824488
+  type: 'test'
+  ...
+# Subtest: stageb proxy: no proxy configured → no gost container, state off
+ok 86 - stageb proxy: no proxy configured → no gost container, state off
+  ---
+  duration_ms: 117.563086
+  type: 'test'
+  ...
+# Subtest: stageb proxy: two devices get distinct gost ports; delete tears down gost
+ok 87 - stageb proxy: two devices get distinct gost ports; delete tears down gost
+  ---
+  duration_ms: 132.058503
+  type: 'test'
+  ...
+# Subtest: stageb proxy: stop → stopped (+ teardown exec); start → re-provisioned to running
+ok 88 - stageb proxy: stop → stopped (+ teardown exec); start → re-provisioned to running
+  ---
+  duration_ms: 99.829941
+  type: 'test'
+  ...
+# Subtest: stageb proxy: create with malformed device proxyUrl → 400, no partial row
+ok 89 - stageb proxy: create with malformed device proxyUrl → 400, no partial row
+  ---
+  duration_ms: 102.255672
+  type: 'test'
+  ...
+# Subtest: redroid limits: template create echoes limits; device create maps them into HostConfig
+ok 90 - redroid limits: template create echoes limits; device create maps them into HostConfig
+  ---
+  duration_ms: 261.564128
+  type: 'test'
+  ...
+# Subtest: redroid limits: omitted = unlimited (no NanoCpus/Memory in the body)
+ok 91 - redroid limits: omitted = unlimited (no NanoCpus/Memory in the body)
+  ---
+  duration_ms: 160.044407
+  type: 'test'
+  ...
+# Subtest: redroid limits: validation rejects out-of-range values (both fields)
+ok 92 - redroid limits: validation rejects out-of-range values (both fields)
+  ---
+  duration_ms: 139.893921
+  type: 'test'
+  ...
+# Subtest: redroid limits: explicit null clears a previously-set limit (update)
+ok 93 - redroid limits: explicit null clears a previously-set limit (update)
+  ---
+  duration_ms: 123.900786
+  type: 'test'
+  ...
+# Subtest: schedule notifications API (P6 flag \#3)
+    # Subtest: unauthenticated → 401 on all four routes
+    ok 1 - unauthenticated → 401 on all four routes
+      ---
+      duration_ms: 3.845726
+      type: 'test'
+      ...
+    # Subtest: viewer: list newest-first + unread-count + unreadOnly
+    ok 2 - viewer: list newest-first + unread-count + unreadOnly
+      ---
+      duration_ms: 12.433743
+      type: 'test'
+      ...
+    # Subtest: viewer: mark-read attempts → 403 (strict read-only)
+    ok 3 - viewer: mark-read attempts → 403 (strict read-only)
+      ---
+      duration_ms: 2.888829
+      type: 'test'
+      ...
+    # Subtest: operator: read-one → 200; list unreadOnly shrinks; count drops
+    ok 4 - operator: read-one → 200; list unreadOnly shrinks; count drops
+      ---
+      duration_ms: 3.48546
+      type: 'test'
+      ...
+    # Subtest: operator: read-all → marks the rest, idempotent second call
+    ok 5 - operator: read-all → marks the rest, idempotent second call
+      ---
+      duration_ms: 3.407528
+      type: 'test'
+      ...
+    # Subtest: operator: read unknown id → 404 envelope
+    ok 6 - operator: read unknown id → 404 envelope
+      ---
+      duration_ms: 0.816003
+      type: 'test'
+      ...
+    # Subtest: limit param is honoured and bounded
+    ok 7 - limit param is honoured and bounded
+      ---
+      duration_ms: 1.515786
+      type: 'test'
+      ...
+    1..7
+ok 94 - schedule notifications API (P6 flag \#3)
+  ---
+  duration_ms: 331.436248
+  type: 'test'
+  ...
+# Subtest: schedules API (P4) — consistency over the real HTTP path
+ok 95 - schedules API (P4) — consistency over the real HTTP path
+  ---
+  duration_ms: 372.43507
+  type: 'test'
+  ...
+# Subtest: schedules API (P4) — PG-first consistency: BullMQ down → sync_error → retry heals
+ok 96 - schedules API (P4) — PG-first consistency: BullMQ down → sync_error → retry heals
+  ---
+  duration_ms: 110.163891
+  type: 'test'
+  ...
+# Subtest: schedules API (P4) — run-now with a disabled provider → 409, schedule untouched
+ok 97 - schedules API (P4) — run-now with a disabled provider → 409, schedule untouched
+  ---
+  duration_ms: 152.444146
+  type: 'test'
+  ...
+# Subtest: real redis + real BullMQ job scheduler (P4)
+ok 98 - real redis + real BullMQ job scheduler (P4) # SKIP no SCHEDULES_REDIS_URL/REDIS_URL set (hermetic run)
+  ---
+  duration_ms: 0.6106
+  type: 'test'
+  ...
+# Subtest: concurrency gate: in-flight same-key run → defer, then visible skip past the cap
+ok 99 - concurrency gate: in-flight same-key run → defer, then visible skip past the cap
+  ---
+  duration_ms: 9.227738
+  type: 'test'
+  ...
+# Subtest: concurrency gate: holder finishes → job proceeds on the next pickup
+ok 100 - concurrency gate: holder finishes → job proceeds on the next pickup
+  ---
+  duration_ms: 2.513263
+  type: 'test'
+  ...
+# Subtest: concurrency gate: QUEUED sibling does NOT block (no deadlock)
+ok 101 - concurrency gate: QUEUED sibling does NOT block (no deadlock)
+  ---
+  duration_ms: 0.741162
+  type: 'test'
+  ...
+# Subtest: concurrency gate: needs_approval HOLDS the key (in flight, paused on human)
+ok 102 - concurrency gate: needs_approval HOLDS the key (in flight, paused on human)
+  ---
+  duration_ms: 0.531979
+  type: 'test'
+  ...
+# Subtest: concurrency gate: keyless definitions + ad-hoc runs are never gated
+ok 103 - concurrency gate: keyless definitions + ad-hoc runs are never gated
+  ---
+  duration_ms: 0.741743
+  type: 'test'
+  ...
+# Subtest: skipByConcurrency: no-op unless the run is still queued
+ok 104 - skipByConcurrency: no-op unless the run is still queued
+  ---
+  duration_ms: 0.346626
+  type: 'test'
+  ...
+# Subtest: worker config: concurrency knobs validated (fail fast on garbage)
+ok 105 - worker config: concurrency knobs validated (fail fast on garbage)
+  ---
+  duration_ms: 0.630151
+  type: 'test'
+  ...
+# Subtest: engine: full lifecycle queued → running → succeeded (events persisted)
+ok 106 - engine: full lifecycle queued → running → succeeded (events persisted)
+  ---
+  duration_ms: 7.297605
+  type: 'test'
+  ...
+# Subtest: engine: transient failure → auto-retry as NEW attempt → succeeded
+ok 107 - engine: transient failure → auto-retry as NEW attempt → succeeded
+  ---
+  duration_ms: 1002.312762
+  type: 'test'
+  ...
+# Subtest: engine: permanent failure (AUTH) is never auto-retried
+ok 108 - engine: permanent failure (AUTH) is never auto-retried
+  ---
+  duration_ms: 0.775193
+  type: 'test'
+  ...
+# Subtest: engine: retry attempts exhaust maxAttempts → failed
+ok 109 - engine: retry attempts exhaust maxAttempts → failed
+  ---
+  duration_ms: 0.538209
+  type: 'test'
+  ...
+# Subtest: engine: cancel while running = REAL stop (in-flight abort, no further work)
+ok 110 - engine: cancel while running = REAL stop (in-flight abort, no further work)
+  ---
+  duration_ms: 121.789873
+  type: 'test'
+  ...
+# Subtest: engine: deadline timeout (run-level) → timed_out
+ok 111 - engine: deadline timeout (run-level) → timed_out
+  ---
+  duration_ms: 1000.539013
+  type: 'test'
+  ...
+# Subtest: engine: readonly tool call → validated + executed via handler
+ok 112 - engine: readonly tool call → validated + executed via handler
+  ---
+  duration_ms: 1.075618
+  type: 'test'
+  ...
+# Subtest: engine: invalid tool arguments → rejected pre-execution, fed back to model
+ok 113 - engine: invalid tool arguments → rejected pre-execution, fed back to model
+  ---
+  duration_ms: 0.557099
+  type: 'test'
+  ...
+# Subtest: engine: unknown tool → fed back as tool_unavailable, run continues
+ok 114 - engine: unknown tool → fed back as tool_unavailable, run continues
+  ---
+  duration_ms: 0.837055
+  type: 'test'
+  ...
+# Subtest: engine: approval_required tool → needs_approval → human approves → executed
+ok 115 - engine: approval_required tool → needs_approval → human approves → executed
+  ---
+  duration_ms: 151.754042
+  type: 'test'
+  ...
+# Subtest: engine: approval rejected → error fed back, model reports, run continues
+ok 116 - engine: approval rejected → error fed back, model reports, run continues
+  ---
+  duration_ms: 151.904635
+  type: 'test'
+  ...
+# Subtest: engine: cancel while waiting approval → cancelled + approval expired
+ok 117 - engine: cancel while waiting approval → cancelled + approval expired
+  ---
+  duration_ms: 150.719425
+  type: 'test'
+  ...
+# Subtest: engine: timeout while waiting approval → timed_out + approval expired
+ok 118 - engine: timeout while waiting approval → timed_out + approval expired
+  ---
+  duration_ms: 1000.446602
+  type: 'test'
+  ...
+# Subtest: engine: tool handler failure is NOT a run failure (fed back to model)
+ok 119 - engine: tool handler failure is NOT a run failure (fed back to model)
+  ---
+  duration_ms: 0.701192
+  type: 'test'
+  ...
+# Subtest: engine: stale job (attempt mismatch) → no-op, run untouched
+ok 120 - engine: stale job (attempt mismatch) → no-op, run untouched
+  ---
+  duration_ms: 0.224414
+  type: 'test'
+  ...
+# Subtest: engine: cancel before start → job sees cancelled, provider never called
+ok 121 - engine: cancel before start → job sees cancelled, provider never called
+  ---
+  duration_ms: 0.194103
+  type: 'test'
+  ...
+# Subtest: engine: provider resolver failure → run failed with classified code
+ok 122 - engine: provider resolver failure → run failed with classified code
+  ---
+  duration_ms: 0.270015
+  type: 'test'
+  ...
+# Subtest: tasks API (P3)
+    # Subtest: create: operator gets 202 + runId, job enqueued (secret-free), audit row
+    ok 1 - create: operator gets 202 + runId, job enqueued (secret-free), audit row
+      ---
+      duration_ms: 4.407196
+      type: 'test'
+      ...
+    # Subtest: create: viewer is refused (403 FORBIDDEN)
+    ok 2 - create: viewer is refused (403 FORBIDDEN)
+      ---
+      duration_ms: 1.803561
+      type: 'test'
+      ...
+    # Subtest: create: unauthenticated is 401
+    ok 3 - create: unauthenticated is 401
+      ---
+      duration_ms: 1.335013
+      type: 'test'
+      ...
+    # Subtest: create: no provider resolvable → 400 (fail closed, never silent-mock)
+    ok 4 - create: no provider resolvable → 400 (fail closed, never silent-mock)
+      ---
+      duration_ms: 66.456828
+      type: 'test'
+      ...
+    # Subtest: create: unknown provider name → 400 PROVIDER_NOT_FOUND (no silent downgrade)
+    ok 5 - create: unknown provider name → 400 PROVIDER_NOT_FOUND (no silent downgrade)
+      ---
+      duration_ms: 3.928857
+      type: 'test'
+      ...
+    # Subtest: create: disabled provider → 400 PROVIDER_NOT_FOUND
+    ok 6 - create: disabled provider → 400 PROVIDER_NOT_FOUND
+      ---
+      duration_ms: 1.666869
+      type: 'test'
+      ...
+    # Subtest: create: unknown tool in body → 400 (registry is the source of truth)
+    ok 7 - create: unknown tool in body → 400 (registry is the source of truth)
+      ---
+      duration_ms: 1.560257
+      type: 'test'
+      ...
+    # Subtest: create: idempotencyKey replay returns the same run (no double-enqueue)
+    ok 8 - create: idempotencyKey replay returns the same run (no double-enqueue)
+      ---
+      duration_ms: 2.012045
+      type: 'test'
+      ...
+    # Subtest: list: returns runs, filters by status + provider, viewer allowed
+    ok 9 - list: returns runs, filters by status + provider, viewer allowed
+      ---
+      duration_ms: 2.525233
+      type: 'test'
+      ...
+    # Subtest: detail: run + events + approvals; unknown id → 404
+    ok 10 - detail: run + events + approvals; unknown id → 404
+      ---
+      duration_ms: 1.370574
+      type: 'test'
+      ...
+    # Subtest: cancel: queued run → cancel_requested, waiting job removed, audit row
+    ok 11 - cancel: queued run → cancel_requested, waiting job removed, audit row
+      ---
+      duration_ms: 3.843486
+      type: 'test'
+      ...
+    # Subtest: cancel: unknown run → 404; viewer cancel → 403
+    ok 12 - cancel: unknown run → 404; viewer cancel → 403
+      ---
+      duration_ms: 0.980506
+      type: 'test'
+      ...
+    # Subtest: retry: failed run → new attempt re-enqueued (old output preserved)
+    ok 13 - retry: failed run → new attempt re-enqueued (old output preserved)
+      ---
+      duration_ms: 1.75594
+      type: 'test'
+      ...
+    # Subtest: retry: not allowed from queued/succeeded → 409 RETRY_NOT_ALLOWED
+    ok 14 - retry: not allowed from queued/succeeded → 409 RETRY_NOT_ALLOWED
+      ---
+      duration_ms: 0.698792
+      type: 'test'
+      ...
+    # Subtest: SSE: snapshot + replay + terminal close (real listener)
+    ok 15 - SSE: snapshot + replay + terminal close (real listener)
+      ---
+      duration_ms: 200.817211
+      type: 'test'
+      ...
+    # Subtest: SSE: ?after= cursor replays only newer events
+    ok 16 - SSE: ?after= cursor replays only newer events
+      ---
+      duration_ms: 220.454657
+      type: 'test'
+      ...
+    # Subtest: SSE: malformed ?after= cursor → 400 (not a 500)
+    ok 17 - SSE: malformed ?after= cursor → 400 (not a 500)
+      ---
+      duration_ms: 0.963586
+      type: 'test'
+      ...
+    # Subtest: SSE: unauthenticated → 401
+    ok 18 - SSE: unauthenticated → 401
+      ---
+      duration_ms: 0.568239
+      type: 'test'
+      ...
+    # Subtest: tools: registry lists the P3 tools + redroid.get_device_status (R4) with safety classes; no shell/exec/raw tools
+    ok 19 - tools: registry lists the P3 tools + redroid.get_device_status (R4) with safety classes; no shell/exec/raw tools
+      ---
+      duration_ms: 0.841485
+      type: 'test'
+      ...
+    # Subtest: approvals: pending list + admin approve (audit row + event)
+    ok 20 - approvals: pending list + admin approve (audit row + event)
+      ---
+      duration_ms: 3.948308
+      type: 'test'
+      ...
+    # Subtest: approvals: reject with note
+    ok 21 - approvals: reject with note
+      ---
+      duration_ms: 1.869272
+      type: 'test'
+      ...
+    # Subtest: approvals: operator refused (403); already-resolved → 409; unknown → 404
+    ok 22 - approvals: operator refused (403); already-resolved → 409; unknown → 404
+      ---
+      duration_ms: 2.764858
+      type: 'test'
+      ...
+    # Subtest: approvals: note null (web UI sends explicit null when note field empty) → 200
+    ok 23 - approvals: note null (web UI sends explicit null when note field empty) → 200
+      ---
+      duration_ms: 1.042228
+      type: 'test'
+      ...
+    # Subtest: providers: create stores encrypted key, never returns it (hasApiKey only)
+    ok 24 - providers: create stores encrypted key, never returns it (hasApiKey only)
+      ---
+      duration_ms: 1.626088
+      type: 'test'
+      ...
+    # Subtest: providers: operator refused (403); duplicate name → 409 PROVIDER_NAME_TAKEN
+    ok 25 - providers: operator refused (403); duplicate name → 409 PROVIDER_NAME_TAKEN
+      ---
+      duration_ms: 1.011297
+      type: 'test'
+      ...
+    # Subtest: providers: SSRF guard rejects loopback/private/metadata baseUrls (create + patch + test)
+    ok 26 - providers: SSRF guard rejects loopback/private/metadata baseUrls (create + patch + test)
+      ---
+      duration_ms: 3.007722
+      type: 'test'
+      ...
+    # Subtest: providers: /test re-checks a blocked baseUrl stored directly in the DB
+    ok 27 - providers: /test re-checks a blocked baseUrl stored directly in the DB
+      ---
+      duration_ms: 0.675952
+      type: 'test'
+      ...
+    # Subtest: providers: patch rotates the key + toggles enabled; audit records changes
+    ok 28 - providers: patch rotates the key + toggles enabled; audit records changes
+      ---
+      duration_ms: 1.521135
+      type: 'test'
+      ...
+    # Subtest: providers: live ping classifies success (fetch mocked) + writes audit
+    ok 29 - providers: live ping classifies success (fetch mocked) + writes audit
+      ---
+      duration_ms: 2.224578
+      type: 'test'
+      ...
+    # Subtest: providers: live ping classifies AUTH failure (fetch mocked 401)
+    ok 30 - providers: live ping classifies AUTH failure (fetch mocked 401)
+      ---
+      duration_ms: 0.890245
+      type: 'test'
+      ...
+    # Subtest: audit-events: list + action/actor filters (admin only)
+    ok 31 - audit-events: list + action/actor filters (admin only)
+      ---
+      duration_ms: 1.903523
+      type: 'test'
+      ...
+    # Subtest: service token: valid token mints the fixed service identity (operator)
+    ok 32 - service token: valid token mints the fixed service identity (operator)
+      ---
+      duration_ms: 1.19781
+      type: 'test'
+      ...
+    # Subtest: service token: invalid → 401 (even with a valid session cookie present)
+    ok 33 - service token: invalid → 401 (even with a valid session cookie present)
+      ---
+      duration_ms: 0.405697
+      type: 'test'
+      ...
+    # Subtest: service token: server without a configured token fails closed (401)
+    ok 34 - service token: server without a configured token fails closed (401)
+      ---
+      duration_ms: 36.863951
+      type: 'test'
+      ...
+    # Subtest: service token: REFUSED on approval endpoints (AI can never self-approve)
+    ok 35 - service token: REFUSED on approval endpoints (AI can never self-approve)
+      ---
+      duration_ms: 1.758361
+      type: 'test'
+      ...
+    1..35
+ok 123 - tasks API (P3)
+  ---
+  duration_ms: 789.259222
+  type: 'test'
+  ...
+# Subtest: getprop full dump and allowlisted key build exact argv arrays
+ok 124 - getprop full dump and allowlisted key build exact argv arrays
+  ---
+  duration_ms: 1.455615
+  type: 'test'
+  ...
+# Subtest: dumpsys builds argv only for allowlisted services
+ok 125 - dumpsys builds argv only for allowlisted services
+  ---
+  duration_ms: 0.419948
+  type: 'test'
+  ...
+# Subtest: logcat always gets server-side -d and a capped -t
+ok 126 - logcat always gets server-side -d and a capped -t
+  ---
+  duration_ms: 0.257045
+  type: 'test'
+  ...
+# Subtest: connect / get-state are fixed non-shell commands
+ok 127 - connect / get-state are fixed non-shell commands
+  ---
+  duration_ms: 0.090352
+  type: 'test'
+  ...
+# Subtest: any op outside the whitelist is rejected (no /exec semantics exist)
+ok 128 - any op outside the whitelist is rejected (no /exec semantics exist)
+  ---
+  duration_ms: 0.157713
+  type: 'test'
+  ...
+# Subtest: getprop property injection attempts are all rejected
+ok 129 - getprop property injection attempts are all rejected
+  ---
+  duration_ms: 0.245265
+  type: 'test'
+  ...
+# Subtest: target injection / non-loopback targets are all rejected
+ok 130 - target injection / non-loopback targets are all rejected
+  ---
+  duration_ms: 0.288055
+  type: 'test'
+  ...
+# Subtest: device-scoped ops require a target
+ok 131 - device-scoped ops require a target
+  ---
+  duration_ms: 0.108332
+  type: 'test'
+  ...
+# Subtest: run() calls the FIXED binary with an argv array and NO shell option
+ok 132 - run() calls the FIXED binary with an argv array and NO shell option
+  ---
+  duration_ms: 0.743342
+  type: 'test'
+  ...
+# Subtest: run() passes through non-zero exit codes honestly
+ok 133 - run() passes through non-zero exit codes honestly
+  ---
+  duration_ms: 0.635611
+  type: 'test'
+  ...
+# Subtest: output cap: huge stdout is truncated and flagged (never silent drop)
+ok 134 - output cap: huge stdout is truncated and flagged (never silent drop)
+  ---
+  duration_ms: 0.263134
+  type: 'test'
+  ...
+# Subtest: timeout: a hanging adb call resolves with timedOut (never hangs the API)
+ok 135 - timeout: a hanging adb call resolves with timedOut (never hangs the API)
+  ---
+  duration_ms: 62.691285
+  type: 'test'
+  ...
+# Subtest: kill-style timeout errors (node execFile timeout shape) map to timedOut
+ok 136 - kill-style timeout errors (node execFile timeout shape) map to timedOut
+  ---
+  duration_ms: 0.428528
+  type: 'test'
+  ...
+# Subtest: binary must be an absolute fixed path — relative/empty rejected at construction
+ok 137 - binary must be an absolute fixed path — relative/empty rejected at construction
+  ---
+  duration_ms: 0.157593
+  type: 'test'
+  ...
+# Subtest: op constants match the documented set
+ok 138 - op constants match the documented set
+  ---
+  duration_ms: 0.094542
+  type: 'test'
+  ...
+# Subtest: classification: definitive 404 (statusCode or daemon wording)
+    # Subtest: statusCode 404 → CONTAINER_NOT_FOUND 404
+    ok 1 - statusCode 404 → CONTAINER_NOT_FOUND 404
+      ---
+      duration_ms: 0.905866
+      type: 'test'
+      ...
+    # Subtest: engine wording "No such container" (any 4xx status) → CONTAINER_NOT_FOUND
+    ok 2 - engine wording "No such container" (any 4xx status) → CONTAINER_NOT_FOUND
+      ---
+      duration_ms: 0.336625
+      type: 'test'
+      ...
+    # Subtest: daemon 4xx + "No such network" wording → CONTAINER_NOT_FOUND
+    ok 3 - daemon 4xx + "No such network" wording → CONTAINER_NOT_FOUND
+      ---
+      duration_ms: 0.197003
+      type: 'test'
+      ...
+    # Subtest: wording ALONE (no daemon status) is NOT definitive → stays GENERIC (MD §9.1)
+    ok 4 - wording ALONE (no daemon status) is NOT definitive → stays GENERIC (MD §9.1)
+      ---
+      duration_ms: 0.311946
+      type: 'test'
+      ...
+    1..4
+ok 139 - classification: definitive 404 (statusCode or daemon wording)
+  ---
+  duration_ms: 2.815158
+  type: 'test'
+  ...
+# Subtest: classification: permission denied
+    # Subtest: EACCES → PERMISSION_DENIED 502
+    ok 1 - EACCES → PERMISSION_DENIED 502
+      ---
+      duration_ms: 0.135732
+      type: 'test'
+      ...
+    # Subtest: message-only "permission denied" → PERMISSION_DENIED
+    ok 2 - message-only "permission denied" → PERMISSION_DENIED
+      ---
+      duration_ms: 0.141143
+      type: 'test'
+      ...
+    1..2
+ok 140 - classification: permission denied
+  ---
+  duration_ms: 0.536319
+  type: 'test'
+  ...
+# Subtest: classification: daemon unavailable (socket failures)
+    # Subtest: ECONNREFUSED → DAEMON_UNAVAILABLE 503
+    ok 1 - ECONNREFUSED → DAEMON_UNAVAILABLE 503
+      ---
+      duration_ms: 0.268565
+      type: 'test'
+      ...
+    # Subtest: ENOENT → DAEMON_UNAVAILABLE 503
+    ok 2 - ENOENT → DAEMON_UNAVAILABLE 503
+      ---
+      duration_ms: 0.178853
+      type: 'test'
+      ...
+    # Subtest: ECONNRESET → DAEMON_UNAVAILABLE 503
+    ok 3 - ECONNRESET → DAEMON_UNAVAILABLE 503
+      ---
+      duration_ms: 0.071781
+      type: 'test'
+      ...
+    # Subtest: EPIPE → DAEMON_UNAVAILABLE 503
+    ok 4 - EPIPE → DAEMON_UNAVAILABLE 503
+      ---
+      duration_ms: 0.053031
+      type: 'test'
+      ...
+    # Subtest: ENETUNREACH → DAEMON_UNAVAILABLE 503
+    ok 5 - ENETUNREACH → DAEMON_UNAVAILABLE 503
+      ---
+      duration_ms: 0.059251
+      type: 'test'
+      ...
+    # Subtest: EHOSTUNREACH → DAEMON_UNAVAILABLE 503
+    ok 6 - EHOSTUNREACH → DAEMON_UNAVAILABLE 503
+      ---
+      duration_ms: 0.096402
+      type: 'test'
+      ...
+    # Subtest: "dial unix" wording without errno → DAEMON_UNAVAILABLE
+    ok 7 - "dial unix" wording without errno → DAEMON_UNAVAILABLE
+      ---
+      duration_ms: 0.134242
+      type: 'test'
+      ...
+    # Subtest: daemon dropped connection (client connection lost) → DAEMON_UNAVAILABLE
+    ok 8 - daemon dropped connection (client connection lost) → DAEMON_UNAVAILABLE
+      ---
+      duration_ms: 0.04293
+      type: 'test'
+      ...
+    1..8
+ok 141 - classification: daemon unavailable (socket failures)
+  ---
+  duration_ms: 1.520206
+  type: 'test'
+  ...
+# Subtest: classification: timeout
+    # Subtest: ETIMEDOUT → TIMEOUT 504
+    ok 1 - ETIMEDOUT → TIMEOUT 504
+      ---
+      duration_ms: 0.057221
+      type: 'test'
+      ...
+    # Subtest: ESOCKETTIMEDOUT → TIMEOUT 504
+    ok 2 - ESOCKETTIMEDOUT → TIMEOUT 504
+      ---
+      duration_ms: 0.058551
+      type: 'test'
+      ...
+    # Subtest: statusCode 408 → TIMEOUT
+    ok 3 - statusCode 408 → TIMEOUT
+      ---
+      duration_ms: 0.062901
+      type: 'test'
+      ...
+    # Subtest: message "request timed out" → TIMEOUT
+    ok 4 - message "request timed out" → TIMEOUT
+      ---
+      duration_ms: 0.142473
+      type: 'test'
+      ...
+    1..4
+ok 142 - classification: timeout
+  ---
+  duration_ms: 0.486318
+  type: 'test'
+  ...
+# Subtest: classification: unclassified → GENERIC 502 (message preserved)
+ok 143 - classification: unclassified → GENERIC 502 (message preserved)
+  ---
+  duration_ms: 0.184353
+  type: 'test'
+  ...
+# Subtest: classification: missing image reference → IMAGE_NOT_FOUND (R5 handoff / R6)
+    # Subtest: daemon 404 + dockerode create wording (R5 live shape) → IMAGE_NOT_FOUND 404, clean message
+    ok 1 - daemon 404 + dockerode create wording (R5 live shape) → IMAGE_NOT_FOUND 404, clean message
+      ---
+      duration_ms: 0.261904
+      type: 'test'
+      ...
+    # Subtest: daemon 404 + plain daemon wording "No such image" → IMAGE_NOT_FOUND
+    ok 2 - daemon 404 + plain daemon wording "No such image" → IMAGE_NOT_FOUND
+      ---
+      duration_ms: 0.154103
+      type: 'test'
+      ...
+    # Subtest: wording ALONE (no daemon status) is NOT definitive → GENERIC (MD §9.1)
+    ok 3 - wording ALONE (no daemon status) is NOT definitive → GENERIC (MD §9.1)
+      ---
+      duration_ms: 0.091571
+      type: 'test'
+      ...
+    # Subtest: container 404 WITHOUT image wording is unchanged (CONTAINER_NOT_FOUND)
+    ok 4 - container 404 WITHOUT image wording is unchanged (CONTAINER_NOT_FOUND)
+      ---
+      duration_ms: 0.078281
+      type: 'test'
+      ...
+    1..4
+ok 144 - classification: missing image reference → IMAGE_NOT_FOUND (R5 handoff / R6)
+  ---
+  duration_ms: 0.850835
+  type: 'test'
+  ...
+# Subtest: precedence: never conflate (MD §9.1)
+    # Subtest: timeout error with not-found-ish message → TIMEOUT (code wins)
+    ok 1 - timeout error with not-found-ish message → TIMEOUT (code wins)
+      ---
+      duration_ms: 0.098521
+      type: 'test'
+      ...
+    # Subtest: socket error with scary message → DAEMON_UNAVAILABLE, not not-found
+    ok 2 - socket error with scary message → DAEMON_UNAVAILABLE, not not-found
+      ---
+      duration_ms: 0.121432
+      type: 'test'
+      ...
+    # Subtest: definitive 404 wins over socket-errno noise
+    ok 3 - definitive 404 wins over socket-errno noise
+      ---
+      duration_ms: 0.087881
+      type: 'test'
+      ...
+    # Subtest: empty/null error → GENERIC, not a crash
+    ok 4 - empty/null error → GENERIC, not a crash
+      ---
+      duration_ms: 0.069901
+      type: 'test'
+      ...
+    1..4
+ok 145 - precedence: never conflate (MD §9.1)
+  ---
+  duration_ms: 0.609011
+  type: 'test'
+  ...
+# Subtest: demuxDockerLogs: multiplexed frames (stdout/stderr) and plain text
+    # Subtest: framed: interleaved stdout/stderr kept in order, newlines split
+    ok 1 - framed: interleaved stdout/stderr kept in order, newlines split
+      ---
+      duration_ms: 1.527126
+      type: 'test'
+      ...
+    # Subtest: plain text fallback (no 8-byte header shape)
+    ok 2 - plain text fallback (no 8-byte header shape)
+      ---
+      duration_ms: 0.217974
+      type: 'test'
+      ...
+    # Subtest: empty buffer → empty
+    ok 3 - empty buffer → empty
+      ---
+      duration_ms: 0.112132
+      type: 'test'
+      ...
+    # Subtest: torn first frame after head-truncation → stop cleanly, no crash
+    ok 4 - torn first frame after head-truncation → stop cleanly, no crash
+      ---
+      duration_ms: 0.186843
+      type: 'test'
+      ...
+    1..4
+ok 146 - demuxDockerLogs: multiplexed frames (stdout/stderr) and plain text
+  ---
+  duration_ms: 2.845699
+  type: 'test'
+  ...
+# Subtest: summarizeStats: cpu/mem math on a single sample
+    # Subtest: normal sample → sane percents
+    ok 1 - normal sample → sane percents
+      ---
+      duration_ms: 0.210924
+      type: 'test'
+      ...
+    # Subtest: zero sysDelta / missing pre → null cpu, no NaN, no crash
+    ok 2 - zero sysDelta / missing pre → null cpu, no NaN, no crash
+      ---
+      duration_ms: 0.128482
+      type: 'test'
+      ...
+    # Subtest: null sample → nulls, no throw
+    ok 3 - null sample → nulls, no throw
+      ---
+      duration_ms: 0.155523
+      type: 'test'
+      ...
+    1..3
+ok 147 - summarizeStats: cpu/mem math on a single sample
+  ---
+  duration_ms: 0.960696
+  type: 'test'
+  ...
+# Subtest: maskContainerEnv: sensitive keys masked, plain keys pass through
+    # Subtest: docker array form
+    ok 1 - docker array form
+      ---
+      duration_ms: 0.952036
+      type: 'test'
+      ...
+    # Subtest: object form + empty value
+    ok 2 - object form + empty value
+      ---
+      duration_ms: 0.127532
+      type: 'test'
+      ...
+    # Subtest: keys containing sensitive segments are conservatively masked
+    ok 3 - keys containing sensitive segments are conservatively masked
+      ---
+      duration_ms: 0.057571
+      type: 'test'
+      ...
+    # Subtest: live-daemon finding: connection strings + *KEY segments must be masked
+    ok 4 - live-daemon finding: connection strings + *KEY segments must be masked
+      ---
+      duration_ms: 0.167453
+      type: 'test'
+      ...
+    1..4
+ok 148 - maskContainerEnv: sensitive keys masked, plain keys pass through
+  ---
+  duration_ms: 1.625447
+  type: 'test'
+  ...
+# Subtest: isManaged: label + exception semantics
+    # Subtest: app.managed=true label → managed
+    ok 1 - app.managed=true label → managed
+      ---
+      duration_ms: 0.088112
+      type: 'test'
+      ...
+    # Subtest: label present but "false" → not managed
+    ok 2 - label present but "false" → not managed
+      ---
+      duration_ms: 0.040431
+      type: 'test'
+      ...
+    # Subtest: no label + no exception → not managed
+    ok 3 - no label + no exception → not managed
+      ---
+      duration_ms: 0.046521
+      type: 'test'
+      ...
+    # Subtest: admin exception by id or by name → managed-by-exception
+    ok 4 - admin exception by id or by name → managed-by-exception
+      ---
+      duration_ms: 0.045811
+      type: 'test'
+      ...
+    # Subtest: missing labels entirely → not managed (no crash)
+    ok 5 - missing labels entirely → not managed (no crash)
+      ---
+      duration_ms: 0.028261
+      type: 'test'
+      ...
+    1..5
+ok 149 - isManaged: label + exception semantics
+  ---
+  duration_ms: 0.417117
+  type: 'test'
+  ...
+# Subtest: op protocol on fake client: idempotency + re-inspect confirmation
+    # Subtest: start already-running → idempotent success, NO daemon start call
+    ok 1 - start already-running → idempotent success, NO daemon start call
+      ---
+      duration_ms: 1.475945
+      type: 'test'
+      ...
+    # Subtest: start stopped → daemon start called, confirmed running
+    ok 2 - start stopped → daemon start called, confirmed running
+      ---
+      duration_ms: 0.420048
+      type: 'test'
+      ...
+    # Subtest: stop already-exited → idempotent success (not a failure)
+    ok 3 - stop already-exited → idempotent success (not a failure)
+      ---
+      duration_ms: 0.226524
+      type: 'test'
+      ...
+    # Subtest: pause only while running (else 409), unpause only while paused
+    ok 4 - pause only while running (else 409), unpause only while paused
+      ---
+      duration_ms: 2.992191
+      type: 'test'
+      ...
+    # Subtest: pause already-paused → idempotent success (target state, MD §9.3)
+    ok 5 - pause already-paused → idempotent success (target state, MD §9.3)
+      ---
+      duration_ms: 0.314956
+      type: 'test'
+      ...
+    # Subtest: unpause paused → running; unpause already-running → idempotent
+    ok 6 - unpause paused → running; unpause already-running → idempotent
+      ---
+      duration_ms: 0.392167
+      type: 'test'
+      ...
+    # Subtest: dead container: start/restart rejected with 409 guidance, not a fake success
+    ok 7 - dead container: start/restart rejected with 409 guidance, not a fake success
+      ---
+      duration_ms: 0.326295
+      type: 'test'
+      ...
+    # Subtest: restart performs even when running; restartCount advanced
+    ok 8 - restart performs even when running; restartCount advanced
+      ---
+      duration_ms: 0.398547
+      type: 'test'
+      ...
+    1..8
+ok 150 - op protocol on fake client: idempotency + re-inspect confirmation
+  ---
+  duration_ms: 7.147383
+  type: 'test'
+  ...
+# Subtest: op protocol: OPERATION_PENDING when API succeeds but state unchanged (MD §9.3)
+    # Subtest: start frozen → OPERATION_PENDING (never a fake success)
+    ok 1 - start frozen → OPERATION_PENDING (never a fake success)
+      ---
+      duration_ms: 0.523419
+      type: 'test'
+      ...
+    # Subtest: delete frozen → OPERATION_PENDING (still inspects)
+    ok 2 - delete frozen → OPERATION_PENDING (still inspects)
+      ---
+      duration_ms: 0.433578
+      type: 'test'
+      ...
+    1..2
+ok 151 - op protocol: OPERATION_PENDING when API succeeds but state unchanged (MD §9.3)
+  ---
+  duration_ms: 1.13797
+  type: 'test'
+  ...
+# Subtest: delete: two-step confirmation + success path
+    # Subtest: wrong/missing confirm → 400 VALIDATION_ERROR, container untouched
+    ok 1 - wrong/missing confirm → 400 VALIDATION_ERROR, container untouched
+      ---
+      duration_ms: 0.260024
+      type: 'test'
+      ...
+    # Subtest: correct confirm (name or id) → deleted; bind info reported
+    ok 2 - correct confirm (name or id) → deleted; bind info reported
+      ---
+      duration_ms: 0.252404
+      type: 'test'
+      ...
+    1..2
+ok 152 - delete: two-step confirmation + success path
+  ---
+  duration_ms: 0.706192
+  type: 'test'
+  ...
+# Subtest: error paths through the service (classified, never generic 500)
+    # Subtest: inspect unknown container → CONTAINER_NOT_FOUND 404
+    ok 1 - inspect unknown container → CONTAINER_NOT_FOUND 404
+      ---
+      duration_ms: 0.56441
+      type: 'test'
+      ...
+    # Subtest: logs unknown container → CONTAINER_NOT_FOUND 404
+    ok 2 - logs unknown container → CONTAINER_NOT_FOUND 404
+      ---
+      duration_ms: 0.447588
+      type: 'test'
+      ...
+    # Subtest: daemon down (ECONNREFUSED) → DAEMON_UNAVAILABLE 503, NOT not-found
+    ok 3 - daemon down (ECONNREFUSED) → DAEMON_UNAVAILABLE 503, NOT not-found
+      ---
+      duration_ms: 0.435808
+      type: 'test'
+      ...
+    # Subtest: permission denied (EACCES) → PERMISSION_DENIED 502
+    ok 4 - permission denied (EACCES) → PERMISSION_DENIED 502
+      ---
+      duration_ms: 0.100702
+      type: 'test'
+      ...
+    # Subtest: timeout → TIMEOUT 504
+    ok 5 - timeout → TIMEOUT 504
+      ---
+      duration_ms: 0.147922
+      type: 'test'
+      ...
+    # Subtest: disabled config → DOCKER_DISABLED 503 with clear message
+    ok 6 - disabled config → DOCKER_DISABLED 503 with clear message
+      ---
+      duration_ms: 0.134673
+      type: 'test'
+      ...
+    1..6
+ok 153 - error paths through the service (classified, never generic 500)
+  ---
+  duration_ms: 2.171427
+  type: 'test'
+  ...
+# Subtest: list: filters, pagination, q, withStats partial errors (MD §9.4)
+    # Subtest: no filters → all, sorted by name
+    ok 1 - no filters → all, sorted by name
+      ---
+      duration_ms: 6.130345
+      type: 'test'
+      ...
+    # Subtest: state filter (single + comma list)
+    ok 2 - state filter (single + comma list)
+      ---
+      duration_ms: 0.60021
+      type: 'test'
+      ...
+    # Subtest: managed filter true/false
+    ok 3 - managed filter true/false
+      ---
+      duration_ms: 0.373297
+      type: 'test'
+      ...
+    # Subtest: q matches name / image / id substring (case-insensitive)
+    ok 4 - q matches name / image / id substring (case-insensitive)
+      ---
+      duration_ms: 0.263044
+      type: 'test'
+      ...
+    # Subtest: pagination slices + reports total
+    ok 5 - pagination slices + reports total
+      ---
+      duration_ms: 0.139922
+      type: 'test'
+      ...
+    # Subtest: withStats: running gets numbers, non-running gets per-item partial error
+    ok 6 - withStats: running gets numbers, non-running gets per-item partial error
+      ---
+      duration_ms: 0.766553
+      type: 'test'
+      ...
+    1..6
+ok 154 - list: filters, pagination, q, withStats partial errors (MD §9.4)
+  ---
+  duration_ms: 8.70786
+  type: 'test'
+  ...
+# Subtest: P6 flag\#1: managed list + inspect honour admin exceptions (MD §11.2)
+    # Subtest: label-less container with exception → managed + managedByException
+    ok 1 - label-less container with exception → managed + managedByException
+      ---
+      duration_ms: 0.342706
+      type: 'test'
+      ...
+    # Subtest: managed=true filter includes the exception container (gate consistency)
+    ok 2 - managed=true filter includes the exception container (gate consistency)
+      ---
+      duration_ms: 0.292255
+      type: 'test'
+      ...
+    # Subtest: inspectSummary: exception container reports managed=true + managedByException
+    ok 3 - inspectSummary: exception container reports managed=true + managedByException
+      ---
+      duration_ms: 0.302495
+      type: 'test'
+      ...
+    1..3
+ok 155 - P6 flag\#1: managed list + inspect honour admin exceptions (MD §11.2)
+  ---
+  duration_ms: 1.246791
+  type: 'test'
+  ...
+# Subtest: logs: tail bounding, byte cap truncation, since validation
+    # Subtest: default tail 500 → last 500 lines only
+    ok 1 - default tail 500 → last 500 lines only
+      ---
+      duration_ms: 0.460228
+      type: 'test'
+      ...
+    # Subtest: byte cap → keeps the TAIL (newest) and marks truncated
+    ok 2 - byte cap → keeps the TAIL (newest) and marks truncated
+      ---
+      duration_ms: 0.509608
+      type: 'test'
+      ...
+    # Subtest: tail above cap is clamped to cap (no unbounded reads)
+    ok 3 - tail above cap is clamped to cap (no unbounded reads)
+      ---
+      duration_ms: 3.001082
+      type: 'test'
+      ...
+    # Subtest: bad since → 400 VALIDATION_ERROR
+    ok 4 - bad since → 400 VALIDATION_ERROR
+      ---
+      duration_ms: 0.307865
+      type: 'test'
+      ...
+    # Subtest: bad tail → 400
+    ok 5 - bad tail → 400
+      ---
+      duration_ms: 0.225814
+      type: 'test'
+      ...
+    # Subtest: since accepts unix seconds + ISO
+    ok 6 - since accepts unix seconds + ISO
+      ---
+      duration_ms: 0.501238
+      type: 'test'
+      ...
+    1..6
+ok 156 - logs: tail bounding, byte cap truncation, since validation
+  ---
+  duration_ms: 5.692307
+  type: 'test'
+  ...
+# Subtest: classifyDockerError is exported and stable for P3 reuse
+ok 157 - classifyDockerError is exported and stable for P3 reuse
+  ---
+  duration_ms: 0.089662
+  type: 'test'
+  ...
+# Error: connect ECONNREFUSED 127.0.0.1:1
+#     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16) {
+#   errno: -111,
+#   code: 'ECONNREFUSED',
+#   syscall: 'connect',
+#   address: '127.0.0.1',
+#   port: 1
+# }
+# Subtest: login flow
+    # Subtest: wrong password → 401 INVALID_CREDENTIALS + audit reason bad_password
+    ok 1 - wrong password → 401 INVALID_CREDENTIALS + audit reason bad_password
+      ---
+      duration_ms: 114.000443
+      type: 'test'
+      ...
+    # Subtest: unknown user → 401 + audit reason unknown_user (same generic message)
+    ok 2 - unknown user → 401 + audit reason unknown_user (same generic message)
+      ---
+      duration_ms: 10.295496
+      type: 'test'
+      ...
+    # Subtest: inactive user → 401 + audit reason inactive
+    ok 3 - inactive user → 401 + audit reason inactive
+      ---
+      duration_ms: 9.144226
+      type: 'test'
+      ...
+    # Subtest: success → 200 + user body + HttpOnly SameSite=Lax cookie; /me 200; hash never leaks
+    ok 4 - success → 200 + user body + HttpOnly SameSite=Lax cookie; /me 200; hash never leaks
+      ---
+      duration_ms: 11.375915
+      type: 'test'
+      ...
+    # Subtest: logout → 204 + cookie cleared + session revoked (me 401 after)
+    ok 5 - logout → 204 + cookie cleared + session revoked (me 401 after)
+      ---
+      duration_ms: 12.737399
+      type: 'test'
+      ...
+    # Subtest: expired session → rejected (row cleaned), /me 401
+    ok 6 - expired session → rejected (row cleaned), /me 401
+      ---
+      duration_ms: 10.707674
+      type: 'test'
+      ...
+    1..6
+ok 158 - login flow
+  ---
+  duration_ms: 246.707086
+  type: 'test'
+  ...
+# Error: connect ECONNREFUSED 127.0.0.1:1
+#     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16) {
+#   errno: -111,
+#   code: 'ECONNREFUSED',
+#   syscall: 'connect',
+#   address: '127.0.0.1',
+#   port: 1
+# }
+# Subtest: rate limit: 5 failed logins / 60s / IP → 6th is 429 (fresh app, clean limiter)
+ok 159 - rate limit: 5 failed logins / 60s / IP → 6th is 429 (fresh app, clean limiter)
+  ---
+  duration_ms: 114.928729
+  type: 'test'
+  ...
+# Error: connect ECONNREFUSED 127.0.0.1:1
+#     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16) {
+#   errno: -111,
+#   code: 'ECONNREFUSED',
+#   syscall: 'connect',
+#   address: '127.0.0.1',
+#   port: 1
+# }
+# Subtest: rate limit is keyed by (ip+username): flooding one account does not lock out another
+ok 160 - rate limit is keyed by (ip+username): flooding one account does not lock out another
+  ---
+  duration_ms: 113.141528
+  type: 'test'
+  ...
+# Subtest: login body validation (fresh app, no rate-limit interference)
+    # Subtest: missing field → 400 VALIDATION_ERROR
+    ok 1 - missing field → 400 VALIDATION_ERROR
+      ---
+      duration_ms: 28.913275
+      type: 'test'
+      ...
+# Error: connect ECONNREFUSED 127.0.0.1:1
+#     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16) {
+#   errno: -111,
+#   code: 'ECONNREFUSED',
+#   syscall: 'connect',
+#   address: '127.0.0.1',
+#   port: 1
+# }
+    # Subtest: unknown extra field → 400 (additionalProperties:false)
+    ok 2 - unknown extra field → 400 (additionalProperties:false)
+      ---
+      duration_ms: 1.307093
+      type: 'test'
+      ...
+    # Subtest: bad username shape → 400
+    ok 3 - bad username shape → 400
+      ---
+      duration_ms: 0.887455
+      type: 'test'
+      ...
+    1..3
+ok 161 - login body validation (fresh app, no rate-limit interference)
+  ---
+  duration_ms: 46.173151
+  type: 'test'
+  ...
+# Subtest: patch-default guard: scanner self-tests (it must actually detect `default:`)
+ok 162 - patch-default guard: scanner self-tests (it must actually detect `default:`)
+  ---
+  duration_ms: 1.839021
+  type: 'test'
+  ...
+# Subtest: patch-default guard: NO PUT/PATCH body schema in apps/api/src/routes/ carries `default:` (R5 clobber class, repo-wide)
+ok 163 - patch-default guard: NO PUT/PATCH body schema in apps/api/src/routes/ carries `default:` (R5 clobber class, repo-wide)
+  ---
+  duration_ms: 2.432972
+  type: 'test'
+  ...
+# Subtest: fully supported host: binder present + docker ok → supported, zero binder warnings
+ok 164 - fully supported host: binder present + docker ok → supported, zero binder warnings
+  ---
+  duration_ms: 4.68579
+  type: 'test'
+  ...
+# Subtest: missing modules → unsupported + concrete modprobe suggestions + official doc link
+ok 165 - missing modules → unsupported + concrete modprobe suggestions + official doc link
+  ---
+  duration_ms: 0.691692
+  type: 'test'
+  ...
+# Subtest: ashmem absent on kernel ≥3.17 (6.x) + /dev/binder present → supported (memfd supersedes ashmem)
+ok 166 - ashmem absent on kernel ≥3.17 (6.x) + /dev/binder present → supported (memfd supersedes ashmem)
+  ---
+  duration_ms: 0.434767
+  type: 'test'
+  ...
+# Subtest: ashmem absent on kernel <3.17 → unsupported + ashmem modprobe suggestion (memfd unavailable)
+ok 167 - ashmem absent on kernel <3.17 → unsupported + ashmem modprobe suggestion (memfd unavailable)
+  ---
+  duration_ms: 0.458918
+  type: 'test'
+  ...
+# Subtest: containerized vantage: host /dev not visible → unknown, never false-unsupported (honest tri-state)
+ok 168 - containerized vantage: host /dev not visible → unknown, never false-unsupported (honest tri-state)
+  ---
+  duration_ms: 0.57816
+  type: 'test'
+  ...
+# Subtest: unparseable kernel + ashmem absent → unknown (memfd indeterminate, never claimed)
+ok 169 - unparseable kernel + ashmem absent → unknown (memfd indeterminate, never claimed)
+  ---
+  duration_ms: 0.420987
+  type: 'test'
+  ...
+# Subtest: unreadable /proc/modules → unknown, never absent/present (honest tri-state)
+ok 170 - unreadable /proc/modules → unknown, never absent/present (honest tri-state)
+  ---
+  duration_ms: 0.374856
+  type: 'test'
+  ...
+# Subtest: missing /dev/binder (modules loaded) → still unsupported
+ok 171 - missing /dev/binder (modules loaded) → still unsupported
+  ---
+  duration_ms: 0.536859
+  type: 'test'
+  ...
+# Subtest: unreadable dmesg → readable:false with note; no crash
+ok 172 - unreadable dmesg → readable:false with note; no crash
+  ---
+  duration_ms: 0.932146
+  type: 'test'
+  ...
+# Subtest: dmesg output is bounded: ≤20 relevant lines, each ≤300 chars
+ok 173 - dmesg output is bounded: ≤20 relevant lines, each ≤300 chars
+  ---
+  duration_ms: 0.898805
+  type: 'test'
+  ...
+# Subtest: hung uname subprocess resolves within the timeout (API never hangs)
+ok 174 - hung uname subprocess resolves within the timeout (API never hangs)
+  ---
+  duration_ms: 401.462109
+  type: 'test'
+  ...
+# Subtest: nvidia-smi success NEVER claims GPU verified (MD §2.4 hard rule)
+ok 175 - nvidia-smi success NEVER claims GPU verified (MD §2.4 hard rule)
+  ---
+  duration_ms: 0.786984
+  type: 'test'
+  ...
+# Subtest: nvidia-smi failure → honest gpu.available=false, still no verification claim
+ok 176 - nvidia-smi failure → honest gpu.available=false, still no verification claim
+  ---
+  duration_ms: 0.380067
+  type: 'test'
+  ...
+# Subtest: docker daemon down → unknown (transient state, not overclaimed) + warning
+ok 177 - docker daemon down → unknown (transient state, not overclaimed) + warning
+  ---
+  duration_ms: 0.435637
+  type: 'test'
+  ...
+# Subtest: missing data root → disk.exists=false with an actionable note
+ok 178 - missing data root → disk.exists=false with an actionable note
+  ---
+  duration_ms: 0.250854
+  type: 'test'
+  ...
+# Subtest: disk free bytes come from statfs (bavail * bsize)
+ok 179 - disk free bytes come from statfs (bavail * bsize)
+  ---
+  duration_ms: 0.248804
+  type: 'test'
+  ...
+# Subtest: R5: data volume below the 4 GiB line → data-volume WARN + free-space fix
+ok 180 - R5: data volume below the 4 GiB line → data-volume WARN + free-space fix
+  ---
+  duration_ms: 0.353797
+  type: 'test'
+  ...
+# Subtest: port check (real 127.0.0.1 probe): occupied while bound, free after
+ok 181 - port check (real 127.0.0.1 probe): occupied while bound, free after
+  ---
+  duration_ms: 7.312165
+  type: 'test'
+  ...
+# Subtest: preflight reports checkedAt and never includes secrets/paths in warnings beyond the data root
+ok 182 - preflight reports checkedAt and never includes secrets/paths in warnings beyond the data root
+  ---
+  duration_ms: 0.428017
+  type: 'test'
+  ...
+# Subtest: R5: 0.0.0.0 listener in the ADB range → adb-exposure FAIL + exposed entry
+ok 183 - R5: 0.0.0.0 listener in the ADB range → adb-exposure FAIL + exposed entry
+  ---
+  duration_ms: 0.58106
+  type: 'test'
+  ...
+# Subtest: R5: 127.0.0.1 listener in the ADB range → adb-exposure PASS (loopback is the contract)
+ok 184 - R5: 127.0.0.1 listener in the ADB range → adb-exposure PASS (loopback is the contract)
+  ---
+  duration_ms: 0.284735
+  type: 'test'
+  ...
+# Subtest: R5: [::] listener in the ADB range → FAIL; v4-mapped 127.0.0.1 → not exposed
+ok 185 - R5: [::] listener in the ADB range → FAIL; v4-mapped 127.0.0.1 → not exposed
+  ---
+  duration_ms: 0.62439
+  type: 'test'
+  ...
+# Subtest: R5: non-ADB-range wild listener is NOT flagged (range scope is the contract)
+ok 186 - R5: non-ADB-range wild listener is NOT flagged (range scope is the contract)
+  ---
+  duration_ms: 0.383436
+  type: 'test'
+  ...
+# Subtest: R5: containerized vantage → exposure + binderfs are WARN (vantage honesty), never FAIL
+ok 187 - R5: containerized vantage → exposure + binderfs are WARN (vantage honesty), never FAIL
+  ---
+  duration_ms: 0.496198
+  type: 'test'
+  ...
+# Subtest: R5: /dev/binder exists but is NOT a binderfs mount → binderfs-mount FAIL + mount fix
+ok 188 - R5: /dev/binder exists but is NOT a binderfs mount → binderfs-mount FAIL + mount fix
+  ---
+  duration_ms: 0.192853
+  type: 'test'
+  ...
+# Subtest: R5: /dev/binder missing entirely (direct vantage) → binderfs-mount FAIL
+ok 189 - R5: /dev/binder missing entirely (direct vantage) → binderfs-mount FAIL
+  ---
+  duration_ms: 0.256735
+  type: 'test'
+  ...
+# Subtest: R5: kernel below the 3.17 floor → kernel-compat FAIL
+ok 190 - R5: kernel below the 3.17 floor → kernel-compat FAIL
+  ---
+  duration_ms: 0.701322
+  type: 'test'
+  ...
+# Subtest: R5: image arch mismatch → image-arch FAIL; match → PASS; not local → WARN
+ok 191 - R5: image arch mismatch → image-arch FAIL; match → PASS; not local → WARN
+  ---
+  duration_ms: 0.373007
+  type: 'test'
+  ...
+# Subtest: R5: GPU via docker info (containerized vantage, no nvidia-smi) → visible, unverified, WARN
+ok 192 - R5: GPU via docker info (containerized vantage, no nvidia-smi) → visible, unverified, WARN
+  ---
+  duration_ms: 0.306995
+  type: 'test'
+  ...
+# Subtest: R5: no gpu visibility anywhere → gpu-visibility FAIL with driver fix (explicit gpuMode)
+ok 193 - R5: no gpu visibility anywhere → gpu-visibility FAIL with driver fix (explicit gpuMode)
+  ---
+  duration_ms: 0.213973
+  type: 'test'
+  ...
+# Subtest: R5: verdict rollup — PASS when all items pass; containerized vantage = pure WARN (no FAIL)
+ok 194 - R5: verdict rollup — PASS when all items pass; containerized vantage = pure WARN (no FAIL)
+  ---
+  duration_ms: 0.286884
+  type: 'test'
+  ...
+# Subtest: R5: fstypeAt — exact mount point match, missing point = null, unreadable = null
+ok 195 - R5: fstypeAt — exact mount point match, missing point = null, unreadable = null
+  ---
+  duration_ms: 0.047861
+  type: 'test'
+  ...
+# Subtest: R5: listenSockets — LISTEN-only filter + hex port decode + v6 forms
+ok 196 - R5: listenSockets — LISTEN-only filter + hex port decode + v6 forms
+  ---
+  duration_ms: 0.059741
+  type: 'test'
+  ...
+# Subtest: resolveProviderKey: accepts 64-hex, 44-base64, and derives via SHA-256 for other secrets
+ok 197 - resolveProviderKey: accepts 64-hex, 44-base64, and derives via SHA-256 for other secrets
+  ---
+  duration_ms: 1.710779
+  type: 'test'
+  ...
+# Subtest: encrypt/decrypt round-trip (incl. unicode + empty string)
+ok 198 - encrypt/decrypt round-trip (incl. unicode + empty string)
+  ---
+  duration_ms: 1.116799
+  type: 'test'
+  ...
+# Subtest: two encryptions of the same plaintext differ (random IV) but both decrypt
+ok 199 - two encryptions of the same plaintext differ (random IV) but both decrypt
+  ---
+  duration_ms: 0.341356
+  type: 'test'
+  ...
+# Subtest: tamper detection: flipped ciphertext byte / wrong tag → ProviderCryptoError
+ok 200 - tamper detection: flipped ciphertext byte / wrong tag → ProviderCryptoError
+  ---
+  duration_ms: 0.290395
+  type: 'test'
+  ...
+# Subtest: wrong key fails authentication (does not throw generic Error)
+ok 201 - wrong key fails authentication (does not throw generic Error)
+  ---
+  duration_ms: 0.235034
+  type: 'test'
+  ...
+# Subtest: malformed tokens: unknown version / bad shape / non-base64 all rejected
+ok 202 - malformed tokens: unknown version / bad shape / non-base64 all rejected
+  ---
+  duration_ms: 0.251254
+  type: 'test'
+  ...
+# Subtest: maskSecret: keeps ≤4 trailing chars, never full secret
+ok 203 - maskSecret: keeps ≤4 trailing chars, never full secret
+  ---
+  duration_ms: 0.164253
+  type: 'test'
+  ...
+# Subtest: default (no script): single stop step, non-empty content
+ok 204 - default (no script): single stop step, non-empty content
+  ---
+  duration_ms: 1.202741
+  type: 'test'
+  ...
+# Subtest: builtin scripts: tool-docker-list consumes 2 steps (tool round then answer)
+ok 205 - builtin scripts: tool-docker-list consumes 2 steps (tool round then answer)
+  ---
+  duration_ms: 0.930196
+  type: 'test'
+  ...
+# Subtest: fail-then-ok: cursor is per-instance — attempt 2 gets the success step
+ok 206 - fail-then-ok: cursor is per-instance — attempt 2 gets the success step
+  ---
+  duration_ms: 0.57806
+  type: 'test'
+  ...
+# Subtest: scripted errors: AUTH and BAD_REQUEST map to the right codes
+ok 207 - scripted errors: AUTH and BAD_REQUEST map to the right codes
+  ---
+  duration_ms: 0.383396
+  type: 'test'
+  ...
+# Subtest: inline JSON script: steps + delayMs + errorMessage; abort during delay → ABORTED
+ok 208 - inline JSON script: steps + delayMs + errorMessage; abort during delay → ABORTED
+  ---
+  duration_ms: 330.95192
+  type: 'test'
+  ...
+# Subtest: file script: absolute path resolves; relative path resolves against cwd; unreadable file → NOT_CONFIGURED
+ok 209 - file script: absolute path resolves; relative path resolves against cwd; unreadable file → NOT_CONFIGURED
+  ---
+  duration_ms: 1.455015
+  type: 'test'
+  ...
+# Subtest: script validation: fail-closed on unknown fields, empty steps, bad toolCalls, bad finishReason, unknown builtin
+ok 210 - script validation: fail-closed on unknown fields, empty steps, bad toolCalls, bad finishReason, unknown builtin
+  ---
+  duration_ms: 0.533519
+  type: 'test'
+  ...
+# Subtest: error aliases: short names (NETWORK/AUTH/...) normalize to PROVIDER_* codes
+ok 211 - error aliases: short names (NETWORK/AUTH/...) normalize to PROVIDER_* codes
+  ---
+  duration_ms: 0.398227
+  type: 'test'
+  ...
+# Subtest: all builtins are pre-validated (regression guard for typos in the table)
+ok 212 - all builtins are pre-validated (regression guard for typos in the table)
+  ---
+  duration_ms: 0.343246
+  type: 'test'
+  ...
+# Subtest: success: content + usage + model parsed; request body has messages/tools/no stream
+ok 213 - success: content + usage + model parsed; request body has messages/tools/no stream
+  ---
+  duration_ms: 18.610138
+  type: 'test'
+  ...
+# Subtest: success: baseUrl already ending in /chat/completions is not double-suffixed
+ok 214 - success: baseUrl already ending in /chat/completions is not double-suffixed
+  ---
+  duration_ms: 0.505679
+  type: 'test'
+  ...
+# Subtest: tool_calls: arguments JSON-parsed into objects; ids preserved
+ok 215 - tool_calls: arguments JSON-parsed into objects; ids preserved
+  ---
+  duration_ms: 0.605381
+  type: 'test'
+  ...
+# Subtest: HTTP taxonomy: 401→AUTH, 403→AUTH, 429→RATE_LIMITED, 500→SERVER, 404→NOT_FOUND, 400→BAD_REQUEST, 418→GENERIC
+ok 216 - HTTP taxonomy: 401→AUTH, 403→AUTH, 429→RATE_LIMITED, 500→SERVER, 404→NOT_FOUND, 400→BAD_REQUEST, 418→GENERIC
+  ---
+  duration_ms: 4.237853
+  type: 'test'
+  ...
+# Subtest: retryability: 429 retried then recovered; 401 never retried; exhausted transients rethrow last error
+ok 217 - retryability: 429 retried then recovered; 401 never retried; exhausted transients rethrow last error
+  ---
+  duration_ms: 1.371343
+  type: 'test'
+  ...
+# Subtest: network errors: fetch throw → NETWORK (retried); DNS-style failure exhausted rethrows NETWORK
+ok 218 - network errors: fetch throw → NETWORK (retried); DNS-style failure exhausted rethrows NETWORK
+  ---
+  duration_ms: 4.523977
+  type: 'test'
+  ...
+# Subtest: abort: pre-aborted signal → ABORTED immediately; mid-flight abort → ABORTED (not NETWORK)
+ok 219 - abort: pre-aborted signal → ABORTED immediately; mid-flight abort → ABORTED (not NETWORK)
+  ---
+  duration_ms: 14.00916
+  type: 'test'
+  ...
+# Subtest: oversize body (>2MB) → INVALID_RESPONSE, not a crash
+ok 220 - oversize body (>2MB) → INVALID_RESPONSE, not a crash
+  ---
+  duration_ms: 5.925571
+  type: 'test'
+  ...
+# Subtest: malformed responses: non-JSON / missing choices / bad tool args all → INVALID_RESPONSE (no retry)
+ok 221 - malformed responses: non-JSON / missing choices / bad tool args all → INVALID_RESPONSE (no retry)
+  ---
+  duration_ms: 1.13938
+  type: 'test'
+  ...
+# Subtest: redaction: provider API key never appears in error messages
+ok 222 - redaction: provider API key never appears in error messages
+  ---
+  duration_ms: 0.635671
+  type: 'test'
+  ...
+# Subtest: config: missing baseUrl/apiKey/model → ProviderError NOT_CONFIGURED at construction
+ok 223 - config: missing baseUrl/apiKey/model → ProviderError NOT_CONFIGURED at construction
+  ---
+  duration_ms: 0.292886
+  type: 'test'
+  ...
+# Subtest: payload: key set is EXACTLY the MD §6.2 contract (no drift, no extras)
+ok 224 - payload: key set is EXACTLY the MD §6.2 contract (no drift, no extras)
+  ---
+  duration_ms: 2.077476
+  type: 'test'
+  ...
+# Subtest: payload: fresh HEALTHY → networkReady=true, all checks PASS, timestamps ISO
+ok 225 - payload: fresh HEALTHY → networkReady=true, all checks PASS, timestamps ISO
+  ---
+  duration_ms: 0.328946
+  type: 'test'
+  ...
+# Subtest: payload: lastErrorCode empty string normalises to null (flat field, no junk)
+ok 226 - payload: lastErrorCode empty string normalises to null (flat field, no junk)
+  ---
+  duration_ms: 0.137422
+  type: 'test'
+  ...
+# Subtest: payload: recovery lock + nextRecoveryAt project (held vs expired)
+ok 227 - payload: recovery lock + nextRecoveryAt project (held vs expired)
+  ---
+  duration_ms: 0.189183
+  type: 'test'
+  ...
+# Subtest: stale: aged last check (HEALTHY row, 120s old, 60s TTL) → stale=true + networkReady=false
+ok 228 - stale: aged last check (HEALTHY row, 120s old, 60s TTL) → stale=true + networkReady=false
+  ---
+  duration_ms: 0.185153
+  type: 'test'
+  ...
+# Subtest: stale: TTL is configurable (custom window honoured)
+ok 229 - stale: TTL is configurable (custom window honoured)
+  ---
+  duration_ms: 0.138723
+  type: 'test'
+  ...
+# Subtest: deriveNetChecks: missing/malformed inputs degrade to UNKNOWN, never PASS (fail-closed)
+ok 230 - deriveNetChecks: missing/malformed inputs degrade to UNKNOWN, never PASS (fail-closed)
+  ---
+  duration_ms: 0.190593
+  type: 'test'
+  ...
+# Subtest: deriveNetChecks: per-value mapping (alive/dead, up/down/missing, enforced/broken, PASS/FAIL/ERROR/SKIPPED)
+ok 231 - deriveNetChecks: per-value mapping (alive/dead, up/down/missing, enforced/broken, PASS/FAIL/ERROR/SKIPPED)
+  ---
+  duration_ms: 0.114272
+  type: 'test'
+  ...
+# Subtest: guard: BLOCKED → HEALTHY has NO legal edge (duplicate/late event cannot overwrite)
+ok 232 - guard: BLOCKED → HEALTHY has NO legal edge (duplicate/late event cannot overwrite)
+  ---
+  duration_ms: 0.443407
+  type: 'test'
+  ...
+# Subtest: guard: VERIFYING → HEALTHY requires a FRESH canary PASS evidence object
+ok 233 - guard: VERIFYING → HEALTHY requires a FRESH canary PASS evidence object
+  ---
+  duration_ms: 0.335986
+  type: 'test'
+  ...
+# Subtest: guard: self-transitions are rejected (callers no-op instead of persisting)
+ok 234 - guard: self-transitions are rejected (callers no-op instead of persisting)
+  ---
+  duration_ms: 0.173193
+  type: 'test'
+  ...
+# Subtest: boundaries agree: HEALTHY fixture (API shape = worker projection = UI badge)
+ok 235 - boundaries agree: HEALTHY fixture (API shape = worker projection = UI badge)
+  ---
+  duration_ms: 0.521519
+  type: 'test'
+  ...
+# Subtest: boundaries agree: BLOCKED fixture → every boundary says BLOCKED (worker BLOCKED, UI fail-closed text)
+ok 236 - boundaries agree: BLOCKED fixture → every boundary says BLOCKED (worker BLOCKED, UI fail-closed text)
+  ---
+  duration_ms: 0.134303
+  type: 'test'
+  ...
+# Subtest: boundaries agree: stale HEALTHY fixture → every boundary treats it as NOT ready
+ok 237 - boundaries agree: stale HEALTHY fixture → every boundary treats it as NOT ready
+  ---
+  duration_ms: 0.122642
+  type: 'test'
+  ...
+# Subtest: rbac matrix
+    # Subtest: unauthenticated: 401 + envelope + requestId on all guarded routes
+    ok 1 - unauthenticated: 401 + envelope + requestId on all guarded routes
+      ---
+      duration_ms: 119.003449
+      type: 'test'
+      ...
+# Error: connect ECONNREFUSED 127.0.0.1:1
+#     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16) {
+#   errno: -111,
+#   code: 'ECONNREFUSED',
+#   syscall: 'connect',
+#   address: '127.0.0.1',
+#   port: 1
+# }
+    # Subtest: viewer: read ok, mutate 403, admin 403
+    ok 2 - viewer: read ok, mutate 403, admin 403
+      ---
+      duration_ms: 24.209775
+      type: 'test'
+      ...
+    # Subtest: operator: mutate ok, admin 403
+    ok 3 - operator: mutate ok, admin 403
+      ---
+      duration_ms: 11.271034
+      type: 'test'
+      ...
+    # Subtest: admin: everything ok
+    ok 4 - admin: everything ok
+      ---
+      duration_ms: 9.875809
+      type: 'test'
+      ...
+    # Subtest: real auth routes respect the same guard (me)
+    ok 5 - real auth routes respect the same guard (me)
+      ---
+      duration_ms: 0.876615
+      type: 'test'
+      ...
+    1..5
+ok 238 - rbac matrix
+  ---
+  duration_ms: 234.015299
+  type: 'test'
+  ...
+# Subtest: requireRole rejects unknown roles at wiring time
+ok 239 - requireRole rejects unknown roles at wiring time
+  ---
+  duration_ms: 10.433099
+  type: 'test'
+  ...
+# Subtest: PINO_REDACT_PATHS covers the known secret fields
+ok 240 - PINO_REDACT_PATHS covers the known secret fields
+  ---
+  duration_ms: 0.746753
+  type: 'test'
+  ...
+# Subtest: top-level secrets are redacted
+ok 241 - top-level secrets are redacted
+  ---
+  duration_ms: 2.463762
+  type: 'test'
+  ...
+# Subtest: nested secrets are redacted (user.apiKey etc.)
+ok 242 - nested secrets are redacted (user.apiKey etc.)
+  ---
+  duration_ms: 0.680431
+  type: 'test'
+  ...
+# Subtest: request headers are redacted (authorization / cookie / x-api-key)
+ok 243 - request headers are redacted (authorization / cookie / x-api-key)
+  ---
+  duration_ms: 0.649221
+  type: 'test'
+  ...
+# Subtest: worker→API service token header is redacted (P6 T7)
+ok 244 - worker→API service token header is redacted (P6 T7)
+  ---
+  duration_ms: 2.30324
+  type: 'test'
+  ...
+# Subtest: the app actually uses these paths (app.js wiring)
+ok 245 - the app actually uses these paths (app.js wiring)
+  ---
+  duration_ms: 9.042205
+  type: 'test'
+  ...
+# Subtest: redroidTunnelBootTimeoutMs: 2400s calibrated default (R6: real cold boot ≈ 24min)
+ok 246 - redroidTunnelBootTimeoutMs: 2400s calibrated default (R6: real cold boot ≈ 24min)
+  ---
+  duration_ms: 0.925506
+  type: 'test'
+  ...
+# Subtest: redroidTunnelBootTimeoutMs: REDROID_TUNNEL_BOOT_TIMEOUT_MS overrides
+ok 247 - redroidTunnelBootTimeoutMs: REDROID_TUNNEL_BOOT_TIMEOUT_MS overrides
+  ---
+  duration_ms: 0.653531
+  type: 'test'
+  ...
+# Subtest: redroidTunnelPollMs: 5000ms default (identical to the in-service fallback)
+ok 248 - redroidTunnelPollMs: 5000ms default (identical to the in-service fallback)
+  ---
+  duration_ms: 0.211744
+  type: 'test'
+  ...
+# Subtest: redroidTunnelPollMs: REDROID_TUNNEL_POLL_MS overrides; non-numeric fails fast
+ok 249 - redroidTunnelPollMs: REDROID_TUNNEL_POLL_MS overrides; non-numeric fails fast
+  ---
+  duration_ms: 1.197771
+  type: 'test'
+  ...
+# Subtest: removeRedroidDataDir: refuses anything outside the data root (with a stable code)
+    # Subtest: sibling of the root → DATA_DIR_REFUSED, nothing removed
+    ok 1 - sibling of the root → DATA_DIR_REFUSED, nothing removed
+      ---
+      duration_ms: 1.062019
+      type: 'test'
+      ...
+    # Subtest: the root itself → refused (never rm the root)
+    ok 2 - the root itself → refused (never rm the root)
+      ---
+      duration_ms: 0.178883
+      type: 'test'
+      ...
+    # Subtest: symlink escaping the root → refused
+    ok 3 - symlink escaping the root → refused
+      ---
+      duration_ms: 6.218086
+      type: 'test'
+      ...
+    # Subtest: not a directory → refused
+    ok 4 - not a directory → refused
+      ---
+      duration_ms: 2.555823
+      type: 'test'
+      ...
+    1..4
+ok 250 - removeRedroidDataDir: refuses anything outside the data root (with a stable code)
+  ---
+  duration_ms: 12.24749
+  type: 'test'
+  ...
+# Subtest: removeRedroidDataDir: removes a real subdirectory inside the root
+ok 251 - removeRedroidDataDir: removes a real subdirectory inside the root
+  ---
+  duration_ms: 2.911249
+  type: 'test'
+  ...
+# Subtest: r3 netcheck: builder is read-only (no mutation, bracket trick, one machine line)
+ok 252 - r3 netcheck: builder is read-only (no mutation, bracket trick, one machine line)
+  ---
+  duration_ms: 0.716472
+  type: 'test'
+  ...
+# Subtest: r3 netcheck: parser handles the happy line and rejects garbage
+ok 253 - r3 netcheck: parser handles the happy line and rejects garbage
+  ---
+  duration_ms: 1.099079
+  type: 'test'
+  ...
+# Subtest: r3 netcheck: classification — definite protection loss vs inconclusive vs intact
+ok 254 - r3 netcheck: classification — definite protection loss vs inconclusive vs intact
+  ---
+  duration_ms: 0.289825
+  type: 'test'
+  ...
+# Subtest: r3 netcheck: process=dead outranks route state (specific cause first)
+ok 255 - r3 netcheck: process=dead outranks route state (specific cause first)
+  ---
+  duration_ms: 0.144963
+  type: 'test'
+  ...
+# Subtest: r3 canary: builder validates inputs strictly (no injection, no secrets)
+ok 256 - r3 canary: builder validates inputs strictly (no injection, no secrets)
+  ---
+  duration_ms: 0.543669
+  type: 'test'
+  ...
+# Subtest: r3 canary: generateCanaryNonce is 16 hex and unique
+ok 257 - r3 canary: generateCanaryNonce is 16 hex and unique
+  ---
+  duration_ms: 0.398317
+  type: 'test'
+  ...
+# Subtest: r3 canary: parser + classifier over every output shape
+ok 258 - r3 canary: parser + classifier over every output shape
+  ---
+  duration_ms: 0.510058
+  type: 'test'
+  ...
+# Subtest: r3 recovery: backoff is exponential and capped (overflow-safe)
+ok 259 - r3 recovery: backoff is exponential and capped (overflow-safe)
+  ---
+  duration_ms: 0.151012
+  type: 'test'
+  ...
+# Subtest: r3 recovery: decision — skip when not recoverable
+ok 260 - r3 recovery: decision — skip when not recoverable
+  ---
+  duration_ms: 0.356626
+  type: 'test'
+  ...
+# Subtest: r3 recovery: decision — every attempt (incl. \#1) waits for the persisted backoff anchor
+ok 261 - r3 recovery: decision — every attempt (incl. \#1) waits for the persisted backoff anchor
+  ---
+  duration_ms: 0.462768
+  type: 'test'
+  ...
+# Subtest: r3 recovery: decision — lock contention is a WAIT, never a second recovery
+ok 262 - r3 recovery: decision — lock contention is a WAIT, never a second recovery
+  ---
+  duration_ms: 0.150893
+  type: 'test'
+  ...
+# Subtest: r3 recovery: decision — max retries → FAILED (manual intervention)
+ok 263 - r3 recovery: decision — max retries → FAILED (manual intervention)
+  ---
+  duration_ms: 0.097922
+  type: 'test'
+  ...
+# Subtest: r3 recovery: decision — gVisor stall signature gets the small budget (R2 L6h: re-provision useless)
+ok 264 - r3 recovery: decision — gVisor stall signature gets the small budget (R2 L6h: re-provision useless)
+  ---
+  duration_ms: 0.107772
+  type: 'test'
+  ...
+# Subtest: r3 recovery: decision — non-stall failures use the full budget
+ok 265 - r3 recovery: decision — non-stall failures use the full budget
+  ---
+  duration_ms: 0.059611
+  type: 'test'
+  ...
+# Subtest: r3 netpayload: fresh HEALTHY is ready; shape matches MD §6.2 semantics
+ok 266 - r3 netpayload: fresh HEALTHY is ready; shape matches MD §6.2 semantics
+  ---
+  duration_ms: 0.643742
+  type: 'test'
+  ...
+# Subtest: r3 netpayload: STALE HEALTHY is treated as unhealthy (MD §5.5 — 健康狀態過期時按不健康處理)
+ok 267 - r3 netpayload: STALE HEALTHY is treated as unhealthy (MD §5.5 — 健康狀態過期時按不健康處理)
+  ---
+  duration_ms: 0.164893
+  type: 'test'
+  ...
+# Subtest: r3 netpayload: DEGRADED/BLOCKED/FAILED never report networkReady
+ok 268 - r3 netpayload: DEGRADED/BLOCKED/FAILED never report networkReady
+  ---
+  duration_ms: 0.143553
+  type: 'test'
+  ...
+# Subtest: r3 netpayload: corrupt/missing rows degrade to safe defaults
+ok 269 - r3 netpayload: corrupt/missing rows degrade to safe defaults
+  ---
+  duration_ms: 0.147732
+  type: 'test'
+  ...
+# Subtest: r3 statemachine: the state set matches the MD exactly (7 states)
+ok 270 - r3 statemachine: the state set matches the MD exactly (7 states)
+  ---
+  duration_ms: 1.333903
+  type: 'test'
+  ...
+# Subtest: r3 statemachine: HEALTHY is reachable ONLY from VERIFYING (no blind HEALTHY)
+ok 271 - r3 statemachine: HEALTHY is reachable ONLY from VERIFYING (no blind HEALTHY)
+  ---
+  duration_ms: 0.201604
+  type: 'test'
+  ...
+# Subtest: r3 statemachine: full legal matrix — every edge in the table is accepted, every other pair is rejected
+ok 272 - r3 statemachine: full legal matrix — every edge in the table is accepted, every other pair is rejected
+  ---
+  duration_ms: 0.915226
+  type: 'test'
+  ...
+# Subtest: r3 statemachine: unknown states are rejected on both sides
+ok 273 - r3 statemachine: unknown states are rejected on both sides
+  ---
+  duration_ms: 0.133522
+  type: 'test'
+  ...
+# Subtest: r3 statemachine: VERIFYING -> HEALTHY requires fresh canary-pass EVIDENCE
+ok 274 - r3 statemachine: VERIFYING -> HEALTHY requires fresh canary-pass EVIDENCE
+  ---
+  duration_ms: 0.248615
+  type: 'test'
+  ...
+# Subtest: r3 statemachine: isCanaryPassEvidence is a strict contract
+ok 275 - r3 statemachine: isCanaryPassEvidence is a strict contract
+  ---
+  duration_ms: 0.122292
+  type: 'test'
+  ...
+# Subtest: r3 statemachine: STOPPED is the universal sink (every state may stop)
+ok 276 - r3 statemachine: STOPPED is the universal sink (every state may stop)
+  ---
+  duration_ms: 0.145423
+  type: 'test'
+  ...
+# Subtest: r3 statemachine: FAILED is a manual-intervention sink (only STARTING or STOPPED leaves it)
+ok 277 - r3 statemachine: FAILED is a manual-intervention sink (only STARTING or STOPPED leaves it)
+  ---
+  duration_ms: 0.097012
+  type: 'test'
+  ...
+# Subtest: r3 statemachine: the MD §5.2 example journeys are all legal
+ok 278 - r3 statemachine: the MD §5.2 example journeys are all legal
+  ---
+  duration_ms: 0.262775
+  type: 'test'
+  ...
+# Subtest: r3 statemachine: legacy proxyState projection is conservative (never "running" when unhealthy)
+ok 279 - r3 statemachine: legacy proxyState projection is conservative (never "running" when unhealthy)
+  ---
+  duration_ms: 0.431907
+  type: 'test'
+  ...
+# Subtest: seed creates the two curated templates (one privileged, one not)
+ok 280 - seed creates the two curated templates (one privileged, one not)
+  ---
+  duration_ms: 2.384481
+  type: 'test'
+  ...
+# Subtest: seed is idempotent — second run updates in place, zero duplicates
+ok 281 - seed is idempotent — second run updates in place, zero duplicates
+  ---
+  duration_ms: 2.393781
+  type: 'test'
+  ...
+# Subtest: seed image pins are explicit — no latest/nightly (MD §2.2)
+ok 282 - seed image pins are explicit — no latest/nightly (MD §2.2)
+  ---
+  duration_ms: 0.376886
+  type: 'test'
+  ...
+# Subtest: seed gpu modes are from the fixed set and consistent with privileged
+ok 283 - seed gpu modes are from the fixed set and consistent with privileged
+  ---
+  duration_ms: 0.180333
+  type: 'test'
+  ...
+# Subtest: t2s pin: tun2socks.env and TUN2SOCKS_PIN agree (single source of truth, two mirrors)
+ok 284 - t2s pin: tun2socks.env and TUN2SOCKS_PIN agree (single source of truth, two mirrors)
+  ---
+  duration_ms: 1.16593
+  type: 'test'
+  ...
+# Subtest: t2s pin: no floating 'latest' anywhere in the pin file (non-comment) or derived URL
+ok 285 - t2s pin: no floating 'latest' anywhere in the pin file (non-comment) or derived URL
+  ---
+  duration_ms: 0.274225
+  type: 'test'
+  ...
+# Subtest: t2s fetch: happy path — download, unzip, sha256 OK, ELF OK → 0755 staged output
+ok 286 - t2s fetch: happy path — download, unzip, sha256 OK, ELF OK → 0755 staged output
+  ---
+  duration_ms: 36.7659
+  type: 'test'
+  ...
+# Subtest: t2s fetch: sha256 mismatch → fail fast, no staged output
+ok 287 - t2s fetch: sha256 mismatch → fail fast, no staged output
+  ---
+  duration_ms: 32.727891
+  type: 'test'
+  ...
+# Subtest: t2s fetch: non-ELF payload (valid sha) → fail fast with format diagnosis
+ok 288 - t2s fetch: non-ELF payload (valid sha) → fail fast with format diagnosis
+  ---
+  duration_ms: 48.119634
+  type: 'test'
+  ...
+# Subtest: t2s fetch: wrong-arch ELF (x86-32 header, valid sha) → fail fast with arch diagnosis
+ok 289 - t2s fetch: wrong-arch ELF (x86-32 header, valid sha) → fail fast with arch diagnosis
+  ---
+  duration_ms: 20.281968
+  type: 'test'
+  ...
+# Subtest: t2s fetch: archive without the expected inner file → fail fast
+ok 290 - t2s fetch: archive without the expected inner file → fail fast
+  ---
+  duration_ms: 10.4605
+  type: 'test'
+  ...
+# Subtest: t2s fetch: download failure → bounded retries then failure (retry cap honored)
+ok 291 - t2s fetch: download failure → bounded retries then failure (retry cap honored)
+  ---
+  duration_ms: 13.45568
+  type: 'test'
+  ...
+# Subtest: t2s fetch: floating 'latest' URL is refused before any network use
+ok 292 - t2s fetch: floating 'latest' URL is refused before any network use
+  ---
+  duration_ms: 2.798358
+  type: 'test'
+  ...
+# Subtest: f-b: run script — runner cmdline is tun2socks-free and propagates the inner exit code
+ok 293 - f-b: run script — runner cmdline is tun2socks-free and propagates the inner exit code
+  ---
+  duration_ms: 1.255961
+  type: 'test'
+  ...
+# Subtest: f-b: stage script — base64 round-trip, 0700, done-signal, shell-safe blob
+ok 294 - f-b: stage script — base64 round-trip, 0700, done-signal, shell-safe blob
+  ---
+  duration_ms: 0.551979
+  type: 'test'
+  ...
+# Subtest: f-b: inner scripts — pkill pattern is bracketed + quoted (defense in depth)
+ok 295 - f-b: inner scripts — pkill pattern is bracketed + quoted (defense in depth)
+  ---
+  duration_ms: 0.189193
+  type: 'test'
+  ...
+# Subtest: f-b: pin constant — derived URL is version-pinned (no floating latest)
+ok 296 - f-b: pin constant — derived URL is version-pinned (no floating latest)
+  ---
+  duration_ms: 0.443737
+  type: 'test'
+  ...
+# Subtest: f-b regression: the OLD inline pattern self-kills its runner (bug, documented)
+ok 297 - f-b regression: the OLD inline pattern self-kills its runner (bug, documented)
+  ---
+  duration_ms: 24.926017
+  type: 'test'
+  ...
+# Subtest: f-b fix: bracketed pattern kills a real stale-daemon stand-in but NOT its own runner
+ok 298 - f-b fix: bracketed pattern kills a real stale-daemon stand-in but NOT its own runner
+  ---
+  duration_ms: 416.144863
+  type: 'test'
+  ...
+# Subtest: f-b fix: staged geometry (sh <file> runner) — no self-kill, stale daemon still killed
+ok 299 - f-b fix: staged geometry (sh <file> runner) — no self-kill, stale daemon still killed
+  ---
+  duration_ms: 414.203366
+  type: 'test'
+  ...
+# Subtest: r2: setup script carries the self-heal before start
+ok 300 - r2: setup script carries the self-heal before start
+  ---
+  duration_ms: 0.244624
+  type: 'test'
+  ...
+# Subtest: r2: self-heal line executes for real (sh) — restore / no-clobber / no-op
+ok 301 - r2: self-heal line executes for real (sh) — restore / no-clobber / no-op
+  ---
+  duration_ms: 64.469073
+  type: 'test'
+  ...
+# Subtest: netStateBadge: fresh HEALTHY → green + text + dispatch ALLOWED
+ok 302 - netStateBadge: fresh HEALTHY → green + text + dispatch ALLOWED
+  ---
+  duration_ms: 0.840055
+  type: 'test'
+  ...
+# Subtest: netStateBadge: stale HEALTHY → STALE + down + BLOCKED (MD §6.3 過期=STALE 或按不健康)
+ok 303 - netStateBadge: stale HEALTHY → STALE + down + BLOCKED (MD §6.3 過期=STALE 或按不健康)
+  ---
+  duration_ms: 0.405877
+  type: 'test'
+  ...
+# Subtest: netStateBadge: every state has its own text label (MD §6.3 文字, 唔單止顏色)
+ok 304 - netStateBadge: every state has its own text label (MD §6.3 文字, 唔單止顏色)
+  ---
+  duration_ms: 1.002467
+  type: 'test'
+  ...
+# Subtest: netStateBadge: VERIFYING is the "recovering" text — never the old green badge
+ok 305 - netStateBadge: VERIFYING is the "recovering" text — never the old green badge
+  ---
+  duration_ms: 0.207264
+  type: 'test'
+  ...
+# Subtest: netStateBadge: networkReady=true but stale → dispatch BLOCKED (gate consistency)
+ok 306 - netStateBadge: networkReady=true but stale → dispatch BLOCKED (gate consistency)
+  ---
+  duration_ms: 0.168973
+  type: 'test'
+  ...
+# Subtest: netStateBadge: no proxy (null) → explicit text, BLOCKED
+ok 307 - netStateBadge: no proxy (null) → explicit text, BLOCKED
+  ---
+  duration_ms: 0.082871
+  type: 'test'
+  ...
+# Subtest: netStateBadge: unknown/garbage state → UNKNOWN text, BLOCKED (fail-closed)
+ok 308 - netStateBadge: unknown/garbage state → UNKNOWN text, BLOCKED (fail-closed)
+  ---
+  duration_ms: 0.158492
+  type: 'test'
+  ...
+# Subtest: netCheckBadge: only PASS/FAIL/UNKNOWN render (fail-closed on junk)
+ok 309 - netCheckBadge: only PASS/FAIL/UNKNOWN render (fail-closed on junk)
+  ---
+  duration_ms: 0.741903
+  type: 'test'
+  ...
+# Subtest: cron fire: run created with slot idempotency key + lineage; next_run_at advances to the NEXT slot
+ok 310 - cron fire: run created with slot idempotency key + lineage; next_run_at advances to the NEXT slot
+  ---
+  duration_ms: 27.520961
+  type: 'test'
+  ...
+# Subtest: redelivered fire of the SAME slot → replay: one run, one enqueue (零重複, 硬驗收)
+ok 311 - redelivered fire of the SAME slot → replay: one run, one enqueue (零重複, 硬驗收)
+  ---
+  duration_ms: 1.897253
+  type: 'test'
+  ...
+# Subtest: fire for an already-ADVANCED slot (beyond tolerance) → dropped, no run
+ok 312 - fire for an already-ADVANCED slot (beyond tolerance) → dropped, no run
+  ---
+  duration_ms: 0.339656
+  type: 'test'
+  ...
+# Subtest: fire for a DELETED schedule → dropped (idempotent no-op)
+ok 313 - fire for a DELETED schedule → dropped (idempotent no-op)
+  ---
+  duration_ms: 0.290145
+  type: 'test'
+  ...
+# Subtest: fire for a DISABLED schedule → dropped (safe direction)
+ok 314 - fire for a DISABLED schedule → dropped (safe direction)
+  ---
+  duration_ms: 0.303745
+  type: 'test'
+  ...
+# Subtest: stale generation (schedHash mismatch) → dropped + stale index entry self-removed
+ok 315 - stale generation (schedHash mismatch) → dropped + stale index entry self-removed
+  ---
+  duration_ms: 1.18486
+  type: 'test'
+  ...
+# Subtest: overlap skip_if_running: active run → terminal skipped row + slot consumed, NO enqueue
+ok 316 - overlap skip_if_running: active run → terminal skipped row + slot consumed, NO enqueue
+  ---
+  duration_ms: 2.267409
+  type: 'test'
+  ...
+# Subtest: overlap queue policy: active run → the new run is STILL created (queued behind the cap)
+ok 317 - overlap queue policy: active run → the new run is STILL created (queued behind the cap)
+  ---
+  duration_ms: 1.091209
+  type: 'test'
+  ...
+# Subtest: once fire: run created + schedule self-disabled + next_run_at cleared (硬驗收 2)
+ok 318 - once fire: run created + schedule self-disabled + next_run_at cleared (硬驗收 2)
+  ---
+  duration_ms: 0.669131
+  type: 'test'
+  ...
+# Subtest: provider disabled at fire time → aborted, NO run, slot NOT consumed (next slot retries)
+ok 319 - provider disabled at fire time → aborted, NO run, slot NOT consumed (next slot retries)
+  ---
+  duration_ms: 0.767303
+  type: 'test'
+  ...
+# Subtest: real BullMQ 6 jobId (repeat:sched-<uuid>:<millis>) → slot parsed from job id, no prevMillis/scheduledAt
+ok 320 - real BullMQ 6 jobId (repeat:sched-<uuid>:<millis>) → slot parsed from job id, no prevMillis/scheduledAt
+  ---
+  duration_ms: 1.908393
+  type: 'test'
+  ...
+# Subtest: notifier: terminal scheduled run → notification + last_status backfill
+    # Subtest: succeeded → row created with title/status, last_status written
+    ok 1 - succeeded → row created with title/status, last_status written
+      ---
+      duration_ms: 0.740192
+      type: 'test'
+      ...
+    # Subtest: failed → message carries errorCode (+truncated errorMessage)
+    ok 2 - failed → message carries errorCode (+truncated errorMessage)
+      ---
+      duration_ms: 0.180773
+      type: 'test'
+      ...
+    # Subtest: skipped (overlap) → notified — once-schedules need the record
+    ok 3 - skipped (overlap) → notified — once-schedules need the record
+      ---
+      duration_ms: 0.158353
+      type: 'test'
+      ...
+    1..3
+ok 321 - notifier: terminal scheduled run → notification + last_status backfill
+  ---
+  duration_ms: 2.761827
+  type: 'test'
+  ...
+# Subtest: notifier: negative paths return null without rows
+    # Subtest: non-terminal run (running) → null, no row
+    ok 1 - non-terminal run (running) → null, no row
+      ---
+      duration_ms: 0.133293
+      type: 'test'
+      ...
+    # Subtest: ad-hoc run (no scheduleId) → null
+    ok 2 - ad-hoc run (no scheduleId) → null
+      ---
+      duration_ms: 0.074301
+      type: 'test'
+      ...
+    # Subtest: deleted schedule → null (no dangling notification)
+    ok 3 - deleted schedule → null (no dangling notification)
+      ---
+      duration_ms: 0.089721
+      type: 'test'
+      ...
+    # Subtest: malformed run (no id) → null, no throw
+    ok 4 - malformed run (no id) → null, no throw
+      ---
+      duration_ms: 0.130122
+      type: 'test'
+      ...
+    1..4
+ok 322 - notifier: negative paths return null without rows
+  ---
+  duration_ms: 1.054358
+  type: 'test'
+  ...
+# Subtest: notifier: duplicate terminal write is a no-op (unique runId)
+ok 323 - notifier: duplicate terminal write is a no-op (unique runId)
+  ---
+  duration_ms: 0.281045
+  type: 'test'
+  ...
+# Subtest: notifier: DB failure is non-fatal (logged, null returned)
+ok 324 - notifier: DB failure is non-fatal (logged, null returned)
+  ---
+  duration_ms: 0.278615
+  type: 'test'
+  ...
+# Subtest: create cron: PG row + upsert with pattern+tz, next_run_at in schedule timezone
+ok 325 - create cron: PG row + upsert with pattern+tz, next_run_at in schedule timezone
+  ---
+  duration_ms: 21.192713
+  type: 'test'
+  ...
+# Subtest: create interval: every=ms, next_run_at = now + intervalMs
+ok 326 - create interval: every=ms, next_run_at = now + intervalMs
+  ---
+  duration_ms: 0.681192
+  type: 'test'
+  ...
+# Subtest: create once: delayed job (deterministic jobId), NOT a job scheduler
+ok 327 - create once: delayed job (deterministic jobId), NOT a job scheduler
+  ---
+  duration_ms: 0.63646
+  type: 'test'
+  ...
+# Subtest: create validation: bad cron / bad tz / interval too small / once in past / missing definition
+ok 328 - create validation: bad cron / bad tz / interval too small / once in past / missing definition
+  ---
+  duration_ms: 1.473845
+  type: 'test'
+  ...
+# Subtest: create duplicate name → 409 SCHEDULE_NAME_TAKEN
+ok 329 - create duplicate name → 409 SCHEDULE_NAME_TAKEN
+  ---
+  duration_ms: 0.915476
+  type: 'test'
+  ...
+# Subtest: PG-first: queue down at create → row exists with sync_status=sync_error (no crash, no rollback)
+ok 330 - PG-first: queue down at create → row exists with sync_status=sync_error (no crash, no rollback)
+  ---
+  duration_ms: 1.353834
+  type: 'test'
+  ...
+# Subtest: sync retry heals sync_error once the queue recovers
+ok 331 - sync retry heals sync_error once the queue recovers
+  ---
+  duration_ms: 2.382121
+  type: 'test'
+  ...
+# Subtest: sync retry while queue still down → healed=false + row stays sync_error (route maps to 503)
+ok 332 - sync retry while queue still down → healed=false + row stays sync_error (route maps to 503)
+  ---
+  duration_ms: 0.800393
+  type: 'test'
+  ...
+# Subtest: pause: DB disabled + scheduler removed; idempotent second pause
+ok 333 - pause: DB disabled + scheduler removed; idempotent second pause
+  ---
+  duration_ms: 2.262029
+  type: 'test'
+  ...
+# Subtest: pause with queue down → sync_error (safe direction: fire handler guards on DB)
+ok 334 - pause with queue down → sync_error (safe direction: fire handler guards on DB)
+  ---
+  duration_ms: 1.337803
+  type: 'test'
+  ...
+# Subtest: resume: re-enables + re-upserts; stale next_run_at recomputed
+ok 335 - resume: re-enables + re-upserts; stale next_run_at recomputed
+  ---
+  duration_ms: 0.774363
+  type: 'test'
+  ...
+# Subtest: resume idempotent when already enabled; heals sync_error as a side effect
+ok 336 - resume idempotent when already enabled; heals sync_error as a side effect
+  ---
+  duration_ms: 2.35648
+  type: 'test'
+  ...
+# Subtest: modify cron expression → next_run_at recomputed + scheduler re-upserted (same key, no dupes)
+ok 337 - modify cron expression → next_run_at recomputed + scheduler re-upserted (same key, no dupes)
+  ---
+  duration_ms: 2.160747
+  type: 'test'
+  ...
+# Subtest: modify once runAt → old delayed job removed, new one added
+ok 338 - modify once runAt → old delayed job removed, new one added
+  ---
+  duration_ms: 0.533929
+  type: 'test'
+  ...
+# Subtest: modify validation: bad cron rejected, row untouched
+ok 339 - modify validation: bad cron rejected, row untouched
+  ---
+  duration_ms: 1.303772
+  type: 'test'
+  ...
+# Subtest: run-now: manual fire creates a run with schedule lineage + idempotent on Idempotency-Key
+ok 340 - run-now: manual fire creates a run with schedule lineage + idempotent on Idempotency-Key
+  ---
+  duration_ms: 2.117406
+  type: 'test'
+  ...
+# Subtest: run-now with disabled provider → 409 PROVIDER_NOT_CONFIGURED (fail closed, like P3 create)
+ok 341 - run-now with disabled provider → 409 PROVIDER_NOT_CONFIGURED (fail closed, like P3 create)
+  ---
+  duration_ms: 0.868604
+  type: 'test'
+  ...
+# Subtest: delete: scheduler removed + row gone; history runs keep lineage (no FK)
+ok 342 - delete: scheduler removed + row gone; history runs keep lineage (no FK)
+  ---
+  duration_ms: 1.76385
+  type: 'test'
+  ...
+# Subtest: delete with queue down: row still deleted (orphan sweep is the backstop)
+ok 343 - delete with queue down: row still deleted (orphan sweep is the backstop)
+  ---
+  duration_ms: 1.188281
+  type: 'test'
+  ...
+# Subtest: list: returns schedules with definition summary + lastRun (delay computed)
+ok 344 - list: returns schedules with definition summary + lastRun (delay computed)
+  ---
+  duration_ms: 1.587827
+  type: 'test'
+  ...
+# Subtest: preview: backend-parsed next run (MD §12.2 — 前端唔好自己猜)
+ok 345 - preview: backend-parsed next run (MD §12.2 — 前端唔好自己猜)
+  ---
+  duration_ms: 0.61602
+  type: 'test'
+  ...
+# Subtest: createRun carries scheduleId + taskDefinitionId + scheduledSlotAt (P4 lineage)
+ok 346 - createRun carries scheduleId + taskDefinitionId + scheduledSlotAt (P4 lineage)
+  ---
+  duration_ms: 0.233184
+  type: 'test'
+  ...
+# Subtest: createSkippedRun: born terminal skipped, explanatory event, no enqueue, idempotent per slot
+ok 347 - createSkippedRun: born terminal skipped, explanatory event, no enqueue, idempotent per slot
+  ---
+  duration_ms: 0.407837
+  type: 'test'
+  ...
+# Subtest: sync guard: HUNG queue (redis offline-queue) fails fast -> sync_error, no hang
+ok 348 - sync guard: HUNG queue (redis offline-queue) fails fast -> sync_error, no hang
+  ---
+  duration_ms: 1000.610239
+  type: 'test'
+  ...
+# Subtest: missing index entries are created (one per enabled non-once schedule)
+ok 349 - missing index entries are created (one per enabled non-once schedule)
+  ---
+  duration_ms: 19.422222
+  type: 'test'
+  ...
+# Subtest: matching index entries are kept (no write churn)
+ok 350 - matching index entries are kept (no write churn)
+  ---
+  duration_ms: 1.095939
+  type: 'test'
+  ...
+# Subtest: drifted params are re-upserted IN PLACE — same key, 零重複 (硬驗收 3)
+ok 351 - drifted params are re-upserted IN PLACE — same key, 零重複 (硬驗收 3)
+  ---
+  duration_ms: 1.864112
+  type: 'test'
+  ...
+# Subtest: orphan schedulers (sched- prefix, no matching enabled row) are removed
+ok 352 - orphan schedulers (sched- prefix, no matching enabled row) are removed
+  ---
+  duration_ms: 1.803641
+  type: 'test'
+  ...
+# Subtest: foreign (non-sched- prefixed) index entries are NEVER touched
+ok 353 - foreign (non-sched- prefixed) index entries are NEVER touched
+  ---
+  duration_ms: 0.341836
+  type: 'test'
+  ...
+# Subtest: a disabled schedule leaves NO index entry (pause consistency)
+ok 354 - a disabled schedule leaves NO index entry (pause consistency)
+  ---
+  duration_ms: 0.900076
+  type: 'test'
+  ...
+# Subtest: once schedule: missing delayed job is re-added; a second pass does NOT duplicate
+ok 355 - once schedule: missing delayed job is re-added; a second pass does NOT duplicate
+  ---
+  duration_ms: 0.707412
+  type: 'test'
+  ...
+# Subtest: orphaned delayed fire jobs (schedule gone) are removed
+ok 356 - orphaned delayed fire jobs (schedule gone) are removed
+  ---
+  duration_ms: 0.204503
+  type: 'test'
+  ...
+# Subtest: sync_status self-heal: a fully-converged pass flips sync_error → synced
+ok 357 - sync_status self-heal: a fully-converged pass flips sync_error → synced
+  ---
+  duration_ms: 1.496736
+  type: 'test'
+  ...
+# Subtest: a failed pass (redis down) throws and touches NOTHING (no false sync_status)
+ok 358 - a failed pass (redis down) throws and touches NOTHING (no false sync_status)
+  ---
+  duration_ms: 0.699512
+  type: 'test'
+  ...
+# Subtest: convergence: repeated passes from an empty index reach exactly {enabled} (零重複 invariant)
+ok 359 - convergence: repeated passes from an empty index reach exactly {enabled} (零重複 invariant)
+  ---
+  duration_ms: 2.467462
+  type: 'test'
+  ...
+# Subtest: enabled non-once: the live next-fire job is NEVER swept (2nd pass regression)
+ok 360 - enabled non-once: the live next-fire job is NEVER swept (2nd pass regression)
+  ---
+  duration_ms: 1.003687
+  type: 'test'
+  ...
+# Subtest: enabled non-once: past-slot repeat job (crash leftover) removed, future job kept
+ok 361 - enabled non-once: past-slot repeat job (crash leftover) removed, future job kept
+  ---
+  duration_ms: 0.866085
+  type: 'test'
+  ...
+# Subtest: once schedule with consumed slot (nextRunAt NULL): stranded job removed
+ok 362 - once schedule with consumed slot (nextRunAt NULL): stranded job removed
+  ---
+  duration_ms: 0.177073
+  type: 'test'
+  ...
+# Subtest: scrubObject: redacts sensitive keys at any depth, keeps shape
+ok 363 - scrubObject: redacts sensitive keys at any depth, keeps shape
+  ---
+  duration_ms: 1.525986
+  type: 'test'
+  ...
+# Subtest: scrubObject: numeric values under sensitive-looking keys are kept (usage counters)
+ok 364 - scrubObject: numeric values under sensitive-looking keys are kept (usage counters)
+  ---
+  duration_ms: 0.197073
+  type: 'test'
+  ...
+# Subtest: scrubObject: truncates long strings; bounded depth/nodes (no DoS via hostile payload)
+ok 365 - scrubObject: truncates long strings; bounded depth/nodes (no DoS via hostile payload)
+  ---
+  duration_ms: 7.244784
+  type: 'test'
+  ...
+# Subtest: transition matrix: every legal transition is accepted, every other pair rejected
+ok 366 - transition matrix: every legal transition is accepted, every other pair rejected
+  ---
+  duration_ms: 2.436042
+  type: 'test'
+  ...
+# Subtest: terminal invariants: no outgoing transitions except manual retry (→ queued) from failed/cancelled/timed_out
+ok 367 - terminal invariants: no outgoing transitions except manual retry (→ queued) from failed/cancelled/timed_out
+  ---
+  duration_ms: 0.671792
+  type: 'test'
+  ...
+# Subtest: create: persists queued run + event + enqueues {runId, attempt} ONLY (no prompt/secret in queue)
+ok 368 - create: persists queued run + event + enqueues {runId, attempt} ONLY (no prompt/secret in queue)
+  ---
+  duration_ms: 1.71147
+  type: 'test'
+  ...
+# Subtest: create: idempotencyKey replay returns original run without a second job
+ok 369 - create: idempotencyKey replay returns original run without a second job
+  ---
+  duration_ms: 0.307445
+  type: 'test'
+  ...
+# Subtest: create: validation failures (prompt/timeout cap/attempts cap/mode/idempotency pattern)
+ok 370 - create: validation failures (prompt/timeout cap/attempts cap/mode/idempotency pattern)
+  ---
+  duration_ms: 0.769863
+  type: 'test'
+  ...
+# Subtest: create: enqueue failure → run marked failed ENQUEUE_FAILED (no phantom queued run)
+ok 371 - create: enqueue failure → run marked failed ENQUEUE_FAILED (no phantom queued run)
+  ---
+  duration_ms: 0.718102
+  type: 'test'
+  ...
+# Subtest: startAttempt: guards stale jobs (terminal run / superseded attempt) and pre-start cancel
+ok 372 - startAttempt: guards stale jobs (terminal run / superseded attempt) and pre-start cancel
+  ---
+  duration_ms: 1.278352
+  type: 'test'
+  ...
+# Subtest: cancel: idempotent from terminal states; request sets cancel_requested only (worker writes cancelled)
+ok 373 - cancel: idempotent from terminal states; request sets cancel_requested only (worker writes cancelled)
+  ---
+  duration_ms: 0.451758
+  type: 'test'
+  ...
+# Subtest: retry: only from terminal failure states; new attempt, old output preserved in events
+ok 374 - retry: only from terminal failure states; new attempt, old output preserved in events
+  ---
+  duration_ms: 0.923675
+  type: 'test'
+  ...
+# Subtest: finishRun: only terminal statuses writable; finishedAt only on terminal; illegal from terminal
+ok 375 - finishRun: only terminal statuses writable; finishedAt only on terminal; illegal from terminal
+  ---
+  duration_ms: 1.236391
+  type: 'test'
+  ...
+# Subtest: reconcileStaleRuns: queued→failed QUEUE_LOST, running→failed WORKER_RESTART, cancel_requested→cancelled, fresh runs untouched
+ok 376 - reconcileStaleRuns: queued→failed QUEUE_LOST, running→failed WORKER_RESTART, cancel_requested→cancelled, fresh runs untouched
+  ---
+  duration_ms: 0.770543
+  type: 'test'
+  ...
+# Subtest: backoffDelay: exponential growth, cap, deterministic without jitter
+ok 377 - backoffDelay: exponential growth, cap, deterministic without jitter
+  ---
+  duration_ms: 0.119603
+  type: 'test'
+  ...
+# Subtest: backoffDelay: jitter stays within [cap*(1-j), cap]
+ok 378 - backoffDelay: jitter stays within [cap*(1-j), cap]
+  ---
+  duration_ms: 0.185633
+  type: 'test'
+  ...
+# Subtest: skipped is a terminal status in the UI model
+ok 379 - skipped is a terminal status in the UI model
+  ---
+  duration_ms: 0.474898
+  type: 'test'
+  ...
+# Subtest: skipped: cannot cancel, cannot retry (consistent with state machine)
+ok 380 - skipped: cannot cancel, cannot retry (consistent with state machine)
+  ---
+  duration_ms: 0.092361
+  type: 'test'
+  ...
+# Subtest: skipped renders with a warn tone (not error)
+ok 381 - skipped renders with a warn tone (not error)
+  ---
+  duration_ms: 0.182543
+  type: 'test'
+  ...
+# Subtest: registry: P3 exposes exactly the readonly + one approval_required tools; no shell/raw tools
+ok 382 - registry: P3 exposes exactly the readonly + one approval_required tools; no shell/raw tools
+  ---
+  duration_ms: 1.76179
+  type: 'test'
+  ...
+# Subtest: findTool: unknown names → null (fail-closed); non-string → null
+ok 383 - findTool: unknown names → null (fail-closed); non-string → null
+  ---
+  duration_ms: 0.178623
+  type: 'test'
+  ...
+# Subtest: safety-class gate: only readonly + approval_required enabled (fail-closed on future classes)
+ok 384 - safety-class gate: only readonly + approval_required enabled (fail-closed on future classes)
+  ---
+  duration_ms: 0.155363
+  type: 'test'
+  ...
+# Subtest: validateToolArgs: valid args pass; defaults applied; input never mutated
+ok 385 - validateToolArgs: valid args pass; defaults applied; input never mutated
+  ---
+  duration_ms: 0.309256
+  type: 'test'
+  ...
+# Subtest: validateToolArgs: rejects unknown properties (additionalProperties:false)
+ok 386 - validateToolArgs: rejects unknown properties (additionalProperties:false)
+  ---
+  duration_ms: 0.192954
+  type: 'test'
+  ...
+# Subtest: validateToolArgs: rejects wrong types / missing required / out-of-range / bad string
+ok 387 - validateToolArgs: rejects wrong types / missing required / out-of-range / bad string
+  ---
+  duration_ms: 0.305616
+  type: 'test'
+  ...
+# Subtest: validateToolArgs: nested/garbage objects fail closed; arrays rejected where object expected
+ok 388 - validateToolArgs: nested/garbage objects fail closed; arrays rejected where object expected
+  ---
+  duration_ms: 0.124462
+  type: 'test'
+  ...
+# Subtest: truncateText: caps long output and keeps short output intact
+ok 389 - truncateText: caps long output and keeps short output intact
+  ---
+  duration_ms: 0.131122
+  type: 'test'
+  ...
+# Subtest: parseHttpUrl rejects non-http(s) and garbage
+ok 390 - parseHttpUrl rejects non-http(s) and garbage
+  ---
+  duration_ms: 1.239511
+  type: 'test'
+  ...
+# Subtest: inspectHostSync blocks loopback / private / link-local literals
+ok 391 - inspectHostSync blocks loopback / private / link-local literals
+  ---
+  duration_ms: 3.386158
+  type: 'test'
+  ...
+# Subtest: assertPublicHttpUrl rejects the metadata endpoint before any DNS
+ok 392 - assertPublicHttpUrl rejects the metadata endpoint before any DNS
+  ---
+  duration_ms: 0.273654
+  type: 'test'
+  ...
+# Subtest: assertPublicHttpUrl blocks a public name that resolves to a private IP (rebinding)
+ok 393 - assertPublicHttpUrl blocks a public name that resolves to a private IP (rebinding)
+  ---
+  duration_ms: 0.132952
+  type: 'test'
+  ...
+# Subtest: assertPublicHttpUrl blocks when the name resolves to IPv4-mapped loopback
+ok 394 - assertPublicHttpUrl blocks when the name resolves to IPv4-mapped loopback
+  ---
+  duration_ms: 0.133803
+  type: 'test'
+  ...
+# Subtest: assertPublicHttpUrl rejects an unresolvable host
+ok 395 - assertPublicHttpUrl rejects an unresolvable host
+  ---
+  duration_ms: 0.105602
+  type: 'test'
+  ...
+# Subtest: assertPublicHttpUrl allows a public endpoint
+ok 396 - assertPublicHttpUrl allows a public endpoint
+  ---
+  duration_ms: 0.146773
+  type: 'test'
+  ...
+# Subtest: assertPublicHttpUrl skips DNS for a public IP literal
+ok 397 - assertPublicHttpUrl skips DNS for a public IP literal
+  ---
+  duration_ms: 0.088772
+  type: 'test'
+  ...
+# Subtest: degraded -> backend recovered: probe flips state back to connected
+ok 398 - degraded -> backend recovered: probe flips state back to connected
+  ---
+  duration_ms: 80.588758
+  type: 'test'
+  ...
+# Subtest: probe stays degraded while redis still down, recovers when the round trip succeeds
+ok 399 - probe stays degraded while redis still down, recovers when the round trip succeeds
+  ---
+  duration_ms: 111.312255
+  type: 'test'
+  ...
+# Subtest: no probing while healthy (zero redis load in steady state)
+ok 400 - no probing while healthy (zero redis load in steady state)
+  ---
+  duration_ms: 59.788803
+  type: 'test'
+  ...
+# Subtest: stop() disables the probe
+ok 401 - stop() disables the probe
+  ---
+  duration_ms: 60.615437
+  type: 'test'
+  ...
+# Subtest: createBullMqWorker passes connection as { url } — never a bare string
+ok 402 - createBullMqWorker passes connection as { url } — never a bare string
+  ---
+  duration_ms: 0.769623
+  type: 'test'
+  ...
+# Subtest: createBullMqWorker rejects malformed REDIS_URL loudly (no silent 127.0.0.1 fallback)
+ok 403 - createBullMqWorker rejects malformed REDIS_URL loudly (no silent 127.0.0.1 fallback)
+  ---
+  duration_ms: 0.214294
+  type: 'test'
+  ...
+# Subtest: buildRedisConnection returns { url } and rejects non-URL input
+ok 404 - buildRedisConnection returns { url } and rejects non-URL input
+  ---
+  duration_ms: 0.085691
+  type: 'test'
+  ...
+# Subtest: bullmq RedisConnection: string form falls back to 127.0.0.1, { url } form is preserved
+ok 405 - bullmq RedisConnection: string form falls back to 127.0.0.1, { url } form is preserved
+  ---
+  duration_ms: 0.632921
+  type: 'test'
+  ...
+1..405
+# tests 627
+# suites 0
+# pass 626
+# fail 0
+# cancelled 0
+# skipped 1
+# todo 0
+# duration_ms 10784.025305
