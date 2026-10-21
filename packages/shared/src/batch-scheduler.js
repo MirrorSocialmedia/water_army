@@ -74,13 +74,23 @@ export function effectiveSlotCap(batch, globalCap) {
  * reported and left alone — never a blind overwrite.
  *
  *   succeeded  → COMPLETED    (from RUNNING)
- *   cancelled  → CANCELLED    (from RUNNING/CANCELLING/RETRY_WAIT/RESERVED/RECOVERING)
+ *   cancelled  → CANCELLED    (from RUNNING/CANCELLING/RETRY_WAIT/RESERVED)
  *   failed /   → FAILED_FINAL (from RUNNING/RETRY_WAIT/RESERVED/RECOVERING)
  *   timed_out
+ *
+ * MD §6.2 red line (BR-B6 E2E run-3 finding 2026-10-22): RECOVERING is a
+ * QUARANTINE state — no auto sync may move it out. A cancelled-plan sync
+ * that clobbered RECOVERING → CANCELLED armed the pause-stop re-arm path
+ * (ensureRuns re-arms a CANCELLED membership whose identity is CANCELLED)
+ * and silently auto re-ran the isolated work to success (3 of 4 SIGKILL
+ * orphans were re-run this way in E2E run-3). RECOVERING → CANCELLED stays
+ * a legal HUMAN edge (explicit transitionIdentity on review); auto paths
+ * (engine stop / reconcile cancel / sweep) never walk it — the isolated
+ * identity is released only by an explicit human action.
  */
 export const IDENTITY_SYNC_PLAN = Object.freeze({
   succeeded: { to: 'COMPLETED', from: ['RUNNING'] },
-  cancelled: { to: 'CANCELLED', from: ['RUNNING', 'CANCELLING', 'RETRY_WAIT', 'RESERVED', 'RECOVERING'] },
+  cancelled: { to: 'CANCELLED', from: ['RUNNING', 'CANCELLING', 'RETRY_WAIT', 'RESERVED'] },
   failed: { to: 'FAILED_FINAL', from: ['RUNNING', 'RETRY_WAIT', 'RESERVED', 'RECOVERING'] },
   timed_out: { to: 'FAILED_FINAL', from: ['RUNNING', 'RETRY_WAIT', 'RESERVED', 'RECOVERING'] },
 });
@@ -723,13 +733,20 @@ export function createBatchScheduler({
           attempt: run.attempt,
         });
       }
-      if (run.batchId && run.identityId) {
+      const stoppedRun = await taskSvc.loadRun(run.id);
+      if (stoppedRun.status === 'cancelled' && run.batchId && run.identityId) {
         // Membership mirror (CAS from ACTIVE only — same as the normal
         // terminal sync): lets evaluateBatchCompletion converge the batch.
+        // Gated on the run actually reaching cancelled: a non-terminated
+        // run (defensive: e.g. a leaked lease on a still-queued run) must
+        // not park its membership, or the live run would complete against
+        // a CANCELLED mirror and the batch would converge on a lie.
         await db.batchIdentity.updateMany({
           where: { batchId: run.batchId, identityId: run.identityId, status: 'ACTIVE' },
           data: { status: 'CANCELLED' },
         });
+      } else if (stoppedRun.status !== 'cancelled') {
+        log.warn?.({ runId: run.id, status: stoppedRun.status }, 'expired lease with side effects: run did not reach cancelled (defensive) — membership left untouched');
       }
       await leaseSvc.release({ resourceType, resourceKey, ownerRunId });
       log.error?.({ runId: run.id, slot: resourceKey, identityId: run.identityId }, 'CRITICAL: expired lease WITH side effects — identity RECOVERING, run CANCELLED, no auto re-run (MD §6.2)');

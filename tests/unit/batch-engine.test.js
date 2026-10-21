@@ -331,6 +331,36 @@ test('engine: identity guard — a non-RESERVED identity stops the run (never fo
   assert.equal((await w.db.identity.findUnique({ where: { id: identities[0].id } })).status, 'CANCELLED');
 });
 
+test('engine: §6.2 red line — redelivery racing RECOVERING isolation cancels the run but NEVER auto-releases the quarantine', async () => {
+  // E2E run-3 race window: worker SIGKILL → reconcile isolates the identity
+  // (RECOVERING) → the stalled-job redelivery lands before/after the honest
+  // run cancel. Either way the redelivered job must stop the run (no RUNNING
+  // zombie) WITHOUT clobbering RECOVERING → CANCELLED — the clobber armed
+  // the pause-stop re-arm and silently re-ran the isolated work to COMPLETED
+  // (3 of 4 orphans in run-3).
+  const w = makeEngineWorld();
+  const { batch, identities, runs } = await seedBatchRun(w, { identities: 1 });
+  const run = runs[0];
+  // The run is in flight (claimed): run running + identity RUNNING.
+  const claimRes = await w.taskSvc.startAttempt(run.id, run.attempt);
+  assert.equal(claimRes.status, 'started');
+  await w.batchSvc.transitionIdentity(identities[0].id, 'RUNNING', { reason: 'engine claim (mimic)', actor: 'worker:test' });
+  // Reconcile has isolated, run cancel not yet applied = the race window.
+  await w.batchSvc.transitionIdentity(identities[0].id, 'RECOVERING', { reason: 'reconcile isolation (mimic)', actor: 'scheduler:reconciler' });
+
+  const out = await w.engine.handleBatchJob(jobFor(run, w));
+  assert.equal(out.outcome, 'identity-not-ready');
+  assert.equal(out.identityStatus, 'RECOVERING');
+  assert.equal((await w.taskSvc.loadRun(run.id)).status, 'cancelled', 'orphaned run honestly stopped');
+  assert.equal((await w.db.identity.findUnique({ where: { id: identities[0].id } })).status, 'RECOVERING', 'quarantine NOT clobbered to CANCELLED');
+  const m = await w.db.batchIdentity.findFirst({ where: { batchId: batch.id, identityId: identities[0].id } });
+  assert.equal(m.status, 'CANCELLED', 'membership mirrored so the batch can converge');
+  // And a scheduler tick must not re-arm / re-dispatch the quarantined identity.
+  await w.scheduler.tick();
+  assert.equal((await w.db.taskRun.findMany({ where: { batchId: batch.id } })).length, 1, 'no second run (auto re-arm blocked while quarantined)');
+  assert.equal((await w.db.identity.findUnique({ where: { id: identities[0].id } })).status, 'RECOVERING', 'tick does not release the quarantine');
+});
+
 test('engine: stale guards — terminal run / superseded attempt are no-ops', async () => {
   const w = makeEngineWorld();
   const { runs } = await seedBatchRun(w, { identities: 1 });

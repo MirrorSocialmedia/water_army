@@ -504,6 +504,30 @@ test('reconcile §6.2: side effects → RECOVERING isolation + run CANCELLED (ho
   assert.ok(w.out.error.some((x) => String(x.m).includes('side effects')), 'CRITICAL log present');
 });
 
+test('reconcile §6.2: quarantined identity is never auto re-armed — human release only (MD §6.2 紅線)', async () => {
+  const w = makeWorld({ inspectEffects: async () => ({ sideEffects: true, detail: 'container still writing' }) });
+  const { batch, run, identity } = await seedLeasedRun(w, { maxAttempts: 5 });
+  w.clock.advance(61_000);
+  await w.scheduler.reconcileExpiredLeases(); // isolate: RECOVERING + run cancelled + membership CANCELLED
+  assert.equal(await identityStatus(w, identity.id), 'RECOVERING');
+  assert.equal((await w.db.batch.findUnique({ where: { id: batch.id } })).status, 'RUNNING');
+
+  // Auto re-arm is BLOCKED while the identity is quarantined: the re-arm path
+  // (ensureRuns, MD §7.1 pause-stop) requires a CANCELLED identity — a state
+  // only an explicit human review reaches. (E2E run-3: the auto clobber to
+  // CANCELLED is exactly what re-armed + re-ran 3 of 4 isolated orphans.)
+  const e1 = await w.scheduler.ensureRuns(batch, { actor: 'scheduler' });
+  assert.equal(e1.dispatched, 0, 'no auto re-dispatch of a quarantined identity');
+  assert.equal((await w.db.taskRun.findMany({ where: { batchId: batch.id } })).length, 1, 'no second run materialized');
+
+  // Human review releases the quarantine (RECOVERING → CANCELLED is the legal
+  // explicit edge, batch-constants) — then the re-arm path works as designed.
+  await w.batchSvc.transitionIdentity(identity.id, 'CANCELLED', { reason: 'human review: quarantine released', actor: 'admin' });
+  const e2 = await w.scheduler.ensureRuns(batch, { actor: 'scheduler' });
+  assert.equal(e2.dispatched, 1, 'human-released identity re-arms with a fresh seq run');
+  assert.equal((await w.db.taskRun.findMany({ where: { batchId: batch.id } })).length, 2);
+});
+
 test('reconcile §6.2: terminal run / missing run → release only; cancel_requested → honest cancel', async () => {
   // (a) run already terminal → release
   const wa = makeWorld();
