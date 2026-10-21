@@ -19,6 +19,17 @@ for f in "$RUN"/pids/w*; do
     kill "$pid" 2>/dev/null || true
   fi
 done
+# 1b) the run.sh-owned API (B6 gen2: it previously outlived teardown → orphan
+#     on 16343 with a stale WORKER_API_TOKEN → next run's workers 401).
+#     Guard: only kill if its APP_PORT env is 16343 — NEVER a foreign process.
+if [ -f "$RUN/pids/api" ]; then
+  apid=$(cat "$RUN/pids/api" 2>/dev/null)
+  if [ -n "${apid:-}" ] && kill -0 "$apid" 2>/dev/null \
+     && tr '\0' '\n' < "/proc/$apid/environ" 2>/dev/null | grep -q '^APP_PORT=16343$'; then
+    log "stopping API pid $apid (APP_PORT=16343 verified)"
+    kill "$apid" 2>/dev/null || true
+  fi
+fi
 # 2) scratch containers (ours only — exact names)
 for c in br-b6-pg br-b6-redis; do
   if dc ps -a --format '{{.Names}}' | grep -qx "$c"; then

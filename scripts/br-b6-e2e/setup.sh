@@ -20,6 +20,28 @@ dc() { sg docker -c "docker $*"; }
 mkdir -p "$RUN"
 log() { echo "[br-b6-e2e-setup] $*"; }
 
+# --- port pre-flight (B6 gen2: orphan-API collision guard) -------------------
+# A previous run that died abnormally can leave an orphan API holding 16343
+# (teardown only killed workers, never the run.sh-owned API). A fresh run
+# would then bind-fail its own API, yet its ready-check curl would succeed
+# against the ORPHAN (shared DB, old WORKER_API_TOKEN) → every worker
+# service-token call 401s. Refuse to start if any scratch port is bound or
+# a foreign APP_PORT=16343 process is alive.
+port_in_use() { ss -ltn 2>/dev/null | grep -q "127.0.0.1:$1"; }
+for p in "$PG_PORT" "$REDIS_PORT" 16343 16344; do
+  if port_in_use "$p"; then
+    log "FATAL: scratch port $p already bound — orphan from a previous run? (kill it, then retry)"
+    exit 1
+  fi
+done
+for proc in $(pgrep -f 'apps/api/src/server.js' 2>/dev/null || true); do
+  if tr '\0' '\n' < "/proc/$proc/environ" 2>/dev/null | grep -q '^APP_PORT=16343$'; then
+    log "FATAL: live API process $proc with APP_PORT=16343 (orphan) — kill it, then retry"
+    exit 1
+  fi
+done
+log "port pre-flight clear ($PG_PORT/$REDIS_PORT/16343/16344)"
+
 # --- containers (ours only, by name) ----------------------------------------
 dc rm -f br-b6-pg br-b6-redis >/dev/null 2>&1 || true
 log "starting br-b6-pg ($PG_PORT) + br-b6-redis ($REDIS_PORT)"

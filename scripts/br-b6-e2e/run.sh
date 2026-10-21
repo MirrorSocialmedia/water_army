@@ -4,7 +4,7 @@
 set -uo pipefail
 cd "$(dirname "$0")/../.."
 RUN=.dev/br-b6-e2e
-mkdir -p "$RUN"
+mkdir -p "$RUN/pids" # pids/ must exist BEFORE the API pid file below (B6 gen2: fresh-checkout crash — driver re-adopt reads it)
 
 log() { echo "[br-b6-e2e-run] $*"; }
 
@@ -40,6 +40,19 @@ for i in $(seq 1 90); do
   [ "$i" = 90 ] && { log "API never became ready"; tail -30 "$RUN/api.err.log"; exit 1; }
 done
 log "API ready (pid $API_PID)"
+
+# listener identity check (B6 gen2): the ready curl can succeed against a
+# FOREIGN listener (orphan API on the same port, shared DB) while OUR api
+# process is already dead (EADDRINUSE). The driver must never run against
+# someone else's API (token mismatch → 401 storm). Verify the actual 16343
+# listener is OUR pid.
+LISTENER_PID=$(ss -ltnp 2>/dev/null | grep ":16343 " | grep -oP 'pid=\K[0-9]+' | head -1)
+if [ "${LISTENER_PID:-}" != "$API_PID" ]; then
+  log "FATAL: 16343 is served by pid ${LISTENER_PID:-?}, not our API pid $API_PID (orphan collision) — aborting"
+  tail -5 "$RUN/api.err.log" 2>/dev/null || true
+  exit 1
+fi
+log "listener identity verified (pid $API_PID)"
 
 # driver (foreground; its rc is the run's rc)
 node scripts/br-b6-e2e/driver.mjs
