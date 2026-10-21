@@ -133,6 +133,29 @@ export { createBatchService } from './batch-service.js';
 /** LeaseService — cross-process resource leases (BR-B1, MD §9.6). */
 export { createLeaseService } from './lease-service.js';
 
+/**
+ * Network policy — QA endpoint allowlist + SSRF hardening (BR-B4, MD §5/§12).
+ * The worker.js gate swap-in is createNetworkPolicyGate (B1 seam, zero engine change).
+ */
+export {
+  NETWORK_POLICY_ENV,
+  NETWORK_SETTING_KEYS,
+  parseAllowlistEntry,
+  parseAllowlist,
+  parseIp4,
+  parseIp6Literal,
+  classifyIp,
+  isIpAllowedForZone,
+  normalizeHost,
+  parseTarget,
+  defaultResolve,
+  assessTarget,
+  assessRedirect,
+  loadNetworkPolicy,
+  redactTarget,
+  createNetworkPolicyGate,
+} from './network-policy.js';
+
 /** Secret scrubbing for persisted payloads (MD §13.3). */
 export { scrubObject } from './scrub.js';
 
