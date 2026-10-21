@@ -336,6 +336,14 @@ export const NETWORK_GATE_ERROR = Object.freeze({
   POLICY_UNAVAILABLE: 'NETWORK_POLICY_UNAVAILABLE',
   /** Target not on the approved allowlist. */
   TARGET_DENIED: 'NETWORK_TARGET_DENIED',
+  /** BR-B4: URL scheme other than http/https (file://, gopher://, ftp://, data:, ...). */
+  BAD_SCHEME: 'NETWORK_BAD_SCHEME',
+  /** BR-B4: unparseable target, credentials in URL (userinfo), invalid port, or protocol downgrade on redirect. */
+  BAD_TARGET: 'NETWORK_BAD_TARGET',
+  /** BR-B4: a resolved IP is in a blocked class (loopback / private / link-local / CGNAT / metadata 169.254.169.254 / unspecified / multicast / ...). */
+  BLOCKED_IP: 'NETWORK_BLOCKED_IP',
+  /** BR-B4: DNS failure, zero addresses, or an unparseable resolved address (fail-closed). */
+  RESOLUTION_FAILED: 'NETWORK_RESOLUTION_FAILED',
 });
 
 /** Mock/default gate — passes everything (B4 replaces this). */
