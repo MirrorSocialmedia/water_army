@@ -135,7 +135,7 @@ async function createCycle(tag, refs) {
       batchSize: ids.length,
       maxActiveContainers: 6,
       failurePolicy: 'continue_and_report',
-      config: { container: CONTAINER_SPEC },
+      config: { adapter: CONTAINER_SPEC },
     },
   });
   if (r.status !== 201 && r.status !== 200) throw new Error(`${tag}: create failed ${r.status} ${r.text.slice(0, 300)}`);

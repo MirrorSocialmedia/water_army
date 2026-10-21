@@ -98,7 +98,9 @@ REDIS_URL=redis://127.0.0.1:$REDIS_PORT/0
 SESSION_SECRET=$SESSION_SECRET
 APP_ENCRYPTION_KEY=$APP_ENCRYPTION_KEY
 WORKER_API_TOKEN=$WORKER_API_TOKEN
-BATCH_CONTAINER_ALLOWED_IMAGES=$ALLOWLIST_JSON
+# Single-quoted: the env file is shell-sourced; a bare JSON value would have
+# its double quotes stripped by the shell at source time (boot hard-fail).
+BATCH_CONTAINER_ALLOWED_IMAGES='$ALLOWLIST_JSON'
 BATCH_ADB_HOST_PORT_RANGE=$BATCH_PORT_RANGE
 BATCH_CONTAINER_DATA_ROOT=$RUN/data
 # Real redroid boots: 30min boot-health window (R5 cold first boot ~24min),

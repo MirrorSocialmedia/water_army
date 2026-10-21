@@ -346,7 +346,7 @@ async function main() {
           batchSize: pool.length,
           maxActiveContainers: pool.length,
           failurePolicy: 'continue_and_report',
-          config: { container: CONTAINER_SPEC },
+          config: { adapter: CONTAINER_SPEC },
         },
       });
       if (created.status !== 201 && created.status !== 200) throw new Error(`cycle create failed: ${created.status} ${created.text.slice(0, 300)}`);
