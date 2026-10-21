@@ -46,7 +46,7 @@ handleJob → gateConcurrency → networkGate(ctx) → startAttempt → provider
 兩個 zone 都**永遠拒**：metadata（169.254.169.254 任何 IP 形態）、CGNAT（100.64/10）、
 unspecified、multicast、broadcast、test-net、nat64。
 
-### 3.2 AppSetting（admin-only 改動 = B6 路由項）
+### 3.2 AppSetting（admin-only — 讀取契約 + 寫入路由均已落地）
 
 | key | valueJson 形態 |
 |-----|----------------|
@@ -55,6 +55,17 @@ unspecified、multicast、broadcast、test-net、nat64。
 | `network.taskTypePolicy` | JSON `{ "ai": bool, "adhoc": bool }`（缺省兩者 true；未知 key / 非 boolean = 整 policy unavailable） |
 
 **合併語義**：同 zone 內 env + AppSetting 取 **union**（dedupe by scheme|host|port）。
+
+**管理路由（BR-B6 G4，`apps/api/src/routes/network-policy.js`，admin-only 讀+寫）**：
+
+| route | 作用 |
+|-------|------|
+| `GET /api/network-policy` | effective policy（env + AppSetting union + sources + 誠實 unavailable 狀態） |
+| `PUT /api/network-policy/allowlists` | `{ allowlist?: string[]\|null, allowlistInternal?: string[]\|null }` — gate 同一個 `parseAllowlist` 校驗（malformed = 400 零寫入）；`null` = 刪 row 還原 env-only；`[]` = 合法清空（emergency stop） |
+| `PUT /api/network-policy/task-types` | 強制完整 `{ ai: bool, adhoc: bool }`（partial = 400） |
+
+每筆寫入記 `updatedBy`（acting admin）+ audit row；response 一律回顯 NEXT dispatch 生效嘅
+effective policy（gate per-attempt 重讀，改動即時生效，無 cache）。
 
 ### 3.3 Entry 格式（strict）
 
@@ -186,19 +197,50 @@ per-hop re-validation 保持同一安全不變量 — **任何一 hop 都唔可�
 | 出口 policy 失效 → fail-closed `NETWORK_POLICY_UNAVAILABLE`，唔直連 | §8 矩陣 + 測試實證（policy 未載入時 mock provider 都拒） | ✅（本單交付） |
 | worker health port 3001 | 無 `ports:` 段（容器內 only） | ✅ |
 
-**Gaps（= B6 整合項，本單唔改 compose）：**
+**Gaps（= B6 整合項，2026-10-21 gen2 記錄；**BR-B6 已收口 2026-10-22**）：**
 
-- **G1 — 無 explicit `networks:` 段**：compose 靠默認 project bridge（`water-army_default`）。
-  功能上已係專用 bridge（唔係 host networking），但 MD §5.1「專用」嘅顯式表述（自訂 name、
-  隔離 subnet、必要時 `internal: true` 切公網出口）未落地。**B6**。
-- **G2 — device（Redroid）容器用默認 `NetworkMode: 'bridge'`**（docker 默認 bridge，
-  非 water-army project network）：device 之間互相可達、可達 host bridge gateway。
-  ADB port 已 127.0.0.1-only（✅）但 network 層隔離未做。**B6**（與 G1 一齊設計：
-  平台 network + device network 分工，gost 代理 172.17.0.1 bind 嘅位置要隨 network 決定）。
-- **G3 — pinned-IP client 未接**（§6 TOCTOU 殘留 + §7 redirect client-side 啟用）：
-  undici dispatcher 改造，動 `providers/` — B6。
-- **G4 — AppSetting admin 寫入路由未建**（MD §12：只 Admin 可改網絡政策；
-  本單 gate 已 enforce 讀取契約 + fail-closed shape 校驗，路由本身 = B6 範圍，跟 RBAC admin 一起）。
+- ~~**G1 — 無 explicit `networks:` 段**~~ → **✅ CLOSED（BR-B6 `eebb973`）**：
+  compose 頂層加 `networks.platform`（`water-army-platform`，subnet `172.38.100.0/24`，
+  gateway `172.38.100.1`），web/api/worker/postgres/redis 五 service 全部 explicit attach，
+  唔再靠默認 project bridge。`docker compose config --quiet` 驗過。
+- ~~**G2 — device（Redroid）容器用默認 `NetworkMode: 'bridge'`**~~ → **✅ CLOSED（BR-B6 `eebb973`）**：
+  新 `apps/api/src/services/device-network.js` — 專用 device network
+  `water-army-devices`（`172.38.200.0/24`，bridge，fail-closed `ensureDeviceNetwork`：
+  404→create、driver 漂移→拒、subnet 漂移→拒）。gost + device + batch container 全部
+  explicit `NetworkingConfig` 落呢個 network，`NetworkMode` 全面移除；`GOST_HOST_BIND`
+  由 gateway（`172.38.200.1`）派生，唔再 hardcoded `172.17.0.1`。存量 device 唔遷移
+  （新容器先生效，見下方 residual note）。
+- ~~**G3 — pinned-IP client 未接**~~ → **✅ CLOSED（BR-B6 `00d736b`）**：
+  `apps/worker/src/net/pinned-fetch.js` — undici `Agent` + custom `connect`：
+  只 dial gate 已驗 IP（pre-socket DNS/parse 前 off-pin 即拒），`Host`/SNI 保留原 hostname，
+  redirect 逐跳 `assessRedirect` 重驗，valid-IP failover，per-request agent lifecycle。
+  `openai-compatible.js` provider 改行呢個 pinned transport（engine 傳 verdict pins）；
+  新錯誤 `PROVIDER_ERROR.NETWORK_POLICY`（non-retryable）。Residual：api-internal tool
+  transport 仍用 plain fetch（verdict 內已有 pin，wiring 留下一期，見 §10.1）。
+- ~~**G4 — AppSetting admin 寫入路由未建**~~ → **✅ CLOSED（BR-B6，本 commit）**：
+  新 `apps/api/src/routes/network-policy.js` — admin-only（讀+寫）：
+  `GET /api/network-policy`（effective = env + AppSetting union + sources + 誠實 unavailable 狀態）、
+  `PUT /api/network-policy/allowlists`（用 gate 同一個 `parseAllowlist` 校驗 — malformed = 400
+  零寫入；`null` = 刪 row 還原 env-only；`[]` = 合法清空 = emergency stop）、
+  `PUT /api/network-policy/task-types`（強制完整 `{ai, adhoc}` object）。每筆寫
+  `updatedBy`（acting admin）+ audit row，response 一律回顯 NEXT dispatch 生效嘅
+  effective policy（gate per-attempt 重讀，改動即時生效）。測試：
+  `tests/integration/network-policy-routes.test.js`（9 tests）。
+
+### 10.1 收口後殘留（residual notes，BR-B6 2026-10-22）
+
+- **G2 residual — 存量 device 唔遷移**：`ensureDeviceNetwork` 只對**新建** container 生效
+  （gost / device / batch 都喺 create 路徑掛 `NetworkingConfig`）。B5 前已存在、行喺 docker 默認
+  bridge 嘅 Redroid device 唔會被自動 migrate（遷移 = stop+recreate = 有狀態風險，超出 network
+  hardening 範圍）。要收齊：逐個 `remove`（volume 保留）後重新 provision。ADR 註記。
+- **G3 residual — api-internal tool transport**：`pinned-fetch.js` 已接 `openai-compatible.js`
+  provider（chat 路徑，即 AI 出站主線）。`api-internal` tool 嘅 transport 仍用 plain fetch；
+  gate verdict 已帶該 endpoint 嘅 pinned IP，wiring（傳 pins 入 tool fetcher）留下一期 —
+  tool 目標仍然受 `assessTarget` 判定（redirect/DNS 層 TOCTOU 殘留只限呢個低頻 admin 路徑，
+  唔係 AI 主線）。
+- **G1 residual — `internal: true` 未啟用**：`water-army-platform` 現係標準 bridge。
+  若日後要硬切公網出口，將 platform network 設 `internal: true` 即可；啟用前須逐 service
+  核實無合法出網依賴（worker 出站本已全數經 gate，postgres/redis 無 ports）。現狀唔改。
 
 ## 11. §14.4 / Phase 4 禁止邏輯掃描（2026-10-21 gen2）
 

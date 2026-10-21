@@ -49,6 +49,7 @@ import { taskDefinitionRoutes } from './routes/task-definitions.js';
 import { dashboardRoutes } from './routes/dashboard.js';
 import { batchMonitorRoutes } from './routes/batch-monitor.js';
 import { batchContainerRoutes } from './routes/batch-containers.js';
+import { networkPolicyRoutes } from './routes/network-policy.js';
 
 /** Public (unauthenticated) route prefixes — everything else may need a session. */
 const PUBLIC_PREFIXES = ['/api/health', '/api/auth/login'];
@@ -393,6 +394,7 @@ export async function buildApp(opts = {}) {
   dashboardRoutes(app);
   batchMonitorRoutes(app);
   batchContainerRoutes(app);
+  networkPolicyRoutes(app);
 
   // --- lifecycle ---------------------------------------------------------------
   app.addHook('onClose', async () => {

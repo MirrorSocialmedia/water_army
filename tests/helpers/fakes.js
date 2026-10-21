@@ -238,6 +238,16 @@ export function makeFakeDb({ users = [] } = {}) {
         }
         return null;
       },
+      create: async ({ data }) => {
+        const row = { ...data, createdAt: new Date(), updatedAt: new Date() };
+        settingRows.set(row.key, row);
+        return row;
+      },
+      deleteMany: async ({ where }) => {
+        const existed = settingRows.has(where.key);
+        settingRows.delete(where.key);
+        return { count: existed ? 1 : 0 };
+      },
     },
     // health/ready probe
     $queryRaw: async () => [{}],
