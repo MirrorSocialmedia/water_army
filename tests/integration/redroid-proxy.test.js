@@ -3,7 +3,7 @@
  *
  * Coverage:
  *  - pure builders (gost container body, tunnel scripts, URL parsing) —
- *    exact-shape assertions incl. the digest-pinned image, 172.17.0.1 bind,
+ *    exact-shape assertions incl. the digest-pinned image, device-network (G2) bind,
  *    empty Env, and the verified netd table-100 `onlink` route
  *  - template proxy CRUD: encrypted at rest (ciphertext in DB, never
  *    plaintext), masked in views, null-clear on patch
@@ -18,6 +18,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
+import { deviceNetwork } from '../../apps/api/src/services/device-network.js';
 import {
   GOST_IMAGE,
   GOST_LISTEN_PORT,
@@ -110,7 +111,7 @@ test('stageb proxy: parseProxyUrl accepts socks5 with/without credentials, rejec
   assert.doesNotThrow(() => validateProxyUrl(PROXY_A));
 });
 
-test('stageb proxy: buildGostContainerBody — pinned image, 172.17.0.1 bind, empty Env, credentials only in Cmd', () => {
+test('stageb proxy: buildGostContainerBody — pinned image, device-network bind (BR-B6 G2), empty Env, credentials only in Cmd', () => {
   const body = buildGostContainerBody({ deviceName: 'redroid-dev1', gostPort: 20082, proxyUrl: PROXY_A });
   assert.equal(body.Image, GOST_IMAGE);
   assert.match(GOST_IMAGE, /^gogost\/gost@sha256:[a-f0-9]{64}$/);
@@ -118,7 +119,11 @@ test('stageb proxy: buildGostContainerBody — pinned image, 172.17.0.1 bind, em
   // R3 live-found 2026-10-20: no 'start' — the image ENTRYPOINT is
   // ["/bin/gost"]; 'start' was parsed as a config-file name (fatal).
   assert.deepEqual(body.Cmd, ['-L', `socks5://:${GOST_LISTEN_PORT}`, '-F', PROXY_A]);
-  assert.deepEqual(body.HostConfig.NetworkMode, 'bridge');
+  // BR-B6 G2: no NetworkMode at all — the dedicated device network is the
+  // explicit endpoint; the gost bind anchors to its gateway.
+  assert.equal(body.HostConfig.NetworkMode, undefined);
+  assert.deepEqual(body.NetworkingConfig.EndpointsConfig[deviceNetwork.name], {});
+  assert.equal(GOST_HOST_BIND, deviceNetwork.gateway);
   assert.deepEqual(body.HostConfig.PortBindings, {
     [`${GOST_LISTEN_PORT}/tcp`]: [{ HostIP: GOST_HOST_BIND, HostPort: '20082' }],
   });
@@ -140,8 +145,10 @@ test('stageb proxy: tunnel scripts — verified netd sequence (table 100 + onlin
   // the onlink flag is REQUIRED (10.8.0.2 is not resolvable inside table 100)
   assert.match(setup, /ip route add default via 10\.8\.0\.2 dev tun0 table 100 onlink/);
   // GATEWAY EXCEPTION (live-found 2026-10-19: without it the gVisor→gost
-  // handshake hairpins out tun0 and the proxy connection is reset)
-  assert.match(setup, /ip route add 172\.17\.0\.1 dev eth0 scope link table 100/);
+  // handshake hairpins out tun0 and the proxy connection is reset).
+  // BR-B6 G2: the gateway is the DEVICE network's (GOST_HOST_BIND), not the
+  // default bridge's 172.17.0.1.
+  assert.ok(setup.includes(`ip route add ${GOST_HOST_BIND} dev eth0 scope link table 100`), 'gateway exception route must target the device-network gateway');
   // rule 5000 fallback (netd owns it for TUNs it registers; EEXIST-safe)
   assert.match(setup, /ip rule add priority 5000 from all lookup 100 2>\/dev\/null \|\| true/);
   // RTM_NEWLINK is blocked in some Android netd states — link add must be
@@ -152,7 +159,7 @@ test('stageb proxy: tunnel scripts — verified netd sequence (table 100 + onlin
   // F-B (R1): bracketed + quoted pattern — combined with staged-file execution
   // (buildT2sRunScript) this is what keeps pkill from killing the runner shell
   assert.match(setup, /pkill -f "\[t\]un2socks" 2>\/dev\/null \|\| true/);
-  assert.match(setup, /nohup \/data\/local\/tmp\/tun2socks --device tun0 --proxy socks5:\/\/172\.17\.0\.1:20082 --loglevel debug > \/data\/local\/tmp\/tun2socks\.log 2>&1 &/);
+  assert.ok(setup.includes(`nohup /data/local/tmp/tun2socks --device tun0 --proxy socks5://${GOST_HOST_BIND}:20082 --loglevel debug > /data/local/tmp/tun2socks.log 2>&1 &`), 't2s must point at the device-network gost bind');
   assert.match(setup, /ps -ef \| grep \[t\]un2socks/); // bracket trick — grep must not self-match
   assert.throws(() => buildTunnelSetupScript({ gostPort: 21000 }), /gostPort/);
   assert.match(buildTunnelTeardownScript(), /pkill -f "\[t\]un2socks"/);
@@ -296,7 +303,7 @@ test('stageb proxy: device create inherits template proxy — gost up + tunnel p
   assert.ok(redroidMock.exec.calls.findIndex((c) => c.script.includes('T2S_STAGED')) <
     redroidMock.exec.calls.findIndex((c) => c.script.includes('sh /data/local/tmp/.t2s-setup.sh')), 'stage must precede run');
   const inner = Buffer.from(stageCalls[0].script.match(/printf '%s' '([A-Za-z0-9+\/=]+)' \| base64 -d/)[1], 'base64').toString('utf8');
-  assert.ok(inner.includes(`socks5://172.17.0.1:${device.proxy.gostPort}`), 'inner setup script must point at THIS device\'s gost port');
+  assert.ok(inner.includes(`socks5://${GOST_HOST_BIND}:${device.proxy.gostPort}`), 'inner setup script must point at THIS device\'s gost port');
   assert.ok(inner.includes('table 100 onlink'));
   assert.ok(!runCalls[0].script.includes('tun2socks'), 'RUNNER cmdline must never contain the literal tun2socks (F-B)');
 });

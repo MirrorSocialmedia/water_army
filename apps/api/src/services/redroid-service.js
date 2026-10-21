@@ -26,6 +26,7 @@ import path from 'node:path';
 import { DOCKER_ERROR, encryptSecret, decryptSecret, resolveProviderKey } from '@water-army/shared';
 
 import { DockerServiceError, classifyDockerError } from './docker-service.js';
+import { GOST_HOST_BIND, deviceNetwork, withDeviceNetwork, ensureDeviceNetwork } from './device-network.js';
 import { checkPortAvailable, } from './preflight.js';
 import { createAdbWhitelist } from './adb-whitelist.js';
 import {
@@ -77,16 +78,18 @@ const fail = (code, status, message, details) => new RedroidServiceError({ code,
 // Stage B (2026-10-19): per-device egress proxy (gost + tun2socks)
 //
 // Architecture (live-spike-verified, see logs/redroid-matrix-B-progress.md):
-//  - one gost container PER device: `redroid-matrix-b-gost-<devName>`,
-//    bridge network, publishes 1080/tcp on 172.17.0.1:<gostPort> (range
-//    20080–20179, DB-unique). gost forwards to the fleet/proxy upstream
-//    (socks5://[user:pass@]host:port).
+//  - one gost container PER device: `redroid-matrix-b-gost-<devName>`, on the
+//    DEDICATED DEVICE NETWORK (BR-B6 G2: water-army-devices, 172.38.200.0/24
+//    — never the default bridge; see device-network.js), publishes 1080/tcp
+//    on <device-net gateway>:<gostPort> (GOST_HOST_BIND is derived from the
+//    network — range 20080–20179, DB-unique). gost forwards to the
+//    fleet/proxy upstream (socks5://[user:pass@]host:port).
 //  - inside the redroid device: tun0 (10.8.0.1 peer 10.8.0.2/32) +
 //    tun2socks v2.7.0 at /data/local/tmp/tun2socks pointing at
-//    socks5://172.17.0.1:<gostPort>; Android netd's table 100 default route
-//    (via 10.8.0.2 onlink) shadows the eth0 default → all device egress
-//    (DNS UDP verified end-to-end; see progress doc for the known
-//    gVisor TCP-over-TUN payload limitation) crosses the proxy.
+//    socks5://<device-net gateway>:<gostPort>; Android netd's table 100
+//    default route (via 10.8.0.2 onlink) shadows the eth0 default → all
+//    device egress (DNS UDP verified end-to-end; see progress doc for the
+//    known gVisor TCP-over-TUN payload limitation) crosses the proxy.
 //  - R1 (2026-10-20) binary contract: the tun2socks binary is a VERIFIED
 //    build artifact of the wrapper image (pinned fetch + sha256/ELF check in
 //    docker/redroid-matrix, reproducible from a clean clone) — not a manual
@@ -106,11 +109,12 @@ export const GOST_IMAGE = 'gogost/gost@sha256:f7a958c451928fbe1b99046d25bd0c9bf4
 /** In-container listen port (fixed; the per-device variable is the host port). */
 export const GOST_LISTEN_PORT = 1080;
 /**
- * Host bind for gost ports: the docker bridge gateway IP — reachable from
- * every bridge-network device (spike-verified), NOT exposed on the public
- * interfaces. Never client input.
+ * Host bind for gost ports: the DEVICE network gateway (BR-B6 G2 — derived
+ * from water-army-devices by construction; pre-G2 this was the default
+ * bridge IP 172.17.0.1). Reachable from every device-network container,
+ * never exposed on public interfaces. Never client input.
  */
-export const GOST_HOST_BIND = '172.17.0.1';
+export { GOST_HOST_BIND }; // re-export for existing importers (tests, views)
 /** Dedicated (non-ADB) port range for per-device gost listeners. */
 export const GOST_PORT_RANGE = Object.freeze({ start: 20080, end: 20179 });
 /** proxyState machine: off → provisioning → running | stopped | error. */
@@ -299,10 +303,13 @@ export function buildGostContainerBody({ deviceName, gostPort, proxyUrl }) {
       'app.kind': 'redroid-gost',
       'redroid.device.name': deviceName,
     },
-    HostConfig: {
-      NetworkMode: 'bridge',
-      PortBindings: { [`${GOST_LISTEN_PORT}/tcp`]: [{ HostIP: GOST_HOST_BIND, HostPort: String(gostPort) }] },
-    },
+    // BR-B6 G2: the dedicated device network (no NetworkMode at all — an
+    // explicit endpoint wins; the gateway-anchored bind stays reachable).
+    ...withDeviceNetwork({
+      hostConfig: {
+        PortBindings: { [`${GOST_LISTEN_PORT}/tcp`]: [{ HostIP: GOST_HOST_BIND, HostPort: String(gostPort) }] },
+      },
+    }).body,
   };
 }
 
@@ -321,10 +328,11 @@ export function buildGostContainerBody({ deviceName, gostPort, proxyUrl }) {
  *    if netd owns it, ours is a no-op duplicate of the same shape).
  *  - `onlink` is REQUIRED on the table-100 default (10.8.0.2 is not
  *    resolvable inside table 100 → ENETUNREACH without it).
- *  - GATEWAY EXCEPTION: 172.17.0.1 (docker bridge) must route via eth0
- *    INSIDE table 100 — otherwise the gVisor→gost handshake (dst
- *    172.17.0.1:<gostPort>) matches the table-100 default and HAIRPINS
- *    back out tun0 → connection reset, zero proxy traffic. Live-found
+ *  - GATEWAY EXCEPTION: the device-network gateway (GOST_HOST_BIND —
+ *    water-army-devices, BR-B6 G2; pre-G2 this was 172.17.0.1, the default
+ *    bridge) must route via eth0 INSIDE table 100 — otherwise the gVisor→gost
+ *    handshake (dst <gateway>:<gostPort>) matches the table-100 default and
+ *    HAIRPINS back out tun0 → connection reset, zero proxy traffic. Live-found
  *    (dev2 failure mode, 2026-10-19).
  *  - Idempotent: re-runnable while the device is up (pkill + del first).
  */
@@ -525,8 +533,9 @@ export function createRedroidService({
   // scripts without a daemon. Returns {exitCode, stdout, stderr}.
   exec: injectedExec,
   // R3: host-side proxy-leg reachability probe. Real = gost container
-  // inspect + TCP connect to 172.17.0.1:<gostPort>; mock adapter injects a
-  // deterministic stand-in (the whole device is simulated there).
+  // inspect + TCP connect to <device-net gateway>:<gostPort> (BR-B6 G2);
+  // mock adapter injects a deterministic stand-in (the whole device is
+  // simulated there).
   proxyReachable: injectedProxyReachable,
   // R6: data-dir removal seam. Real = removeRedroidDataDir (path-guarded
   // recursive rm); mock mode can force a failure shape (e.g. the EACCES the
@@ -741,8 +750,9 @@ export function createRedroidService({
   /**
    * Allocate a unique gost host port in the dedicated range (DB-unique +
    * 127.0.0.1 bind probe as a conservative collision screen — the real bind
-   * is 172.17.0.1; a 0.0.0.0 listener shows up as occupied, a 127.0.0.1-only
-   * listener does not and cannot conflict with 172.17.0.1).
+   * is the device-network gateway (GOST_HOST_BIND); a 0.0.0.0 listener shows
+   * up as occupied, a 127.0.0.1-only listener does not and cannot conflict
+   * with the gateway bind).
    */
   async function allocateGostPort({ excludeDeviceId } = {}) {
     const { start, end } = gostRange();
@@ -1356,6 +1366,8 @@ export function createRedroidService({
       const existing = await client.getContainer(name).inspect();
       return { containerId: existing.Id, reused: true };
     } catch { /* not present — create below */ }
+    // BR-B6 G2: the gost proxy rides the dedicated device network (idempotent ensure).
+    await ensureDeviceNetwork(client, { log });
     const body = buildGostContainerBody({ deviceName: row.name, gostPort: row.gostPort, proxyUrl: row._proxyUrlPlaintext });
     let created;
     try {
@@ -1685,8 +1697,11 @@ export function createRedroidService({
 
       // 3. docker create — config built from template fields ONLY (MD §13.1)
       const client = requireClient();
+      // BR-B6 G2: devices ride the DEDICATED device network — never the
+      // default bridge (idempotent ensure; fail closed on engine error).
+      await ensureDeviceNetwork(client, { log });
       const HostConfig = {
-        NetworkMode: 'bridge',
+        // (no NetworkMode — the explicit device-network endpoint wins)
         PortBindings: {
           // MD §1.2 hard rule: ADB publishes on 127.0.0.1 ONLY.
           // The bind address is a server-side constant — there is no client
@@ -1723,6 +1738,9 @@ export function createRedroidService({
           'redroid.gpu.mode': template.gpuMode,
         },
         HostConfig,
+        // BR-B6 G2: explicit device-network endpoint (replaces the old
+        // HostConfig.NetworkMode = 'bridge').
+        NetworkingConfig: { EndpointsConfig: { [deviceNetwork.name]: {} } },
       };
 
       let created;

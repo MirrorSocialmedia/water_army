@@ -18,6 +18,28 @@ x-logging: &default-logging
     max-size: "10m"
     max-file: "3"
 
+# =============================================================================
+# BR-B6 G1 (docs/network-policy.md §10): EXPLICIT dedicated platform network.
+# Pre-G1 the 5 platform services rode the implicit default project bridge
+# (water-army_default, auto subnet). Now the dedicated bridge is declared:
+# fixed name + isolated subnet (172.38.100.0/24 — clear of docker's default
+# 172.17/16/18 + LAN 192.168.31/24). Devices (redroid + batch containers) do
+# NOT ride this network — they use the dedicated device network created by
+# the API (G2, see apps/api/src/services/device-network.js).
+# Note: `internal: true` (cutting ALL container egress) is deliberately NOT
+# set: the worker's provider calls may legitimately target the allowlisted
+# staging/QA endpoints, which the B4 policy gate (not the L3 network) governs.
+# =============================================================================
+networks:
+  platform:
+    name: water-army-platform
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.38.100.0/24
+          gateway: 172.38.100.1
+
 services:
   # ---------------------------------------------------------------- web
   web:
@@ -25,6 +47,7 @@ services:
       context: .
       dockerfile: docker/web.Dockerfile
     image: water-army/web:local
+    networks: [platform]
     # P6 (flag #2): the platform's own stateless services are the persistent
     # app-managed targets — label-based management survives container
     # recreation (ID-keyed exceptions orphan on rebuild; labels re-apply).
@@ -61,6 +84,7 @@ services:
       context: .
       dockerfile: docker/api.Dockerfile
     image: water-army/api:local
+    networks: [platform]
     labels:
       app.managed: "true"
       app.created-by: "compose"
@@ -131,9 +155,11 @@ services:
       context: .
       dockerfile: docker/worker.Dockerfile
     image: water-army/worker:local
+    networks: [platform]
     labels:
       app.managed: "true"
       app.created-by: "compose"
+    # NO Docker socket here — hard boundary (MD §4 / threat T1).
     # NO Docker socket here — hard boundary (MD §4 / threat T1).
     environment:
       NODE_ENV: production
@@ -181,6 +207,7 @@ services:
   # ---------------------------------------------------------------- postgres
   postgres:
     image: postgres:17.6
+    networks: [platform]
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-app}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD missing — set it in .env}
@@ -206,6 +233,7 @@ services:
   # ---------------------------------------------------------------- redis
   redis:
     image: redis:7.4.5
+    networks: [platform]
     # BullMQ works best with AOF persistence (MD §15 / BullMQ docs).
     command: ["redis-server", "--appendonly", "yes"]
     volumes:

@@ -148,7 +148,7 @@ export const NET_ERRORS = Object.freeze({
   TUNNEL_IFACE_DOWN: 'TUNNEL_IFACE_DOWN',            // tun0 present but not UP (definite)
   TUNNEL_ROUTE_UNCERTAIN: 'TUNNEL_ROUTE_UNCERTAIN',  // table-100 default or rule 5000 gone, or effective route = direct (fail-open detected) (definite)
   CONTAINER_NOT_RUNNING: 'CONTAINER_NOT_RUNNING',    // device container exited/missing (definite)
-  PROXY_UNREACHABLE: 'PROXY_UNREACHABLE',            // gost container down or 172.17.0.1:<gostPort> not accepting TCP (definite)
+  PROXY_UNREACHABLE: 'PROXY_UNREACHABLE',            // gost container down or <device-net gateway>:<gostPort> not accepting TCP (definite)
   CANARY_FAIL: 'CANARY_FAIL',                        // canary ran, verification failed (content/status)
   CANARY_TIMEOUT: 'CANARY_TIMEOUT',                  // canary exceeded its timeout (forward/return data plane dead)
   CANARY_NOT_CONFIGURED: 'CANARY_NOT_CONFIGURED',    // no admin canary target → data plane unverifiable → can never be HEALTHY

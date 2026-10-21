@@ -77,6 +77,16 @@ export function makeFakeDockerClient({ mode = 'ok', containers = [], networks = 
 
   for (const c of containers) register(c);
 
+  // Network seed — strings (legacy) or full inspect records (Driver/IPAM for
+  // the BR-B6 G2 device-network tests).
+  const netById = new Map();
+  for (const n of networks) {
+    const name = typeof n === 'string' ? n : n.Name;
+    netById.set(name, typeof n === 'string'
+      ? { Id: `net-${name}`, Name: name, Driver: 'bridge', IPAM: { Config: [] }, Labels: {} }
+      : { Id: n.Id ?? `net-${name}`, Name: n.Name, Driver: n.Driver ?? 'bridge', IPAM: n.IPAM ?? { Config: [] }, Labels: n.Labels ?? {} });
+  }
+
   function record(method, id, opts) {
     calls.push({ method, id, opts: opts ?? null });
   }
@@ -302,7 +312,37 @@ export function makeFakeDockerClient({ mode = 'ok', containers = [], networks = 
     async listNetworks() {
       guard();
       record('listNetworks', null);
-      return networks.map((Name) => ({ Name }));
+      return [...netById.values()].map(({ Name }) => ({ Name }));
+    },
+
+    /** BR-B6 G2: dockerode getNetwork(name).inspect() — 404 when absent. */
+    getNetwork(name) {
+      guard();
+      record('getNetwork', name);
+      return {
+        id: name,
+        async inspect() {
+          const n = netById.get(name);
+          if (!n) throw engineError(404, `network ${name} not found`);
+          return JSON.parse(JSON.stringify(n));
+        },
+      };
+    },
+
+    /** BR-B6 G2: dockerode createNetwork(body) — 409 on name conflict. */
+    async createNetwork(body) {
+      guard();
+      record('createNetwork', body?.Name ?? null, body);
+      if (!body?.Name) throw engineError(400, 'network name required');
+      if (netById.has(body.Name)) throw engineError(409, `network with name ${body.Name} already exists`);
+      const n = { Id: `net-${body.Name}`, Name: body.Name, Driver: body.Driver ?? 'bridge', IPAM: body.IPAM ?? { Config: [] }, Labels: body.Labels ?? {} };
+      netById.set(body.Name, n);
+      return { Id: n.Id, Warning: '' };
+    },
+
+    /** BR-B6 G2 test seam: register a network record mid-test. */
+    __registerNetwork: (rec) => {
+      netById.set(rec.Name, { Id: rec.Id ?? `net-${rec.Name}`, Name: rec.Name, Driver: rec.Driver ?? 'bridge', IPAM: rec.IPAM ?? { Config: [] }, Labels: rec.Labels ?? {} });
     },
 
     async createContainer(config) {
@@ -324,13 +364,22 @@ export function makeFakeDockerClient({ mode = 'ok', containers = [], networks = 
           Image: 'sha256:fake',
           Config: { Labels: body.Labels ?? {}, Env: body.Env ?? [], Cmd: body.Cmd ?? null, Image: body.Image ?? 'unknown' },
           HostConfig: {
-            NetworkMode: body.HostConfig?.NetworkMode ?? 'bridge',
+            // BR-B6 G2: an explicit NetworkingConfig endpoint replaces
+            // NetworkMode (docker records '' for user-defined networks).
+            NetworkMode: body.NetworkingConfig?.EndpointsConfig
+              ? ''
+              : (body.HostConfig?.NetworkMode ?? 'bridge'),
             Privileged: Boolean(body.HostConfig?.Privileged),
             NanoCpus: body.HostConfig?.NanoCpus ?? 0,
             Memory: body.HostConfig?.Memory ?? 0,
             PortBindings: body.HostConfig?.PortBindings ?? null,
           },
-          NetworkSettings: { Ports: null },
+          NetworkSettings: {
+            Ports: null,
+            Networks: body.NetworkingConfig?.EndpointsConfig
+              ? Object.fromEntries(Object.keys(body.NetworkingConfig.EndpointsConfig).map((k) => [k, { NetworkID: `net-${k}` }]))
+              : undefined,
+          },
           Mounts: (body.HostConfig?.Mounts ?? body.Mounts ?? []).map((m) => ({ Type: m.Type, Source: m.Source ?? null, Destination: m.Target, RW: !m.ReadOnly })),
         },
         restarts: 0,

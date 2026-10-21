@@ -17,7 +17,7 @@
  */
 import { EventEmitter } from 'node:events';
 
-import { removeRedroidDataDir, T2S_SETUP_FILE, T2S_NETCHECK_MARKER, T2S_CANARY_MARKER, TUN2SOCKS_CHECK_MARKER, TUN2SOCKS_PIN } from './redroid-service.js';
+import { removeRedroidDataDir, T2S_SETUP_FILE, T2S_NETCHECK_MARKER, T2S_CANARY_MARKER, TUN2SOCKS_CHECK_MARKER, TUN2SOCKS_PIN, GOST_HOST_BIND } from './redroid-service.js';
 
 let mockIdSeq = 9000;
 
@@ -36,6 +36,14 @@ export function createMockRedroidDocker({ networks = ['bridge'], startFails = fa
   const byName = new Map();
   const calls = [];
   const logBuffers = new Map();
+  // BR-B6 G2: network registry (strings by default; full records tolerated).
+  const netById = new Map();
+  for (const n of networks) {
+    const name = typeof n === 'string' ? n : n.Name;
+    netById.set(name, typeof n === 'string'
+      ? { Id: `net-${name}`, Name: name, Driver: 'bridge', IPAM: { Config: [] }, Labels: {} }
+      : { Id: n.Id ?? `net-${name}`, Name: n.Name, Driver: n.Driver ?? 'bridge', IPAM: n.IPAM ?? { Config: [] }, Labels: n.Labels ?? {} });
+  }
 
   function engineError(statusCode, message) {
     const e = new Error(message);
@@ -162,12 +170,21 @@ export function createMockRedroidDocker({ networks = ['bridge'], startFails = fa
           Image: 'sha256:mock-redroid',
           Config: { Labels: body.Labels ?? {}, Env: body.Env ?? [], Cmd: body.Cmd ?? null, Image: body.Image ?? 'unknown' },
           HostConfig: {
-            NetworkMode: body.HostConfig?.NetworkMode ?? 'bridge',
+            // BR-B6 G2: an explicit NetworkingConfig endpoint replaces
+            // NetworkMode (docker records '' for user-defined networks).
+            NetworkMode: body.NetworkingConfig?.EndpointsConfig
+              ? ''
+              : (body.HostConfig?.NetworkMode ?? 'bridge'),
             Privileged: Boolean(body.HostConfig?.Privileged),
             PortBindings: body.HostConfig?.PortBindings ?? null,
             DeviceRequests: body.HostConfig?.DeviceRequests ?? null,
           },
-          NetworkSettings: { Ports: null },
+          NetworkSettings: {
+            Ports: null,
+            Networks: body.NetworkingConfig?.EndpointsConfig
+              ? Object.fromEntries(Object.keys(body.NetworkingConfig.EndpointsConfig).map((k) => [k, { NetworkID: `net-${k}` }]))
+              : undefined,
+          },
           Mounts: (body.HostConfig?.Mounts ?? []).map((m) => ({ Type: m.Type, Source: m.Source ?? null, Destination: m.Target, RW: !m.ReadOnly })),
         },
       };
@@ -179,7 +196,30 @@ export function createMockRedroidDocker({ networks = ['bridge'], startFails = fa
     },
 
     async listNetworks() {
-      return networks.map((Name) => ({ Name }));
+      return [...netById.values()].map(({ Name }) => ({ Name }));
+    },
+
+    // BR-B6 G2: dockerode getNetwork(name).inspect() — 404 when absent.
+    getNetwork(name) {
+      return {
+        id: name,
+        async inspect() {
+          calls.push({ method: 'getNetwork', id: name });
+          const n = netById.get(name);
+          if (!n) throw engineError(404, `network ${name} not found`);
+          return JSON.parse(JSON.stringify(n));
+        },
+      };
+    },
+
+    // BR-B6 G2: dockerode createNetwork(body) — 409 on name conflict.
+    async createNetwork(body) {
+      calls.push({ method: 'createNetwork', cfg: body ?? null });
+      if (!body?.Name) throw engineError(400, 'network name required');
+      if (netById.has(body.Name)) throw engineError(409, `network with name ${body.Name} already exists`);
+      const n = { Id: `net-${body.Name}`, Name: body.Name, Driver: body.Driver ?? 'bridge', IPAM: body.IPAM ?? { Config: [] }, Labels: body.Labels ?? {} };
+      netById.set(body.Name, n);
+      return { Id: n.Id, Warning: '' };
     },
 
     async ping() {
@@ -389,13 +429,13 @@ export function createMockExec({ fail = false, binaryCheck, netcheck, canary, st
       }
       return {
         exitCode: 0,
-        stdout: 'root 4444 1 0 10:00:00 ? 00:00:01 /data/local/tmp/tun2socks --device tun0 --proxy socks5://172.17.0.1:20082 --loglevel debug\n',
+        stdout: `root 4444 1 0 10:00:00 ? 00:00:01 /data/local/tmp/tun2socks --device tun0 --proxy socks5://${GOST_HOST_BIND}:20082 --loglevel debug\n`,
         stderr: '',
       };
     }
     return {
       exitCode: 0,
-      stdout: 'root 4444 1 0 10:00:00 ? 00:00:01 /data/local/tmp/tun2socks --device tun0 --proxy socks5://172.17.0.1:20082 --loglevel debug\n',
+      stdout: `root 4444 1 0 10:00:00 ? 00:00:01 /data/local/tmp/tun2socks --device tun0 --proxy socks5://${GOST_HOST_BIND}:20082 --loglevel debug\n`,
       stderr: '',
     };
   }

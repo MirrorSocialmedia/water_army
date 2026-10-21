@@ -55,6 +55,7 @@ import {
 } from '@water-army/shared';
 
 import { classifyDockerError } from './docker-service.js';
+import { deviceNetwork, ensureDeviceNetwork } from './device-network.js';
 
 /** Docker port-key shape for the probe port (container side). */
 function portKey(containerPort) {
@@ -544,11 +545,15 @@ export function createBatchLifecycleService({
     if (adopted) {
       createdId = adopted.Id;
     } else {
+      // BR-B6 G2: batch devices ride the DEDICATED device network — never
+      // the default bridge (idempotent ensure; fail closed on engine error).
+      await ensureDeviceNetwork(c, { log });
       const body = {
         Image: spec.image,
         Labels: buildContainerLabels({ identityId: run.identityId, batchId: run.batchId, taskRunId: run.id, createdBy: actor.label ?? 'batch-lifecycle' }),
+        // (no NetworkMode — the explicit device-network endpoint wins)
+        NetworkingConfig: { EndpointsConfig: { [deviceNetwork.name]: {} } },
         HostConfig: {
-          NetworkMode: 'bridge',
           PortBindings: { [portKey(healthCfg.containerPort)]: [{ HostIp: '127.0.0.1', HostPort: String(port) }] },
           Mounts: [{ Type: 'bind', Source: source, Target: '/data', ReadOnly: false }],
           Privileged: imageEntry.privileged === true,
