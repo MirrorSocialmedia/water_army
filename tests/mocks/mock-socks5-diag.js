@@ -246,7 +246,10 @@ const tcpServer = net.createServer((client) => {
       const [relayHost, relayPort] = CFG.relay.split(':');
       const upstream = net.connect(Number(relayPort), relayHost);
       const relayed = { bytesIn: rest.length, bytesOut: 0 };
-      client.write(Buffer.from([0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0]));
+      // RFC1928 §6: full 10-byte reply incl. BND.PORT (0 = unspecified).
+      // Same fix as mock-socks5.js — strict clients (gost 3.3.0) block ~62s
+      // on the truncated 8-byte form (R8 regression, 2026-10-21).
+      client.write(Buffer.from([0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0]));
       upstream.on('connect', () => {
         log({ t: 'diag-upstream-connect', dest: `${addr}:${port}` });
         if (rest.length) { log({ t: 'diag-write-up', len: rest.length, origin: 'rest', head: rest.subarray(0, 48).toString('hex') }); upstream.write(rest); }

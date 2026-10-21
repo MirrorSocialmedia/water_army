@@ -302,7 +302,9 @@ const tcpServer = net.createServer((client) => {
       // below is untouched.
       if (CFG.reject) {
         log({ t: 'tcp-reject-connect', dest: `${addr}:${port}`, from });
-        client.write(Buffer.from([0x05, 0x05, 0x00, 0x01, 0, 0, 0, 0]));
+        // Same 10-byte RFC1928 reply shape (REP=0x05) so strict clients parse
+        // it without waiting for a truncated BND.PORT (see note above).
+        client.write(Buffer.from([0x05, 0x05, 0x00, 0x01, 0, 0, 0, 0, 0, 0]));
         client.destroy();
         return;
       }
@@ -312,7 +314,13 @@ const tcpServer = net.createServer((client) => {
       const [relayHost, relayPort] = CFG.relay.split(':');
       const upstream = net.connect(Number(relayPort), relayHost);
       const relayed = { bytesIn: rest.length, bytesOut: 0 };
-      client.write(Buffer.from([0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0]));
+      // RFC1928 §6: CONNECT reply MUST include BND.ADDR + BND.PORT (10 bytes
+      // for atyp=IPv4). R8 live regression (2026-10-21): the previous 8-byte
+      // reply truncated BND.PORT — strict SOCKS5 clients (gogost/gost 3.3.0,
+      // the product's sidecar image) blocked ~62s waiting for the missing 2
+      // bytes before timing out, which made every tunnel canary fail
+      // (connect-failed) in live test stacks. bnd.port=0 is legal (unspecified).
+      client.write(Buffer.from([0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0]));
       upstream.on('connect', () => { if (rest.length) upstream.write(rest); });
       upstream.on('data', (d) => { relayed.bytesOut += d.length; client.write(d); });
       client.removeAllListeners('data');
