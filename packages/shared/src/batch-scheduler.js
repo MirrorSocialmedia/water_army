@@ -599,7 +599,9 @@ export function createBatchScheduler({
       });
       if (liveRuns.length) continue;
       const liveMembers = await db.batchIdentity.count({ where: { batchId: batch.id, status: { in: ['PENDING', 'ACTIVE'] } } });
-      if (liveMembers.count > 0) continue;
+      // PRISMA PARITY: count() returns a number (was `liveMembers.count` —
+      // worked on the old fake, would skip the check entirely on real Prisma).
+      if (Number(liveMembers) > 0) continue;
       try {
         await batchSvc.transitionBatch(batch.id, 'CANCELLED', {
           reason: 'cancel finalized (no live runs remain)',

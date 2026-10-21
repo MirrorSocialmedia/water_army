@@ -84,10 +84,22 @@ export function makeBatchFakeDb({ identities = [], batches = [], batchIdentities
         return rows.map((r) => (select ? Object.fromEntries(Object.keys(select).map((k) => [k, r[k]])) : { ...r }));
       },
       /** BR-B2 (G1): counts for the API list/preview routes. */
+      // PRISMA PARITY: count() returns a NUMBER (the fake used to return
+      // {count:n} — that would break real-DB consumers, BR-B2 G6 fix).
       count: async ({ where = {} } = {}) => {
         let rows = [...identityRows.values()];
         if (where.status !== undefined) rows = rows.filter((r) => r.status === where.status);
-        return { count: rows.length };
+        return rows.length;
+      },
+      /** PRISMA PARITY: groupBy for the API status-counts. */
+      groupBy: async ({ by = [], _count } = {}) => {
+        const out = new Map();
+        for (const r of identityRows.values()) {
+          const key = by.map((k) => r[k]).join('|');
+          if (!out.has(key)) out.set(key, { ...Object.fromEntries(by.map((k, i) => [k, key.split('|')[i]])), _count: { _all: 0 } });
+          out.get(key)._count[_count ? Object.keys(_count)[0] : '_all'] += 1;
+        }
+        return [...out.values()];
       },
       create: async ({ data }) => {
         const id = data.id ?? randomUUID();
@@ -146,7 +158,8 @@ export function makeBatchFakeDb({ identities = [], batches = [], batchIdentities
       },
       findMany: async ({ where = {}, orderBy } = {}) => {
         let rows = [...batchRows.values()];
-        if (where.id !== undefined) rows = rows.filter((b) => b.id === where.id);
+        if (where.id !== undefined && where.id.in === undefined) rows = rows.filter((b) => b.id === where.id);
+        if (where.id?.in) rows = rows.filter((b) => where.id.in.includes(b.id));
         if (where.cycleId !== undefined) rows = rows.filter((b) => b.cycleId === where.cycleId);
         if (where.status !== undefined) rows = rows.filter((b) => b.status === where.status);
         if (where.status?.in) rows = rows.filter((b) => where.status.in.includes(b.status));
@@ -204,7 +217,7 @@ export function makeBatchFakeDb({ identities = [], batches = [], batchIdentities
       count: async ({ where = {} } = {}) => {
         let rows = [...batchRows.values()];
         if (where.status !== undefined) rows = rows.filter((b) => b.status === where.status);
-        return { count: rows.length };
+        return rows.length;
       },
     },
 
@@ -228,10 +241,14 @@ export function makeBatchFakeDb({ identities = [], batches = [], batchIdentities
         membershipRows.push(row);
         return { ...row };
       },
-      findMany: async ({ where = {} } = {}) => {
+      findMany: async ({ where = {}, orderBy } = {}) => {
         let rows = membershipRows;
         if (where.batchId !== undefined) rows = rows.filter((m) => m.batchId === where.batchId);
-        if (where.identityId !== undefined) rows = rows.filter((m) => m.identityId === where.identityId);
+        if (where.identityId !== undefined && where.identityId.in === undefined) rows = rows.filter((m) => m.identityId === where.identityId);
+        if (where.identityId?.in) rows = rows.filter((m) => where.identityId.in.includes(m.identityId));
+        if (orderBy?.position) {
+          rows = [...rows].sort((a, b) => (orderBy.position === 'asc' ? a.position - b.position : b.position - a.position));
+        }
         return rows.map((m) => ({ ...m }));
       },
       findFirst: async ({ where = {} } = {}) => {
@@ -257,7 +274,7 @@ export function makeBatchFakeDb({ identities = [], batches = [], batchIdentities
           if (where.status !== undefined && m.status !== where.status) continue;
           n += 1;
         }
-        return { count: n };
+        return n;
       },
     },
 
@@ -443,7 +460,7 @@ export function makeBatchFakeDb({ identities = [], batches = [], batchIdentities
         let rows = [...leaseRows.values()];
         if (where.resourceType !== undefined) rows = rows.filter((r) => r.resourceType === where.resourceType);
         if (where.leaseExpiresAt) rows = rows.filter((r) => leaseWindowMatches(r.leaseExpiresAt, where.leaseExpiresAt));
-        return { count: rows.length };
+        return rows.length;
       },
     },
 
@@ -476,6 +493,15 @@ export function makeBatchFakeDb({ identities = [], batches = [], batchIdentities
         Object.assign(row, data, { updatedAt: clock() });
         return { ...row };
       },
+      deleteMany: async ({ where = {} } = {}) => {
+        let n = 0;
+        for (const key of [...appSettingRows.keys()]) {
+          if (where.key !== undefined && key !== where.key) continue;
+          appSettingRows.delete(key);
+          n += 1;
+        }
+        return { count: n };
+      },
     },
 
     // ------------------------------------- BR-B2 (G1): task_run_events
@@ -491,6 +517,10 @@ export function makeBatchFakeDb({ identities = [], batches = [], batchIdentities
         };
         taskRunEventRows.push(row);
         return { ...row };
+      },
+      findUnique: async ({ where }) => {
+        const found = taskRunEventRows.find((e) => e.id === where.id);
+        return found ? { ...found } : null;
       },
       findMany: async ({ where = {}, orderBy, take } = {}) => {
         let rows = taskRunEventRows.filter((e) => {

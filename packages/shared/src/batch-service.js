@@ -242,6 +242,12 @@ export function createBatchService({ db, log = console, now = () => new Date(), 
       if (missing.length) {
         throw new BatchError('VALIDATION_ERROR', `Unknown identities in cycle: ${missing.join(', ')}`, { status: 400 });
       }
+      // NOTE (B2 G7): plan-time coexistence of two cycles sharing an identity
+      // is INTENTIONALLY allowed (B1 contract — batch-idempotency tests: a
+      // distinct idempotency key creates an independent cycle; MD §3.1 line
+      // "同一 identity 最多只有一個 active run" is enforced at DISPATCH via
+      // the reservation guard, not at plan time). A plan-time 409 here was
+      // tried and reverted because it broke the shipped B1 behavior.
     }
 
     const cycleId = input.cycleId ?? newUuid();

@@ -40,6 +40,7 @@ import { templateRoutes } from './routes/templates.js';
 import { redroidTemplateRoutes } from './routes/redroid-templates.js';
 import { redroidDeviceRoutes } from './routes/devices.js';
 import { taskRoutes } from './routes/tasks.js';
+import { batchRoutes } from './routes/batches.js';
 import { scheduleRoutes } from './routes/schedules.js';
 import { scheduleNotificationRoutes } from './routes/schedule-notifications.js';
 import { taskDefinitionRoutes } from './routes/task-definitions.js';
@@ -305,6 +306,7 @@ export async function buildApp(opts = {}) {
   redroidTemplateRoutes(app);
   redroidDeviceRoutes(app);
   taskRoutes(app, { taskQueue });
+  batchRoutes(app);
   scheduleRoutes(app);
   scheduleNotificationRoutes(app);
   taskDefinitionRoutes(app);
