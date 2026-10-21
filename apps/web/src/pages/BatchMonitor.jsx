@@ -4,6 +4,7 @@ import { useApi } from '../hooks/useApi';
 import { StateFrame } from '../components/StateFrame';
 import { monitor } from '../services/batches';
 import { control } from '../services/batches';
+import BatchContainersPanel from '../components/BatchContainersPanel';
 import { DEFAULT_ALERT_LIMITS } from '@water-army/shared/batch-metrics';
 import {
   BATCH_STATUS_PILL,
@@ -54,6 +55,7 @@ export function BatchMonitor({ user }) {
   const [actionNote, setActionNote] = useState(null);
 
   const isOp = can(user?.role, 'pause');
+  const isAdmin = user?.role === 'admin';
   const now = Date.now();
   const counts = snap?.counts?.global;
   const cycle = snap?.cycle;
@@ -84,7 +86,7 @@ export function BatchMonitor({ user }) {
       reload();
     } catch (err) {
       if (err.status === 404 || err.status === 501) {
-        setActionNote(`Control endpoint ${err.code ?? 'not found'} — ${kind} is delivered with B2 (B6 integration). The batch state above is live.`);
+        setActionNote(`Control endpoint unavailable (${err.code ?? err.status}) — the batch state above is live.`);
       } else {
         setActionError(`${err.code ?? 'ERROR'}: ${err.message}`);
       }
@@ -271,6 +273,9 @@ export function BatchMonitor({ user }) {
                 </p>
               </div>
             ) : null}
+
+            {/* B3 container lifecycle surface (BR-B6 integration) */}
+            <BatchContainersPanel isOp={isOp} isAdmin={isAdmin} busy={busy} />
 
             {/* task table (MD §11.2: state / attempt / start / heartbeat / last error) */}
             <div className="card">

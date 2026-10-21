@@ -30,7 +30,7 @@ const PAGES = {
   batches: BatchPlanner,
   monitor: BatchMonitor,
   identities: Identities,
-  'identities-detail': (props) => <IdentityDetail identityId={props.params.id} />,
+  'identities-detail': (props) => <IdentityDetail identityId={props.params.id} user={props.user} />,
   reports: BatchReports,
   settings: Settings,
 };

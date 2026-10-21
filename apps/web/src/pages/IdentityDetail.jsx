@@ -1,7 +1,8 @@
-import { Fingerprint } from 'lucide-react';
+import { Fingerprint, ShieldOff } from 'lucide-react';
+import { useState } from 'react';
 import { useApi } from '../hooks/useApi';
 import { StateFrame } from '../components/StateFrame';
-import { identities } from '../services/batches';
+import { identities, purge } from '../services/batches';
 import {
   IDENTITY_PILL,
   RUN_STATUS_PILL,
@@ -23,8 +24,28 @@ import {
  * nothing else — no cookie/token/password/network credentials can appear
  * here by construction.
  */
-export function IdentityDetail({ identityId }) {
+export function IdentityDetail({ identityId, user }) {
   const { data, loading, error, reload } = useApi(() => identities.detail(identityId), [identityId]);
+  const [purgeOut, setPurgeOut] = useState(null); // last dry-run / purge result
+  const [purgeConfirm, setPurgeConfirm] = useState(''); // must equal the identity id
+  const [purgeBusy, setPurgeBusy] = useState(false);
+  const [purgeErr, setPurgeErr] = useState(null);
+  const isAdmin = user?.role === 'admin';
+
+  async function runPurge(dryRun) {
+    setPurgeBusy(true);
+    setPurgeErr(null);
+    try {
+      const out = dryRun ? await purge.dryRun(identityId) : await purge.run(identityId);
+      setPurgeOut(out);
+      reload();
+    } catch (e) {
+      setPurgeErr(`${e.code ?? 'ERROR'}: ${e.message}`);
+    } finally {
+      setPurgeBusy(false);
+      if (!dryRun) setPurgeConfirm('');
+    }
+  }
 
   if (!loading && error?.status === 404) {
     return (
@@ -214,9 +235,74 @@ export function IdentityDetail({ identityId }) {
               <pre className="log-view" style={{ maxHeight: 240 }}>{JSON.stringify(data.identity.metadata, null, 2)}</pre>
             </div>
           ) : null}
+
+          {isAdmin ? (
+            <PurgePanel
+              identityId={identityId}
+              dataDir={data.dataDir}
+              out={purgeOut}
+              confirmText={purgeConfirm}
+              onConfirmText={setPurgeConfirm}
+              busy={purgeBusy}
+              err={purgeErr}
+              onDryRun={() => runPurge(true)}
+              onPurge={() => runPurge(false)}
+            />
+          ) : null}
         </div>
       ) : null}
     </StateFrame>
+  );
+}
+
+/**
+ * The ONLY data-wipe path (MD Phase 3 item 4 / MD §4.2): admin + human,
+ * two-step confirmed, dry-run first (size/files preview, zero side effects),
+ * then a typo-proof confirm token (must equal the identity id). Batch
+ * completion NEVER auto-purges.
+ */
+function PurgePanel({ identityId, dataDir, out, confirmText, onConfirmText, busy, err, onDryRun, onPurge }) {
+  return (
+    <div className="card" role="region" aria-label="Purge identity data">
+      <div className="card-head">
+        <strong style={{ color: 'var(--danger, #b00020)' }}>
+          <ShieldOff size={14} style={{ verticalAlign: '-2px' }} /> Purge identity data (admin)
+        </strong>
+        <span className="muted">the only wipe path — batch completion never auto-purges (MD §4.2)</span>
+      </div>
+      <p className="muted">
+        Wipes <code className="mono">{dataDir?.path ?? 'the identity data dir'}</code> and removes this identity's containers
+        (ownership-gated). Stopped containers are removed; running ones are stopped first. Audited.
+      </p>
+      {out ? (
+        <div className="state">
+          <strong>{out.dryRun ? 'Dry-run (nothing changed)' : 'Purge completed'}</strong>
+          <pre className="log-view" style={{ maxHeight: 200 }}>{JSON.stringify(out, null, 2)}</pre>
+        </div>
+      ) : null}
+      {err ? <code className="dep-error">{err}</code> : null}
+      <div className="row-actions">
+        <button type="button" className="btn" disabled={busy} onClick={onDryRun}>
+          {busy ? 'Working…' : 'Dry-run (preview size/files)'}
+        </button>
+        <input
+          type="text"
+          className="input"
+          style={{ maxWidth: 320 }}
+          placeholder="type the identity id to enable purge"
+          value={confirmText}
+          onChange={(e) => onConfirmText(e.target.value)}
+        />
+        <button
+          type="button"
+          className="btn btn-danger"
+          disabled={busy || confirmText.trim() !== identityId}
+          onClick={onPurge}
+        >
+          Purge identity data
+        </button>
+      </div>
+    </div>
   );
 }
 

@@ -593,11 +593,16 @@ export function batchRoutes(app) {
     {
       preHandler: app.requireRole('operator'),
       schema: { params: { type: 'object', additionalProperties: false, required: ['id'], properties: { id: { type: 'string', pattern: UUID_RE.source } } } },
+      // B6: the UI collects a human reason for destructive stops (MD §11.2
+      // two-step confirm) — audited with the action, never acted upon.
+      // NO body schema on purpose: body-less POSTs must keep working
+      // (pre-B6 clients), the reason is optional and sanitized at read time.
     },
     async (req, reply) => {
       rateGuard(writeLimiter, req, reply, 'batch writes');
       const { batch, res } = await lifecycle('cancelBatch', req.params.id, req.user.id);
-      await audit(req, 'batch.cancel', { resourceType: 'batch', resourceId: req.params.id, details: { immediate: res.immediate, requested: res.requested ?? 0, cancelledQueued: res.cancelledQueued ?? 0 } });
+      const reason = typeof req.body?.reason === 'string' ? req.body.reason.slice(0, 280) : null;
+      await audit(req, 'batch.cancel', { resourceType: 'batch', resourceId: req.params.id, details: { immediate: res.immediate, requested: res.requested ?? 0, cancelledQueued: res.cancelledQueued ?? 0, reason } });
       // 202: RUNNING batches converge via the worker's finalizer (CANCELLING→CANCELLED).
       return reply.code(res.immediate ? 200 : 202).send({ batch, immediate: res.immediate, requested: res.requested ?? 0, cancelledQueued: res.cancelledQueued ?? 0 });
     },
