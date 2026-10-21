@@ -1,0 +1,11 @@
+# BR-B6 sandbox E2E — "permanently broken" test container (MD §14.3 item 5).
+# Exits immediately with code 1: the lifecycle's app-layer health wait sees
+# state=exited → HEALTH_TIMEOUT (503, retryable) → engine retries to
+# maxAttempts → FAILED_FINAL → batch resolves per failure_policy
+# (COMPLETED_WITH_ERRORS under continue_and_report).
+# This is a GENUINE permanent infra failure (the container cannot come up),
+# injected via the image — not a mock flag.
+# Base pinned BY DIGEST (same alpine as the good image — the ONLY difference
+# is the CMD, which keeps the failure attribution unambiguous).
+FROM alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
+CMD ["/bin/sh", "-c", "echo brb6-broken: exiting by design; exit 1"]
