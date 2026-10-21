@@ -638,7 +638,12 @@ export function createBatchScheduler({
    *   expired container_slot lease
    *     ├─ no run / run terminal → release (owner-only, idempotent)
    *     ├─ side effects TRUE     → identity RUNNING→RECOVERING (isolated),
-   *     │                           CRITICAL log, slot freed, NO auto re-run
+   *     │                           run → CANCELLED (honest stop — otherwise
+   *     │                           it sits RUNNING forever and wedges the
+   *     │                           batch; BR-B6 E2E P3b), membership
+   *     │                           mirrored CANCELLED, CRITICAL log, slot
+   *     │                           freed, NO auto re-run (identity stays
+   *     │                           RECOVERING — re-arm is blocked)
    *     ├─ cancel_requested      → markCancelled + sync (honest stop)
    *     ├─ attempt ≥ maxAttempts → failed EXECUTOR_LOST + identity FAILED_FINAL
    *     └─ else                  → failed EXECUTOR_LOST + identity RETRY_WAIT
@@ -693,8 +698,41 @@ export function createBatchScheduler({
           details: { runId: run.id, attempt: run.attempt, inspection: inspection.detail ?? null },
         });
       }
+      // Honest stop (BR-B6 E2E P3b finding 2026-10-22): the RUN must be
+      // terminated here too. Leaving it RUNNING was a dead end — no live
+      // worker holds it (the in-process timeout died with the killed
+      // worker), the reprocessed stalled job no-ops (stale-terminal /
+      // claim-CAS guard), and ensureRuns skips RUNNING runs — so the run,
+      // its membership and the whole batch sat non-terminal forever (E2E:
+      // worker SIGKILL mid-hold → run RUNNING 15+ min, identity RECOVERING,
+      // batch RUNNING forever). Cancelling converges the batch (membership
+      // → CANCELLED below). Do NOT run syncIdentityAfterRunTerminal here:
+      // its cancelled plan would clobber RECOVERING → CANCELLED, which then
+      // arms the pause-stop re-arm path and auto re-runs the work to
+      // success — exactly what the MD §6.2 red line forbids (E2E: 3 of 4
+      // orphans were silently re-run to COMPLETED this way).
+      if (run.status === 'running') {
+        await taskSvc.requestCancel(run.id, {
+          actorUserId: 'scheduler:reconciler',
+          reason: 'expired lease with side effects (MD §6.2) — isolated, no auto re-run',
+        });
+      }
+      if ((await taskSvc.loadRun(run.id)).status === 'cancel_requested') {
+        await taskSvc.markCancelled(run.id, {
+          reason: 'executor lost with side effects — isolated for manual review (MD §6.2)',
+          attempt: run.attempt,
+        });
+      }
+      if (run.batchId && run.identityId) {
+        // Membership mirror (CAS from ACTIVE only — same as the normal
+        // terminal sync): lets evaluateBatchCompletion converge the batch.
+        await db.batchIdentity.updateMany({
+          where: { batchId: run.batchId, identityId: run.identityId, status: 'ACTIVE' },
+          data: { status: 'CANCELLED' },
+        });
+      }
       await leaseSvc.release({ resourceType, resourceKey, ownerRunId });
-      log.error?.({ runId: run.id, slot: resourceKey, identityId: run.identityId }, 'CRITICAL: expired lease WITH side effects — identity RECOVERING, no auto re-run (MD §6.2)');
+      log.error?.({ runId: run.id, slot: resourceKey, identityId: run.identityId }, 'CRITICAL: expired lease WITH side effects — identity RECOVERING, run CANCELLED, no auto re-run (MD §6.2)');
       summary.isolated += 1;
       return;
     }

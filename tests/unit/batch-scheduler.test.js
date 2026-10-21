@@ -477,9 +477,9 @@ test('reconcile §6.2: attempts exhausted → failed EXECUTOR_LOST + FAILED_FINA
   assert.equal(jobsOf(w.queue).find((j) => j.id === batchJobId(run.id, 2)), undefined, 'no NEW attempt job');
 });
 
-test('reconcile §6.2: side effects → RECOVERING isolation, NO auto re-run (MD §6.2 紅線)', async () => {
+test('reconcile §6.2: side effects → RECOVERING isolation + run CANCELLED (honest stop), NO auto re-run (MD §6.2 紅線)', async () => {
   const w = makeWorld({ inspectEffects: async () => ({ sideEffects: true, detail: 'container still writing' }) });
-  const { run, identity } = await seedLeasedRun(w, { maxAttempts: 5 });
+  const { batch, run, identity } = await seedLeasedRun(w, { maxAttempts: 5 });
   w.clock.advance(61_000);
   const res = await w.scheduler.reconcileExpiredLeases();
   assert.equal(res.isolated, 1);
@@ -487,8 +487,19 @@ test('reconcile §6.2: side effects → RECOVERING isolation, NO auto re-run (MD
   assert.equal(res.finalFailed, 0);
 
   const after = await w.taskSvc.loadRun(run.id);
-  assert.equal(after.status, 'running', 'run left untouched (a human decides the stop)');
+  // Honest stop (BR-B6 E2E P3b): an orphaned RUNNING run wedges the batch
+  // forever (no live worker, ensureRuns skips running runs) — it must be
+  // cancelled so evaluateBatchCompletion can converge.
+  assert.equal(after.status, 'cancelled', 'orphaned run honestly cancelled');
+  // The identity stays RECOVERING (isolated for a human) — NOT clobbered to
+  // CANCELLED, which would arm the pause-stop re-arm path (ensureRuns) and
+  // auto re-run work that left side effects (MD §6.2 紅線).
   assert.equal(await identityStatus(w, identity.id), 'RECOVERING');
+  // Membership mirrored CANCELLED (CAS from ACTIVE) → the batch converges.
+  const m = await w.db.batchIdentity.findFirst({ where: { batchId: batch.id, identityId: identity.id } });
+  assert.equal(m.status, 'CANCELLED', 'membership mirror lets completion converge');
+  await w.scheduler.evaluateRunningBatches();
+  assert.equal((await w.db.batch.findUnique({ where: { id: batch.id } })).status, 'COMPLETED', 'batch converges (no longer wedged RUNNING)');
   assert.equal(jobsOf(w.queue).length, 1, 'only the original (dead) job — no re-run');
   assert.ok(w.out.error.some((x) => String(x.m).includes('side effects')), 'CRITICAL log present');
 });
