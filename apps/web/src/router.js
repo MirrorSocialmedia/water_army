@@ -15,6 +15,11 @@ const ROUTES = [
   { path: '/tasks', page: 'tasks' },
   { path: '/tasks/:id', page: 'tasks-detail' },
   { path: '/schedules', page: 'schedules' },
+  { path: '/batches', page: 'batches' },
+  { path: '/monitor', page: 'monitor' },
+  { path: '/identities', page: 'identities' },
+  { path: '/identities/:id', page: 'identities-detail' },
+  { path: '/reports', page: 'reports' },
   { path: '/settings', page: 'settings' },
 ];
 
@@ -66,5 +71,9 @@ export const NAV_ITEMS = [
   { path: '/devices', label: 'Devices', icon: 'device' },
   { path: '/tasks', label: 'Tasks', icon: 'tasks' },
   { path: '/schedules', label: 'Schedules', icon: 'schedules' },
+  { path: '/batches', label: 'Batch Planner', icon: 'batches' },
+  { path: '/monitor', label: 'Batch Monitor', icon: 'monitor' },
+  { path: '/identities', label: 'Identities', icon: 'identities' },
+  { path: '/reports', label: 'Batch Reports', icon: 'reports' },
   { path: '/settings', label: 'Settings', icon: 'settings' },
 ];

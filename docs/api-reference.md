@@ -173,6 +173,23 @@ proxy.network = null（無 proxy 綁定）或：
 |--------|------|------|------|--------------|
 | GET | `/dashboard/summary` | viewer+ | — | 200：`containers`（managed fleet 計數 — 同 list/gate 同一條 label-OR-exception 規則；Docker down = `{available:false}` 降級，**唔會 500**）/ `taskRuns`（active 現況、24h failed/succeeded、5 條最近失敗）/ `schedules`（total+enabled）/ `notifications`（unread）。Dashboard 所有數字來自呢個端點（MD §6.1：零硬編碼） |
 
+## Batch Rotation 監控／匯出（BR-B5 — MD Phase 5 lane B）
+
+只讀監控 + 報告匯出面。batch 控制路由（`POST /api/batches`、`/preview`、`/:id/start|pause|resume|cancel`、task-run retry/cancel/logs）屬 **BR-B2**，未落 main 前無效（本檔案只註冊 read/monitor/report；literal-segment 路由與 B2 嘅 `/api/batches/:id` 由 find-my-way static-segment 排序安全共存）。
+
+**零秘密鐵律**：所有 response 係 allow-list 投影（非 DB row 透傳）+ `scrubObject`/`maskCredentialShapedValues` 雙重遮罩；identity `metadata`、task `error`、report 匯出體（JSON/CSV）全部經硬門 — 任何 credential 形狀值漏過 = 500 `REPORT_SECRET_TRIP`（fail-closed，寧可唔出報告都唔出秘密）。
+
+| Method | Path | Role | 參數 | 錯誤碼 / 備註 |
+|--------|------|------|------|--------------|
+| GET | `/api/identities` | viewer+ | `status`（11-state FSM）/ `q`（name/ref/id）/ `page` / `pageSize` | 200 `{items, total, page, pageSize}`；item = allow-list 投影（state、dataDir 路徑、lastTask/lastError 遮罩摘要、health 摘要）— **無 credential 欄** |
+| GET | `/api/identities/:id` | viewer+ | — | 200 詳情：stable ID、data dir 狀態、container 對應（Docker label 反查）、最近 runs/memberships、`metadata`（scrub + 截斷）；404 `IDENTITY_NOT_FOUND` |
+| GET | `/api/batch-monitor/summary` | viewer+ | — | 200：current batch + cycle 進度、global/cycle 計數（active/queued/completed/failed/skipped）、containers + 容量上限、host（CPU/RAM/磁碟，探測失敗 = `null` 降級，**唔會 500**）、deps（db/redis/docker/network-policy 健康）、alerts（critical 先）、task 表（≤200，error 遮罩） |
+| GET | `/api/batches/metrics` | viewer+ | — | 200：MD §13 全部 14 metric（`batch_active_count` … `network_health_failures_total`）+ 計算細節（start durations、heartbeat age）+ alerts；Docker down = `containers: null` 降級 |
+| GET | `/api/batch-reports` | viewer+ | `page` / `pageSize` | 200 cycle 列表（UUID、batch 數、計數、時間範圍、`exportable` flag） |
+| GET | `/api/batch-reports/:cycleId` | **operator+** | `format=json\|csv`（header 或 query `?format=`） | 200 匯出體（attachment）：各 identity 終態、成功/失敗/跳過統計、嘗試次數、失敗原因（遮罩）、資源峰值、時間範圍 + audit event（`batch_report_export`）；404 `CYCLE_NOT_FOUND`、409 `CYCLE_NOT_COMPLETE`、500 `REPORT_SECRET_TRIP`（secret 硬門觸發） |
+
+**Alert 落地（MD §13）**：無獨立 alert channel（repo 無既有機制）→ 可查詢狀態（`/api/batches/metrics` + summary 嘅 `alerts[]`：severity/code/message/detail/fingerprint/firstSeen）+ pino（critical = `error`、其餘 = `warn`）+ audit event（每 alert 首次 fire 寫 `batch_alert_raised`；恢復寫 `batch_alert_cleared`；同 fingerprint 每小時最多 re-audit 一次）。條件：active 超 `batch.global_max_active_containers`、worker 無心跳（`worker_heartbeat_age_seconds` 超時）、DB/Redis 不可用、磁碟低、連續容器啟動失敗、task 持續 UNKNOWN、無 label 孤兒 managed 容器、network policy 不可用。
+
 ## 端點總計
 
-**69 條路由**（逐檔案計，實核 2026-10-20 R4）：health 2 + auth 3 + containers 15（含 5 個 action + exceptions 3 條 + create-from-template）+ container templates 2 + dashboard 1 + tasks 15（runs 6 + approvals 3 + tools 1 + providers 4 + audit 1）+ task definitions 1 + schedules 10（含 POST preview）+ schedule notifications 4 + redroid templates/preflight 5 + redroid devices 11（含 3 個 action + proxy/retry）。所有寫操作（POST/PATCH/PUT/DELETE，`/auth/login` 除外）：RBAC + audit row（actor、request_id、IP、status、details scrub）+ Origin 檢查（browser mutating 請求）。
+**75 條路由**（逐檔案計；BR-B5 實核 2026-10-21）：health 2 + auth 3 + containers 15（含 5 個 action + exceptions 3 條 + create-from-template）+ container templates 2 + dashboard 1 + tasks 15（runs 6 + approvals 3 + tools 1 + providers 4 + audit 1）+ task definitions 1 + schedules 10（含 POST preview）+ schedule notifications 4 + redroid templates/preflight 5 + redroid devices 11（含 3 個 action + proxy/retry）+ **batch monitor 6（BR-B5：identities 2 + monitor summary + metrics + reports 2）**。所有寫操作（POST/PATCH/PUT/DELETE，`/auth/login` 除外）：RBAC + audit row（actor、request_id、IP、status、details scrub）+ Origin 檢查（browser mutating 請求）。

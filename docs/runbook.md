@@ -402,3 +402,42 @@ tick（≤ `REDROID_HEALTH_POLL_MS` 30s；definite loss 下實測 +2s 已 BLOCKE
 - audit 有完整時間線（每次 netState 轉移 = audit row，source + 原因 + 時間）—
   事後審計窗口內嘅流量暴露可用 `netLastChangeAt` 收窄。
 - 長期 = 等 P0 單（netns DROP + netd spike）落地。
+
+## 11. Batch Rotation 監控／告警應變（BR-B5 — MD Phase 5）
+
+### 11.1 日常睇法
+- **UI**：`#monitor`（Live Monitor — 5s auto-refresh：current batch、計數、containers、host、deps、alerts、task 表）／`#batches`（Planner — preview 預設，Start 要打 `start` 二次確認）／`#identities`（身份列表 + 詳情，零秘密）／`#reports`（cycle 匯出 JSON/CSV，operator+）。
+- **API**：`GET /api/batch-monitor/summary`（整屏 snapshot）／`GET /api/batches/metrics`（MD §13 14 metric + alerts）／`GET /api/identities[/:id]`／`GET /api/batch-reports[/:cycleId?format=csv]`。
+- 探測降級口徑：Docker down = `containers: null`；host probe 失敗 = `host: null`；**endpoint 仍然 200，唔會 500**（500 只留俾真錯誤 + secret 硬門 `REPORT_SECRET_TRIP`）。
+
+### 11.2 Metric 對照（`/api/batches/metrics` → MD §13 名）
+| MD §13 metric | 來源 |
+|---|---|
+| `batch_active_count` / `batch_queued_count` / `batch_failed_count` | `TaskRun` status 計數（global + 本 cycle） |
+| `active_containers` | Docker list（managed label + exception，`containers.running`） |
+| `container_start_duration_seconds` | `batch_state` `container_start` 事件（24h 窗口）p50/p95/max + fail 計數 |
+| `task_run_duration_seconds` | `TaskRun`（finished − started）p50/p95/max（24h 窗口） |
+| `task_retry_total` / `task_timeout_total` | 成功 retry 後最終完成 / `errorCode` 含 TIMEOUT 嘅 run |
+| `worker_heartbeat_age_seconds` | 最舊 active run 嘅 heartbeat 年齡（無 active = null） |
+| `expired_lease_total` | `ResourceLease.leaseExpiresAt <= now` 且未釋放 |
+| `host_memory_available_bytes` / `host_disk_available_bytes` | host probe（`/proc/meminfo` + data root statfs；失敗 = null） |
+| `network_policy_denied_total` / `network_health_failures_total` | BR-B4 network policy 匯出（deny 計數 / health fail 計數） |
+
+### 11.3 Alert 應變（`alerts[]`：severity critical 先）
+| alert code | 意義 | 應變 |
+|---|---|---|
+| `active_over_capacity` | active containers > `batch.global_max_active_containers` | 暫停派新 batch（UI Stop/Pause — operator+）；核 capacity 設定 |
+| `worker_heartbeat_stale` | active run 心跳過期 | 查 worker 存活（`docker logs` / queue stalled）；lease 到期會自動重新指派 |
+| `dependency_unavailable`（db/redis/docker） | 關鍵依賴 probe 失敗 | 跟對應 runbook 章節（§1 重啟／§2 queue／§10 proxy）；API 本身降級繼續服務 |
+| `disk_low` | data root 可用磁碟低於門檻 | 清老 container/data dir（admin 判斷，§4 高危操作）；暫停 batch |
+| `container_start_failures` | 24h 內連續啟動失敗超門檻 | 核 image / disk / docker daemon；`container_start` 事件有 fail 詳情 |
+| `task_unknown_persistent` | task 持續 UNKNOWN（狀態機失步） | 對 `TaskRun` vs container 實際狀態；手動修正前審計 |
+| `orphan_managed_container` | managed container 無有效 identity label | `docker inspect` 核 label → 手工歸屬或（admin）清理；**唔好 blind kill** |
+| `network_policy_unavailable` | B4 policy 檢查器不可用 | fail-closed：網絡任務應被擋；查 policy 模組狀態 |
+
+**Alert 落地**（MD §13）：repo 無獨立 alert channel → 三軌 = ①可查詢狀態（`/api/batches/metrics` + summary `alerts[]`：code/severity/detail/fingerprint/firstSeen）②pino 日誌（critical → `level: error`，其餘 `warn`；同 fingerprint 去重，每小時最多 re-log 一次）③audit（`batch_alert_raised` 首次 fire＋`batch_alert_cleared` 恢復；hourly re-audit 上限）。
+
+### 11.4 報告匯出（MD §11.4）
+- `GET /api/batch-reports/:cycleId?format=json|csv`（**operator+**；viewer = 403）。
+- 匯出體 = 各 identity 終態、成功/失敗/跳過統計、嘗試次數、失敗原因（`errorMessage` 經 `maskCredentialShapedValues` 遮罩）、資源峰值、時間範圍 — **零秘密硬門**：builder 入場先 `scrubObject` + `assertNoSecrets`，觸發 = 500 `REPORT_SECRET_TRIP`（寧缺毋漏）；每次匯出寫 audit（`batch_report_export`：cycleId、format、actor、requestId）。
+- CSV = 每行一 identity（stable ID、終態、attempt、失敗碼、錯誤摘要遮罩）— 供 Excel 分析；JSON = 完整結構（UI 下載 + 檔案歸檔）。

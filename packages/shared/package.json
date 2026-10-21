@@ -6,6 +6,8 @@
   "description": "Shared constants and API contracts (zero dependencies)",
   "main": "src/index.js",
   "exports": {
-    ".": "./src/index.js"
+    ".": "./src/index.js",
+    "./batch-constants": "./src/batch-constants.js",
+    "./batch-metrics": "./src/batch-metrics.js"
   }
 }

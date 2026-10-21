@@ -29,6 +29,7 @@ import { createRateLimiter } from './security/rate-limit.js';
 import { createAuditService } from './services/audit.js';
 import { createSessionService } from './services/session.js';
 import { createDockerService } from './services/docker-service.js';
+import { createBatchMetricsService } from './services/batch-metrics-service.js';
 import { runRedroidPreflight } from './services/preflight.js';
 import { createRedroidService } from './services/redroid-service.js';
 import { createAdbWhitelist } from './services/adb-whitelist.js';
@@ -45,6 +46,7 @@ import { scheduleRoutes } from './routes/schedules.js';
 import { scheduleNotificationRoutes } from './routes/schedule-notifications.js';
 import { taskDefinitionRoutes } from './routes/task-definitions.js';
 import { dashboardRoutes } from './routes/dashboard.js';
+import { batchMonitorRoutes } from './routes/batch-monitor.js';
 
 /** Public (unauthenticated) route prefixes — everything else may need a session. */
 const PUBLIC_PREFIXES = ['/api/health', '/api/auth/login'];
@@ -61,6 +63,10 @@ function publicPath(url) {
  * @param {object} [opts.docker]  docker client wrapper (or fake)
  * @param {boolean}[opts.registerHealth] register health routes (default true)
  * @param {object} [opts.logStream] pino stream override (test seam for log capture)
+ * @param {object} [opts.batchMetricsOsProbe]  {freemem,totalmem,loadavg} (test seam)
+ * @param {object} [opts.batchMetricsFsProbe]  {stat,statfs} (test seam)
+ * @param {string} [opts.batchMetricsDiskPath] statfs path override (test seam)
+ * @param {object} [opts.batchMetricsLimits]  alert limit overrides (test seam)
  * @returns {Promise<import('fastify').FastifyInstance>}
  */
 export async function buildApp(opts = {}) {
@@ -92,6 +98,23 @@ export async function buildApp(opts = {}) {
   const audit = createAuditService({ db, log: app.log });
   const rateLimiter = createRateLimiter({ limit: 5, windowMs: 60_000 });
   const dockerService = createDockerService({ docker, db, config, log: app.log, audit });
+
+  // BR-B5 (MD §11.2/§13): batch rotation monitor + metrics — the read-only
+  // surface. All probes injectable; alerts land in pino + audit (this repo
+  // has no alert channel — documented in the service + runbook).
+  const batchMetrics = createBatchMetricsService({
+    db,
+    dockerService,
+    log: app.log,
+    audit,
+    redisPing: () => redis.ping(),
+    dockerPing: () => docker.ping(),
+    // test seams (all undefined in production)
+    osProbe: opts.batchMetricsOsProbe,
+    fsProbe: opts.batchMetricsFsProbe,
+    diskPath: opts.batchMetricsDiskPath,
+    limits: opts.batchMetricsLimits,
+  });
 
   // P5 redroid (工單: device 操作全部 API 側同步 — worker 唔涉及).
   // REDROID_ADAPTER=mock → deterministic mock docker+adb+preflight (never in
@@ -171,6 +194,7 @@ export async function buildApp(opts = {}) {
   app.decorate('rateLimiter', rateLimiter);
   app.decorate('requireRole', requireRole);
   app.decorate('dockerService', dockerService);
+  app.decorate('batchMetrics', batchMetrics);
   app.decorate('redroidService', redroidService);
   app.decorate('taskQueue', taskQueue);
   app.decorate('taskSseActive', 0); // P3 SSE concurrency cap counter
@@ -311,6 +335,7 @@ export async function buildApp(opts = {}) {
   scheduleNotificationRoutes(app);
   taskDefinitionRoutes(app);
   dashboardRoutes(app);
+  batchMonitorRoutes(app);
 
   // --- lifecycle ---------------------------------------------------------------
   app.addHook('onClose', async () => {

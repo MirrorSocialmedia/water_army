@@ -11,6 +11,11 @@ import DeviceDetail from './pages/DeviceDetail';
 import Tasks from './pages/Tasks';
 import TaskDetail from './pages/TaskDetail';
 import Schedules from './pages/Schedules';
+import BatchPlanner from './pages/BatchPlanner';
+import BatchMonitor from './pages/BatchMonitor';
+import Identities from './pages/Identities';
+import IdentityDetail from './pages/IdentityDetail';
+import BatchReports from './pages/BatchReports';
 import Settings from './pages/Settings';
 
 const PAGES = {
@@ -22,6 +27,11 @@ const PAGES = {
   tasks: Tasks,
   'tasks-detail': (props) => <TaskDetail runId={props.params.id} />,
   schedules: Schedules,
+  batches: BatchPlanner,
+  monitor: BatchMonitor,
+  identities: Identities,
+  'identities-detail': (props) => <IdentityDetail identityId={props.params.id} />,
+  reports: BatchReports,
   settings: Settings,
 };
 
@@ -81,7 +91,7 @@ export function App() {
   const Page = PAGES[page] ?? Dashboard;
   return (
     <AppLayout user={user} onLogout={handleLogout}>
-      <Page params={params} />
+      <Page params={params} user={user} />
     </AppLayout>
   );
 }

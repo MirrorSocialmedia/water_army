@@ -1,7 +1,11 @@
 import {
+  Activity,
   CalendarClock,
   Container,
+  FileDown,
+  Fingerprint,
   LayoutDashboard,
+  ListTree,
   LogOut,
   Settings,
   Smartphone,
@@ -16,6 +20,10 @@ const ICONS = {
   device: Smartphone,
   tasks: Workflow,
   schedules: CalendarClock,
+  batches: ListTree,
+  monitor: Activity,
+  identities: Fingerprint,
+  reports: FileDown,
   settings: Settings,
 };
 
@@ -29,6 +37,11 @@ const PAGE_TITLES = {
   tasks: 'Tasks',
   'tasks-detail': 'Task',
   schedules: 'Schedules',
+  batches: 'Batch Planner',
+  monitor: 'Batch Monitor',
+  identities: 'Identities',
+  'identities-detail': 'Identity',
+  reports: 'Batch Reports',
   settings: 'Settings',
 };
 
