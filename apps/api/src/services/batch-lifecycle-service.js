@@ -843,7 +843,10 @@ export function createBatchLifecycleService({
       const run = await db.taskRun.findUnique({ where: { id: runId } }).catch(() => null);
       const problems = run ? ownershipVerdict(m.Labels ?? {}, run, m.Id).problems : ['run row missing'];
       const leaseAlive = run ? run.leaseExpiresAt != null && run.leaseExpiresAt.getTime() > clock().getTime() : false;
-      const v = reconcileVerdict({ run, containerRunning: m.State === 'running', leaseAlive, ownershipProblems: problems });
+      // (let, not const: the TOCTOU re-check below may re-grade the verdict
+      // to mismatch — a const here would throw inside the try and hide the
+      // refusal behind a generic "fix failed" with no audit trail.)
+      let v = reconcileVerdict({ run, containerRunning: m.State === 'running', leaseAlive, ownershipProblems: problems });
       let fixed = false;
       let fixedDetail = null;
       if (fix && v.fixable) {

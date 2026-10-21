@@ -28,6 +28,21 @@ import { API_ERROR } from '@water-army/shared';
 
 import { requireHuman } from '../security/service-auth.js';
 
+// Task-run ids are UUIDs (same validation B2's batch task-run routes use).
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const RUN_PARAMS = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['runId'],
+  properties: { runId: { type: 'string', pattern: UUID_RE.source } },
+};
+const ID_PARAMS = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['id'],
+  properties: { id: { type: 'string', pattern: UUID_RE.source } },
+};
+
 function httpError(status, apiCode, message) {
   const err = new Error(message);
   err.statusCode = status;
@@ -145,9 +160,7 @@ export function batchContainerRoutes(app) {
     '/api/task-runs/:runId/containers/start',
     {
       preHandler: app.requireRole('operator'),
-      schema: {
-        body: { type: 'object', additionalProperties: false },
-      },
+      schema: { params: RUN_PARAMS },
     },
     async (req, reply) => {
       rateGuard(startLimiter, req, reply, 'start requests');
@@ -159,29 +172,41 @@ export function batchContainerRoutes(app) {
    * GET /api/task-runs/:runId/containers/health — app-layer health
    * (MD §8.2: ADB handshake, NOT docker state). Single probe, bounded.
    */
-  app.get('/api/task-runs/:runId/containers/health', { preHandler: app.requireRole('operator') }, async (req) => {
-    return lifecycle.healthForRun(req.params.runId);
-  });
+  app.get(
+    '/api/task-runs/:runId/containers/health',
+    { preHandler: app.requireRole('operator'), schema: { params: RUN_PARAMS } },
+    async (req) => {
+      return lifecycle.healthForRun(req.params.runId);
+    },
+  );
 
   /**
    * POST /api/task-runs/:runId/containers/stop — reversible stop
    * (MD Phase 3 item 4): container exits, VOLUME + data intact, port lease
    * released. The re-dispatch path may start the run again.
    */
-  app.post('/api/task-runs/:runId/containers/stop', { preHandler: app.requireRole('operator') }, async (req) => {
-    rateGuard(mutateLimiter, req, reply, 'stop requests');
-    return lifecycle.stopForRun(req.params.runId, actor(req));
-  });
+  app.post(
+    '/api/task-runs/:runId/containers/stop',
+    { preHandler: app.requireRole('operator'), schema: { params: RUN_PARAMS } },
+    async (req, reply) => {
+      rateGuard(mutateLimiter, req, reply, 'stop requests');
+      return lifecycle.stopForRun(req.params.runId, actor(req));
+    },
+  );
 
   /**
    * POST /api/task-runs/:runId/containers/remove — container removal with
    * VOLUME RETENTION (MD Phase 3 item 4): the container goes, the identity
    * data STAYS (only purge may wipe it). Idempotent (already-gone = no-op).
    */
-  app.post('/api/task-runs/:runId/containers/remove', { preHandler: app.requireRole('operator') }, async (req) => {
-    rateGuard(mutateLimiter, req, reply, 'remove requests');
-    return lifecycle.removeForRun(req.params.runId, actor(req));
-  });
+  app.post(
+    '/api/task-runs/:runId/containers/remove',
+    { preHandler: app.requireRole('operator'), schema: { params: RUN_PARAMS } },
+    async (req, reply) => {
+      rateGuard(mutateLimiter, req, reply, 'remove requests');
+      return lifecycle.removeForRun(req.params.runId, actor(req));
+    },
+  );
 
   /**
    * POST /api/identities/:id/purge — the ONLY data-wipe path (MD Phase 3
@@ -199,6 +224,7 @@ export function batchContainerRoutes(app) {
       // preHandler may not return an already-sent reply.
       preHandler: app.requireRole('admin'),
       schema: {
+        params: ID_PARAMS,
         body: {
           type: 'object',
           additionalProperties: false,

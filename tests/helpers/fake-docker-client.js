@@ -129,6 +129,10 @@ export function makeFakeDockerClient({ mode = 'ok', containers = [], networks = 
     __calls: calls,
     __byId: byId,
     __byName: byName,
+    /** Test seam: register a full inspect-shaped row mid-test (orphan/
+     *  mismatch reconciliation fixtures). Same shape as the `containers` seed.
+     * @returns {string} the container id */
+    __register: (row) => register(row),
     __freeze: (idOrName) => {
       const rec = byId.get(idOrName) ?? byId.get(byName.get(idOrName));
       if (rec) frozen.add(rec.inspect.Id);
