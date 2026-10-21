@@ -347,7 +347,7 @@ export function createBatchEngine({
       let outcome;
       let finishInfo = null;
       try {
-        const result = await adapterRegistry.run(runRow.inputJson?.adapter ?? null, {
+        const result = await adapterRegistry.run(adapterNameOf(runRow), {
           runId,
           attempt,
           identityId: runRow.identityId,
@@ -425,9 +425,27 @@ export function createBatchEngine({
 }
 
 /**
+ * inputJson.adapter is the FULL API spec object { type, durationMs, outcome,
+ * failures } on the live path (createAndDispatch stores configJson.adapter
+ * verbatim) but a bare type string on the unit-test seam. The registry is
+ * keyed by the type string — normalize once, at both consumer sites (run +
+ * §6.2 inspect). Unknown shapes → null = ADAPTER_NOT_CONFIGURED (fail-closed).
+ */
+function adapterNameOf(run) {
+  const a = run?.inputJson?.adapter;
+  if (a == null || a === '') return null; // unconfigured → ADAPTER_NOT_CONFIGURED
+  if (typeof a === 'string') return a; // unit-test seam / bare type
+  // Non-empty but unrecognizable spec → an UNKNOWN adapter name (never null:
+  // null means "nothing ran" (sideEffects=false), which would let the §6.2
+  // reconciler auto re-run a run whose adapter we cannot identify. Fail closed.
+  if (typeof a === 'object' && !Array.isArray(a) && typeof a.type === 'string') return a.type;
+  return 'malformed-adapter-spec';
+}
+
+/**
  * Convenience: the inspect seam for the scheduler's lease reconciliation
  * (MD §6.2) — routes to the run's adapter.
  */
 export function makeInspectEffects(adapterRegistry) {
-  return async (run) => adapterRegistry.inspect(run?.inputJson?.adapter ?? null);
+  return async (run) => adapterRegistry.inspect(adapterNameOf(run));
 }

@@ -365,3 +365,36 @@ test('engine: adapter fail-closed — missing adapter → ADAPTER_NOT_CONFIGURED
     (e) => e instanceof AdapterError && e.apiCode === 'ADAPTER_NOT_ALLOWED',
   );
 });
+
+test('engine: LIVE adapter spec object {type:"noop"} executes (regression — API stores the full spec object in inputJson.adapter; the registry is keyed by the type string)', async () => {
+  const w = makeEngineWorld();
+  // Exact live shape: createCycle → createAndDispatch stores configJson.adapter
+  // verbatim (an object), unlike the string seam used by other tests.
+  const { batch, identities, runs } = await seedBatchRun(w, { identities: 1, adapter: { type: 'noop' } });
+  const run = runs[0];
+  assert.deepEqual(run.inputJson.adapter, { type: 'noop' }, 'harness preserved the live object shape');
+  const outcome = await w.engine.handleBatchJob(jobFor(run, w));
+  assert.equal(outcome.outcome, 'succeeded');
+  const after = await w.taskSvc.loadRun(run.id);
+  assert.equal(after.status, 'succeeded');
+  assert.equal(after.errorCode, null);
+  assert.equal((await w.db.identity.findUnique({ where: { id: identities[0].id } })).status, 'COMPLETED');
+  await w.scheduler.tick();
+  assert.equal((await w.db.batch.findUnique({ where: { id: batch.id } })).status, 'COMPLETED');
+});
+
+test('inspect seam: object spec → sideEffects=false (noop); malformed non-empty spec → sideEffects=true (fail-closed, MD §6.2)', async () => {
+  const w = makeEngineWorld();
+  const inspect = makeInspectEffects(w.adapterRegistry);
+  // Live spec object (the shape the scheduler sees from the DB).
+  const ok = await inspect({ inputJson: { adapter: { type: 'noop', durationMs: 50 } } });
+  assert.equal(ok.sideEffects, false, 'noop spec object must report no side effects (auto re-run path)');
+  // Non-empty but unrecognizable spec — must NOT be treated as "nothing ran".
+  const bad = await inspect({ inputJson: { adapter: { type: 42 } } });
+  assert.equal(bad.sideEffects, true, 'malformed spec must stay conservative (isolate, no auto re-run)');
+  const arr = await inspect({ inputJson: { adapter: ['noop'] } });
+  assert.equal(arr.sideEffects, true);
+  // Genuinely unconfigured (null) keeps the legacy semantic: nothing ran.
+  const none = await inspect({ inputJson: {} });
+  assert.equal(none.sideEffects, false);
+});
