@@ -25,7 +25,9 @@ import { pathToFileURL } from 'node:url';
 import { Worker as BullMQWorker } from 'bullmq';
 import Redis from 'ioredis';
 import pino from 'pino';
-import { PINO_REDACT_PATHS, buildRedisConnection, createTaskRunService, TASK_QUEUE_NAME, createTaskQueue, enqueueTaskRun, closeTaskQueue, SCHEDULE_FIRE_JOB_NAME, createNetworkPolicyGate } from '@water-army/shared';
+import { PINO_REDACT_PATHS, buildRedisConnection, createTaskRunService, TASK_QUEUE_NAME, createTaskQueue, enqueueTaskRun, enqueueAnyRun, closeTaskQueue, SCHEDULE_FIRE_JOB_NAME, createNetworkPolicyGate, BATCH_RUN_JOB_NAME, createBatchService, createLeaseService, createBatchScheduler, createBatchSchedulerLoop } from '@water-army/shared';
+import { createAdapterRegistry } from './adapter-registry.js';
+import { createBatchEngine, makeInspectEffects } from './batch-engine.js';
 
 import { loadWorkerConfig } from './config.js';
 import { createSchedulerReconciler } from './scheduler-reconciler.js';
@@ -268,6 +270,13 @@ export function createWorkerApp({
   const fireHandlerRef = { impl: null };
   // P6 flag #3: schedule notification writer (terminal scheduled runs → UI badge).
   const notifierRef = { impl: null };
+  // BR-B2: batch lane (built in start() once the DB exists, like the engine).
+  const batchSvcRef = { impl: null };
+  const leaseSvcRef = { impl: null };
+  const adapterRegistryRef = { impl: null };
+  const batchSchedulerRef = { impl: null };
+  const batchSchedulerLoopRef = { impl: null };
+  const batchEngineRef = { impl: null };
 
   const buildRealServices = () => {
     if (!svcRef.impl) {
@@ -280,10 +289,13 @@ export function createWorkerApp({
         },
         log,
         // P4: schedule fire → createRun must reach the queue (the worker is
-        // the producer for schedule-originated runs).
+        // the producer for schedule-originated runs). BR-B2: batch-aware
+        // router — a batch run re-enqueues as a `batch-run` job, an AI/adhoc
+        // run takes the original path unchanged (enqueueAnyRun is a strict
+        // superset of enqueueTaskRun; the returned job is ignored here).
         enqueue: async ({ runId, attempt }) => {
           const run = await dbRef.client.taskRun.findUnique({ where: { id: runId } });
-          await enqueueTaskRun(producerQueue, { runId, attempt, timeoutMs: run?.inputJson?.timeoutMs });
+          await enqueueAnyRun(producerQueue, { db: dbRef.client, runId, attempt, timeoutMs: run?.inputJson?.timeoutMs, run });
         },
       });
     }
@@ -324,6 +336,53 @@ export function createWorkerApp({
         }),
       });
     }
+    // BR-B2: batch lane — services + scheduler + engine. Multi-replica safe
+    // by construction (CAS + idempotent enqueue; MD §14.2): every worker may
+    // run a scheduler loop; they converge, they never double-dispatch.
+    if (!batchSvcRef.impl) {
+      batchSvcRef.impl = createBatchService({ db: dbRef.client, log });
+    }
+    if (!leaseSvcRef.impl) {
+      leaseSvcRef.impl = createLeaseService({ db: dbRef.client });
+    }
+    if (!adapterRegistryRef.impl) {
+      adapterRegistryRef.impl = createAdapterRegistry({ env: process.env, log });
+    }
+    if (!batchSchedulerRef.impl) {
+      batchSchedulerRef.impl = createBatchScheduler({
+        db: dbRef.client,
+        batchSvc: batchSvcRef.impl,
+        leaseSvc: leaseSvcRef.impl,
+        taskSvc: svcRef.impl,
+        queue: producerQueue,
+        log,
+        inspectEffects: makeInspectEffects(adapterRegistryRef.impl),
+        config: { slotTtlMs: config.batchSlotTtlMs, staleCancelMs: 60_000 },
+      });
+    }
+    if (!batchEngineRef.impl) {
+      batchEngineRef.impl = createBatchEngine({
+        db: dbRef.client,
+        taskSvc: svcRef.impl,
+        batchSvc: batchSvcRef.impl,
+        leaseSvc: leaseSvcRef.impl,
+        scheduler: batchSchedulerRef.impl,
+        adapterRegistry: adapterRegistryRef.impl,
+        // BR-B4: the SAME fail-closed allowlist/SSRF gate the AI engine uses
+        // (second, stateless instance — ctx.taskType = 'batch', so an explicit
+        // policy.taskTypes.batch === false denies batch runs; unset = allowed).
+        networkGate: createNetworkPolicyGate({ getDb: () => dbRef.client, env: process.env, config, log }),
+        config: {
+          batchHeartbeatMs: config.batchHeartbeatMs,
+          batchCancelPollMs: config.batchCancelPollMs,
+          batchSlotWaitMs: config.batchSlotWaitMs,
+          batchSlotTtlMs: config.batchSlotTtlMs,
+          batchMaxSlotDefers: config.batchMaxSlotDefers,
+          batchDefaultTimeoutMs: config.batchDefaultTimeoutMs,
+        },
+        log,
+      });
+    }
   };
   if (dbRef.client && !injectedEngine) buildRealServices();
 
@@ -336,6 +395,14 @@ export function createWorkerApp({
         throw new Error('worker: fire handler not ready');
       }
       return fireHandlerRef.impl.handleFireJob(job);
+    }
+    // BR-B2: batch-run jobs (global container-slot cap, adapter registry).
+    if (job?.name === BATCH_RUN_JOB_NAME) {
+      if (!batchEngineRef.impl) {
+        log.error?.({ jobId: job?.id }, 'worker: batch job received but batch engine not built — failing loudly');
+        throw new Error('worker: batch engine not ready');
+      }
+      return batchEngineRef.impl.handleBatchJob(job);
     }
     const engineImpl = engineRef.impl;
     if (!engineImpl) {
@@ -421,6 +488,24 @@ export function createWorkerApp({
     }
     reconcilerRef.impl.start({ intervalMs: config.scheduleReconcileIntervalMs });
     log.info({ intervalMs: config.scheduleReconcileIntervalMs }, 'scheduler reconciler started (boot pass + background)');
+
+    // BR-B2 (MD §7.1): batch scheduler — boot pass (re-derive dispatch from
+    // the DB after a restart) + guarded interval. Multiple workers = multiple
+    // replicas: safe by construction (MD §14.2), bounded by CAS + idempotent
+    // enqueue; BATCH_SCHEDULER_ENABLED=false can confine scheduling to one
+    // designated replica operationally.
+    if (config.batchSchedulerEnabled) {
+      if (!batchSchedulerLoopRef.impl) {
+        batchSchedulerLoopRef.impl = createBatchSchedulerLoop(batchSchedulerRef.impl, {
+          intervalMs: config.batchSchedulerIntervalMs,
+          log,
+        });
+      }
+      batchSchedulerLoopRef.impl.start();
+      log.info({ intervalMs: config.batchSchedulerIntervalMs }, 'batch scheduler started (boot pass + background)');
+    } else {
+      log.info('batch scheduler disabled (BATCH_SCHEDULER_ENABLED=false) — this replica only executes batch jobs');
+    }
   };
 
   let shuttingDown = false;
@@ -430,6 +515,9 @@ export function createWorkerApp({
     log.info({ signal }, 'worker shutting down');
     try {
       reconcilerRef.impl?.stop();
+    } catch { /* best effort */ }
+    try {
+      batchSchedulerLoopRef.impl?.stop();
     } catch { /* best effort */ }
     try {
       worker.queueStateProbeStop?.();
@@ -452,6 +540,8 @@ export function createWorkerApp({
     start, shutdown, healthServer, worker, healthRedis, queueState, dbRef, engineRef, svcRef,
     // P4 (test inspection): producer + reconciler + fire handler.
     producerQueue, reconcilerRef, fireHandlerRef,
+    // BR-B2 (test inspection): batch lane refs.
+    batchSvcRef, leaseSvcRef, adapterRegistryRef, batchSchedulerRef, batchSchedulerLoopRef, batchEngineRef,
   };
 }
 

@@ -826,6 +826,18 @@ const seedRepeatJob = (key, slotMs, template) => {
       removed.push(j.id);
       return true;
     },
+    // BullMQ Job.moveToDelayed(ms) — waiting/delayed → delayed (active jobs
+    // reject: the worker already owns them). BR-B2 slot-defer path.
+    async moveToDelayed(ms) {
+      const jj = jobs.get(j.id);
+      if (!jj) throw new Error(`Job with id '${j.id}' not found`);
+      if (jj.state === 'active') {
+        throw new Error(`Job with id '${j.id}' cannot be moved to delayed (state: active)`);
+      }
+      jj.state = 'delayed';
+      jj.opts = { ...jj.opts, delay: ms };
+      return wrapJob(jj);
+    },
   });
   return {
     enqueued,
