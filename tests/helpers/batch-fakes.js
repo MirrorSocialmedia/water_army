@@ -39,6 +39,10 @@ export function makeBatchFakeDb({ identities = [], batches = [], batchIdentities
   const taskRunRows = [...taskRuns];
   const leaseRows = new Map(); // `${type}\u0000${key}` → row
   const eventRows = [];
+  // BR-B2 (G1): run-scoped streams + settings the scheduler/engine/API need.
+  const taskRunEventRows = [];
+  const approvalRows = new Map();
+  const appSettingRows = new Map();
   let txDepth = 0;
 
   for (const r of identities) identityRows.set(r.id, { ...r, updatedAt: r.updatedAt ?? clock() });
@@ -54,6 +58,9 @@ export function makeBatchFakeDb({ identities = [], batches = [], batchIdentities
       taskRuns: taskRunRows,
       leases: leaseRows,
       stateEvents: eventRows,
+      taskRunEvents: taskRunEventRows,
+      approvals: approvalRows,
+      appSettings: appSettingRows,
     },
 
     // ------------------------------------------------------------- identity
@@ -62,14 +69,25 @@ export function makeBatchFakeDb({ identities = [], batches = [], batchIdentities
         if (where.id && identityRows.has(where.id)) return { ...identityRows.get(where.id) };
         return null;
       },
-      findMany: async ({ where = {}, select } = {}) => {
+      findMany: async ({ where = {}, select, orderBy, skip, take } = {}) => {
         let rows = [...identityRows.values()];
         if (where.id?.in) {
           const set = new Set(where.id.in);
           rows = rows.filter((r) => set.has(r.id));
         }
         if (where.status !== undefined) rows = rows.filter((r) => r.status === where.status);
+        if (orderBy?.createdAt) {
+          rows.sort((a, b) => (orderBy.createdAt === 'asc' ? a.createdAt - b.createdAt : b.createdAt - a.createdAt));
+        }
+        if (skip) rows = rows.slice(skip);
+        if (take !== undefined) rows = rows.slice(0, take);
         return rows.map((r) => (select ? Object.fromEntries(Object.keys(select).map((k) => [k, r[k]])) : { ...r }));
+      },
+      /** BR-B2 (G1): counts for the API list/preview routes. */
+      count: async ({ where = {} } = {}) => {
+        let rows = [...identityRows.values()];
+        if (where.status !== undefined) rows = rows.filter((r) => r.status === where.status);
+        return { count: rows.length };
       },
       create: async ({ data }) => {
         const id = data.id ?? randomUUID();
@@ -128,8 +146,11 @@ export function makeBatchFakeDb({ identities = [], batches = [], batchIdentities
       },
       findMany: async ({ where = {}, orderBy } = {}) => {
         let rows = [...batchRows.values()];
+        if (where.id !== undefined) rows = rows.filter((b) => b.id === where.id);
         if (where.cycleId !== undefined) rows = rows.filter((b) => b.cycleId === where.cycleId);
         if (where.status !== undefined) rows = rows.filter((b) => b.status === where.status);
+        if (where.status?.in) rows = rows.filter((b) => where.status.in.includes(b.status));
+        if (where.status?.notIn) rows = rows.filter((b) => !where.status.notIn.includes(b.status));
         if (orderBy?.batchNo) rows.sort((a, b) => (orderBy.batchNo === 'asc' ? a.batchNo - b.batchNo : b.batchNo - a.batchNo));
         return rows.map((b) => ({ ...b }));
       },
@@ -217,6 +238,27 @@ export function makeBatchFakeDb({ identities = [], batches = [], batchIdentities
         const rows = (await db.batchIdentity.findMany({ where }));
         return rows[0] ?? null;
       },
+      /** BR-B2 (G1): CAS update (where carries the expected status). */
+      updateMany: async ({ where = {}, data }) => {
+        let count = 0;
+        for (const m of membershipRows) {
+          if (where.batchId !== undefined && m.batchId !== where.batchId) continue;
+          if (where.identityId !== undefined && m.identityId !== where.identityId) continue;
+          if (where.status !== undefined && m.status !== where.status) continue;
+          Object.assign(m, data);
+          count += 1;
+        }
+        return { count };
+      },
+      count: async ({ where = {} } = {}) => {
+        let n = 0;
+        for (const m of membershipRows) {
+          if (where.batchId !== undefined && m.batchId !== where.batchId) continue;
+          if (where.status !== undefined && m.status !== where.status) continue;
+          n += 1;
+        }
+        return { count: n };
+      },
     },
 
     // --------------------------------------------------------------- events
@@ -248,28 +290,50 @@ export function makeBatchFakeDb({ identities = [], batches = [], batchIdentities
     // ------------------------------------------------------------- task_runs
     taskRun: {
       findUnique: async ({ where }) => {
-        const found = taskRunRows.find((r) => r.id === where.id);
-        return found ? { ...found } : null;
-      },
-      findFirst: async ({ where = {} } = {}) => {
-        for (const r of taskRunRows) {
-          if (where.identityId !== undefined && r.identityId !== where.identityId) continue;
-          if (where.status?.in && !where.status.in.includes(r.status)) continue;
-          if (where.id && r.id !== where.id) continue;
-          return { ...r };
+        if (where.id) {
+          const found = taskRunRows.find((r) => r.id === where.id);
+          return found ? { ...found } : null;
+        }
+        if (where.idempotencyKey != null) {
+          const found = taskRunRows.find((r) => r.idempotencyKey === where.idempotencyKey);
+          return found ? { ...found } : null;
         }
         return null;
       },
-      findMany: async ({ where = {} } = {}) => {
-        return taskRunRows
-          .filter((r) => {
-            if (where.identityId !== undefined && r.identityId !== where.identityId) return false;
-            if (where.status?.in && !where.status.in.includes(r.status)) return false;
-            return true;
-          })
-          .map((r) => ({ ...r }));
+      findFirst: async ({ where = {} } = {}) => {
+        for (const r of taskRunRows) {
+          if (runMatches(r, where)) return { ...r };
+        }
+        return null;
       },
+      findMany: async ({ where = {}, orderBy, skip, take } = {}) => {
+        let rows = taskRunRows.filter((r) => runMatches(r, where));
+        if (orderBy?.createdAt) {
+          rows = [...rows].sort((a, b) => (orderBy.createdAt === 'asc' ? a.createdAt - b.createdAt : b.createdAt - a.createdAt));
+        }
+        if (skip) rows = rows.slice(skip);
+        if (take !== undefined) rows = rows.slice(0, take);
+        return rows.map((r) => ({ ...r }));
+      },
+      /**
+       * BR-B2 (G1): the engine's CAS claim — where carries the expected
+       * (status, attempt); a concurrent writer wins → count 0.
+       */
+      updateMany: async ({ where = {}, data }) => {
+        let count = 0;
+        for (const row of taskRunRows) {
+          if (runMatches(row, where)) {
+            Object.assign(row, data, { updatedAt: data.updatedAt ?? clock() });
+            count += 1;
+          }
+        }
+        return { count };
+      },
+      /** BR-B2 (G1): full-column create (idempotencyKey P2002 = replay). */
       create: async ({ data }) => {
+        if (data.idempotencyKey != null && taskRunRows.some((r) => r.idempotencyKey === data.idempotencyKey)) {
+          throw P2002('idempotency_key');
+        }
         const row = {
           id: data.id ?? randomUUID(),
           taskDefinitionId: data.taskDefinitionId ?? null,
@@ -282,6 +346,17 @@ export function makeBatchFakeDb({ identities = [], batches = [], batchIdentities
           leaseOwner: data.leaseOwner ?? null,
           leaseExpiresAt: data.leaseExpiresAt ?? null,
           heartbeatAt: data.heartbeatAt ?? null,
+          inputJson: data.inputJson ?? null,
+          resultJson: data.resultJson ?? null,
+          resultText: data.resultText ?? null,
+          errorCode: data.errorCode ?? null,
+          errorMessage: data.errorMessage ?? null,
+          queuedAt: data.queuedAt ?? null,
+          startedAt: data.startedAt ?? null,
+          finishedAt: data.finishedAt ?? null,
+          durationMs: data.durationMs ?? null,
+          requestedBy: data.requestedBy ?? null,
+          idempotencyKey: data.idempotencyKey ?? null,
           createdAt: data.createdAt ?? clock(),
           updatedAt: clock(),
         };
@@ -365,6 +440,106 @@ export function makeBatchFakeDb({ identities = [], batches = [], batchIdentities
       },
     },
 
+    // ------------------------------------------- BR-B2 (G1): app_settings
+    appSetting: {
+      findUnique: async ({ where }) => {
+        if (where.key != null && appSettingRows.has(where.key)) return { ...appSettingRows.get(where.key) };
+        return null;
+      },
+      findMany: async () => [...appSettingRows.values()].map((r) => ({ ...r })),
+      upsert: async ({ where, create, update }) => {
+        const existing = appSettingRows.get(where.key);
+        if (existing) {
+          Object.assign(existing, update, { updatedAt: clock() });
+          return { ...existing };
+        }
+        const row = { key: where.key, valueJson: create.valueJson, updatedBy: create.updatedBy ?? null, createdAt: clock(), updatedAt: clock() };
+        appSettingRows.set(where.key, row);
+        return { ...row };
+      },
+      create: async ({ data }) => {
+        if (appSettingRows.has(data.key)) throw P2002('key');
+        const row = { key: data.key, valueJson: data.valueJson, updatedBy: data.updatedBy ?? null, createdAt: clock(), updatedAt: clock() };
+        appSettingRows.set(data.key, row);
+        return { ...row };
+      },
+      update: async ({ where, data }) => {
+        const row = appSettingRows.get(where.key);
+        if (!row) throw P2025('app setting');
+        Object.assign(row, data, { updatedAt: clock() });
+        return { ...row };
+      },
+    },
+
+    // ------------------------------------- BR-B2 (G1): task_run_events
+    taskRunEvent: {
+      create: async ({ data }) => {
+        const row = {
+          id: data.id ?? randomUUID(),
+          taskRunId: data.taskRunId,
+          eventType: data.eventType,
+          message: data.message ?? null,
+          payloadJson: data.payloadJson ?? null,
+          createdAt: data.createdAt ?? clock(),
+        };
+        taskRunEventRows.push(row);
+        return { ...row };
+      },
+      findMany: async ({ where = {}, orderBy, take } = {}) => {
+        let rows = taskRunEventRows.filter((e) => {
+          if (where.taskRunId !== undefined && e.taskRunId !== where.taskRunId) return false;
+          if (where.id !== undefined && e.id !== where.id) return false;
+          // Cursor: OR [createdAt > c, createdAt = c AND id > cid]
+          if (where.OR) {
+            const [gt, eq] = where.OR;
+            const a = gt?.createdAt?.gt !== undefined ? e.createdAt > new Date(gt.createdAt.gt) : false;
+            const b = eq?.createdAt !== undefined && eq?.id?.gt !== undefined
+              ? e.createdAt.getTime() === new Date(eq.createdAt).getTime() && e.id > eq.id.gt
+              : false;
+            if (!(a || b)) return false;
+          }
+          return true;
+        });
+        if (orderBy?.createdAt) {
+          rows = [...rows].sort((a, b) => (orderBy.createdAt === 'asc' ? a.createdAt - b.createdAt : b.createdAt - a.createdAt));
+        }
+        if (take !== undefined) rows = rows.slice(0, take);
+        return rows.map((r) => ({ ...r }));
+      },
+    },
+
+    // ------------------------------------- BR-B2 (G1): approval_requests
+    approvalRequest: {
+      findUnique: async ({ where }) => (where.id && approvalRows.has(where.id) ? { ...approvalRows.get(where.id) } : null),
+      findMany: async ({ where = {} } = {}) =>
+        [...approvalRows.values()].filter((a) => {
+          if (where.taskRunId !== undefined && a.taskRunId !== where.taskRunId) return false;
+          if (where.status !== undefined && a.status !== where.status) return false;
+          return true;
+        }).map((a) => ({ ...a })),
+      create: async ({ data }) => {
+        const row = {
+          id: data.id ?? randomUUID(),
+          taskRunId: data.taskRunId,
+          toolName: data.toolName,
+          argumentsJson: data.argumentsJson ?? null,
+          status: data.status ?? 'pending',
+          requestedAt: clock(),
+          reviewedBy: data.reviewedBy ?? null,
+          reviewedAt: data.reviewedAt ?? null,
+          reviewNote: data.reviewNote ?? null,
+        };
+        approvalRows.set(row.id, row);
+        return { ...row };
+      },
+      update: async ({ where, data }) => {
+        const row = approvalRows.get(where.id);
+        if (!row) throw P2025('approval');
+        Object.assign(row, data);
+        return { ...row };
+      },
+    },
+
     /**
    * Interactive transaction (hermetic): passes the SAME db (single-process
    * fakes are atomic by construction). On throw, ALL state written inside
@@ -379,6 +554,9 @@ export function makeBatchFakeDb({ identities = [], batches = [], batchIdentities
         leases: new Map([...leaseRows.entries()].map(([k, v]) => [k, structuredClone(v)])),
         taskRuns: structuredClone(taskRunRows),
         events: structuredClone(eventRows),
+        taskRunEvents: structuredClone(taskRunEventRows),
+        approvals: new Map([...approvalRows.entries()].map(([k, v]) => [k, structuredClone(v)])),
+        appSettings: new Map([...appSettingRows.entries()].map(([k, v]) => [k, structuredClone(v)])),
       };
       txDepth += 1;
       try {
@@ -396,12 +574,35 @@ export function makeBatchFakeDb({ identities = [], batches = [], batchIdentities
         for (const r of snapshot.taskRuns) taskRunRows.push(r);
         eventRows.length = 0;
         for (const e of snapshot.events) eventRows.push(e);
+        taskRunEventRows.length = 0;
+        for (const e of snapshot.taskRunEvents) taskRunEventRows.push(e);
+        approvalRows.clear();
+        for (const [k, v] of snapshot.approvals) approvalRows.set(k, v);
+        appSettingRows.clear();
+        for (const [k, v] of snapshot.appSettings) appSettingRows.set(k, v);
         throw err;
       } finally {
         txDepth -= 1;
       }
     },
   };
+
+  /** BR-B2 (G1): shared task-run where matcher (findFirst/findMany/updateMany). */
+  function runMatches(r, where) {
+    if (where.id !== undefined && r.id !== where.id) return false;
+    if (where.identityId !== undefined && r.identityId !== where.identityId) return false;
+    if (where.batchId !== undefined && r.batchId !== where.batchId) return false;
+    if (where.status !== undefined) {
+      // Prisma shape: a string is an exact match; an object is { in?: [], notIn?: [] }.
+      if (typeof where.status === 'object') {
+        if (where.status.in && !where.status.in.includes(r.status)) return false;
+        if (where.status.notIn && where.status.notIn.includes(r.status)) return false;
+      } else if (r.status !== where.status) return false;
+    }
+    if (where.attempt !== undefined && r.attempt !== where.attempt) return false;
+    if (where.updatedAt?.lt && !(new Date(r.updatedAt).getTime() < new Date(where.updatedAt.lt).getTime())) return false;
+    return true;
+  }
 
   return db;
 }

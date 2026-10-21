@@ -66,6 +66,11 @@ export {
   enqueueTaskRun,
   removeWaitingTaskRun,
   closeTaskQueue,
+  // BR-B2 (gen1): batch-run job helpers (idempotent enqueue / waiting removal /
+  // batch-aware router — see task-queue.js).
+  enqueueBatchRun,
+  removeWaitingBatchRun,
+  enqueueAnyRun,
 } from './task-queue.js';
 
 /** Schedule cron/timezone utilities (same cron-parser as BullMQ). */
@@ -125,6 +130,15 @@ export {
   newUuid,
   BatchError,
   IDEMPOTENCY_KEY_RE,
+  // BR-B2 (gen1): scheduler/queue constants + helpers.
+  BATCH_ADAPTER_REGISTRY,
+  BATCH_MAX_ATTEMPTS_CAP,
+  BATCH_CONFIG_DEFAULTS,
+  APP_SETTING_BATCH_GLOBAL_MAX_ACTIVE,
+  BATCH_RUN_JOB_NAME,
+  batchJobId,
+  runIdempotencyKey,
+  validateBatchConfig,
 } from './batch-constants.js';
 
 /** BatchService — single owner of batch/identity state (BR-B1, MD §6/§9). */

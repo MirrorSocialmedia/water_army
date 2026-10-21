@@ -53,7 +53,10 @@ export async function enqueueTaskRun(queue, { runId, attempt, timeoutMs }) {
   // BullMQ job timeout = run deadline + grace, so a wedged job is reaped
   // even if the engine's own deadline logic is bypassed (backstop only).
   const timeout = (Number.isFinite(timeoutMs) ? timeoutMs : 120_000) + 30_000;
-  await queue.add(TASK_JOB_NAME, { runId, attempt }, { jobId: taskJobId(runId, attempt), timeout });
+  // BR-B2 (gen2): return the added job so batch-aware callers can normalize
+  // its id (real BullMQ resolves a Job; the fake resolves { id }). Existing
+  // callers ignore the return value — behavior unchanged.
+  return queue.add(TASK_JOB_NAME, { runId, attempt }, { jobId: taskJobId(runId, attempt), timeout });
 }
 
 /**
@@ -142,7 +145,9 @@ export async function enqueueAnyRun(queue, { db, runId, attempt, timeoutMs, maxA
   if (row?.batchId) {
     return enqueueBatchRun(queue, { runId, attempt, timeoutMs, maxAttempts: row?.maxAttempts ?? maxAttempts });
   }
-  return { queued: true, reused: false, jobId: await enqueueTaskRun(queue, { runId, attempt, timeoutMs }) };
+  // queue.add resolves to a Job (BullMQ) / { id } (fake) — normalize to id.
+  const job = await enqueueTaskRun(queue, { runId, attempt, timeoutMs });
+  return { queued: true, reused: false, jobId: job?.id ?? job };
 }
 
 /** @param {Queue} queue */

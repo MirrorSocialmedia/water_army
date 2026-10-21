@@ -813,14 +813,18 @@ const seedRepeatJob = (key, slotMs, template) => {
     data: j.data,
     state: j.state,
     opts: j.opts,
+    // Faithful to BullMQ: only waiting/delayed jobs are removable — an
+    // active/finished job makes remove() REJECT (callers treat it as a no-op
+    // via catch; BR-B2 gen2: the fake previously returned false, which real
+    // BullMQ never does — helpers that ignore the return would lie).
     async remove() {
       const jj = jobs.get(j.id);
-      if (jj && (jj.state === 'waiting' || jj.state === 'delayed')) {
-        jobs.delete(j.id);
-        removed.push(j.id);
-        return true;
+      if (!jj || (jj.state !== 'waiting' && jj.state !== 'delayed')) {
+        throw new Error(`Job with id '${j.id}' cannot be removed (state: ${jj?.state ?? 'gone'})`);
       }
-      return false;
+      jobs.delete(j.id);
+      removed.push(j.id);
+      return true;
     },
   });
   return {
