@@ -329,6 +329,13 @@ export function makeBatchFakeDb({ identities = [], batches = [], batchIdentities
         }
         return { count };
       },
+      /** BR-B2 (G2): single delete (reconciliation defensive path). */
+      delete: async ({ where }) => {
+        const idx = taskRunRows.findIndex((r) => runMatches(r, where));
+        if (idx === -1) throw P2025('taskRun');
+        const [row] = taskRunRows.splice(idx, 1);
+        return { ...row };
+      },
       /** BR-B2 (G1): full-column create (idempotencyKey P2002 = replay). */
       create: async ({ data }) => {
         if (data.idempotencyKey != null && taskRunRows.some((r) => r.idempotencyKey === data.idempotencyKey)) {

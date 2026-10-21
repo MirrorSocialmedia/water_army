@@ -144,6 +144,18 @@ export {
 /** BatchService — single owner of batch/identity state (BR-B1, MD §6/§9). */
 export { createBatchService } from './batch-service.js';
 
+/** BatchScheduler — dispatch/tick/reconciliation (BR-B2 gen2, MD §6.2/§7). */
+export {
+  createBatchScheduler,
+  createBatchSchedulerLoop,
+  readGlobalMaxActive,
+  effectiveSlotCap,
+  IDENTITY_SYNC_PLAN,
+  MEMBERSHIP_SYNC_PLAN,
+  RUN_TERMINAL,
+  BATCH_SCHEDULER_DEFAULTS,
+} from './batch-scheduler.js';
+
 /** LeaseService — cross-process resource leases (BR-B1, MD §9.6). */
 export { createLeaseService } from './lease-service.js';
 
