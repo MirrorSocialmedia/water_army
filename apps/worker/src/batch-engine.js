@@ -131,9 +131,15 @@ export function createBatchEngine({
    *   - otherwise → failed terminal + identity FAILED_FINAL (manual retry)
    */
   async function handleAdapterFailure(run, err) {
+    // B6 gen2 (E2E finding): 429 RATE_LIMITED is TRANSIENT — the API emits
+    // retry-after and the budget window resets; parking the identity in
+    // RETRY_WAIT (next scheduler tick re-dispatches) instead of FAILED_FINAL
+    // is the honest outcome. (Service-lane 429s should not occur since the
+    // dispatcher is exempt from the per-actor write budget — this is the
+    // defense-in-depth net for any actor/budget regression.)
     const retryable =
       (err instanceof AdapterError && err.retryable) ||
-      (err instanceof AdapterError && [502, 503, 504].includes(err.status));
+      (err instanceof AdapterError && [429, 502, 503, 504].includes(err.status));
     const code = err instanceof AdapterError ? err.apiCode : 'ADAPTER_ERROR';
     const message = String(err?.message ?? 'adapter error').slice(0, 1_000);
     await taskSvc.finishRun(run.id, {

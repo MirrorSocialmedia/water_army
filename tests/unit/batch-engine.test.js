@@ -246,6 +246,34 @@ test('engine: retryable adapter failure — auto-retry to the cap, then FAILED_F
   assert.equal(events.filter((e) => e.eventType === 'attempt_started').length, 2);
 });
 
+test('engine: 429 RATE_LIMITED adapter failure — transient (park RETRY_WAIT, never FAILED_FINAL on first hit) — B6 gen2 E2E finding', async () => {
+  const w = makeEngineWorld({ adapterEnv: { NOOP_DURATION_MS: '50', NOOP_OUTCOME: 'fail_429' } });
+  const { identities, runs } = await seedBatchRun(w, { identities: 1, maxAttempts: 3 });
+  const run = runs[0];
+
+  // Attempt 1 → 429 → the budget window resets with time: the engine must
+  // park the identity in RETRY_WAIT (next tick re-dispatches), not drop it.
+  const o1 = await w.engine.handleBatchJob(jobFor(run, w));
+  assert.equal(o1.outcome, 'auto-retry', '429 is transient — auto-retry, not failed-final');
+  let after = await w.taskSvc.loadRun(run.id);
+  assert.equal(after.status, 'queued', 'run row reused, back to queued for the next attempt');
+  assert.equal(after.attempt, 2);
+  assert.equal((await w.db.identity.findUnique({ where: { id: identities[0].id } })).status, 'RETRY_WAIT');
+
+  // Attempt 2 → 429 again → still parked (attempts remain).
+  const o2 = await w.engine.handleBatchJob(jobFor({ ...run, attempt: 2 }, w));
+  assert.equal(o2.outcome, 'auto-retry');
+  assert.equal((await w.db.identity.findUnique({ where: { id: identities[0].id } })).status, 'RETRY_WAIT');
+
+  // Attempt 3 → at cap → FAILED_FINAL (honest: we did wait it out).
+  const o3 = await w.engine.handleBatchJob(jobFor({ ...run, attempt: 3 }, w));
+  assert.equal(o3.outcome, 'failed-final');
+  after = await w.taskSvc.loadRun(run.id);
+  assert.equal(after.status, 'failed');
+  assert.equal(after.errorCode, 'RATE_LIMITED');
+  assert.equal((await w.db.identity.findUnique({ where: { id: identities[0].id } })).status, 'FAILED_FINAL');
+});
+
 test('engine: non-retryable adapter failure — immediate FAILED_FINAL (no auto-retry)', async () => {
   const w = makeEngineWorld({ adapterEnv: { NOOP_DURATION_MS: '50', NOOP_OUTCOME: 'fail' } });
   const { identities, runs } = await seedBatchRun(w, { identities: 1, maxAttempts: 3 });

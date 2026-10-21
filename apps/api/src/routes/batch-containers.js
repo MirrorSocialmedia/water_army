@@ -87,6 +87,15 @@ export function batchContainerRoutes(app) {
   const mutateLimiter = createWindowLimiter({ limit: 30, windowMs: 60_000 });
 
   function rateGuard(limiter, req, reply, what) {
+    // B6 gen2 (E2E finding): the service dispatcher (worker lane) is the ONLY
+    // legitimate sustained-load path for container lifecycle ops, and it is
+    // already governed by the global active-container cap + per-batch
+    // maxActive (the real resource governors). The per-actor write budget
+    // exists for HUMAN operator churn (MD §13.2). With the shared 20/min
+    // budget, a 50-identity batch exhausts it on the first dispatch burst
+    // and every later start 429s → runs FAILED_FINAL (dropped work).
+    // Service actors are exempt; human operators keep the budget.
+    if (req.user?.isService) return;
     const key = req.user?.id ?? req.ip ?? 'anon';
     const res = limiter.take(key);
     if (!res.allowed) {

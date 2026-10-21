@@ -561,3 +561,51 @@ test('BR-B3 gen2 S3 — per-actor write budget: 21st start → 429 + retry-after
   const other = await app.inject({ method: 'POST', url: `/api/task-runs/${RUN2}/containers/start`, payload: JSON.stringify({}), headers: { cookie: admin, 'content-type': 'application/json' } });
   assert.equal(other.statusCode, 200, `a different actor is not throttled: ${other.body}`);
 });
+
+test('BR-B6 gen2 — service dispatcher is exempt from the per-actor write budget (sustained batch dispatch must not 429)', async (t) => {
+  const { app, root } = await makeApp();
+  t.after(() => {
+    fs.rmSync(root, { recursive: true, force: true });
+    return app.close();
+  });
+
+  const req = (method, url, opts = {}) =>
+    app.inject({
+      method,
+      url,
+      payload: opts.payload === undefined ? undefined : JSON.stringify(opts.payload),
+      headers: {
+        ...(opts.cookie ? { cookie: opts.cookie } : {}),
+        ...(opts.token ? { 'x-wa-service-token': opts.token } : {}),
+        ...(opts.payload !== undefined ? { 'content-type': 'application/json' } : {}),
+      },
+    });
+
+  // The worker lane (service token) is the ONLY legitimate sustained-load
+  // path for container lifecycle ops and is governed by the global
+  // active-container cap + per-batch maxActive, NOT the per-actor human
+  // write budget (MD §13.2). A 50-identity batch churns ~50 starts in a
+  // minute; throttling it with the 20/min human budget drops runs to
+  // FAILED_FINAL (the B6 gen2 E2E caught exactly this). So: 25 rapid
+  // service starts (well past the 20/min human budget) must ALL pass with
+  // NO 429 anywhere in the burst. (25, not 60: the fake docker world does
+  // not adopt containers, so each start leases a fresh ADB port — the test
+  // pool holds 50.)
+  let last;
+  for (let i = 0; i < 25; i += 1) {
+    last = await req('POST', `/api/task-runs/${RUN1}/containers/start`, { token: SERVICE_TOKEN });
+    assert.equal(last.statusCode, 200, `service start #${i + 1} must not be throttled: ${last.body}`);
+  }
+
+  // sanity: a HUMAN actor is still bounded by the 20/min budget (the
+  // exemption is service-scoped, not a blanket disabling) — 21st start 429s.
+  const op = await login(app, 'operator1');
+  let h;
+  for (let i = 0; i < 20; i += 1) {
+    h = await req('POST', `/api/task-runs/${RUN2}/containers/start`, { cookie: op });
+    assert.equal(h.statusCode, 200, `human start #${i + 1} within budget: ${h.body}`);
+  }
+  h = await req('POST', `/api/task-runs/${RUN2}/containers/start`, { cookie: op });
+  assert.equal(h.statusCode, 429, 'human 21st start still rate-limited (budget intact for humans)');
+  assert.equal(h.json().error.code, 'RATE_LIMITED');
+});

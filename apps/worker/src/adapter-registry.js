@@ -28,7 +28,7 @@ export class AdapterError extends Error {
   }
 }
 
-const NOOP_OUTCOMES = new Set(['ok', 'fail', 'fail_retryable']);
+const NOOP_OUTCOMES = new Set(['ok', 'fail', 'fail_retryable', 'fail_429']);
 
 function clampInt(raw, min, max, dflt) {
   const n = Number.parseInt(raw, 10);
@@ -81,6 +81,11 @@ export function createNoopAdapter({ env = process.env } = {}) {
       }
       if (outcome === 'fail_retryable') {
         throw new AdapterError('ADAPTER_FAILED_RETRYABLE', 'noop adapter: retryable failure (NOOP_OUTCOME=fail_retryable)', { status: 503, retryable: true });
+      }
+      if (outcome === 'fail_429') {
+        // B6 gen2: exercise the engine's 429-as-transient path (budget window
+        // resets → park RETRY_WAIT, never FAILED_FINAL on a rate limit).
+        throw new AdapterError('RATE_LIMITED', 'noop adapter: rate limited (NOOP_OUTCOME=fail_429)', { status: 429 });
       }
       return { resultText: `noop ok (${durationMs}ms)`, resultJson: { durationMs, outcome: 'ok' } };
     },
