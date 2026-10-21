@@ -376,15 +376,23 @@ export function createBatchService({ db, log = console, now = () => new Date(), 
     }
 
     const memberships = await db.batchIdentity.findMany({ where: { batchId } });
-    const ids = memberships.map((m) => m.identityId);
-    const identities = ids.length ? await db.identity.findMany({ where: { id: { in: ids } }, select: { id: true, status: true } }) : [];
-    const statusOf = new Map(identities.map((i) => [i.id, i.status]));
-
+    // The MEMBERSHIP is the per-batch completion source of truth (batch-constants:
+    // "a batch is complete only when every membership is in IDENTITY_TERMINAL";
+    // MD §3.3: SKIPPED counts as terminal — an approved skip). The identity's own
+    // status may legitimately sit in a non-terminal CONFIG state while its
+    // membership is terminal (e.g. DISABLED behind an approved SKIPPED membership —
+    // DISABLED is not in IDENTITY_TERMINAL and never will be, it is a standing
+    // admin state, not a run-lifecycle state). Counting the identity status here
+    // wedged the batch in RUNNING forever (BR-B6 E2E finding 2026-10-22: one
+    // disabled skip in a 50-id batch blocked the whole cycle). Membership sync is
+    // applied atomically with the run terminal transition, so a terminal
+    // membership never lags a live run, and a run can never un-terminate —
+    // the membership is safe as the criterion.
     let failedFinal = 0;
     let skipped = 0;
     let pending = 0;
     for (const m of memberships) {
-      const s = statusOf.get(m.identityId) ?? m.status;
+      const s = m.status;
       if (s === 'FAILED_FINAL') failedFinal += 1;
       else if (s === 'SKIPPED') skipped += 1;
       if (!IDENTITY_TERMINAL.includes(s)) pending += 1;

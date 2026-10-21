@@ -186,9 +186,13 @@ function seedCycle({ ctx, failurePolicy = 'continue_and_report', statuses = [] }
   statuses.forEach((status, i) => {
     const identity = seedIdentity(100 + i, status);
     db.__state.identities.set(identity.id, identity);
+    // The membership mirrors the run terminal (MEMBERSHIP_SYNC_PLAN is applied
+    // atomically in syncIdentityAfterRunTerminal in the real engine); in-flight
+    // work stays ACTIVE. (Must stay in sync with packages/shared/src/batch-service.js
+    // evaluateBatchCompletion — completion is judged by the MEMBERSHIP.)
     db.__state.batchIdentities.push({
       batchId, identityId: identity.id, position: i + 1,
-      status: status === 'FAILED_FINAL' ? 'FAILED_FINAL' : status === 'SKIPPED' ? 'SKIPPED' : 'ACTIVE',
+      status: ['COMPLETED', 'FAILED_FINAL', 'CANCELLED', 'SKIPPED'].includes(status) ? status : 'ACTIVE',
       createdAt: new Date(),
     });
   });
@@ -211,6 +215,36 @@ test('MD §3.3: all terminal, no failures → COMPLETED (skipped counts as termi
   assert.deepEqual(res, { complete: true, status: 'COMPLETED', failedFinal: 0, skipped: 1, pending: 0 });
   const live = await ctx.db.batch.findUnique({ where: { id: batchId } });
   assert.ok(live.finishedAt instanceof Date);
+});
+
+test('MD §3.3: SKIPPED membership on a DISABLED identity still completes the batch (BR-B6 E2E regression)', async () => {
+  // The exact shape that wedged the 200-id sandbox E2E cycle (2026-10-22):
+  // a disabled identity is planned as an approved SKIPPED membership, but its
+  // OWN row stays DISABLED — a standing admin config state, NOT a run-lifecycle
+  // terminal (and never in IDENTITY_TERMINAL). Completion must be judged by
+  // the membership, or the batch sits in RUNNING forever and the whole cycle
+  // stalls (batches 2..N never start).
+  const ctx = makeCtx();
+  const cycleId = '00000000-0000-4000-8000-00000000c002';
+  const batchId = uuid(51);
+  ctx.db.__state.batches.set(batchId, {
+    id: batchId, name: 'cycle #2', cycleId, batchNo: 1, status: 'RUNNING',
+    batchSize: 2, maxActiveContainers: 50, failurePolicy: 'continue_and_report', configJson: {},
+    idempotencyKey: null, createdBy: null, createdAt: new Date(),
+    startedAt: new Date('2026-10-21T03:00:00Z'), finishedAt: null,
+  });
+  const done = seedIdentity(200, 'COMPLETED');
+  const disabled = seedIdentity(201, 'DISABLED');
+  ctx.db.__state.identities.set(done.id, done);
+  ctx.db.__state.identities.set(disabled.id, disabled);
+  ctx.db.__state.batchIdentities.push(
+    { batchId, identityId: done.id, position: 1, status: 'COMPLETED', createdAt: new Date() },
+    { batchId, identityId: disabled.id, position: 2, status: 'SKIPPED', skipReason: 'identity disabled', createdAt: new Date() },
+  );
+  const res = await ctx.svc.evaluateBatchCompletion(batchId);
+  assert.deepEqual(res, { complete: true, status: 'COMPLETED', failedFinal: 0, skipped: 1, pending: 0 });
+  const live = await ctx.db.batch.findUnique({ where: { id: batchId } });
+  assert.equal(live.status, 'COMPLETED', 'batch completes despite the DISABLED identity row');
 });
 
 test('MD §3.3: FAILED_FINAL + stop_batch → PAUSED (human judgement), not completed', async () => {
