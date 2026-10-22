@@ -227,7 +227,10 @@ cmd_teardown() {
     local i
     for i in 1 2; do
       if [ -n "$(DC images -q alpine:3.20 2>/dev/null)" ]; then
-        DC run --rm -v "$DATA_ROOT:/wipe" alpine:3.20 sh -c 'rm -rf /wipe/* /wipe/.[!.]* 2>/dev/null' >/dev/null 2>&1 || true
+        # NOTE: direct sg docker -c (NOT DC) - DC's $* relay strips the inner
+        # single quotes, so the container's 'sh -c' would only receive 'rm'
+        # as its script and delete nothing (silent; observed in teardown).
+        sg docker -c "docker run --rm -v $DATA_ROOT:/wipe alpine:3.20 sh -c 'rm -rf /wipe/* /wipe/.[!.]* 2>/dev/null'" >/dev/null 2>&1 || true
       fi
       rm -rf "$DATA_ROOT" 2>/dev/null || true
       [ ! -d "$DATA_ROOT" ] && break
@@ -244,6 +247,8 @@ cmd_teardown() {
     log "TEARDOWN CLEAN: zero br-b6r-* residue"
     return 0
   fi
+  [ -d "$DATA_ROOT" ] && left=$(( left + 1 ))
+  [ -d "$DATA_ROOT" ] && log "note: data root $DATA_ROOT still present (root-owned files?)"
   log "FATAL: residue remains: $left"
   return 1
 }
