@@ -1,0 +1,29 @@
+# BR-B6-Acceptance A+B — 30s window sampler as a persistent systemd USER unit.
+#
+# Why a user unit: the gen1 nohup/setsid sampler+watcher ran inside the
+# openclaw-gateway service cgroup and were killed by the gateway 1006 restart
+# (2026-10-22 14:33). A user unit lives under the user manager (Linger=yes on
+# this host), independent of the gateway cgroup.
+#
+# Install:  bash scripts/br-b6accab/systemd/install-units.sh
+# Teardown: bash scripts/br-b6accab/systemd/teardown-units.sh  (AB4 mandatory)
+#
+# Note: absolute paths are host-pinned (kenneth @ this host) by design —
+# single-host acceptance task, no templating.
+
+[Unit]
+Description=BR-B6-Acceptance A+B — 30s SGLang off-peak window sampler
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/kenneth/.openclaw/workspace/water_army
+ExecStart=/usr/bin/env bash /home/kenneth/.openclaw/workspace/water_army/scripts/br-b6accab/sampler.sh /home/kenneth/.openclaw/workspace/logs/br-b6-accAB/samples-30s.csv 30
+Restart=always
+RestartSec=5
+TimeoutStopSec=10
+StandardOutput=append:/home/kenneth/.openclaw/workspace/logs/br-b6-accAB/sampler.out
+StandardError=append:/home/kenneth/.openclaw/workspace/logs/br-b6-accAB/sampler.out
+
+[Install]
+WantedBy=default.target

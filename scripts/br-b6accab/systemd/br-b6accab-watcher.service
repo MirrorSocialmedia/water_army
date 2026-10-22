@@ -1,0 +1,23 @@
+# BR-B6-Acceptance A+B — 60s window watcher as a persistent systemd USER unit.
+# Re-runs window-check.sh every 60s; appends to window-watch.log; writes the
+# WINDOW-OPEN marker only as a signal (the boot harness re-gates independently).
+#
+# Install:  bash scripts/br-b6accab/systemd/install-units.sh
+# Teardown: bash scripts/br-b6accab/systemd/teardown-units.sh  (AB4 mandatory)
+
+[Unit]
+Description=BR-B6-Acceptance A+B — 60s window watcher (gate eval + marker)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/kenneth/.openclaw/workspace/water_army
+ExecStart=/usr/bin/env bash /home/kenneth/.openclaw/workspace/water_army/scripts/br-b6accab/window-watcher.sh /home/kenneth/.openclaw/workspace/logs/br-b6-accAB/samples-30s.csv /home/kenneth/.openclaw/workspace/logs/br-b6-accAB/window-watch.log /home/kenneth/.openclaw/workspace/logs/br-b6-accAB/WINDOW-OPEN 60
+Restart=always
+RestartSec=5
+TimeoutStopSec=10
+StandardOutput=append:/home/kenneth/.openclaw/workspace/logs/br-b6-accAB/watcher.out
+StandardError=append:/home/kenneth/.openclaw/workspace/logs/br-b6-accAB/watcher.out
+
+[Install]
+WantedBy=default.target
