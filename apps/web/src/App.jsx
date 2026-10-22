@@ -16,6 +16,7 @@ import BatchMonitor from './pages/BatchMonitor';
 import Identities from './pages/Identities';
 import IdentityDetail from './pages/IdentityDetail';
 import BatchReports from './pages/BatchReports';
+import RamGate from './pages/RamGate';
 import Settings from './pages/Settings';
 
 const PAGES = {
@@ -32,6 +33,7 @@ const PAGES = {
   identities: Identities,
   'identities-detail': (props) => <IdentityDetail identityId={props.params.id} user={props.user} />,
   reports: BatchReports,
+  'ram-gate': (props) => <RamGate user={props.user} />,
   settings: Settings,
 };
 

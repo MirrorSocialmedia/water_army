@@ -201,6 +201,30 @@ export {
 /** LeaseService — cross-process resource leases (BR-B1, MD §9.6). */
 export { createLeaseService } from './lease-service.js';
 
+/** Host metrics sampler (RAM-G1) — /proc/meminfo + /proc/loadavg. */
+export { createHostMetrics, parseMeminfo } from './host-metrics.js';
+
+/**
+ * RAM Gate — product-grade host-RAM admission gate (RAM-G1).
+ * Fail-closed admission for RAM-heavy redroid boots; atomic reservation in
+ * one Redis Lua script; lease reconciliation + recovery; UI status surface.
+ */
+export {
+  RAM_GATE_DEFAULTS,
+  RAM_GATE_ENV,
+  RAM_GATE_APP_SETTING_KEY,
+  RAM_GATE_REASON,
+  resolveRamGateConfig,
+  computeAdmission,
+  createRamGate,
+  ADMIT_LUA,
+  DRY_RUN_LUA,
+  RELEASE_LUA,
+  RELEASE_BY_KEY_LUA,
+  RENEW_LUA,
+  COUNT_LUA,
+} from './ram-gate.js';
+
 /**
  * Network policy — QA endpoint allowlist + SSRF hardening (BR-B4, MD §5/§12).
  * The worker.js gate swap-in is createNetworkPolicyGate (B1 seam, zero engine change).

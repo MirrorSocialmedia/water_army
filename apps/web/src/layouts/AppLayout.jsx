@@ -2,6 +2,7 @@ import {
   Activity,
   CalendarClock,
   Container,
+  Cpu,
   FileDown,
   Fingerprint,
   LayoutDashboard,
@@ -24,6 +25,7 @@ const ICONS = {
   monitor: Activity,
   identities: Fingerprint,
   reports: FileDown,
+  ramgate: Cpu,
   settings: Settings,
 };
 
@@ -42,6 +44,7 @@ const PAGE_TITLES = {
   identities: 'Identities',
   'identities-detail': 'Identity',
   reports: 'Batch Reports',
+  'ram-gate': 'RAM Gate',
   settings: 'Settings',
 };
 

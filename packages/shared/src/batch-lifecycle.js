@@ -52,6 +52,10 @@ export const BATCH_LIFECYCLE_ERROR = Object.freeze({
   PURGE_CONFIRM_REQUIRED: 'PURGE_CONFIRM_REQUIRED',
   /** reconcile requested fix on a non-admin (or service) identity. */
   RECONCILE_FIX_FORBIDDEN: 'RECONCILE_FIX_FORBIDDEN',
+  /** RAM-G1: host-RAM admission gate denied this boot (fail-closed). 503 =
+   *  retryable → the run goes RETRY_WAIT and re-admits on the next attempt
+   *  (MD G1: 記憶體不足 → stop 新增、pending 保留 — nothing is deleted). */
+  RAM_GATE_DENIED: 'RAM_GATE_DENIED',
 });
 
 export const BATCH_LIFECYCLE_ERROR_STATUS = Object.freeze({
@@ -70,6 +74,7 @@ export const BATCH_LIFECYCLE_ERROR_STATUS = Object.freeze({
   [BATCH_LIFECYCLE_ERROR.CONTAINER_OP_FAILED]: 502,
   [BATCH_LIFECYCLE_ERROR.PURGE_CONFIRM_REQUIRED]: 400,
   [BATCH_LIFECYCLE_ERROR.RECONCILE_FIX_FORBIDDEN]: 403,
+  [BATCH_LIFECYCLE_ERROR.RAM_GATE_DENIED]: 503,
 });
 
 /** Error carrying a stable API code (the API error handler passes it through). */

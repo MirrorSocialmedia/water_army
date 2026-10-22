@@ -89,7 +89,13 @@ export function createBatchLifecycleService({
   clock = () => new Date(),
   healthProbe,
   fsOps,
+  // RAM-G1: host-RAM admission gate (null = pre-G1 behaviour — hermetic
+  // suites never see a gate; production always constructs one when redis
+  // has eval()). kind='run', entity = task-run id; lease held until
+  // stop/remove (the container's RAM is held for the run's lifetime).
+  ramGate: injectedRamGate,
 }) {
+  const ramGate = injectedRamGate ?? null;
   const fso = fsOps ?? fs.promises;
   const client = docker?.client ?? null;
   const dataRoot = () => config?.batchContainerDataRoot ?? IDENTITY_DATA_ROOT_DEFAULT;
@@ -485,6 +491,28 @@ export function createBatchLifecycleService({
     if (!identity) throw new BatchLifecycleError(E.IDENTITY_INVALID, `identity ${run.identityId} not found`, { status: 404 });
     assertIdentityCreatable(identity);
 
+    // RAM-G1: host-RAM admission — BEFORE the sweep/port-lease/docker create.
+    // 503 RAM_GATE_DENIED → worker retry policy = RETRY_WAIT (pending kept,
+    // nothing deleted, re-admit on the next attempt with fresh metrics).
+    if (ramGate) {
+      const adm = await ramGate.admit({ kind: 'run', entityKey: run.id, entityName: `run:${run.id}`, source: 'batch-start' });
+      if (!adm.admitted) {
+        await audited({
+          actorUserId: actor.userId ?? null,
+          action: 'batch_container.start_denied_ram',
+          resourceType: 'container',
+          resourceId: run.id,
+          status: 'denied',
+          details: { runId: run.id, identityId: run.identityId, reason: adm.reason, currentMiB: adm.currentMiB ?? null, projectedMiB: adm.projectedMiB ?? null, liveCount: adm.liveCount ?? null },
+        });
+        throw new BatchLifecycleError(
+          E.RAM_GATE_DENIED,
+          `host-RAM admission denied (${adm.reason}) — MemAvailable ${Math.round(adm.currentMiB ?? 0)} MiB, projected ${Math.round(adm.projectedMiB ?? 0)} MiB; run goes RETRY_WAIT and re-admits on the next attempt (MD G1: stop new boots, keep pending)`,
+          { status: 503, details: { reason: adm.reason, currentMiB: adm.currentMiB ?? null, projectedMiB: adm.projectedMiB ?? null } },
+        );
+      }
+    }
+
     const imageEntry = await resolveImageEntry(spec.image);
     const healthCfg = effectiveHealthProbe(spec);
     const c = await requireClient();
@@ -687,6 +715,11 @@ export function createBatchLifecycleService({
     }
     const port = boundHostPort(container);
     await releasePortLease(run.id, port);
+    // RAM-G1: the container stopped → its RAM is freed → release the lease
+    // (a fresh startForRun re-admits against fresh metrics).
+    if (ramGate) {
+      await ramGate.releaseByKey({ kind: 'run', entityKey: run.id, reason: 'stop-for-run' }).catch((err) => log.warn?.({ error: err.message }, 'ram-gate: release on stop failed'));
+    }
     await audited({ actorUserId: actor.userId ?? null, action: 'batch_container.stopped', resourceType: 'container', resourceId: containerId, status: 'ok', details: { runId: run.id, wasRunning, volumeRetained: true, by: actor.label } });
     void verdict;
     return { stopped: true, wasRunning, containerId, volumeRetained: true };
@@ -715,6 +748,11 @@ export function createBatchLifecycleService({
     await dcall('remove', () => c.getContainer(containerId).remove({ force: true }), containerId);
     const port = boundHostPort(container);
     await releasePortLease(run.id, port);
+    // RAM-G1: the container is gone → release the lease (the identity DATA
+    // volume is untouched — the gate never deletes data).
+    if (ramGate) {
+      await ramGate.releaseByKey({ kind: 'run', entityKey: run.id, reason: 'remove-for-run' }).catch((err) => log.warn?.({ error: err.message }, 'ram-gate: release on remove failed'));
+    }
     const identity = await db.identity.findUnique({ where: { id: run.identityId } }).catch(() => null);
     await audited({
       actorUserId: actor.userId ?? null,

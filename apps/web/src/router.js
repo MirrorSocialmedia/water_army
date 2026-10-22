@@ -20,6 +20,7 @@ const ROUTES = [
   { path: '/identities', page: 'identities' },
   { path: '/identities/:id', page: 'identities-detail' },
   { path: '/reports', page: 'reports' },
+  { path: '/ram-gate', page: 'ram-gate' },
   { path: '/settings', page: 'settings' },
 ];
 
@@ -75,5 +76,6 @@ export const NAV_ITEMS = [
   { path: '/monitor', label: 'Batch Monitor', icon: 'monitor' },
   { path: '/identities', label: 'Identities', icon: 'identities' },
   { path: '/reports', label: 'Batch Reports', icon: 'reports' },
+  { path: '/ram-gate', label: 'RAM Gate', icon: 'ramgate' },
   { path: '/settings', label: 'Settings', icon: 'settings' },
 ];

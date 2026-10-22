@@ -541,8 +541,23 @@ export function createRedroidService({
   // recursive rm); mock mode can force a failure shape (e.g. the EACCES the
   // R5 live run hit on root-owned dirs) to test the partial-failure surface.
   removeDataDir: injectedRemoveDataDir,
+  // RAM-G1: host-RAM admission gate (null = pre-G1 behaviour — hermetic
+  // suites never see a gate; production always constructs one when redis
+  // has eval()). Admit BEFORE any side effect; release on stop/delete/rollback.
+  ramGate: injectedRamGate,
 } = {}) {
   const removeDataDir = injectedRemoveDataDir ?? removeRedroidDataDir;
+  const ramGate = injectedRamGate ?? null;
+
+  /** RAM-G1 denial → stable 409 with the machine reason in the message. */
+  const ramGateDenied = (adm, what) =>
+    fail(
+      'RAM_GATE_DENIED',
+      409,
+      `${what} denied by RAM gate (${adm.reason}) — MemAvailable ${fmtMiB(adm.currentMiB)} MiB, projected ${fmtMiB(adm.projectedMiB)} MiB; see Settings → RAM Gate for the policy and decision log`,
+      { reason: adm.reason, currentMiB: adm.currentMiB ?? null, projectedMiB: adm.projectedMiB ?? null, liveCount: adm.liveCount ?? null },
+    );
+  const fmtMiB = (v) => (Number.isFinite(v) ? Math.round(v).toLocaleString('en-US') : '?');
   const adbEngine = adb ?? createAdbWhitelist({
     adbBinary: config?.redroidAdbBinary,
     timeoutMs: config?.redroidAdbTimeoutMs,
@@ -1616,6 +1631,26 @@ export function createRedroidService({
     const dataRoot = path.resolve(config?.redroidDataRoot ?? '/var/lib/water-army/redroid');
     const dataDir = path.join(dataRoot, name);
 
+    // RAM-G1: host-RAM admission — BEFORE any side effect (no data dir, no
+    // DB row, no docker create on a denial). The lease lives until the
+    // device stops (the RAM is held for the device's lifetime).
+    if (ramGate) {
+      const adm = await ramGate.admit({ kind: 'device', entityKey: name, entityName: name, source: 'redroid-create' });
+      if (!adm.admitted) {
+        await audit({
+          actorUserId: actorUserId ?? null,
+          action: 'redroid.device.create_denied',
+          resourceType: 'redroid_device',
+          resourceId: null,
+          requestId: requestId ?? null,
+          ip: ip ?? null,
+          status: 'denied',
+          details: { name, reason: adm.reason, currentMiB: adm.currentMiB ?? null, projectedMiB: adm.projectedMiB ?? null, liveCount: adm.liveCount ?? null },
+        }).catch(() => {});
+        throw ramGateDenied(adm, `Device create '${name}'`);
+      }
+    }
+
     let row = null;
     let createdDir = false;
     try {
@@ -1844,6 +1879,12 @@ export function createRedroidService({
     } catch {
       /* best-effort */
     }
+    // RAM-G1: the admission lease is released with the create attempt — a
+    // failed create must not keep budget reserved (C5: boot failure →
+    // 預留正確釋放).
+    if (ramGate && row?.name) {
+      await ramGate.releaseByKey({ kind: 'device', entityKey: row.name, reason: 'create-rollback' }).catch((err) => log.warn?.({ error: err.message }, 'ram-gate: release on rollback failed'));
+    }
     try {
       if (row) await db.device.delete({ where: { id: row.id } }).catch(() => {});
     } catch {
@@ -1896,6 +1937,29 @@ export function createRedroidService({
     if (!row.containerId) {
       throw fail('REDROID_NOT_PROVISIONED', 409, `Device '${row.name}' has no container (create failed) — delete and recreate it`);
     }
+    // RAM-G1: 'start' re-admits (the device was stopped → its lease was
+    // released). 'restart' keeps the existing lease (no RAM growth — one
+    // container, one lease) and only renews the TTL backstop. 'stop' releases
+    // AFTER success below.
+    if (ramGate && action === 'start') {
+      const adm = await ramGate.admit({ kind: 'device', entityKey: row.name, entityName: row.name, source: 'redroid-start' });
+      if (!adm.admitted) {
+        await audit({
+          actorUserId: actorUserId ?? null,
+          action: 'redroid.device.start_denied',
+          resourceType: 'redroid_device',
+          resourceId: row.id,
+          requestId: requestId ?? null,
+          ip: ip ?? null,
+          status: 'denied',
+          details: { name: row.name, reason: adm.reason, currentMiB: adm.currentMiB ?? null, projectedMiB: adm.projectedMiB ?? null, liveCount: adm.liveCount ?? null },
+        }).catch(() => {});
+        throw ramGateDenied(adm, `Device start '${row.name}'`);
+      }
+    }
+    if (ramGate && action === 'restart') {
+      await ramGate.renewLease({ kind: 'device', entityKey: row.name }).catch(() => {});
+    }
     // Stage B: tear the tunnel down BEFORE the container stops (exec needs a
     // running container). Best-effort — the docker action is the contract.
     if (row.gostPort && (action === 'stop' || action === 'restart')) {
@@ -1916,6 +1980,11 @@ export function createRedroidService({
       throw err;
     }
     await db.device.update({ where: { id: row.id }, data: { containerState: result.state } });
+    // RAM-G1: a successful stop frees the device's RAM → release the lease
+    // (the next 'start' re-admits against fresh metrics).
+    if (ramGate && action === 'stop' && result.state !== 'running') {
+      await ramGate.releaseByKey({ kind: 'device', entityKey: row.name, reason: 'stop-action' }).catch((err) => log.warn?.({ error: err.message }, 'ram-gate: release on stop failed'));
+    }
     // Stage B: after start/restart — (re)provision gost (idempotent reuse)
     // synchronously + the in-device tunnel in the background (boot may take minutes).
     if (row.gostPort && (action === 'start' || action === 'restart') && result.state === 'running') {
@@ -1992,6 +2061,13 @@ export function createRedroidService({
     let gostTeardown = null;
     if (row.gostPort) {
       gostTeardown = await teardownGost(row).catch((e) => ({ removed: false, error: String(e?.message ?? e).slice(0, 200) }));
+    }
+
+    // RAM-G1: the device is being removed → release its lease (identity data
+    // removal is operator-gated by `removeData` and untouched here — the gate
+    // NEVER deletes data).
+    if (ramGate) {
+      await ramGate.releaseByKey({ kind: 'device', entityKey: row.name, reason: 'delete-action' }).catch((err) => log.warn?.({ error: err.message }, 'ram-gate: release on delete failed'));
     }
 
     // R4: invalidate any create-idempotency entry that cached THIS device's

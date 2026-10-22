@@ -33,6 +33,7 @@ import { createDockerService } from './services/docker-service.js';
 import { createBatchMetricsService } from './services/batch-metrics-service.js';
 import { runRedroidPreflight } from './services/preflight.js';
 import { createRedroidService } from './services/redroid-service.js';
+import { buildRamGateService } from './services/ram-gate-service.js';
 import { createAdbWhitelist } from './services/adb-whitelist.js';
 import { createMockRedroidEnvironment } from './services/redroid-mock.js';
 import { createTaskQueue, closeTaskQueue } from './plugins/task-queue.js';
@@ -50,6 +51,7 @@ import { dashboardRoutes } from './routes/dashboard.js';
 import { batchMonitorRoutes } from './routes/batch-monitor.js';
 import { batchContainerRoutes } from './routes/batch-containers.js';
 import { networkPolicyRoutes } from './routes/network-policy.js';
+import { systemRamGateRoutes } from './routes/system-ram-gate.js';
 
 /** Public (unauthenticated) route prefixes — everything else may need a session. */
 const PUBLIC_PREFIXES = ['/api/health', '/api/auth/login'];
@@ -126,6 +128,29 @@ export async function buildApp(opts = {}) {
   const sessions = createSessionService({ db, config });
   const audit = createAuditService({ db, log: app.log });
 
+  // RAM-G1 (boss MD 2026-10-22): product-grade host-RAM admission gate.
+  // Constructed ONLY when redis has eval() (real ioredis; hermetic fakes
+  // lack it → gate null → boot paths behave exactly as pre-G1, the
+  // documented zero-regression isolation). In production: always on unless
+  // RAM_GATE_ENABLED=false. Test seam: opts.ramGate / opts.ramGateMetrics.
+  // NOTE: constructed BEFORE the batch lifecycle below (it takes the gate
+  // at creation time).
+  const ramGateService = opts.ramGate
+    ? { gate: opts.ramGate, skipped: null, decisions: () => [] }
+    : (await buildRamGateService({
+        db,
+        redis,
+        config,
+        log: app.log,
+        audit,
+        metrics: opts.ramGateMetrics,
+      }));
+  if (!ramGateService.gate) {
+    app.log.warn(`RAM gate OFF — ${ramGateService.skipped} (boot paths run un-gated; production always has redis eval)`);
+  } else {
+    app.log.info('RAM gate ON — host-RAM admission active for device/batch boots');
+  }
+
   // BR-B3 (MD Phase 3, lane A): batch container lifecycle. The API owns the
   // Docker socket for batch containers (worker never holds it — threat T1);
   // the S4 worker container adapter reaches this surface via service-token
@@ -150,6 +175,8 @@ export async function buildApp(opts = {}) {
         // test seam: hermetic suites inject a canned ADB probe (the default is a
         // real node:net handshake to 127.0.0.1 — no container in the test host).
         healthProbe: opts.batchLifecycleHealthProbe,
+        // RAM-G1: host-RAM admission gate (null = pre-G1 behaviour).
+        ramGate: ramGateService.gate,
       })
     : createUnavailableBatchLifecycle();
   const rateLimiter = createRateLimiter({ limit: 5, windowMs: 60_000 });
@@ -190,6 +217,8 @@ export async function buildApp(opts = {}) {
     config,
     log: app.log,
     audit,
+    // RAM-G1: host-RAM admission gate (null = pre-G1 behaviour).
+    ramGate: ramGateService.gate,
     // Mock mode: the adb engine runs through the canned mock executor (calls
     // are recorded on redroidMockEnv.adb.calls for zero-shell assertions).
     adb: redroidEnv
@@ -253,6 +282,7 @@ export async function buildApp(opts = {}) {
   app.decorate('batchLifecycle', batchLifecycle);
   app.decorate('batchMetrics', batchMetrics);
   app.decorate('redroidService', redroidService);
+  app.decorate('ramGateService', ramGateService);
   app.decorate('taskQueue', taskQueue);
   app.decorate('taskSseActive', 0); // P3 SSE concurrency cap counter
 
@@ -395,9 +425,11 @@ export async function buildApp(opts = {}) {
   batchMonitorRoutes(app);
   batchContainerRoutes(app);
   networkPolicyRoutes(app);
+  systemRamGateRoutes(app);
 
   // --- lifecycle ---------------------------------------------------------------
   app.addHook('onClose', async () => {
+    ramGateService.gate?.stop?.();
     await closeDb(db);
     await closeRedis(redis);
     await closeTaskQueue(taskQueue);

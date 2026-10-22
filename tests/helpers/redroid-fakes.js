@@ -24,8 +24,11 @@ export const TEST_PASSWORD = 'TestPass123';
  * @param {object} [opts.dockerOpts] mock redroid docker opts (startFails etc.)
  * @param {object} [opts.adbOpts] mock adb opts (online etc.)
  * @param {object} [opts.configOverride]
+ * @param {object} [opts.extraAppOpts] pass-through to buildApp (RAM-G1: gate
+ *   redis + metrics seam — existing callers pass nothing, zero behaviour
+ *   change).
  */
-export async function makeRedroidTestApp({ redroidMockOpts = {}, configOverride = {} } = {}) {
+export async function makeRedroidTestApp({ redroidMockOpts = {}, configOverride = {}, extraAppOpts = {} } = {}) {
   const passwordHash = await hash(TEST_PASSWORD, { type: argon2id });
   const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'wa-p5-redroid-'));
   const db = makeFakeDb({
@@ -71,6 +74,8 @@ export async function makeRedroidTestApp({ redroidMockOpts = {}, configOverride 
     // uses the deterministic mock env (REDROID_ADAPTER=mock, test seam).
     docker: makeContainerFake(),
     redroidMockOpts,
+    // RAM-G1 seam: gate-capable redis / metrics (default = fakeRedisOk, gate off).
+    ...extraAppOpts,
   });
   return { app, db, dataRoot, redroidMock: app.redroidMockEnv, close: async () => { await app.close(); fs.rmSync(dataRoot, { recursive: true, force: true }); } };
 }
