@@ -81,7 +81,9 @@ async function login() {
 async function waitFor(label, fn, { timeoutMs = 120_000, intervalMs = 3000 } = {}) {
   const t0 = Date.now();
   for (;;) {
-    const v = await fn().catch(() => null);
+    // BR-B6 gen3: Promise.resolve — callers may pass sync fns; a sync value
+    // has no .catch and the first poll would FATAL the whole driver.
+    const v = await Promise.resolve(fn()).catch(() => null);
     if (v) return { v, timedOut: false, elapsedMs: Date.now() - t0 };
     if (Date.now() - t0 > timeoutMs) return { v: null, timedOut: true, elapsedMs: Date.now() - t0 };
     await sleep(intervalMs);
@@ -162,12 +164,15 @@ async function cycleTerminal(cycleId) {
   return bs.length > 0 && bs.every((b) => TERMINAL_BATCH.includes(b.status));
 }
 async function waitTerminal(cycleId, tag, { timeoutMs = 5 * 60_000 } = {}) {
-  const { timedOut } = await waitFor(`${tag} terminal`, () => (cycleTerminal(cycleId) ? true : null), { timeoutMs, intervalMs: 3000 });
+  // BR-B6 gen3: the predicate must AWAIT cycleTerminal — the un-awaited
+  // form returned a truthy Promise and waitTerminal "passed" instantly.
+  const isTerminal = async () => (await cycleTerminal(cycleId) ? true : null);
+  const { timedOut } = await waitFor(`${tag} terminal`, isTerminal, { timeoutMs, intervalMs: 3000 });
   if (timedOut) {
     for (const b of await batchesOf(cycleId)) {
       if (!TERMINAL_BATCH.includes(b.status)) await api('POST', `/api/batches/${b.id}/cancel`).catch(() => {});
     }
-    await waitFor(`${tag} terminal after cancel`, () => (cycleTerminal(cycleId) ? true : null), { timeoutMs: 2 * 60_000, intervalMs: 3000 });
+    await waitFor(`${tag} terminal after cancel`, isTerminal, { timeoutMs: 2 * 60_000, intervalMs: 3000 });
   }
 }
 // re-arm identities for the next fault scenario (fresh READY state)
@@ -310,7 +315,7 @@ async function f3() {
   console.log('[F3] RECOVERY: redis up + worker respawn');
   dc('start br-b6-redis');
   startWorker('f3b');
-  await waitFor('F3 worker up', () => (workerAlive() ? true : null), { timeoutMs: 60_000, intervalMs: 2000 });
+  await waitFor('F3 worker up', async () => (workerAlive() ? true : null), { timeoutMs: 60_000, intervalMs: 2000 });
 
   await waitTerminal(cycleId, 'F3');
   const ok = await assertConvergence('F3', refs, cycleId, { expectAllSucceeded: false });
