@@ -5,7 +5,7 @@
 # Verification: samples-30s.csv must gain a new row within ~30s;
 # window-watch.log must gain a row within ~60s.
 set -euo pipefail
-REPO="$(cd "$(dirname "$0")/../.." && pwd)"
+REPO="$(cd "$(dirname "$0")/../../.." && pwd)"
 DEST="$HOME/.config/systemd/user"
 mkdir -p "$DEST"
 cp "$REPO/scripts/br-b6accab/systemd/br-b6accab-sampler.service" "$DEST/"
