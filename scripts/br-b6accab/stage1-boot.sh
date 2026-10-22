@@ -141,6 +141,7 @@ cmd_boot() {
   # ADB wire handshake (get-state=device) + sys.boot_completed=1
   echo "ts,g0_util,g0_mem_free,g1_util,g1_mem_free,mem_avail_mb,load1,sglang_code,boot_completed,adb_state" > "$BOOT_CSV"
   local t0=$(date +%s) next_health=0 bc=0 st=
+  "$ADB" connect "127.0.0.1:$adb_port" > /dev/null 2>&1 || true
   while :; do
     local now
     now=$(date +%s)
@@ -151,6 +152,9 @@ cmd_boot() {
       next_health=$(( now + 30 ))
     fi
     vram_redline || { log "STOP: vram redline during boot — saving logs"; break; }
+    # adb TCP devices only appear after `adb connect` — without it, get-state
+    # returns empty forever (root cause of attempt #2 false TIMEOUT)
+    "$ADB" connect "127.0.0.1:$adb_port" > /dev/null 2>&1 || true
     bc=$("$ADB" -s "127.0.0.1:$adb_port" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r\n' || echo "")
     st=$("$ADB" -s "127.0.0.1:$adb_port" get-state 2>/dev/null | tr -d '\r\n' || echo "")
     [ "$st" = "offline" ] && bc=""
@@ -160,6 +164,7 @@ cmd_boot() {
     echo "$(ts),${g},$(awk '/MemAvailable/{printf "%d",$2/1024}' /proc/meminfo),$(awk '{print $1}' /proc/loadavg),$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 http://127.0.0.1:30000/health 2>/dev/null || echo 000),${bc:-},${st:-}" >> "$BOOT_CSV"
     sleep 10
   done
+  "$ADB" disconnect "127.0.0.1:$adb_port" > /dev/null 2>&1 || true
 
   # post-boot hard-gate re-check (W2/W3/W4/W5) — boss 2026-10-22 15:59:
   # gate verified once BEFORE boot and once AFTER boot
@@ -213,18 +218,22 @@ cmd_teardown() {
     log "rm container $c"; DC rm -f "$c" >/dev/null 2>&1 || true
   done
   # network-membership sweep (catches misnamed containers attached to our bridge)
-  if DC network inspect "$NET" >/dev/null 2>&1; then
-    for c in $(DC network inspect -f '{{range .Containers}}{{.Name}} {{end}}' "$NET" 2>/dev/null); do
-      log "rm network-attached container $c"; DC rm -f "$c" >/dev/null 2>&1 || true
-    done
-  fi
+  for c in $(DC ps -aq --filter "network=$NET"); do
+    log "rm network-attached container $c"; DC rm -f "$c" >/dev/null 2>&1 || true
+  done
   DC network rm "$NET" >/dev/null 2>&1 && log "rm network $NET" || log "network $NET absent (ok)"
   if [ -d "$DATA_ROOT" ]; then
     log "rm data root $DATA_ROOT (alpine root shim for root-owned files, then host rmdir)"
-    if [ -n "$(DC images -q alpine:3.20 2>/dev/null)" ]; then
-      DC run --rm -v "$DATA_ROOT:/wipe" alpine:3.20 sh -c 'rm -rf /wipe/* /wipe/.[!.]* 2>/dev/null' >/dev/null 2>&1 || true
-    fi
-    rm -rf "$DATA_ROOT" 2>/dev/null || true
+    local i
+    for i in 1 2; do
+      if [ -n "$(DC images -q alpine:3.20 2>/dev/null)" ]; then
+        DC run --rm -v "$DATA_ROOT:/wipe" alpine:3.20 sh -c 'rm -rf /wipe/* /wipe/.[!.]* 2>/dev/null' >/dev/null 2>&1 || true
+      fi
+      rm -rf "$DATA_ROOT" 2>/dev/null || true
+      [ ! -d "$DATA_ROOT" ] && break
+      [ "$i" -eq 1 ] && log "data root not empty after wipe pass 1 — retrying"
+      sleep 2
+    done
     rmdir "$DATA_ROOT" 2>/dev/null || true
   fi
   # verify zero residue (our artifacts only)
