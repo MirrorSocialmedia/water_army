@@ -68,7 +68,10 @@ async function api(method, path, { body } = {}) {
   const text = await res.text();
   let json = null;
   try { json = JSON.parse(text); } catch { /* non-JSON */ }
-  return { status: res.status, json, text };
+  // BR-B6 gen3: MUST return headers — login() reads set-cookie from them
+  // (the E2E driver's api() does; this copy never had been live-run until
+  // the gen3 fault run, which hit `res.headers.get` on undefined).
+  return { status: res.status, json, text, headers: res.headers };
 }
 async function login() {
   const res = await api('POST', '/api/auth/login', { body: { username: seed.admin.username, password: seed.admin.password } });
@@ -147,9 +150,12 @@ async function batchesOf(cycleId) {
 async function startBatch(cycleId, tag) {
   const [b] = await batchesOf(cycleId);
   const r = await api('POST', `/api/batches/${b.id}/start`);
-  const running = r.status === 200 && (r.json?.batch?.status === 'RUNNING' || r.json?.started === false);
-  if (!running) throw new Error(`${tag}: start failed ${r.status} ${r.text.slice(0, 200)}`);
-  return r.json;
+  // Contract (E2E driver P1 + batches-api tests): 202 = fresh dispatch
+  // (async — batch goes RUNNING); 200 = idempotent no-op (scheduler already
+  // started it, or it converged). Both are success — convergence is proven
+  // by the subsequent DB waitFor, not by this status.
+  if (r.status === 202 || r.status === 200) return r.json;
+  throw new Error(`${tag}: start failed ${r.status} ${r.text.slice(0, 200)}`);
 }
 async function cycleTerminal(cycleId) {
   const bs = await batchesOf(cycleId);
@@ -172,9 +178,15 @@ async function rearm(refs) {
   }
 }
 // the MD's core invariants (唔雙跑唔漏單) — scoped to a set of identities
-async function assertConvergence(phase, refs, { expectAllSucceeded = true } = {}) {
+// BR-B6 gen3: MUST scope to the current cycle's batches — the scratch DB
+// accumulates cycles (F0→F3 reuse the same identities), so an unscoped
+// per-identity terminal count would count F0's runs inside F1 and hard-fail
+// every later phase. (The attempt_started uniqueness check below is
+// deliberately global: the claim CAS must never double-execute ANY run.)
+async function assertConvergence(phase, refs, cycleId, { expectAllSucceeded = true } = {}) {
+  const batchIds = (await batchesOf(cycleId)).map((b) => b.id);
   const ids = refs.map((ref) => seed.main.find((m) => m.ref === ref).id);
-  const runs = await db.taskRun.findMany({ where: { identityId: { in: ids } } });
+  const runs = await db.taskRun.findMany({ where: { identityId: { in: ids }, batchId: { in: batchIds } } });
   const byId = new Map();
   for (const r of runs) {
     if (!byId.has(r.identityId)) byId.set(r.identityId, []);
@@ -214,7 +226,7 @@ async function f0() {
   await startBatch(cycleId, 'F0');
   record('F0', 'cycle created + started', true, `cycleId=${String(cycleId).slice(0, 8)}…`);
   await waitTerminal(cycleId, 'F0');
-  const ok = await assertConvergence('F0', refs);
+  const ok = await assertConvergence('F0', refs, cycleId);
   record('F0', 'baseline cycle fully succeeded', ok);
 }
 
@@ -243,7 +255,7 @@ async function f1() {
   dc('start br-b6-redis');
 
   await waitTerminal(cycleId, 'F1');
-  const ok = await assertConvergence('F1', refs);
+  const ok = await assertConvergence('F1', refs, cycleId);
   record('F1', 'cycle converged after Redis recovery', ok);
 }
 
@@ -275,7 +287,7 @@ async function f2() {
   // re-dispatch; the invariant that matters is ONE honest outcome per identity
   // with zero double execution.
   await waitTerminal(cycleId, 'F2');
-  const ok = await assertConvergence('F2', refs, { expectAllSucceeded: false });
+  const ok = await assertConvergence('F2', refs, cycleId, { expectAllSucceeded: false });
   const bs = await batchesOf(cycleId);
   record('F2', `cycle terminal after PG recovery: ${bs.map((b) => b.status).join(',')}`, true, 'honest outcomes (see DB)');
   await rearm(refs);
@@ -301,7 +313,7 @@ async function f3() {
   await waitFor('F3 worker up', () => (workerAlive() ? true : null), { timeoutMs: 60_000, intervalMs: 2000 });
 
   await waitTerminal(cycleId, 'F3');
-  const ok = await assertConvergence('F3', refs, { expectAllSucceeded: false });
+  const ok = await assertConvergence('F3', refs, cycleId, { expectAllSucceeded: false });
   record('F3', 'combo converged (no lost identity, no double run)', ok);
   return ok;
 }
