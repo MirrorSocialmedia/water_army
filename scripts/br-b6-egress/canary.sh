@@ -8,11 +8,13 @@
 #     the discriminator: gost-container IP = via-proxy, device-container IP =
 #     DIRECT (the fail-open path), gateway IP = host self-check
 #   - the received payload bytes (probe tag lines land here)
+#   - a conn-attempt line also doubles as a ~60s heartbeat (timeout wrapper)
 # Answers 200 OK (body "OK") on every connection so HTTP probes terminate
 # cleanly (wget sees 200; the connection is already logged either way).
 #
-# Single-connection-at-a-time by design (probes are sequential); a -t 15
-# inactivity timeout keeps the loop alive if a client stalls.
+# Single-connection-at-a-time by design (probes are sequential). alpine 3.20
+# busybox nc has no -t flag (live-found) -> `timeout 60` wrapper instead: a
+# stuck client can hold the listener at most 60s, then the loop recovers.
 # =============================================================================
 LOG=/canary/conn.log
 PORT="${1:-16370}"
@@ -23,9 +25,11 @@ mkdir -p /canary
 while :; do
   {
     echo "=== conn-attempt $(date -u '+%Y-%m-%dT%H:%M:%SZ') ==="
-    ( printf 'HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK'
-      sleep 0.3
-    ) | busybox nc -l -p "$PORT" -t 15 2>&1
+    timeout 60 sh -c '
+      ( printf "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK"
+        sleep 0.3
+      ) | busybox nc -l -p '"$PORT"' 2>&1
+    '
   } >> "$LOG"
   sleep 0.2
 done

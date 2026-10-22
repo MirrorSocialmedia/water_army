@@ -50,7 +50,20 @@ ts() { # dual timestamp: UTC + HKT
   echo "$(date -u '+%Y-%m-%dT%H:%M:%SZ') / $(TZ=Asia/Hong_Kong date '+%Y-%m-%dT%H:%M:%S%z')"
 }
 log() { echo "[$(ts)] $*" | tee -a "$EGRESS_OUT/egress-run.log"; }
-dc() { sg docker -c "docker $*"; }
+
+# docker-group guard (the dc() contract): refuse to run without it
+if ! id -nG 2>/dev/null | tr ' ' '\n' | grep -qx docker; then
+  echo "FATAL: user $(id -un) is not in the docker group — dc() direct-call contract violated (refusing to guess)" >&2
+  return 1 2>/dev/null || exit 1
+fi
+dc() { # docker CLI — direct call, args passed as an array (no re-parse).
+  # NOTE (2026-10-22, live-found x2): `sg docker -c "docker $*"` word-splits
+  # template strings (spaces inside `--format '{{...}}'` break), and the
+  # %q-fix broke again because sg's dash mangles bash $'...' quoting. The
+  # service user is a MEMBER of the docker group (guard above), so a direct
+  # array call is both correct and the simplest.
+  docker "$@"
+}
 
 # netcheck = the EXACT in-device script the platform watchdog runs
 # (apps/api/src/services/redroid-health.js buildT2sNetcheckScript).
@@ -68,11 +81,12 @@ G=$(ip route get 8.8.8.8 2>/dev/null)
 if printf "%s" "$G" | grep -q "table 100"; then EFFECTIVE=tunnel; elif printf "%s" "$G" | grep -q "dev eth0"; then EFFECTIVE=direct; else EFFECTIVE=unknown; fi
 echo "NETCHECK process=$PROCESS pid=$PID iface=$IFACE route=$ROUTE rule=$RULE effective=$EFFECTIVE"'
 
-# Run NETCHECK inside the device's netns+pidns via a one-shot sidecar
-# container (root-free equivalent of nsenter -t <pid> -n; the docker daemon
-# does the netns/pidns join on our behalf).
-netcheck() { # $1=device container name -> prints NETCHECK= line
-  dc run --rm --net "container:$1" --pid "container:$1" --entrypoint sh \
+# Run NETCHECK inside the device's netns (+ the tunnel runner's pidns, where
+# tun2socks lives in this harness) via a one-shot sidecar container — the
+# root-free equivalent of nsenter -t <pid> -n (-t pidns). The docker daemon
+# does the namespace join on our behalf.
+netcheck() { # $1=device container  $2=tunnel-runner container -> NETCHECK= line
+  dc run --rm --net "container:$1" --pid "container:$2" --entrypoint sh \
     "$SIDECAR_IMG" -c "$NETCHECK_SCRIPT" 2>/dev/null | grep '^NETCHECK '
 }
 
