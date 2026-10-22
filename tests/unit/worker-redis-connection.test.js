@@ -69,6 +69,66 @@ test('buildRedisConnection returns { url } and rejects non-URL input', () => {
   assert.throws(() => buildRedisConnection(null), TypeError);
 });
 
+// ---- BR-B6: slot-defer completion-artifact demotion ---------------------
+// The batch engine's sanctioned slot-defer path parks the job in DELAYED
+// from inside the processor; BullMQ's completion handling then surfaces a
+// PAIR of events per deferral ('Job ... is not in the active state.
+// moveToFinished' + 'Missing lock for job ...' — exact pairs observed in
+// E2E run-4/run-5: 468k error lines per run). createBullMqWorker budgets
+// two demotions per tracked job id; anything over budget stays at error.
+
+test('createBullMqWorker: deferral artifacts demote to debug; over-budget and untracked errors stay at error level', () => {
+  const events = [];
+  const fakeLog = {
+    info() {},
+    warn(o) { events.push(['warn', o]); },
+    error: (o) => events.push(['error', o]),
+    debug: (o) => events.push(['debug', o]),
+  };
+  const tracker = { budget: new Map([['batch-1111-1', 2]]) };
+  const worker = createBullMqWorker(makeConfig(), { Worker: FakeWorker, log: fakeLog, deferTracker: tracker });
+
+  // The observed artifact pair for a tracked job id → both demoted:
+  worker.emit('error', new Error('Job batch-1111-1 is not in the active state. moveToFinished'));
+  worker.emit('error', new Error('Missing lock for job batch-1111-1. moveToFinished'));
+  // Budget exhausted — a THIRD same-id error is a real error again:
+  worker.emit('error', new Error('Job batch-1111-1 is not in the active state. moveToFinished'));
+
+  // 'failed' form with job.id, budget pre-marked as the processor would —
+  // the observed artifact pair arrives as two events:
+  tracker.budget.set('batch-2222-2', 2);
+  worker.emit('failed', { id: 'batch-2222-2', data: {} }, new Error('Job batch-2222-2 is not in the active state. moveToFinished'));
+  worker.emit('failed', { id: 'batch-2222-2', data: {} }, new Error('Missing lock for job batch-2222-2. moveToFinished'));
+  // Untracked id → never demoted, stays warn (the real failure path):
+  worker.emit('failed', { id: 'batch-3333-3', data: {} }, new Error('boom'));
+
+  // Genuine worker error (no job id at all) → stays error:
+  worker.emit('error', new Error('ECONNREFUSED 127.0.0.1:16342'));
+
+  assert.deepEqual(
+    events.map((e) => e[0]),
+    ['debug', 'debug', 'error', 'debug', 'debug', 'warn', 'error'],
+    'artifact pair demoted, over-budget error surfaced, untracked failed stays warn, real worker error stays error',
+  );
+  assert.equal(tracker.budget.size, 0, 'both budgets fully consumed');
+});
+
+test('createBullMqWorker without deferTracker: every error/failed surfaces at full level (default path unchanged)', () => {
+  const events = [];
+  const fakeLog = {
+    info() {},
+    warn(o) { events.push(['warn', o]); },
+    error: (o) => events.push(['error', o]),
+    debug: (o) => events.push(['debug', o]),
+  };
+  const worker = createBullMqWorker(makeConfig(), { Worker: FakeWorker, log: fakeLog });
+
+  worker.emit('error', new Error('Job batch-9999-9 is not in the active state. moveToFinished'));
+  worker.emit('failed', { id: 'batch-9999-9', data: {} }, new Error('Job batch-9999-9 is not in the active state. moveToFinished'));
+
+  assert.deepEqual(events.map((e) => e[0]), ['error', 'warn'], 'no tracker → nothing is demoted');
+});
+
 // ---- Layer 2: real RedisConnection behavior contrast (documented trap) --
 
 function makeFakeClient() {

@@ -199,9 +199,44 @@ export function createHealthServer(healthRedis, getQueueState, getDbStatus) {
  * @param {object}   [deps.log]
  * @param {Function} [deps.processor]  job → result (defaults to a loud no-op)
  * @param {object}   [deps.queueState] state object bound to worker events
+ * @param {object}   [deps.deferTracker] { budget: Map<string, number> } —
+ *   per-job-id artifact BUDGET for jobs the processor knowingly moved to
+ *   DELAYED (slot deferral). BullMQ's completion path then fails on the
+ *   no-longer-active job and surfaces TWO 'error'/'failed' events per
+ *   deferral (observed live: 'Job ... is not in the active state.
+ *   moveToFinished' + 'Missing lock for job ...' — exact pairs in E2E
+ *   run-4/run-5). Each event consumes one budget; when the budget is
+ *   exhausted, further same-id errors are first-class errors again.
  */
-export function createBullMqWorker(config, { Worker: WorkerCtor = BullMQWorker, log: workerLog = log, processor, queueState } = {}) {
+export function createBullMqWorker(config, { Worker: WorkerCtor = BullMQWorker, log: workerLog = log, processor, queueState, deferTracker } = {}) {
   const state = queueState ?? createQueueState();
+  const deferredBudget = deferTracker?.budget ?? new Map();
+  let deferredArtifactCount = 0;
+  // BR-B6 (E2E run-4/run-5): the sanctioned slot-defer path calls
+  // job.moveToDelayed() from inside the processor; BullMQ's completion
+  // handling then fails ('Job ... is not in the active state. moveToFinished'
+  // + 'Missing lock for job ...') and surfaces it as worker 'error'. Every
+  // deferral emitted TWO error-level lines — a 9-minute run with 196 queued
+  // runs and a 1s deferral wait stormed 468k lines. The deferral itself is
+  // healthy (run stays QUEUED, holds nothing, re-lands after the delay), so
+  // budgeted artifacts are demoted to debug with a running count; anything
+  // over budget is still a first-class error.
+  const isDeferralArtifact = (err, jobId) => {
+    let candidate = jobId;
+    if (candidate == null && typeof err?.message === 'string') {
+      candidate = err.message.match(/\bJob ([0-9a-zA-Z_-]+)/)?.[1] ?? err.message.match(/Missing lock for job ([0-9a-zA-Z_-]+)/)?.[1] ?? null;
+    }
+    if (candidate == null) return null;
+    const left = (deferredBudget.get(candidate) ?? 0) - 1;
+    if (left < 0) return null; // no budget — a real error
+    if (left === 0) deferredBudget.delete(candidate);
+    else deferredBudget.set(candidate, left);
+    return candidate;
+  };
+  const demote = (candidate, kind) => {
+    deferredArtifactCount += 1;
+    workerLog.debug?.({ jobId: candidate, deferredArtifacts: deferredArtifactCount, kind }, 'worker noise suppressed: slot-defer completion artifact (job is delayed by design, run stays QUEUED)');
+  };
   const worker = new WorkerCtor(
     TASK_QUEUE_NAME,
     processor ??
@@ -223,9 +258,15 @@ export function createBullMqWorker(config, { Worker: WorkerCtor = BullMQWorker, 
     workerLog.info?.({ jobId: job?.id, runId: job?.data?.runId }, 'job completed');
   });
   worker.on('failed', (job, err) => {
+    const artifact = isDeferralArtifact(err, job?.id);
+    if (artifact) return demote(artifact, 'failed');
     workerLog.warn({ jobId: job?.id, runId: job?.data?.runId, error: err?.message }, 'job failed');
   });
-  worker.on('error', (err) => workerLog.error({ error: err.message }, 'worker error'));
+  worker.on('error', (err) => {
+    const artifact = isDeferralArtifact(err);
+    if (artifact) return demote(artifact, 'error');
+    workerLog.error({ error: err.message }, 'worker error');
+  });
   Object.defineProperty(worker, 'queueState', { value: state });
   return worker;
 }
@@ -253,6 +294,13 @@ export function createWorkerApp({
 } = {}) {
   const healthRedis = createHealthRedis(config, { Redis: RedisCtor });
   const queueState = createQueueState();
+  // BR-B6 (E2E run-4/run-5): the batch engine's slot-defer path parks the
+  // job in DELAYED from inside the processor; BullMQ's completion handling
+  // then emits a PAIR of 'error'/'failed' events for the no-longer-active
+  // job. The processor budgets two artifact events per deferred job id so
+  // createBullMqWorker can demote exactly those (468k error lines per run
+  // otherwise); anything over budget stays at error level.
+  const deferTracker = { budget: new Map() };
 
   // P4: the worker is ALSO a producer — schedule fires enqueue task-run jobs
   // through this queue (same queue, same job name; idempotent job ids make
@@ -421,7 +469,12 @@ export function createWorkerApp({
         log.error?.({ jobId: job?.id }, 'worker: batch job received but batch engine not built — failing loudly');
         throw new Error('worker: batch engine not ready');
       }
-      return batchEngineRef.impl.handleBatchJob(job);
+      const out = await batchEngineRef.impl.handleBatchJob(job);
+      if (out?.outcome === 'slot-deferred' && job?.id != null) {
+        // expect the paired completion artifacts for this id (see createBullMqWorker)
+        deferTracker.budget.set(job.id, (deferTracker.budget.get(job.id) ?? 0) + 2);
+      }
+      return out;
     }
     const engineImpl = engineRef.impl;
     if (!engineImpl) {
@@ -467,7 +520,7 @@ export function createWorkerApp({
     }
   };
 
-  const worker = createBullMqWorker(config, { Worker, processor, queueState });
+  const worker = createBullMqWorker(config, { Worker, processor, queueState, deferTracker });
   const healthServer = createHealthServer(
     healthRedis,
     () => queueState,
