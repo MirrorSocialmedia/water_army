@@ -15,8 +15,7 @@
 | `1d6f547` | RAM-G2 harness fixes: health/live path, api_login default cookie, subshell API_CODE fix | gen1 |
 | `fd24442` | RAM-G2 ladder fixes (gen1 tail WIP): capture create body before gate_snapshot clobbers API_BODY; jq --arg quoting; 164xx allowlist consolidated into foreign_port_redline; soak on resumed stages | gen2 (代 gen1 尾段 commit) |
 | `bb25347` | RAM-G2 Phase E harness: identity marker E2E + real batch gate-503 path (gen2) | gen2 |
-| `<fix-sha>` | **產品 bug fix**: worker enqueue wrapper 補傳 `delayMs`（batch auto-retry backoff 唔生效 → MAX_PARALLEL 下 3 attempts 30ms burn → FAILED_FINAL）— `apps/worker/src/worker.js` | gen2 |
-| `<report-sha>` | 本報告 | gen2 |
+| `199afc7` | **產品 bug fix**: worker enqueue wrapper 補傳 `delayMs`（batch auto-retry backoff 唔生效 → MAX_PARALLEL 下 3 attempts 30ms burn → FAILED_FINAL）— `apps/worker/src/worker.js` + 本報告初版 | gen2 |
 
 ### 新增文件
 - `scripts/ramgate-g2/{setup.sh,ladder.sh,teardown.sh,common.sh}` — D 段 harness（resumable, pidfile-only, 164xx port 紅線）
@@ -40,7 +39,7 @@
 | E 段 run-6 attempt-1 | 20,525.1 MiB | 10 台 | `e2e/e5-attempt1-evidence.txt` (audit) |
 | E 段 run-6 attempt-3 admit | ~21,5xx MiB | 9→10 台 | `e2e/e5-gate-attempt2.json` |
 | CEO 核盤 (04:1x) | 21,739 MB (dec) ≈ 21,230 MiB | 10 台 orphan idle 1-2h | 任務書 |
-| teardown 後 | **TBD — §8** | 0 台 | §8 |
+| teardown 後 | **26,166 MiB**（~2 GiB docker 分頁 cache 屬正常） | 0 台 | `teardown/zero-residue-final.txt` |
 
 SGLang 30000 全程 200（ladder 25/25 sample；E 段 health 抽樣全 200）— 未 stop/restart（硬界線 1）。
 
@@ -165,7 +164,20 @@ SGLang 30000 全程 200（ladder 25/25 sample；E 段 health 抽樣全 200）—
 
 ## 8. Recorded teardown（每步 raw 證據）
 
-_(teardown 執行後 append — 見 follow-up commit)_
+證據根：`/home/kenneth/.openclaw/workspace/logs/ramgate-g2/teardown/`（`teardown-main.log` = 全程 log）
+
+| 步 | 動作 | 結果 | 證據 |
+|----|------|------|------|
+| 1 | 10 台逐台 stop + delete（product API，`removeData:false`） | 全 200；gate `liveLeases` 10→0 逐台降（10800→9600→…→11200→0 MiB reserved，每步 = −1×1200） | `stop-*.json` `delete-*.json` `gate-after-l*.txt` |
+| 2 | gate zero-lease 核對 | `live=0 reserved=0 wouldAdmit=ADMITTED`（current 26,721.9 MiB 回歸） | `gate-final-zero.json` |
+| 3 | dataDir 清理（G1 alpine 方法，root-owned）+ scratch identity data（合成 E2E 數據，非真 Identity） | `/var/lib/water-army/redroid-ramgate-g2/` 清空；`.g2-scratch-identity-data` 刪除 | `datadirs-before-clean.txt` `alpine-clean-devicedirs.txt` `datadirs-after-clean.txt` |
+| 4 | scratch api/worker（pidfile kill）+ pg/redis（docker rm -f） | api/worker 先 cgroup 核對（`docker-`=0）再 kill；**teardown 腳本 `grep -c \|\| echo 0` 雙輸出 bug 誤 SKIP → 補殺（pid 驗證後 kill；worker TERM 掛起 → SIGKILL，BullMQ graceful close hang — 可觀測性注記）**；pg/redis 容器移除 | `kill-api.txt` `kill-worker.txt` `kill-api-retry.txt` `kill-worker-retry.txt` `kill-scratch-db.txt` |
+| 5 | bridge `br-b6g-ladder` 刪除 | ok | `kill-bridge.txt` |
+| 6 | ports 16400-16499 | **NONE**（首次 check 時 api/worker 未死 → 補殺後 = NONE） | `ports-164xx-listening.txt` + `zero-residue-final.txt` |
+| 7 | 零殘留 | containers（brb6g/g2-scratch/wa-batch）= 0；network = 0；ports = 0；dataDir 空 | `zero-residue.txt` `zero-residue-final.txt` |
+| 8 | 用戶 stack + SGLang 未動核對 | compose **5/5 healthy**；30000 = **200** | `post-teardown-stack.txt` `zero-residue-final.txt` |
+
+**Teardown 後 MemAvailable = 26,794,164 kB ≈ 26,166 MiB**（pre-boot 28,109 MiB → 10 台 min 20,142 MiB → teardown 後 26,166 MiB；差 ~2 GiB = docker 分頁 cache，正常）。
 
 ---
 
