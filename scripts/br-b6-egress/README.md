@@ -27,12 +27,11 @@ tested fail-closed isolation strategy:
 |---|---|
 | `common.sh` | helpers: pinned digests, net plan, the EXACT platform netcheck script (`buildT2sNetcheckScript`), netns-sidecar netcheck/probe, canary markers |
 | `01-snapshot-pre.sh` | C1: read-only pre-state snapshot (nft/iptables/docker nets/routes/addr/30000/sshd/uptime) → `$EGRESS_OUT` (workspace logs, not repo) |
-| `02-env-up.sh` | C2: build sidecar; create nets (A open / B internal / C canary); canary, gost, device containers; wire the real tunnel (repo setup sequence) |
-| `03-scenarios-c3.sh` | C3: 4 scenarios × 2 layers (netcheck + kernel probes + canary log), dual-stamped timeline |
-| `04-scenarios-c4.sh` | C4: fail-closed retest on the internal net |
-| `05-teardown.sh` | C5: invokes `rollback.sh`, then diffs vs pre-state |
-| `rollback.sh` | scoped teardown (`br-b6e-*` only) + rollback verification vs pre-snapshot |
-| `canary.sh` | in-canary TCP connection logger (src-IP discriminator, 200 OK responder) |
+| — | C2/C3/C4 were executed as **documented interactive sequences** (gen1/gen2), not standalone scripts — exact commands + full evidence: workspace `logs/br-b6-egress/acceptance.md` §7 + `waterarmy-br-accC-progress.md`. (A 02/03/04/05 standalone script set was planned in commit 989b708's README but not materialized; honest record.) |
+| `rollback.sh` | C5: scoped teardown (`br-b6e-*` only) + rollback verification vs pre-snapshot (gen2: `$E`→`$EGRESS_OUT` unbound-var fix; image sweep = tag + build manifest) |
+| `canary.py` + `canary.Dockerfile` | **active** in-canary protocol-aware python3 TCP logger (src-IP discriminator, CONNECT/HTTP/raw → 200 OK responder); gen2 2026-10-22: CONNECT branch also captures the tunneled request so probe tags land in the log |
+| `canary.sh` | legacy busybox-nc connection logger (superseded by canary.py; kept for reference — alpine 3.20 `nc -t` absent, timeout-wrapper note inside) |
+| `t2s-run.sh` | tunnel runner executed INSIDE the device netns (repo `buildTunnelSetupScript` sequence; gost-target = container IP; documents kill-semantics + the rtnetlink pre-create no-op on containerized netns) |
 | `sidecar.Dockerfile` | `br-b6e-sidecar:egress` (alpine:3.20 + iproute2) — root-free netns/pidns join stand-in |
 | `nft-failclosed-template.nft` | root-only per-counter variant (NOT executed by the harness) |
 

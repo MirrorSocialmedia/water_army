@@ -5,7 +5,8 @@
 # Removes ONLY this test's artifacts. Explicitly scoped:
 #   - containers whose name starts with `br-b6e-` (stop -t 5, then rm -f)
 #   - networks whose name starts with `br-b6e-`
-#   - image references `br-b6e-sidecar:*` (built by this harness only)
+#   - image references `br-b6e-*` (sidecar + canary, built by this harness only)
+#     plus every image id in `$EGRESS_OUT/images-manifest.txt` (build-time manifest)
 #   - data dirs `$EGRESS_DATA/data-br-b6e-*`
 #   - (host firewall: this harness wrote NO host rules — non-root; the
 #     nft-variant template was never executed. The nft sweep below is a
@@ -55,11 +56,18 @@ for n in $(dc network ls --format '{{.Name}}' 2>/dev/null | grep '^br-b6e-'); do
   fi
 done
 
-# --- sidecar image (harness-built only) ----------------------------------------
-for i in $(dc images --filter 'reference=br-b6e-sidecar*' --format '{{.ID}}' 2>/dev/null); do
-  log "rmi $i (br-b6e-sidecar)"
+# --- images (harness-built only: tag sweep + build manifest) ---------------------
+for i in $(dc images --filter 'reference=br-b6e-*' --format '{{.ID}}' 2>/dev/null); do
+  log "rmi $i (br-b6e-* tag)"
   dc rmi -f "$i" >/dev/null 2>&1 || vlog "image remove failed: $i"
 done
+if [ -f "$EGRESS_OUT/images-manifest.txt" ]; then
+  for i in $(sort -u "$EGRESS_OUT/images-manifest.txt"); do
+    [ -n "$i" ] || continue
+    log "rmi $i (manifest)"
+    dc rmi -f "$i" >/dev/null 2>&1 || vlog "image remove failed (manifest): $i"
+  done
+fi
 
 # --- data dirs ------------------------------------------------------------------
 for d in "$EGRESS_DATA"/data-br-b6e-*; do
@@ -93,20 +101,22 @@ if dc network ls --format '{{.Name}}' 2>/dev/null | grep -q '^br-b6e-'; then
 else
   vlog "OK: no br-b6e-* networks remain"
 fi
-ip route > "$E/pre-routes-post-rollback.txt" 2>&1
-ip -br addr > "$E/pre-addr-post-rollback.txt" 2>&1
-if diff -q "$E/pre-routes.txt" "$E/pre-routes-post-rollback.txt" >/dev/null 2>&1; then
+ip route > "$EGRESS_OUT/pre-routes-post-rollback.txt" 2>&1
+ip -br addr > "$EGRESS_OUT/pre-addr-post-rollback.txt" 2>&1
+if diff -q "$EGRESS_OUT/pre-routes.txt" "$EGRESS_OUT/pre-routes-post-rollback.txt" >/dev/null 2>&1;
+then
   vlog "OK: ip route diff vs pre-state = clean"
 else
   vlog "DIFF: ip route changed vs pre-state (inspect pre-routes-post-rollback.txt):"
-  diff "$E/pre-routes.txt" "$E/pre-routes-post-rollback.txt" | head -20 | tee -a "$V"
+  diff "$EGRESS_OUT/pre-routes.txt" "$EGRESS_OUT/pre-routes-post-rollback.txt" | head -20 | tee -a "$V"
   leftover=1
 fi
-if diff -q "$E/pre-addr.txt" "$E/pre-addr-post-rollback.txt" >/dev/null 2>&1; then
+if diff -q "$EGRESS_OUT/pre-addr.txt" "$EGRESS_OUT/pre-addr-post-rollback.txt" >/dev/null 2>&1;
+then
   vlog "OK: ip -br addr diff vs pre-state = clean"
 else
   vlog "DIFF: ip addr changed vs pre-state:"
-  diff "$E/pre-addr.txt" "$E/pre-addr-post-rollback.txt" | head -20 | tee -a "$V"
+  diff "$EGRESS_OUT/pre-addr.txt" "$EGRESS_OUT/pre-addr-post-rollback.txt" | head -20 | tee -a "$V"
   leftover=1
 fi
 # SGLang + sshd + user compose health (redlines)
@@ -115,7 +125,8 @@ pgrep -a sshd >> "$V" 2>&1
 for c in water-army-web-1 water-army-api-1 water-army-worker-1 water-army-postgres-1 water-army-redis-1 sglang-fixed-run; do
   dc inspect "$c" 2>/dev/null | jq -r '.[0] | [.Name, .State.Status, .State.StartedAt] | @tsv' >> "$V" 2>&1 || echo "$c MISSING" >> "$V"
 done
-if [ -s "$E/pre-uptime.txt" ] 2>/dev/null; then
+if [ -s "$EGRESS_OUT/pre-uptime.txt" ] 2>/dev/null;
+then
   pre_starts=$(awk -F'\t' 'NF>=3 {print $3}' "$E/pre-uptime.txt" | tr '\n' ' ')
   post_starts=$(awk -F'\t' '$1 ~ /^water-army-|^sglang/ && NF>=3 {print $3}' "$V" | tr '\n' ' ')
   if [ -n "$pre_starts" ] && [ "$pre_starts" = "$post_starts" ]; then

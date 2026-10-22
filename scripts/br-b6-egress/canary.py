@@ -73,10 +73,16 @@ def handle(c: socket.socket, addr) -> None:
         first, rest = read_first_line(c)
         w(f"first-line: {first!r}")
         if first.startswith("CONNECT"):
+            if rest:
+                w("conn-headers: %r" % rest[:200].decode("utf-8", "replace"))
             c.sendall(b"HTTP/1.1 200 Connection established\r\n\r\n")
             w("reply: 200 Connection established")
-            data = read_http_request(c, rest)
-            w("recv: %r" % data[:400].decode("utf-8", "replace"))
+            # after the tunnel is up, the CLIENT's original request arrives
+            # as a fresh stream (socks5/CONNECT shape) — read it so the probe
+            # tag lands in the log (live-found 2026-10-22: the residual
+            # CONNECT headers are NOT the tunneled request)
+            data = read_http_request(c, b"")
+            w("recv-tunneled: %r" % data[:400].decode("utf-8", "replace"))
             c.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK")
             w("reply: 200 OK (tunneled)")
         elif first[:5] in (b"GET", b"POST", b"PUT", b"HEAD", b"DELE"):

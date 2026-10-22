@@ -414,7 +414,24 @@ digest pin + gost digest pin + 本 repo 嘅 tunnel setup sequence）喺專用 br
 - 正式口徑：Batch Rotation 程式及沙箱 E2E 已完成；真機 50 容器容量、完整
   warm-rotation 與 Batch Rotation live egress 尚待驗收 → **C 項實測結果**
   （完成後填實：每場景 PASS/FAIL/SKIPPED/BLOCKED + 證據路徑；netns 層驗證
-  （boot 前）誠實標註）：_in progress — 2026-10-22_
+  （boot 前）誠實標註）：**完成 2026-10-22 — 8/8 場景 PASS**（詳細：workspace
+  `logs/br-b6-egress/acceptance.md`，不入 repo）。
+  - **Q1 fail-open（open net，tunnel 死）= 實錚成立**：t2s 死 → kernel 釋放 tun0 →
+    table-100 default 消失 → main/per-net table → eth0；canary（container）收到**直連**
+    probe，src IP = device container IP（非 gost IP）= 核心 fail-open 證據。
+  - **Q2 fail-closed（`--internal` net，tunnel 死）= 實錚成立（FIB 層，比 FORWARD 更強）**：
+    canary **0 直連**；`ip route get <target>` = `Network unreachable`；Control A（手加
+    main default route）都打唔败 — netns 有 `32000: from all unreachable` catch-all rule。
+    機理：internal net 嘅 per-net table 無 default → walk 落 unreachable rule；open net 有
+    default（table 1002）→ 直連可行。attribution caveat：本 host 一般性 inter-net FORWARD
+    isolation（Control B 實錚），per-layer iptables 歸因 = root nft 變體 = BLOCKED。
+  - **Code finding（交平台團隊）**：`redroid-health.js` L191 netcheck `grep "table 100"`
+    係 substring match → 會誤 match "table 1002"（docker per-net table）→ tunnel 死時
+    `effective` 誤報 tunnel。實際影響 LOW（`classifyNetcheck` 經 iface/route=missing 已先
+    返 definite→BLOCKED，平台判定正確），但 raw field 誤導。建議：`grep "table 100[[:space:]]"`。
+  - 本測試 **≠ Batch Rotation 真 egress 生產驗收**；kernel 層發現係其輸入。Batch Rotation
+    live egress 狀態：**照樣 NOT VERIFIED**（另立大單）。驗證層 = **netns 層（boot 前）**：
+    routes/rules/tun0 係 netns-global，Android container 見同一 kernel 狀態；honest label。
 
 ## 11. Batch Rotation 監控／告警應變（BR-B5 — MD Phase 5）
 

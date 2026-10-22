@@ -39,8 +39,13 @@ set -x
 pkill -f "[t]un2socks" 2>/dev/null || true
 sleep 1
 ip link del tun0 2>/dev/null || true
-# best-effort pre-create (netd may block RTM_NEWLINK in Android; here iproute2
-# has CAP_NET_ADMIN in the netns — creation succeeds, t2s attaches to it)
+# best-effort pre-create — LIVE-FOUND (2026-10-22, kernel 6.8 this host):
+# `ip link add ... type tun` FAILS in this containerized netns ("tun/tap
+# creation via rtnetlink is not supported", EOPNOTSUPP) -> this line is a
+# silent no-op here; tun0 is always created by tun2socks' TUNSETIFF ioctl
+# (the EXACT production path; device lifetime = t2s fd, freed by the kernel
+# when t2s dies -> table-100 default auto-removed -> main table -> eth0).
+# Kept for portability to environments where rtnetlink TUN creation works.
 ip link add tun0 type tun 2>/dev/null || true
 # tun2socks FIRST: opens/holds tun0
 nohup "$T2S_BIN" --device tun0 --proxy "socks5://${GHOST_IP}:${GHOST_PORT}" --loglevel debug > /var/log/t2s.log 2>&1 &
