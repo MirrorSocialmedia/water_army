@@ -176,8 +176,15 @@ async function waitTerminal(cycleId, tag, { timeoutMs = 5 * 60_000 } = {}) {
   }
 }
 // re-arm identities for the next fault scenario (fresh READY state)
+// BR-B6 gen3 (fault attempt 7): DISABLED identities must STAY disabled
+// across scenarios — re-arming brb6-004 to READY via direct DB write
+// re-enabled it, so it EXECUTED in F1/F2/F3 and the disabled contract
+// (SKIPPED per cycle) could not be verified. Their SKIPPED outcome is
+// asserted by assertConvergence in every phase.
 async function rearm(refs) {
+  const disabled = new Set(seed.disabledRefs);
   for (const ref of refs) {
+    if (disabled.has(ref)) continue;
     const id = seed.main.find((m) => m.ref === ref).id;
     await db.identity.update({ where: { id }, data: { status: 'READY' } }).catch(() => {});
   }
