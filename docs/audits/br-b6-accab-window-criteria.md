@@ -67,6 +67,13 @@ AB2 嘅真正未知數只有一個：低峰窗口內單一 redroid 冷啟有冇�
 | W4 | host MemAvailable | **≥ 16 GiB**（16384 MB） | ladder 紅線 |
 | W5 | port band 16400–16499 | 無 listener | 本單 port 分配 |
 
+> **策略變更（老細 2026-10-22 15:59，生效中）**：W1 降為**觀察量**（唔再阻 boot）—
+> 根因實測：SGLang GPU load = agent 自己嘅推理用量（GPU 0% ↔ 冇 agent 思考）→
+> 「等 W1 窗口」係自鎖。W2–W5 照硬 gate，boot 前一次 + boot 後核一次。
+> 實證結果：AB2 24s / AB3 5×22s boot，操作者 agent idle 時段 GPU 實測 0%、
+> 30000 零影響（全 200）— 見 `logs/br-b6-accAB/decision-report.md`。
+> 工具：`BRB6ACCAB_W1_SOFT=1 bash window-check.sh`（stage1/stage2 嘅 gate 自動 set）。
+
 判定工具：`scripts/br-b6accab/window-check.sh`（exit 0 = WINDOW OPEN）。
 Sampler：`scripts/br-b6accab/sampler.sh`（30s append CSV；含 `br-b6e_count` —
 C 項 egress 測試容器計數，並行可觀測性）。
