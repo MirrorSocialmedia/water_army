@@ -156,6 +156,16 @@ BATCH_DEFAULT_TIMEOUT_MS=2700000
 # container adapter: 10min hold = the soak window; 30s health re-probe.
 CONTAINER_ADAPTER_HOLD_MS=600000
 CONTAINER_ADAPTER_HEALTH_POLL_MS=30000
+# COUPLING (live-proven 2026-10-22, ladder attempts 1-4): the API's start call
+# blocks inside waitHealthy for up to BATCH_CONTAINER_HEALTH_TIMEOUT_MS
+# (30min here) waiting for the ADB wire handshake; the worker's tool client
+# must not abort that call first or every slow real-device boot misfiles as
+# TOOL_TIMEOUT (the 120s code default was calibrated for instant mock boots —
+# E2E never saw it). Set to the adapter's clamp max (1_800_000) = the health
+# window; if the window is raised, raise this in lockstep (clamp cap is the
+# product ceiling — a boot that needs the full window now fails honestly on
+# both sides: API leaves the container for reconcile, run is retryable).
+CONTAINER_ADAPTER_LIFECYCLE_TIMEOUT_MS=1800000
 EOF
 
 log "setup complete"
