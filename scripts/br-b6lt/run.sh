@@ -71,6 +71,11 @@ log "worker running (pid $W1)"
 # --- driver (foreground; its rc is the run's rc) -------------------------------
 node scripts/br-b6lt/driver.mjs
 RC=$?
-
+# Grace window: the driver's HALT path only asks for cancellation (DB);
+# stopping the in-flight containers is the worker's job (cancel poll -> API
+# stop). Give it a beat before teardown kills API+worker — otherwise the
+# containers would be live when teardown runs (they are then removed by
+# teardown's label sweep, but a clean stop is gentler on the data root).
+sleep 10
 log "driver rc=$RC"
 exit $RC

@@ -29,34 +29,28 @@ if [ -f "$RUN/pids/api" ]; then
   fi
 fi
 
-# 2) managed containers left by the ladder. Live containers are product-named
-#    wa-batch-<batchId>-a<n> — ownership is proven by batchId being in OUR
-#    scratch DB (UUIDs are globally unique; a concurrent fault/E2E run on
-#    163xx has disjoint batch ids and is never touched). Fallback when pg is
-#    already gone: only name-prefixed br-b6lt-* containers.
-DB_NAME=cw_b6lt
-DB_USER=cw_b6lt
-if command -v sg >/dev/null 2>&1; then
-  OUR_BATCHES=$(sg docker -c "docker exec br-b6lt-pg psql -U $DB_USER -d $DB_NAME -tAc 'SELECT id FROM batches'" 2>/dev/null || true)
-  for cid in $(sg docker -c "docker ps -aq --filter label=com.mirrorsocialmedia.water-army.managed=true" 2>/dev/null); do
-    name=$(sg docker -c "docker inspect --format '{{.Name}}' $cid" 2>/dev/null | tr -d '/')
-    case "$name" in
-      br-b6lt-*)
-        log "removing residual managed container $cid ($name)"; sg docker -c "docker rm -f $cid" >/dev/null 2>&1 || true ;;
-      wa-batch-*)
-        ours=0
-        for b in $OUR_BATCHES; do
-          case "$name" in *"$b"*) ours=1; break ;; esac
-        done
-        if [ "$ours" = "1" ]; then
-          log "removing ladder-owned live container $cid ($name)"; sg docker -c "docker rm -f $cid" >/dev/null 2>&1 || true
-        else
-          log "LEAVING foreign managed container $cid ($name) alone (batch id not in our DB)"
-        fi ;;
-      *) log "LEAVING foreign managed container $cid ($name) alone" ;;
-    esac
-  done
-fi
+# 2) managed containers left by the ladder. Product-named containers carry
+#    the batch-only label com.mirrorsocialmedia.water-army.task-run-id (the
+#    user's compose never has it) — filter on that, name-gated to wa-batch-*/
+#    br-b6lt-*.
+#    BUGFIX (2026-10-22, ladder attempts 4-5): the old logic matched the
+#    name-embedded UUID against `SELECT id FROM batches` — broken twice over:
+#    the tables are `batch`/`task_run` (query failed silently → empty list)
+#    AND the name embeds the RUN uuid, not the batch uuid. Every live
+#    container was classified "foreign" and left running: 36 orphans / ~16GB
+#    RAM after two HALT runs, which then tripped the host-ram guard on the
+#    next launch (MemAvailable 7.0G/5.5G). Label filter + rm -f is the
+#    same contract the (correct) E2E teardown uses; data roots survive rm -f
+#    (bind mounts are removed, not the source dir).
+residual=$(sg docker -c "docker ps -a --filter label=com.mirrorsocialmedia.water-army.task-run-id --format '{{.ID}} {{.Names}}'" 2>/dev/null || true)
+while read -r cid cname; do
+  [ -z "${cid:-}" ] && continue
+  case "$cname" in
+    wa-batch-*|br-b6lt-*)
+      log "removing ladder-managed container $cid ($cname)"; sg docker -c "docker rm -f $cid" >/dev/null 2>&1 || true ;;
+    *) log "LEAVING foreign labeled container $cid ($cname) alone" ;;
+  esac
+done <<< "$residual"
 
 # 3) scratch containers by name (ours only)
 sg docker -c "docker rm -f br-b6lt-pg br-b6lt-redis" >/dev/null 2>&1 || true
