@@ -1,0 +1,42 @@
+#!/usr/sbin/nft -f
+# =============================================================================
+# BR-Acceptance C4 — HOST-NFT fail-closed variant (ROOT ONLY — NOT EXECUTED by
+# the harness; the service user has no CAP_NET_ADMIN and sudo needs a password,
+# so the as-run C4 used the Docker-native --internal network instead).
+#
+# Provided so a root operator can run the stronger per-rule-counter variant:
+#   egress from the C4 device subnet (br-b6e-sec, 172.39.201.0/24) is allowed
+#   ONLY to this device's gost container address; everything else is DROPPED
+#   with a counter. Reversible: `nft delete table inet br_b6e_failclosed`.
+#
+# Scope discipline (matches the boss-approved constraint): rules match the
+# test subnet by source AND the test networks by interface — they cannot
+# match any other network's traffic. No flush, no default-policy change.
+#
+# Usage (as root, with the C4 env up):
+#   nft -f nft-failclosed-template.nft
+#   nft list table inet br_b6e_failclosed        # counters per rule
+#   nft delete table inet br_b6e_failclosed      # full revert
+#
+# Adjust the two placeholders before use:
+#   @GOST2_IP@  = br-b6e-gost2's br-b6e-sec IP (docker inspect)
+# =============================================================================
+table inet br_b6e_failclosed {
+    chain egress {
+        type filter hook output priority 0; policy accept;
+        # host-initiated traffic (output hook) is never in scope — the
+        # constraint is device-subnet egress, which is FORWARD traffic:
+        iifname "lo" accept
+    }
+
+    chain forward {
+        type filter hook forward priority 0; policy accept;
+        # --- br-b6e-sec (internal test device net) egress ONLY to its gost ---
+        ip saddr 172.39.201.0/24 ip daddr @GOST2_IP@ tcp dport 1080 accept comment "br-b6e: device -> own gost (proxy path)"
+        ip saddr 172.39.201.0/24 ip daddr @GOST2_IP@ accept comment "br-b6e: device -> own gost (any)"
+        ip saddr 172.39.201.0/24 tcp dport 22 limit rate 4/minute accept comment "br-b6e: ADB lane (host loopback form)"
+        ip saddr 172.39.201.0/24 drop counter comment "br-b6e: FAIL-CLOSED default drop (counted)"
+        # everything else (other subnets) = untouched:
+        ip saddr != 172.39.201.0/24 accept
+    }
+}
