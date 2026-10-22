@@ -97,7 +97,7 @@ cmd_gate() {
 }
 
 cmd_boot() {
-  local name="${2:-br-b6r-s1}" adb_port="${3:-16400}"
+  local name="${1:-br-b6r-s1}" adb_port="${2:-16400}"
   local data_dir="$DATA_ROOT/${name#br-b6r-}"
   mkdir -p "$EVID"
   log "GATE first (window must be OPEN)"
@@ -142,7 +142,9 @@ cmd_boot() {
   echo "ts,g0_util,g0_mem_free,g1_util,g1_mem_free,mem_avail_mb,load1,sglang_code,boot_completed,adb_state" > "$BOOT_CSV"
   local t0=$(date +%s) next_health=0 bc=0 st=
   while :; do
-    local now=$(date +%s) elapsed=$(( now - t0 ))
+    local now
+    now=$(date +%s)
+    local elapsed=$(( now - t0 ))
     [ "$elapsed" -gt "$BOOT_TIMEOUT_S" ] && { log "TIMEOUT: ${BOOT_TIMEOUT_S}s health window exhausted — saving logs"; break; }
     if [ "$now" -ge "$next_health" ]; then
       sglang_probe || { log "STOP: 30000 redline during boot — saving logs"; break; }
@@ -210,9 +212,20 @@ cmd_teardown() {
   for c in $(DC ps -aq --filter 'name=br-b6r-'); do
     log "rm container $c"; DC rm -f "$c" >/dev/null 2>&1 || true
   done
+  # network-membership sweep (catches misnamed containers attached to our bridge)
+  if DC network inspect "$NET" >/dev/null 2>&1; then
+    for c in $(DC network inspect -f '{{range .Containers}}{{.Name}} {{end}}' "$NET" 2>/dev/null); do
+      log "rm network-attached container $c"; DC rm -f "$c" >/dev/null 2>&1 || true
+    done
+  fi
   DC network rm "$NET" >/dev/null 2>&1 && log "rm network $NET" || log "network $NET absent (ok)"
   if [ -d "$DATA_ROOT" ]; then
-    log "rm data root $DATA_ROOT"; rm -rf "$DATA_ROOT" || true
+    log "rm data root $DATA_ROOT (alpine root shim for root-owned files, then host rmdir)"
+    if [ -n "$(DC images -q alpine:3.20 2>/dev/null)" ]; then
+      DC run --rm -v "$DATA_ROOT:/wipe" alpine:3.20 sh -c 'rm -rf /wipe/* /wipe/.[!.]* 2>/dev/null' >/dev/null 2>&1 || true
+    fi
+    rm -rf "$DATA_ROOT" 2>/dev/null || true
+    rmdir "$DATA_ROOT" 2>/dev/null || true
   fi
   # verify zero residue (our artifacts only)
   local left
