@@ -65,7 +65,8 @@ boot_dev() { # $1=index i ; uses $2=port ; sets BC[i]/BT[i]; 0 ok / 1 timeout / 
 }
 
 soak_stage() { # $1=stage label (1|5|10)
-  local stage="$1" flag="$R2_EVID/soak-$stage.done"
+  local stage="$1"
+  local flag="$R2_EVID/soak-$stage.done"
   [ -f "$flag" ] && { log "soak stage $stage already done (resumed)"; return 0; }
   local K end
   K=$(up_count)
@@ -93,12 +94,9 @@ cmd_gate() {
   vram_redline || return 1
   sglang_redline || return 1
   mem_redline || return 1
+  # 164xx: allowlist = device ADB band (16400-16409, legitimate once devices
+  # are up on a resumed ladder) + scratch infra (16490/16494/16495/16496)
   foreign_port_redline || return 1
-  local p
-  for p in 16400 16401 16402 16403 16404 16405 16406 16407 16408 16409 16490 16494 16495 16496; do
-    ss -ltn 2>/dev/null | grep -q ":$p " && [ "$p" != "16490" ] && [ "$p" != "16494" ] && [ "$p" != "16495" ] && \
-      { log "NO-GO: port $p bound (infra 16490/16494/16495 allowlisted only)"; return 1; }
-  done
   api_login || { log "NO-GO: api login failed"; return 1; }
   gate_snapshot "pregate"
   log "GO: VRAM ok / 30000=200 / MemAvail $(mem_avail_mb)MB / 164xx clean / gate status captured"
@@ -131,6 +129,7 @@ cmd_ladder() {
         BC[$i]=1; BT[$i]=0
         log "RESUMED $name (already boot_completed; boot time unmeasured this run)"
         row
+        case "$i" in 1|5|10) soak_stage "$i" ;; esac
         continue
       fi
       log "$name in DB but not boot_completed — waiting for it to finish"
@@ -158,29 +157,31 @@ cmd_ladder() {
       \"idempotencyKey\": \"$key\"
     }"
     code=$API_CODE
-    echo "$API_BODY" > "$R2_EVID/create-s$i-http$code.json"
+    create_body="$API_BODY"   # capture BEFORE gate_snapshot (which clobbers API_BODY)
+    echo "$create_body" > "$R2_EVID/create-s$i-http$code.json"
     gate_snapshot "s$i"
     if [ "$code" = "201" ]; then
       log "CREATE OK $name (gate ADMITTED — see gate-status-s$i.summary.json)"
-      port=$(echo "$API_BODY" | jq -r '.device.adbPort // empty' 2>/dev/null)
+      port=$(echo "$create_body" | jq -r '.device.adbPort // empty' 2>/dev/null)
       [ -z "$port" ] && port=$(dev_port "$i")
       boot_dev "$i" "$port" || { STOPPED=1; STOP_REASON="bootfail-or-redline-s$i"; STOP_MEMAVAIL=$(mem_avail_mb); break; }
       # let the API learn adbState=online (watchdog also does this)
       api POST "/api/devices/redroid/$name/refresh" "{}" >/dev/null 2>&1 || true
-    elif [ "$code" = "409" ] && echo "$API_BODY" | grep -q 'RAM_GATE_DENIED'; then
-      log "GATE DENY at s$i (HTTP 409): $(echo "$API_BODY" | head -c 300)"
-      jq -c '{device: "\($name)", stage: $i, http: 409, body: ., decision: .details // .message, at: "\(.at // "")"}' \
-        --arg name "$name" "$R2_EVID/create-s$i-http409.json" > "$R2_EVID/DENY-s$i.json" 2>/dev/null \
+    elif [ "$code" = "409" ] && echo "$create_body" | grep -q 'RAM_GATE_DENIED'; then
+      log "GATE DENY at s$i (HTTP 409): $(echo "$create_body" | head -c 300)"
+      jq -c --arg name "$name" --arg at "$(ts)" '{device:$name, stage: $i, http: 409, at:$at, error:.error, zero_side_effects:"verify: no container/dataDir/db-row; liveLeases unchanged"}' \
+        "$R2_EVID/create-s$i-http409.json" > "$R2_EVID/DENY-s$i.json" 2>/dev/null \
         || cp "$R2_EVID/create-s$i-http409.json" "$R2_EVID/DENY-s$i.json"
       gate_snapshot "deny-s$i"
       # state file for the operator (config decision)
-      jq -c '{halted_at_device: "'$name'", http: 409, at: "'"$(ts)"'", up: '"$(up_count)"', memavail_mb: '"$(mem_avail_mb)"', decision_file: "DENY-s'$i'.json"}' \
+      jq -cn --arg d "$name" --arg at "$(ts)" --argjson up "$(up_count)" --argjson mem "$(mem_avail_mb)" \
+        '{halted_at_device:$d, http:409, at:$at, up:$up, memavail_mb:$mem, decision_file: "DENY-s'$i'.json"}' \
         > "$R2_EVID/LADDER_HALTED.json" 2>/dev/null || true
       log "LADDER HALTED (gate deny) — operator: record + PUT /api/system/ram-gate/config {postBootTargetMiB} + re-run (resumable)"
       write_summary "gate-deny"
       return 3
     else
-      log "FATAL: unexpected create response for $name: HTTP $code"; echo "$API_BODY" | head -c 500; return 4
+      log "FATAL: unexpected create response for $name: HTTP $code"; echo "$create_body" | head -c 500; return 4
     fi
 
     # stage soaks
