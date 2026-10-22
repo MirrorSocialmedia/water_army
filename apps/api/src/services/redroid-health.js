@@ -188,7 +188,22 @@ export function buildT2sNetcheckScript() {
     'RU=$(ip rule show 2>/dev/null)',
     'if printf "%s" "$RU" | grep -q "5000:"; then RULE=present; else RULE=missing; fi',
     'G=$(ip route get 8.8.8.8 2>/dev/null)',
-    'if printf "%s" "$G" | grep -q "table 100"; then EFFECTIVE=tunnel; elif printf "%s" "$G" | grep -q "dev eth0"; then EFFECTIVE=direct; else EFFECTIVE=unknown; fi',
+    // T102 (BR-Acceptance C3-S2a, 2026-10-22): EXACT table-100 token match.
+    // The bare substring "table 100" also matched Docker per-net tables
+    // (user-defined networks get per-net routing tables numbered 1000+; the
+    // live C3-S2a capture showed "table 1002" in `ip route get` output with
+    // the tunnel dead -> false effective=tunnel). Token semantics: "table
+    // 100" must be followed by END-OF-LINE or whitespace, so 1000/1002/
+    // 1003/... can never match. POSIX ERE (-E, ($|[[:space:]])): the live
+    // captures (toybox) show the token mid-line followed by a space; the $ 
+    // branch additionally pins the token-at-EOL shape (e.g. any formatter
+    // that prints "table 100" as the last token / on its own line — grep is
+    // line-based and never sees the line terminator, so a whitespace-only
+    // guard would silently miss EOL). -E and [[:space:]] are supported by
+    // toybox/busybox/GNU grep alike. The printf "\\n" normalizes an
+    // unterminated final line ($() already stripped the captured trailing
+    // newline; grep accepts either).
+    'if printf "%s\\n" "$G" | grep -qE "table 100($|[[:space:]])"; then EFFECTIVE=tunnel; elif printf "%s" "$G" | grep -q "dev eth0"; then EFFECTIVE=direct; else EFFECTIVE=unknown; fi',
     'echo "NETCHECK process=$PROCESS pid=$PID iface=$IFACE route=$ROUTE rule=$RULE effective=$EFFECTIVE"',
   ].join('\n');
 }
