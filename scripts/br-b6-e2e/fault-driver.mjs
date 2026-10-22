@@ -90,7 +90,7 @@ async function waitFor(label, fn, { timeoutMs = 120_000, intervalMs = 3000 } = {
   }
 }
 const TERMINAL_BATCH = ['COMPLETED', 'COMPLETED_WITH_ERRORS', 'CANCELLED', 'FAILED'];
-const TERMINAL_RUN = ['succeeded', 'failed', 'timed_out', 'cancelled'];
+const TERMINAL_RUN = ['succeeded', 'failed', 'timed_out', 'cancelled', 'skipped'];
 const CONTAINER_SPEC = {
   type: 'container',
   image: GOOD_IMAGE,
@@ -188,9 +188,17 @@ async function rearm(refs) {
 // per-identity terminal count would count F0's runs inside F1 and hard-fail
 // every later phase. (The attempt_started uniqueness check below is
 // deliberately global: the claim CAS must never double-execute ANY run.)
+//
+// BR-B6 gen3 (fault attempt 6, F0): the 12 refs include brb6-004 — one of
+// the 4 SEED-DISABLED identities (DISABLED_SET in seed.js). Its correct
+// outcome is SKIPPED membership + no (or skipped) run rows (MD §14.1,
+// live-proven by E2E P0/P5) — the old code counted 'skipped' as non-terminal
+// and demanded 'succeeded', hard-failing a perfectly correct system.
 async function assertConvergence(phase, refs, cycleId, { expectAllSucceeded = true } = {}) {
   const batchIds = (await batchesOf(cycleId)).map((b) => b.id);
-  const ids = refs.map((ref) => seed.main.find((m) => m.ref === ref).id);
+  const pairs = refs.map((ref) => ({ ref, id: seed.main.find((m) => m.ref === ref).id }));
+  const ids = pairs.map((p) => p.id);
+  const disabledIds = new Set(seed.disabledRefs.map((r) => seed.main.find((m) => m.ref === r)?.id).filter(Boolean));
   const runs = await db.taskRun.findMany({ where: { identityId: { in: ids }, batchId: { in: batchIds } } });
   const byId = new Map();
   for (const r of runs) {
@@ -199,12 +207,21 @@ async function assertConvergence(phase, refs, cycleId, { expectAllSucceeded = tr
   }
   const bad = [];
   const outcomes = {};
-  for (const id of ids) {
+  for (const { ref, id } of pairs) {
+    const id8 = id.slice(0, 8);
     const rs = (byId.get(id) ?? []).filter((r) => TERMINAL_RUN.includes(r.status));
-    if (rs.length !== 1) bad.push(`${id.slice(0, 8)}: ${rs.length} terminal runs`);
+    if (disabledIds.has(id)) {
+      // Disabled contract: SKIPPED (zero run rows, or one 'skipped' row) is
+      // the correct terminal — a DISABLED run is the failure.
+      if (rs.length > 1) bad.push(`${id8} (${ref}): ${rs.length} terminal runs (disabled)`);
+      else if (rs.length === 1 && rs[0].status !== 'skipped') bad.push(`${id8} (${ref}): disabled identity executed (${rs[0].status})`);
+      else outcomes.skipped = (outcomes.skipped ?? 0) + 1;
+      continue;
+    }
+    if (rs.length !== 1) bad.push(`${id8} (${ref}): ${rs.length} terminal runs`);
     else {
       outcomes[rs[0].status] = (outcomes[rs[0].status] ?? 0) + 1;
-      if (expectAllSucceeded && rs[0].status !== 'succeeded') bad.push(`${id.slice(0, 8)}: ${rs[0].status} (${rs[0].errorCode ?? ''})`);
+      if (expectAllSucceeded && rs[0].status !== 'succeeded') bad.push(`${id8} (${ref}): ${rs[0].status} (${rs[0].errorCode ?? ''})`);
     }
   }
   record(phase, `${refs.length} identities: exactly ONE terminal outcome each`, bad.length === 0,
