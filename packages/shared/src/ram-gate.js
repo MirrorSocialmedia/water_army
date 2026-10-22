@@ -310,11 +310,13 @@ return {1, n, projected, 'ADMITTED'}
 /** Owner-checked release (admissionId must match — a stale stop must never
  *  delete a FRESH lease for the same entity). → 1 released / 0 no-op. */
 export const RELEASE_LUA = `
-local cjson = require('cjson')
+-- no require('cjson'): Redis >= 7.1 sandboxes block require. The lease value
+-- is our own JSON with admissionId as the first key, so a bounded match is
+-- safe and dependency-free.
 local val = redis.call('GET', KEYS[2])
 if val then
-  local ok, decoded = pcall(cjson.decode, val)
-  if ok and decoded and decoded.a == ARGV[1] then
+  local id = string.match(val, '"a":"([^"]+)"')
+  if id and id == ARGV[1] then
     redis.call('DEL', KEYS[2])
     redis.call('SREM', KEYS[1], KEYS[2])
     return 1
@@ -401,7 +403,9 @@ export function createRamGate({
   };
 
   async function evalScript(script, keyList, argList) {
-    return redis.eval(script, keyList, argList);
+    // ioredis-native convention: eval(script, numkeys, ...keys, ...args).
+    // The check+write in a single atomic script is the whole point — see docs.
+    return redis.eval(script, keyList.length, ...keyList, ...argList);
   }
 
   async function effectiveConfig() {

@@ -2,7 +2,8 @@
  * tests/helpers/ramgate-fake-redis.js — hermetic fake for the RAM gate's
  * Redis surface (RAM-G1).
  *
- * Fidelity contract: `eval(script, [keys], [args])` is dispatched on the
+ * Fidelity contract: `eval(script, numkeys, ...keys, ...args)` (ioredis-native
+ * convention) is dispatched on the
  * EXACT script text (the real Lua constants from @water-army/shared) and
  * each handler re-implements that script's semantics 1:1 in JS — including
  * the dead-lease pruning and the check-then-write INSIDE one call (the
@@ -92,10 +93,10 @@ export function makeFakeRamRedis({ now = () => Date.now() } = {}) {
     return [decision, n, projected, reason];
   }
 
-  const evalImpl = async (script, keys, args) => {
+  const evalImpl = async (script, numkeys, ...rest) => {
     if (errors.length > 0) throw new Error(errors[0]);
-    const K = (keys ?? []).map(String);
-    const A = (args ?? []).map(String);
+    const K = rest.slice(0, numkeys).map(String);
+    const A = rest.slice(numkeys).map(String);
     if (script === ADMIT_LUA) return runAdmitLike({ write: true }, K, A);
     if (script === DRY_RUN_LUA) return runAdmitLike({ write: false }, K, A);
     if (script === COUNT_LUA) return [prunedCount(K[0])];

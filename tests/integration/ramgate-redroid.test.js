@@ -42,9 +42,10 @@ function makeGateWorld() {
   return { state, metrics, gateRedis };
 }
 
-async function makeApp() {
+async function makeApp({ redroidMockOpts = {} } = {}) {
   const gw = makeGateWorld();
   const { app, db, dataRoot, redroidMock } = await makeRedroidTestApp({
+    redroidMockOpts,
     extraAppOpts: { redis: gw.gateRedis, ramGateMetrics: gw.metrics },
   });
   const admin = await login(app, 'admin');
@@ -204,4 +205,33 @@ test('RAM-G1 redroid — delete releases the lease; wouldAdmitNext reflects the 
   assert.equal(del.statusCode, 200, del.body);
   st = await status();
   assert.equal(st.counts.liveLeases, 0, 'delete releases the lease');
+});
+
+test('RAM-G1 redroid — C5: docker create fails AFTER admission → rollback releases the lease (no budget leak)', async (t) => {
+  const {
+    app, db, dataRoot, redroidMock, admin, status, decisions, close,
+  } = await makeApp({
+    redroidMockOpts: { createError: { statusCode: 500, message: 'driver failed: storage driver error (simulated)' } },
+  });
+  t.after(close);
+
+  const res = await app.inject({
+    method: 'POST', url: '/api/devices/redroid', headers: { cookie: admin },
+    payload: { name: 'redroid-g1-h', templateName: SEED_TEMPLATES[1].name, idempotencyKey: 'g1-ik-071' },
+  });
+  assert.notEqual(res.statusCode, 201, `failed create must not succeed: ${res.body}`);
+
+  // The admission DID happen (decision trail) — the release must undo it.
+  const admit = (await decisions()).find((x) => x.action === 'admit' && x.entity === 'redroid-g1-h');
+  assert.ok(admit, 'admission decision recorded before the docker failure');
+  assert.equal(admit.reason, 'ADMITTED');
+
+  const st = await status();
+  assert.equal(st.counts.liveLeases, 0, 'rollback released the admission lease — no budget leak');
+  assert.equal(st.counts.reservedMiB, 0);
+
+  // Full rollback: no DB row, no data dir, no dangling container.
+  assert.equal(await db.device.findUnique({ where: { name: 'redroid-g1-h' } }), null, 'no device row after rollback');
+  assert.equal(fs.existsSync(path.join(dataRoot, 'redroid-g1-h')), false, 'data dir removed on rollback');
+  assert.equal(redroidMock.docker.client.__byName.get('redroid-g1-h') ?? null, null, 'no dangling container after rollback');
 });
