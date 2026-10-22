@@ -138,7 +138,13 @@ cmd_boot() {
   local i name port data_dir
   for i in $(seq 1 "$N"); do
     name="br-b6r-s$i"; port=$(( 16399 + i )); data_dir="$DATA_ROOT/s$i"
-    DC ps -q --filter "name=^${name}\$" >/dev/null 2>&1 && { log "FATAL: $name exists — teardown first"; return 2; }
+    # docker inspect by exact name (no regex through the $* relay — a trailing
+    # '$' anchor there is fragile; observed one false-FATAL at 09:15 with daemon
+    # clean)
+    if [ -n "$(sg docker -c "docker inspect -f '{{.Name}}' $name" 2>/dev/null)" ]; then
+      log "FATAL: $name exists — teardown first"
+      return 2
+    fi
     [ -d "$data_dir" ] && { log "FATAL: data dir exists ($data_dir) — teardown first"; return 2; }
     mkdir -p "$data_dir"
     log "creating $name (ADB 127.0.0.1:$port, product spec)"
