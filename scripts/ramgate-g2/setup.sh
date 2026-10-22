@@ -116,7 +116,7 @@ cmd_setup() {
     local ok=0
     for i in $(seq 1 20); do
       sleep 1
-      curl -s -o /dev/null -w '%{http_code}' --max-time 3 "$R2_API/api/health" 2>/dev/null | grep -q 200 && { ok=1; break; }
+      curl -s -o /dev/null -w '%{http_code}' --max-time 3 "$R2_API/api/health/live" 2>/dev/null | grep -q 200 && { ok=1; break; }
     done
     [ "$ok" = "1" ] || { log "FATAL: scratch api not listening on 16490"; tail -10 "$R2_EVID/scratch-api.log"; return 1; }
     log "scratch api up (pid $(cat "$pidfile"), @16490)"
@@ -133,9 +133,9 @@ cmd_setup() {
 
 cmd_verify_template() {
   api_login || return 1
-  local existing
-  existing=$(api GET '/api/redroid/templates'); local code=$API_CODE
-  if [ "$code" != "200" ]; then log "WARN: template list failed ($code)"; return 1; fi
+  local existing code
+  api GET '/api/redroid/templates'; code=$API_CODE; existing="$API_BODY"
+  if [ "$code" != "200" ]; then log "WARN: template list failed ($code): ${existing:0:200}"; return 1; fi
   if echo "$existing" | grep -q "\"name\":\"$R2_TEMPLATE_NAME\""; then
     log "template $R2_TEMPLATE_NAME already exists"
     return 0
@@ -161,7 +161,7 @@ EOF
 
 cmd_verify() {
   log "== verify (read-only) =="
-  log "api health: $(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$R2_API/api/health")"
+  log "api health: $(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$R2_API/api/health/live") / ready: $(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$R2_API/api/health/ready")"
   api_login || { log "FAIL: login"; return 1; }
   gate_status > "$R2_EVID/gate-status-verify.json"
   grep -q '"enabled":true' "$R2_EVID/gate-status-verify.json" && log "gate ENABLED (config live from AppSetting/defaults)" || { log "FAIL: gate not enabled"; return 1; }

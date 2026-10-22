@@ -98,13 +98,13 @@ foreign_port_redline() {
 }
 
 # ---- API helpers (cookie session) ----
-api_login() { # $1=cookie_file
-  local resp
-  [ -s "$1" ] && return 0
+api_login() { # [$1=cookie_file]
+  local resp ck="${1:-$R2_SCRATCH_STATE/cookie.txt}"
+  [ -s "$ck" ] && return 0
   [ -f "$R2_SECRETS" ] || { log "FATAL: $R2_SECRETS missing"; return 1; }
   # shellcheck disable=SC1090
   . "$R2_SECRETS"
-  resp=$(curl -s -c "$1" -X POST "$R2_API/api/auth/login" \
+  resp=$(curl -s -c "$ck" -X POST "$R2_API/api/auth/login" \
     -H 'Content-Type: application/json' \
     -d "{\"username\":\"$G2_ADMIN_USER\",\"password\":\"$G2_ADMIN_PASS\"}")
   echo "$resp" | grep -q '"role"' || { log "FATAL: login failed: $(echo "$resp" | head -c 200)"; return 1; }
