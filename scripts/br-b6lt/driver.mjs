@@ -60,7 +60,10 @@ async function api(method, path, { body } = {}) {
   const text = await res.text();
   let json = null;
   try { json = JSON.parse(text); } catch { /* non-JSON */ }
-  return { status: res.status, json, text };
+  // BR-B6 gen3: MUST return headers — login() reads set-cookie from them.
+  // (Same never-live-run bug the fault-driver hit on its first live run;
+  // the ladder driver is a sibling copy with the identical latent defect.)
+  return { status: res.status, json, text, headers: res.headers };
 }
 async function login() {
   const res = await api('POST', '/api/auth/login', { body: { username: seed.admin.username, password: seed.admin.password } });
@@ -194,11 +197,14 @@ async function startFirstBatch(cycleId, label) {
   const [b] = await allBatchesOf(cycleId);
   if (!b) throw new Error(`${label}: no batches found`);
   const r = await api('POST', `/api/batches/${b.id}/start`);
-  // scheduler auto-start race: a 200 already-running no-op is success too
-  if (r.status !== 200 || !(r.json?.batch?.status === 'RUNNING' || r.json?.started === false)) {
-    throw new Error(`${label}: start failed ${r.status} ${r.text.slice(0, 200)}`);
+  // Contract (E2E driver P1 + fault-driver f84f82f lesson): 202 = fresh
+  // dispatch (async — batch goes RUNNING); 200 = idempotent no-op (scheduler
+  // already started it, or it converged). Both are success — convergence is
+  // proven by the subsequent DB waitFor, not by this status.
+  if (r.status === 202 || r.status === 200) {
+    return { batch: r.json?.batch, alreadyRunning: r.json?.started === false };
   }
-  return { batch: r.json.batch, alreadyRunning: r.json.started === false };
+  throw new Error(`${label}: start failed ${r.status} ${r.text.slice(0, 200)}`);
 }
 async function cycleTerminal(cycleId) {
   const bs = await allBatchesOf(cycleId);
