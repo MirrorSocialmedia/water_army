@@ -443,11 +443,13 @@ async function phase3bWorkerKill() {
   startWorker('2', { healthPort: 16345 });
   record('P3b', 'worker restarted (new pid, scheduler on)', workers.get('2')?.pid != null, `pid=${workers.get('2')?.pid}`);
 
-  // Each victim: lease expires → scheduler isolates (identity RECOVERING,
-  // run stays RUNNING — MD §6.2 red line: NO auto re-run) → BullMQ
-  // stalled-job redelivery → engine's identity guard → honest cancel.
-  // (Legal ordering (b): redelivery wins the race → direct cancel, no
-  // RECOVERING window. Both end at: run cancelled + identity CANCELLED.)
+  // Each victim: lease expires → scheduler isolates (identity RECOVERING —
+  // quarantine) + honestly CANCELS the run + mirrors membership CANCELLED
+  // (MD §6.2 red line: NO auto re-run; the identity is released only by an
+  // explicit human review, never by auto sync). BullMQ stalled-job
+  // redelivery can race the isolation — the engine stop path and the sync
+  // plan are both red-line-safe (neither clobbers RECOVERING), so EVERY
+  // ordering converges to: run cancelled + identity RECOVERING.
   const t0 = Date.now();
   const victimIds = new Set(snapshot.map((r) => r.id));
   let sawRecovering = false;
@@ -466,8 +468,8 @@ async function phase3bWorkerKill() {
     : [];
   record('P3b', 'orphaned runs reconciled: identity RECOVERING isolation observed (MD §6.2 red line)', sawRecovering,
     sawRecovering ? 'CRITICAL isolation path taken' : 'job-redelivery race won before isolation (legal ordering b)', { soft: true });
-  record('P3b', `all ${victimIds.size} orphaned runs ended CANCELLED + identities CANCELLED (no auto re-run to success)`,
-    allResolved && victims.every((r) => r.status === 'cancelled') && victimIdentities.every((i) => i.status === 'CANCELLED'),
+  record('P3b', `all ${victimIds.size} orphaned runs ended CANCELLED + identities RECOVERING (isolated, no auto re-run — MD §6.2 red line)`,
+    allResolved && victims.every((r) => r.status === 'cancelled') && victimIdentities.length === victims.length && victimIdentities.every((i) => i.status === 'RECOVERING'),
     victims.map((r) => `${r.status}`).join(',') + ` identities=${victimIdentities.map((i) => i.status).join(',')}`);
 
   // NO double execution of any victim attempt (claim CAS invariant)
@@ -505,13 +507,23 @@ async function phase5(cycleId) {
     runsByIdentity.get(r.identityId).push(r);
   }
 
-  // exactly ONE terminal result per identity: 1 run row, terminal; ≤1 succeeded
+  // exactly ONE terminal result per identity: 1 run row (terminal, ≤1
+  // succeeded) — OR a SKIPPED membership with zero run rows (MD §3.3: the
+  // approved skip IS the terminal result for a disabled identity).
+  const mainIds = new Set(idents.map((i) => i.id));
+  const skippedIds = new Set(
+    (await db.batchIdentity.findMany({ where: { status: 'SKIPPED' }, select: { identityId: true } }))
+      .map((m) => m.identityId)
+      .filter((id) => mainIds.has(id)),
+  );
   const bad = [];
   const statusCounts = {};
   for (const i of idents) {
     const rs = runsByIdentity.get(i.id) ?? [];
     statusCounts[i.status] = (statusCounts[i.status] ?? 0) + 1;
-    if (rs.length !== 1) bad.push(`${i.externalRef}: ${rs.length} run rows`);
+    if (skippedIds.has(i.id)) {
+      if (rs.length !== 0) bad.push(`${i.externalRef}: SKIPPED identity has ${rs.length} run rows`);
+    } else if (rs.length !== 1) bad.push(`${i.externalRef}: ${rs.length} run rows`);
     else if (!TERMINAL_RUN.includes(rs[0].status)) bad.push(`${i.externalRef}: run not terminal (${rs[0].status})`);
     else if (rs.filter((r) => r.status === 'succeeded').length > 1) bad.push(`${i.externalRef}: double success`);
   }
@@ -579,7 +591,11 @@ async function phase5(cycleId) {
 
   // wave (brb6-f) + P4 (brb6-g) identities: exactly one terminal result each
   for (const [prefix, label, okStatus] of [
-    ['brb6-f', 'restart wave (P3)', (i, r) => (i.status === 'COMPLETED') || (i.status === 'CANCELLED' && r.status === 'cancelled')],
+    // victim: run cancelled + identity RECOVERING (quarantine, human
+    // review); survivor: run succeeded + identity COMPLETED. Anything else
+    // (e.g. a COMPLETED identity behind a cancelled run = auto re-run) is a
+    // red-line violation and fails the check.
+    ['brb6-f', 'restart wave (P3)', (i, r) => (i.status === 'COMPLETED' && r.status === 'succeeded') || (i.status === 'RECOVERING' && r.status === 'cancelled')],
     ['brb6-g', 'permanent-failure cycle (P4)', (i, r) => i.status === 'FAILED_FINAL' && r.status === 'failed'],
   ]) {
     const pg = await db.identity.findMany({ where: { externalRef: { startsWith: prefix } } });
@@ -767,8 +783,11 @@ async function main() {
   record('P3', 'restart wave: all 6 identities exactly ONE terminal result (victims cancelled, rest succeeded)',
     !waveWait.timedOut && waveExactlyOne && waveRuns.some((r) => r.status === 'cancelled') && waveRuns.some((r) => r.status === 'succeeded'),
     waveRuns.map((r) => r.status).join(',') + ` batch=${waveBatch.status}`);
-  record('P3', 'restart wave batch COMPLETED_WITH_ERRORS (honest: cancelled victims counted)',
-    waveBatch.status === 'COMPLETED_WITH_ERRORS', `batch=${waveBatch.status}`);
+  // B1 completion rule (delivered): only FAILED_FINAL counts as a batch
+  // error; CANCELLED (quarantine) is a plain terminal → the wave converges
+  // COMPLETED. (COMPLETED_WITH_ERRORS would require a FAILED_FINAL.)
+  record('P3', 'restart wave batch converged (all members terminal; no wedge)',
+    ['COMPLETED', 'COMPLETED_WITH_ERRORS'].includes(waveBatch.status), `batch=${waveBatch.status}`);
   void waveIdents;
 
   // P4: permanent failure needs 6 identities that are NOT yet terminal
@@ -816,8 +835,12 @@ async function runPhase4With(brokenIds) {
   const allFailedFinal = runs.length === 6 && runs.every((r) => r.status === 'failed' && r.attempt >= 3 && r.errorCode);
   record('P4', 'all 6 runs FAILED after exhausting maxAttempts=3 (real retries, real error codes)', allFailedFinal,
     runs.map((r) => `${r.status}@a${r.attempt}:${(r.errorCode ?? '').slice(0, 20)}`).join(' | ').slice(0, 240));
-  const handshakes = await db.taskRunEvent.count({ where: { taskRunId: { in: runs.map((r) => r.id) }, message: { contains: 'handshake' } } });
-  record('P4', 'failure cause logged (ADB handshake timeout events)', handshakes >= 6, `${handshakes} handshake-failure events`);
+  // The 'failed' event message is the fixed string "run failed" — the cause
+  // lives in the run's errorMessage (each of the 6 runs ends at attempt 3
+  // with the API's ADB-handshake-timeout error: "...the ADB handshake did
+  // not answer within the health window...").
+  const handshakeRuns = runs.filter((r) => String(r.errorMessage ?? '').includes('handshake')).length;
+  record('P4', 'failure cause logged (ADB handshake timeout in run error)', handshakeRuns >= 6, `${handshakeRuns}/6 runs carry the handshake-timeout error`);
 }
 
 function cryptoRandomUuid(seedStr) {
