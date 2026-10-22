@@ -79,6 +79,16 @@ SESSION_SECRET=$(openssl rand -hex 32)
 APP_ENCRYPTION_KEY=$(openssl rand -base64 32)
 WORKER_API_TOKEN=$(openssl rand -hex 32)
 
+# --- adb client (product boot-health = adb CLI on the host; REDROID_ADB_BINARY)
+# The product defaults to /usr/bin/adb; this host has no system adb. Platform-tools
+# is provisioned user-local (no root): ~/.local/share/platform-tools/adb.
+ADB_BIN="${REDROID_ADB_BINARY:-$HOME/.local/share/platform-tools/adb}"
+if [ ! -x "$ADB_BIN" ]; then
+  log "FATAL: adb client not found at $ADB_BIN — provision platform-tools (curl https://dl.google.com/android/repository/platform-tools-latest-linux.zip) or set REDROID_ADB_BINARY"
+  exit 1
+fi
+log "adb client present: $ADB_BIN ($($ADB_BIN version 2>/dev/null | head -1))"
+
 # Allowlist: the fleet redroid image with product-grade limits (R5: 2GB/2vCPU)
 # + 720x1280@30 (VRAM-pressure reduced vs R5's 1080x1920; capacity test, not
 # render fidelity). gpu_mode=host is MANDATORY on this host (R5: swiftshader
@@ -113,6 +123,11 @@ BATCH_CONTAINER_DATA_ROOT=$RUN/data
 BATCH_CONTAINER_HEALTH_TIMEOUT_MS=1800000
 BATCH_CONTAINER_HEALTH_POLL_MS=10000
 BATCH_CONTAINER_HEALTH_PROBE_TIMEOUT_MS=5000
+# Host has no system adb — point the API at the user-local platform-tools binary.
+# (ladder attempt 3: every run TOOL_TIMEOUT'd because boot-health spawned a
+# non-existent /usr/bin/adb and the start call outlived the worker's 120s
+# lifecycle timeout; adb 1.0.41 provisioned at the path above.)
+REDROID_ADB_BINARY=$ADB_BIN
 LOG_LEVEL=info
 EOF
 
