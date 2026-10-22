@@ -84,9 +84,14 @@ WORKER_API_TOKEN=$(openssl rand -hex 32)
 # render fidelity). gpu_mode=host is MANDATORY on this host (R5: swiftshader
 # does not boot — surfaceflinger EGL crash loop).
 ALLOWLIST_JSON=$(cat <<EOF
-[{"image":"$REDROID_IMG","privileged":true,"reason":"BR-B6 S5 real-device ladder load test (MD §14.4)","memoryBytes":4294967296,"nanoCpus":2000000000,"cmd":["androidboot.redroid_width=720","androidboot.redroid_height=1280","androidboot.redroid_dpi=320","androidboot.redroid_fps=30","androidboot.redroid_gpu_mode=host"]}]
+[{"image":"$REDROID_IMG","privileged":true,"reason":"BR-B6 S5 real-device ladder load test (MD §14.4)","memoryBytes":4294967296,"nanoCpus":2,"cmd":["androidboot.redroid_width=720","androidboot.redroid_height=1280","androidboot.redroid_dpi=320","androidboot.redroid_fps=30","androidboot.redroid_gpu_mode=host"]}]
 EOF
 )
+# NOTE: the allowlist's nanoCpus field is in CPU units per the product
+# contract (integration test: nanoCpus:2 -> HostConfig.NanoCpus 2e9 — the
+# service multiplies by 1e9). Writing 2000000000 here re-scaled to 2e18
+# nanocpus -> docker create 400 on every run (live-proven, ladder attempt 3,
+# 273x 'range of CPUs is from 0.01 to 16.00').
 
 cat > "$RUN/api.env" <<EOF
 NODE_ENV=production
