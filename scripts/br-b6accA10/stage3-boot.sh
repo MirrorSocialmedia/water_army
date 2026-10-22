@@ -274,7 +274,7 @@ cmd_boot() {
   "stop_reason": "${STOP_REASON}",
   "stop_memavailable_mb": ${STOP_MEMAVAIL:-null},
   "boot_timeout": $([ "$BOOTFAIL" = "1" ] && echo true || echo false),
-  "per_device_boot_s": $(for i in $(seq 1 "$N"); do [ "${BC[$i]:-0}" = "1" ] && printf '"s%s":%s,' "$i" "${BOOT_T[$i]}"; done | sed 's/,$//'),
+  "per_device_boot_s": {$(for i in $(seq 1 "$N"); do [ "${BC[$i]:-0}" = "1" ] && printf '"s%s":%s,' "$i" "${BOOT_T[$i]}"; done | sed 's/,$//')},
   "note": "stage-min MemAvailable/VRAM/load1/30000 + capacity-at-10 derived from $BOOT_CSV by the analyzer (see report.md)"
 }
 EOF
