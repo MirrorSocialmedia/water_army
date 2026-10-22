@@ -22,7 +22,7 @@ log() { echo "[br-b6lt-setup] $*"; }
 
 # --- port pre-flight (same orphan-API collision guard as br-b6-e2e) ---------
 port_in_use() { ss -ltn 2>/dev/null | grep -q "127.0.0.1:$1"; }
-for p in "$PG_PORT" "$REDIS_PORT" 16543; do
+for p in "$PG_PORT" "$REDIS_PORT" 16543 16544; do
   if port_in_use "$p"; then
     log "FATAL: scratch port $p already bound — orphan from a previous run? (kill it, then retry)"
     exit 1
@@ -121,6 +121,9 @@ QA_ENDPOINT_ALLOWLIST_INTERNAL=http://127.0.0.1:16543
 LOG_LEVEL=info
 # Ladder: process up to 50 container jobs in parallel (the global cap is the
 # real governor; serial workers would make the ladder meaningless).
+# Health server: 16544 = ladder scratch (3001 is the user's dev port —
+# binding it was a redline near-miss on the first live launch, 2026-10-22).
+WORKER_HEALTH_PORT=16544
 TASK_MAX_CONCURRENCY=50
 BATCH_SCHEDULER_INTERVAL_MS=2000
 BATCH_HEARTBEAT_MS=2000

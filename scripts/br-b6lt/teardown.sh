@@ -29,12 +29,30 @@ if [ -f "$RUN/pids/api" ]; then
   fi
 fi
 
-# 2) any managed containers left by the ladder (by label, never by name glob)
+# 2) managed containers left by the ladder. Live containers are product-named
+#    wa-batch-<batchId>-a<n> — ownership is proven by batchId being in OUR
+#    scratch DB (UUIDs are globally unique; a concurrent fault/E2E run on
+#    163xx has disjoint batch ids and is never touched). Fallback when pg is
+#    already gone: only name-prefixed br-b6lt-* containers.
+DB_NAME=cw_b6lt
+DB_USER=cw_b6lt
 if command -v sg >/dev/null 2>&1; then
+  OUR_BATCHES=$(sg docker -c "docker exec br-b6lt-pg psql -U $DB_USER -d $DB_NAME -tAc 'SELECT id FROM batches'" 2>/dev/null || true)
   for cid in $(sg docker -c "docker ps -aq --filter label=com.mirrorsocialmedia.water-army.managed=true" 2>/dev/null); do
     name=$(sg docker -c "docker inspect --format '{{.Name}}' $cid" 2>/dev/null | tr -d '/')
     case "$name" in
-      br-b6lt-*) log "removing residual managed container $cid ($name)"; sg docker -c "docker rm -f $cid" >/dev/null 2>&1 || true ;;
+      br-b6lt-*)
+        log "removing residual managed container $cid ($name)"; sg docker -c "docker rm -f $cid" >/dev/null 2>&1 || true ;;
+      wa-batch-*)
+        ours=0
+        for b in $OUR_BATCHES; do
+          case "$name" in *"$b"*) ours=1; break ;; esac
+        done
+        if [ "$ours" = "1" ]; then
+          log "removing ladder-owned live container $cid ($name)"; sg docker -c "docker rm -f $cid" >/dev/null 2>&1 || true
+        else
+          log "LEAVING foreign managed container $cid ($name) alone (batch id not in our DB)"
+        fi ;;
       *) log "LEAVING foreign managed container $cid ($name) alone" ;;
     esac
   done
