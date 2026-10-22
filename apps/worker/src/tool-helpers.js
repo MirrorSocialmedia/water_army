@@ -31,13 +31,17 @@ export function createApiClient({ baseUrl, serviceToken, timeoutMs = 15_000, fet
   if (!serviceToken) throw new ToolExecutionError('CONFIG_MISSING', 'service token is not configured (WORKER_API_TOKEN)');
   const fetchFn = fetchImpl ?? globalThis.fetch;
 
-  async function request(method, path, { query = undefined, body = undefined } = {}) {
+  async function request(method, path, { query = undefined, body = undefined, timeoutMs: callTimeoutMs = undefined } = {}) {
     const url = new URL(base + path);
     for (const [k, v] of Object.entries(query ?? {})) {
       if (v != null && v !== '') url.searchParams.set(k, String(v));
     }
+    // B6 gen3: per-call override — long-lived lifecycle ops (container start
+    // spans the API's whole boot-health window, up to 60s) must not ride the
+    // 15s default or they end TOOL_TIMEOUT while the API still succeeds.
+    const t = Number.isFinite(callTimeoutMs) && callTimeoutMs > 0 ? callTimeoutMs : timeoutMs;
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(new Error('tool request timeout')), timeoutMs);
+    const timer = setTimeout(() => ctrl.abort(new Error('tool request timeout')), t);
     let res;
     try {
       res = await fetchFn(url, {
@@ -53,7 +57,7 @@ export function createApiClient({ baseUrl, serviceToken, timeoutMs = 15_000, fet
       const aborted = ctrl.signal.aborted;
       throw new ToolExecutionError(
         aborted ? 'TOOL_TIMEOUT' : 'TOOL_UNAVAILABLE',
-        aborted ? `tool request timed out after ${timeoutMs}ms` : `API unreachable: ${err?.message ?? err}`,
+        aborted ? `tool request timed out after ${t}ms` : `API unreachable: ${err?.message ?? err}`,
         { statusCode: aborted ? 504 : 503 },
       );
     } finally {
@@ -104,17 +108,21 @@ export function createApiClient({ baseUrl, serviceToken, timeoutMs = 15_000, fet
     // these routes with the service token — the worker has no docker socket,
     // MD §4 / threat T1). The API error envelope's stable codes ride the
     // ToolExecutionError status for the engine's retry policy mapping.
-    /** POST /api/task-runs/:runId/containers/start (create-or-adopt, idempotent) */
-    async batchContainersStart(runId) {
-      return request('POST', `/api/task-runs/${encodeURIComponent(runId)}/containers/start`, { body: {} });
+    /** POST /api/task-runs/:runId/containers/start (create-or-adopt, idempotent).
+     *  B6 gen3: long-lived — create + engine start + the API's boot-health
+     *  window (up to batchContainerHealthTimeoutMs, default 60s); pass a
+     *  lifecycle timeout so a slow boot is not misfiled as TOOL_TIMEOUT. */
+    async batchContainersStart(runId, { timeoutMs } = {}) {
+      return request('POST', `/api/task-runs/${encodeURIComponent(runId)}/containers/start`, { body: {}, timeoutMs });
     },
     /** GET /api/task-runs/:runId/containers/health (app-layer ADB probe) */
     async batchContainersHealth(runId) {
       return request('GET', `/api/task-runs/${encodeURIComponent(runId)}/containers/health`);
     },
-    /** POST /api/task-runs/:runId/containers/stop (reversible — volume kept) */
-    async batchContainersStop(runId) {
-      return request('POST', `/api/task-runs/${encodeURIComponent(runId)}/containers/stop`, { body: {} });
+    /** POST /api/task-runs/:runId/containers/stop (reversible — volume kept;
+     *  docker stop grace is bounded but a wedged stop can run long) */
+    async batchContainersStop(runId, { timeoutMs } = {}) {
+      return request('POST', `/api/task-runs/${encodeURIComponent(runId)}/containers/stop`, { body: {}, timeoutMs });
     },
   };
 }

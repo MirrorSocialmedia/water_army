@@ -15,6 +15,7 @@ import assert from 'node:assert/strict';
 
 import {
   enqueueBatchRun,
+  enqueueTaskRun,
   removeWaitingBatchRun,
   enqueueAnyRun,
 } from '@water-army/shared';
@@ -39,6 +40,20 @@ test('enqueueBatchRun: fresh job → batch-run name, secret-free payload, determ
   // backstop = timeout×attempts + 30s×attempts + 300s
   assert.equal(job.opts.timeout, 60_000 * 2 + 30_000 * 2 + 300_000);
   assert.equal(job.opts.attempts, 1, 'no BullMQ-level auto-retry (DB is the retry owner)');
+  // BR-B6 (E2E run-4): the job lock must outlive the longest legitimate
+  // processor time (the backstop above) — the BullMQ default 30s lock
+  // expired mid-job, requeued live jobs and stormed completions with
+  // 'not in active state / Missing lock'.
+  assert.equal(job.opts.lockDuration, 60_000 * 2 + 30_000 * 2 + 300_000, 'lockDuration = job timeout backstop');
+});
+
+test('enqueueTaskRun: lockDuration = run deadline + grace (no mid-job lock expiry)', async () => {
+  const queue = makeFakeQueue();
+  await enqueueTaskRun(queue, { runId: RUN, attempt: 2, timeoutMs: 120_000 });
+  const job = queue.jobs.get(taskJobId(RUN, 2));
+  assert.ok(job, 'task-run job registered');
+  assert.equal(job.opts.timeout, 120_000 + 30_000);
+  assert.equal(job.opts.lockDuration, 120_000 + 30_000, 'lock outlives the run deadline + grace');
 });
 
 test('enqueueBatchRun: existing job (getJob pre-check) → reused, no second job', async () => {

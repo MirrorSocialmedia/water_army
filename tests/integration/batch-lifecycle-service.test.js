@@ -739,6 +739,48 @@ test('reconcile fix (admin): orphan → stopped+removed; stale → stopped; mism
   assert.ok(env.audits.some((a) => a.action === 'batch_reconcile.scanned'));
 });
 
+test('reconcile fix: stopping a managed container releases its ADB port lease (E2E run-4 leak)', async () => {
+  // E2E run-4 P5: ports=6 — the sweep stopped the residual containers
+  // directly (docker client) but never released their port leases (the
+  // stopForRun/removeForRun paths do; the bypass didn't), pinning pool
+  // ports until the 30-min TTL. Every stop path must free its port.
+  const R3 = uid(53);
+  const R4 = uid(54);
+  const env = makeEnv({
+    taskRuns: [
+      // terminal run, container still running (the P4 shape: final attempt
+      // failed, the container was left; the sweep must stop it AND free the port)
+      runRow({ id: R3, status: 'succeeded' }),
+      // running run, EXPIRED lease (stale_running fixable), container running
+      runRow({ id: R4, status: 'running', leaseExpiresAt: new Date(NOW.getTime() - 1_000) }),
+    ],
+    leases: [
+      { resourceType: 'port', resourceKey: 'port:16370', ownerRunId: R3, ownerLabel: 'batch-lifecycle', leaseExpiresAt: LATER },
+      { resourceType: 'port', resourceKey: 'port:16371', ownerRunId: R4, ownerLabel: 'batch-lifecycle', leaseExpiresAt: LATER },
+    ],
+    containerSeeds: [
+      { name: 'br-b3-leak-r3', state: 'running', labels: buildContainerLabels({ identityId: ID1, batchId: BATCH1, taskRunId: R3, createdBy: 'w' }), portBindings: { '5555/tcp': [{ HostIp: '127.0.0.1', HostPort: '16370' }] } },
+      { name: 'br-b3-leak-r4', state: 'running', labels: buildContainerLabels({ identityId: ID1, batchId: BATCH1, taskRunId: R4, createdBy: 'w' }), portBindings: { '5555/tcp': [{ HostIp: '127.0.0.1', HostPort: '16371' }] } },
+    ],
+  });
+  const byName = env.docker.client.__byName;
+  await env.db.taskRun.update({ where: { id: R3 }, data: { containerId: byName.get('br-b3-leak-r3') } });
+  await env.db.taskRun.update({ where: { id: R4 }, data: { containerId: byName.get('br-b3-leak-r4') } });
+
+  assert.equal(await env.db.resourceLease.count({ where: { resourceType: 'port', leaseExpiresAt: { gt: NOW } } }), 2);
+
+  const r = await env.svc.reconcile({ fix: true, actor: { userId: 'u-admin', label: 'reconcile-admin' } });
+  const item = (id) => r.items.find((i) => i.runId === id);
+  assert.equal(item(R3).fixedDetail, 'stopped+removed');
+  assert.equal(item(R4).fixedDetail, 'stopped');
+
+  assert.equal(
+    await env.db.resourceLease.count({ where: { resourceType: 'port', leaseExpiresAt: { gt: NOW } } }),
+    0,
+    'fix-stopped containers release their ADB port leases (no TTL-dependent pool pinning)',
+  );
+});
+
 // ---------------------------------------------------------------- 13. engine start failure
 test('start: engine start failure → container removed, DB bind cleared, retryable error', async () => {
   const docker = makeFakeDockerWrapper();

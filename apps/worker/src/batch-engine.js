@@ -127,7 +127,9 @@ export function createBatchEngine({
    *   - retryable (ADAPTER_FAILED_RETRYABLE / transport-class) AND attempts
    *     remain → failed terminal for THIS attempt + identity RETRY_WAIT +
    *     requestRetry (fresh attempt, auto-dispatched via the batch-aware
-   *     enqueue seam)
+   *     enqueue seam, DELAYED by config.batchRetryDelayMs — B6 gen3: the
+   *     attempt budget must span a transient dependency outage (API restart
+   *     ~5s, docker hiccup), not burn all attempts inside one window)
    *   - otherwise → failed terminal + identity FAILED_FINAL (manual retry)
    */
   async function handleAdapterFailure(run, err) {
@@ -159,8 +161,8 @@ export function createBatchEngine({
         if (e.apiCode === 'ILLEGAL_IDENTITY_TRANSITION') log.info?.({ runId: run.id, status: (await db.identity.findUnique({ where: { id: run.identityId } }))?.status }, 'identity retry sync divergence (already moved)');
         else throw e;
       }
-      await taskSvc.requestRetry(run.id, { actorUserId: 'engine:auto-retry', note: code });
-      log.warn?.({ runId: run.id, attempt: run.attempt, code }, 'batch engine: retryable adapter failure — auto-retry dispatched');
+      await taskSvc.requestRetry(run.id, { actorUserId: 'engine:auto-retry', note: code, delayMs: Math.max(0, Math.floor(Number(config.batchRetryDelayMs ?? 0))) });
+      log.warn?.({ runId: run.id, attempt: run.attempt, code, delayMs: Math.max(0, Math.floor(Number(config.batchRetryDelayMs ?? 0))) }, 'batch engine: retryable adapter failure — auto-retry dispatched (backoff applied)');
       return { outcome: 'auto-retry', code, attempt: run.attempt + 1 };
     }
     const after = await taskSvc.loadRun(run.id);

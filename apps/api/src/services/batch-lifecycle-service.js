@@ -866,6 +866,19 @@ export function createBatchLifecycleService({
             const ct = c.getContainer(m.Id);
             if (info.State?.Running) await ct.stop({ t: config?.batchContainerStopTimeoutSec ?? 10 });
             if (v.state === 'orphan') await ct.remove({ force: true });
+            // BR-B6 (E2E run-4 leak): this IS a stop/remove path — every
+            // stop must release the container's ADB host-port lease. The
+            // sweep stops/removes directly (not via stopForRun/removeForRun,
+            // which release the lease); bypassing them leaked 6 live port
+            // leases in E2E run-4 (run-4 P5: ports=6), pinning pool ports
+            // until the 30-min TTL.
+            if (run) {
+              for (const bindsList of Object.values(info.HostConfig?.PortBindings ?? {})) {
+                if (Array.isArray(bindsList) && bindsList[0]?.HostPort) {
+                  await releasePortLease(runId, Number(bindsList[0].HostPort));
+                }
+              }
+            }
             fixed = true;
             fixedDetail = v.state === 'orphan' ? 'stopped+removed' : 'stopped';
             await audited({ actorUserId: actor.userId ?? null, action: 'batch_reconcile.fixed', resourceType: 'container', resourceId: m.Id, status: 'ok', details: { runId, state: v.state, fixedDetail } });

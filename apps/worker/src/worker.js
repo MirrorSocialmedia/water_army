@@ -397,6 +397,7 @@ export function createWorkerApp({
           batchSlotTtlMs: config.batchSlotTtlMs,
           batchMaxSlotDefers: config.batchMaxSlotDefers,
           batchDefaultTimeoutMs: config.batchDefaultTimeoutMs,
+          batchRetryDelayMs: config.batchRetryDelayMs,
         },
         log,
       });

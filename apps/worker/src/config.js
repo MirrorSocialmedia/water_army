@@ -36,6 +36,13 @@ export function loadWorkerConfig(env = process.env) {
     batchSlotTtlMs: Number(env.BATCH_SLOT_TTL_MS ?? 60_000),
     batchMaxSlotDefers: Number(env.BATCH_MAX_SLOT_DEFERS ?? 40),
     batchDefaultTimeoutMs: Number(env.BATCH_DEFAULT_TIMEOUT_MS ?? 120_000),
+    /**
+     * B6 gen3 (E2E run-3 wave: 6/6 FAILED_FINAL during a ~5s API restart):
+     * backoff between auto-retried batch attempts. 0 = legacy immediate
+     * re-dispatch. Default 10s: comfortably spans an API rolling-restart
+     * window so the maxAttempts budget is not burned inside one outage.
+     */
+    batchRetryDelayMs: Number(env.BATCH_RETRY_DELAY_MS ?? 10_000),
     /** Scheduler tick cadence (boot pass is immediate) + master switch. */
     batchSchedulerIntervalMs: Number(env.BATCH_SCHEDULER_INTERVAL_MS ?? 5_000),
     batchSchedulerEnabled: env.BATCH_SCHEDULER_ENABLED !== 'false' && env.BATCH_SCHEDULER_ENABLED !== '0',
@@ -63,6 +70,9 @@ export function loadWorkerConfig(env = process.env) {
   }
   if (!Number.isFinite(config.taskConcurrencyMaxDefers) || config.taskConcurrencyMaxDefers < 1) {
     throw new Error(`invalid TASK_CONCURRENCY_MAX_DEFERS: ${env.TASK_CONCURRENCY_MAX_DEFERS}`);
+  }
+  if (!Number.isFinite(config.batchRetryDelayMs) || config.batchRetryDelayMs < 0 || config.batchRetryDelayMs > 300_000) {
+    throw new Error(`invalid BATCH_RETRY_DELAY_MS: ${env.BATCH_RETRY_DELAY_MS} (must be 0..300000)`);
   }
   // BR-B2: the slot lease TTL must outlive two missed heartbeats (crash →
   // reconcile window), and the scheduler cadence must stay sane.

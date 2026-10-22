@@ -497,7 +497,7 @@ export function createTaskRunService({ db, config = {}, enqueue, log = console }
    * clears the latest-attempt fields (the previous output stays preserved in
    * the event stream), re-queues with job id `${runId}-${attempt}` (taskJobId).
    */
-  async function requestRetry(runId, { actorUserId = null, note = null } = {}) {
+  async function requestRetry(runId, { actorUserId = null, note = null, delayMs = 0 } = {}) {
     const run = await loadRun(runId);
     const retryable = ['failed', 'timed_out', 'cancelled'].includes(run.status);
     if (!retryable) {
@@ -541,7 +541,9 @@ export function createTaskRunService({ db, config = {}, enqueue, log = console }
 
     if (typeof enqueue === 'function') {
       try {
-        await enqueue({ runId: run.id, attempt: nextAttempt });
+        // B6 gen3: the engine passes a backoff delay so auto-retries span
+        // transient dependency outages (manual retries default to 0 = now).
+        await enqueue({ runId: run.id, attempt: nextAttempt, delayMs });
       } catch (err) {
         await db.taskRun.update({
           where: { id: run.id },
