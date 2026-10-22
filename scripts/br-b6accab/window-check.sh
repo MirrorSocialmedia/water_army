@@ -5,12 +5,16 @@
 #
 # Criteria (fixed, see docs/audits/br-b6-accab-window-criteria.md):
 #   W1: BOTH GPUs util < 20% for the last 10 samples (>=5 min at 30s)
+#       — SOFT / OBSERVE-ONLY when BRB6ACCAB_W1_SOFT=1 (boss strategy 2026-10-22
+#       15:59: SGLang GPU load = agents' own inference; waiting for W1 is
+#       self-locking). W2-W5 stay hard.
 #   W2: BOTH GPUs free VRAM >= 1500 MiB (ladder redline, vram-monitoring-plan §3)
 #   W3: SGLang /health = 200 on the last sample
 #   W4: host MemAvailable >= 16 GiB (ladder host redline)
 #   W5: our port band 16400-16499 unbound
 #
 # Usage: bash scripts/br-b6accab/window-check.sh <samples.csv>
+#        BRB6ACCAB_W1_SOFT=1 bash ...   (W1 demoted to observation)
 set -uo pipefail
 
 CSV="${1:?samples.csv path required}"
@@ -25,10 +29,17 @@ tail -n "$((N + 1))" "$CSV" | tail -n "$N" > /tmp/brb6accab-tail.$$ || exit 2
 
 fail=0
 detail=""
+W1_SOFT="${BRB6ACCAB_W1_SOFT:-0}"
 
-# W1: util < 20 on both GPUs for ALL last N rows
+# W1: util < 20 on both GPUs for ALL last N rows (soft when W1_SOFT=1)
 bad_w1=$(awk -F, -v n="$N" '{if ($2 >= 20 || $4 >= 20 || $2=="NA" || $4=="NA") print NR": "$1" g0="$2" g1="$4}' /tmp/brb6accab-tail.$$)
-if [ -n "$bad_w1" ]; then fail=1; detail="W1-violations: $bad_w1"$'\n'"$detail"; fi
+if [ -n "$bad_w1" ]; then
+  if [ "$W1_SOFT" = "1" ]; then
+    detail="W1-OBSERVE (soft, not blocking): $bad_w1"$'\n'"$detail"
+  else
+    fail=1; detail="W1-violations: $bad_w1"$'\n'"$detail"
+  fi
+fi
 
 # W2: free VRAM >= 1500 on both GPUs (last row = current)
 last=$(tail -1 /tmp/brb6accab-tail.$$)
@@ -56,5 +67,15 @@ if [ -n "$bound" ]; then fail=1; detail="W5: 164xx port bound: $bound"; fi
 rm -f /tmp/brb6accab-tail.$$
 ts=$(tail -1 /tmp/brb6accab-tail.$$ 2>/dev/null | cut -d, -f1)
 echo "window-check @ ${ts:-?} (last ${N} rows):"
-[ "$fail" -eq 0 ] && echo "  WINDOW OPEN — all criteria W1-W5 satisfied" || { echo "  WINDOW CLOSED"; printf '%b\n' "$detail"; }
+if [ "$fail" -eq 0 ]; then
+  if [ "$W1_SOFT" = "1" ] && [ -n "$detail" ]; then
+    echo "  WINDOW OPEN (W2-W5 hard criteria satisfied; W1 observe-only — violations logged below)"
+    printf '%b\n' "$detail"
+  else
+    echo "  WINDOW OPEN — all criteria W1-W5 satisfied"
+  fi
+else
+  echo "  WINDOW CLOSED"
+  printf '%b\n' "$detail"
+fi
 exit "$fail"

@@ -9,7 +9,11 @@
 #     image, privileged, 4G RAM, 2 vCPU, nvidia all-GPU, /data bind, 127.0.0.1 ADB)
 #
 # Subcommands:
-#   gate      — window + port + host preflight. Exit 0 = GO, 1 = NO-GO.
+#   gate      — W2-W5 HARD gate + port + host preflight. W1 (GPU util window)
+#               is OBSERVE-ONLY since boss strategy 2026-10-22 15:59: SGLang
+#               load = agents' own inference, so waiting for a util window is
+#               self-locking. W2/W3/W4/W5 stay hard; re-verified post-boot.
+#               Exit 0 = GO, 1 = NO-GO.
 #   boot      — full controlled boot: gate -> create -> wait boot (10s sample,
 #               30s 30000 health) -> 5min soak -> stop -> save evidence.
 #   teardown  — remove ALL br-b6r-* artifacts (containers, network, data root).
@@ -52,6 +56,15 @@ host_row() { # -> "memavail_mb,load1"
   awk '/MemAvailable/ {a=int($2/1024)} END{print a}' /proc/meminfo; awk '{print $1}' /proc/loadavg
 }
 
+stop_and_evidence() { # $1=container name — stop + save logs (normal end or redline stop)
+  local name="$1"
+  log "stopping $name"
+  DC stop -t 30 "$name" > /dev/null 2>&1 || true
+  DC logs --tail 200 "$name" > "$EVID/${name}-container.log" 2>&1 || true
+  dmesg 2>/dev/null | tail -50 > "$EVID/${name}-dmesg-post.txt" || true
+  log "evidence in $EVID/${name}-*"
+}
+
 # --- vram redline: any GPU free < 1500 MiB ----------------------------------
 vram_redline() {
   local g0f g1f
@@ -62,8 +75,8 @@ vram_redline() {
 }
 
 cmd_gate() {
-  log "window-check (needs >=10 recent samples in $SAMPLES_CSV)"
-  bash scripts/br-b6accab/window-check.sh "$SAMPLES_CSV" || { log "NO-GO: window closed"; return 1; }
+  log "gate (W2-W5 hard; W1 observe-only — boss strategy 2026-10-22 15:59)"
+  BRB6ACCAB_W1_SOFT=1 bash scripts/br-b6accab/window-check.sh "$SAMPLES_CSV" || { log "NO-GO: W2-W5 gate failed"; return 1; }
   # ADB port band preflight (16400 = s1 ... 16404 = s5)
   local bound p
   bound=$(ss -ltn 2>/dev/null | awk '{print $4}' | grep -oP ':(164[0-9]{2})\s*$' | head -5 || true)
@@ -146,6 +159,22 @@ cmd_boot() {
     sleep 10
   done
 
+  # post-boot hard-gate re-check (W2/W3/W4/W5) — boss 2026-10-22 15:59:
+  # gate verified once BEFORE boot and once AFTER boot
+  if [ -n "${bc:-}" ] && [ "$bc" != "0" ]; then
+    log "POST-BOOT GATE CHECK (W2/W3/W4/W5)"
+    vram_redline || { log "STOP: vram redline post-boot"; stop_and_evidence "$name"; return 1; }
+    sglang_probe || { log "STOP: 30000 redline post-boot"; stop_and_evidence "$name"; return 1; }
+    local ma_post
+    ma_post=$(awk '/MemAvailable/{printf "%d",$2/1024}' /proc/meminfo)
+    [ "$ma_post" -ge 16384 ] || { log "REDLINE-POST: MemAvailable ${ma_post}MB < 16384"; stop_and_evidence "$name"; return 1; }
+    local p
+    for p in $(ss -ltn 2>/dev/null | awk '{print $4}' | grep -oP ':(164[0-9]{2})\s*$' | sed 's/^://' | sort -u); do
+      [ "$p" = "$adb_port" ] || { log "REDLINE-POST: foreign 164xx bound: $p"; stop_and_evidence "$name"; return 1; }
+    done
+    log "POST-BOOT GATE: PASS (W2 VRAM ok / W3 30000=200 / W4 MemAvail ${ma_post}MB / W5 164xx ours-only)"
+  fi
+
   # 5min soak (if booted) for GPU0 render peak
   if [ -n "${bc:-}" ] && [ "$bc" != "0" ]; then
     log "soak ${SOAK_S}s (sampling 10s)"
@@ -169,12 +198,8 @@ cmd_boot() {
   fi
 
   # stop + evidence
-  log "stopping $name"
-  DC stop -t 30 "$name" > /dev/null 2>&1 || true
-  DC logs --tail 200 "$name" > "$EVID/${name}-container.log" 2>&1 || true
-  dmesg 2>/dev/null | tail -50 > "$EVID/${name}-dmesg-post.txt" || true
+  stop_and_evidence "$name"
   log "POST-SNAPSHOT gpu: $(gpu_row) | host: $(host_row | paste -sd,)"
-  log "evidence in $EVID/${name}-*"
   [ -n "${bc:-}" ] && [ "$bc" != "0" ] && return 0
   return 1
 }
