@@ -342,9 +342,14 @@ export function createWorkerApp({
         // router — a batch run re-enqueues as a `batch-run` job, an AI/adhoc
         // run takes the original path unchanged (enqueueAnyRun is a strict
         // superset of enqueueTaskRun; the returned job is ignored here).
-        enqueue: async ({ runId, attempt }) => {
+        enqueue: async ({ runId, attempt, delayMs }) => {
+          // RAM-G2 (E5 finding): delayMs was DROPPED here — batch auto-retries
+          // were enqueued at t+0 instead of t+BATCH_RETRY_DELAY_MS, so the
+          // maxAttempts budget burned inside one gate-denied window (3
+          // attempts in ~30ms at MAX_PARALLEL → FAILED_FINAL). B6 gen3's
+          // backoff intent (see enqueueBatchRun) is now honored end-to-end.
           const run = await dbRef.client.taskRun.findUnique({ where: { id: runId } });
-          await enqueueAnyRun(producerQueue, { db: dbRef.client, runId, attempt, timeoutMs: run?.inputJson?.timeoutMs, run });
+          await enqueueAnyRun(producerQueue, { db: dbRef.client, runId, attempt, timeoutMs: run?.inputJson?.timeoutMs, run, delayMs });
         },
       });
     }
