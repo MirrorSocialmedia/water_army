@@ -25,12 +25,17 @@ const ROUTES = [
   { path: '/settings', page: 'settings' },
 ];
 
-function currentPath() {
+export function currentPath() {
   const hash = window.location.hash.replace(/^#/, '');
-  return hash || '/';
+  // Strip the query BEFORE segment matching (P2 T26 finding): the viewer
+  // console URL is '/devices/<id>/console?mode=viewer' — without the split the
+  // last segment 'console?mode=viewer' never matches the 'console' route and
+  // the page silently fell back to the dashboard (no stream ever started).
+  const path = hash.split('?')[0];
+  return path || '/';
 }
 
-function matchRoute(pathName) {
+export function matchRoute(pathName) {
   const urlParts = pathName.split('/');
   for (const route of ROUTES) {
     const routeParts = route.path.split('/');
