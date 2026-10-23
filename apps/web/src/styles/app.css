@@ -445,6 +445,38 @@ input:focus { outline: 1px solid var(--accent); }
   border-radius: 4px;
   background: #000;
 }
+/* --- Fleet Console (MC P3, MD §14 Phase 3: layout 1–5 / slot count / close) --- */
+.fleet-page-head { flex-wrap: wrap; }
+.fleet-usage { font-variant-numeric: tabular-nums; }
+.fleet-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr; /* overwritten inline by fleetColumns(n) */
+}
+.fleet-tile { text-align: left; }
+.fleet-head { flex-wrap: wrap; }
+.fleet-stage { margin-bottom: 8px; padding: 6px; }
+.fleet-canvas { max-height: 44vh; }
+.fleet-kv { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; margin: 8px 0; }
+.fleet-kv dt { font-size: 11px; opacity: 0.7; }
+.fleet-kv dd { font-size: 12px; font-variant-numeric: tabular-nums; }
+.fleet-keybar { margin: 8px 0 0; gap: 6px; }
+.fleet-keybar .keybtn { min-width: 64px; padding: 6px 6px; font-size: 12px; }
+.fleet-ro { font-size: 12px; margin: 8px 0 0; }
+.fleet-close { margin-left: auto; padding: 4px 10px; font-size: 12px; }
+.chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border, #444);
+  background: var(--bg-card);
+  color: inherit;
+  cursor: pointer;
+}
+.chip:hover:not(:disabled) { border-color: var(--ok); }
+.chip:disabled { opacity: 0.45; cursor: not-allowed; }
+.chip.chip-open { border-color: var(--ok); background: rgba(46, 204, 113, 0.08); }
+
 .keybar {
   display: flex;
   flex-wrap: wrap;

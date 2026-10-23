@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useApi } from '../hooks/useApi';
 import { api } from '../api/client';
+import { navigate } from '../router';
 import { StateFrame } from '../components/StateFrame';
 import { timeAgo, stateBadgeClass } from '../components/container-utils';
 import {
@@ -103,7 +104,17 @@ export function Devices() {
 
   return (
     <div className="stack">
-      <h1>Redroid devices</h1>
+      <div className="card-head">
+        <h1>Redroid devices</h1>
+        <button
+          type="button"
+          className="console-open-btn"
+          onClick={() => navigate('/devices/fleet')}
+          title="Fleet Console — 同時開啟 1–5 路裝置串流（MD §14 Phase 3）"
+        >
+          Fleet Console（1–5 路）
+        </button>
+      </div>
 
       {preflight.error ? (
         <div className="error-box">Preflight unavailable: {preflight.error.message}</div>

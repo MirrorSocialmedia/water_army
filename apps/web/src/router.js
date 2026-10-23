@@ -11,6 +11,8 @@ const ROUTES = [
   { path: '/containers', page: 'containers' },
   { path: '/containers/:id', page: 'containers-detail' },
   { path: '/devices', page: 'devices' },
+  // STATIC before PARAM: '/devices/fleet' must not be swallowed by ':id'.
+  { path: '/devices/fleet', page: 'devices-fleet' },
   { path: '/devices/:id', page: 'devices-detail' },
   { path: '/devices/:id/console', page: 'devices-console' },
   { path: '/tasks', page: 'tasks' },
@@ -76,6 +78,7 @@ export const NAV_ITEMS = [
   { path: '/', label: 'Dashboard', icon: 'dashboard' },
   { path: '/containers', label: 'Containers', icon: 'container' },
   { path: '/devices', label: 'Devices', icon: 'device' },
+  { path: '/devices/fleet', label: 'Fleet Console', icon: 'device' },
   { path: '/tasks', label: 'Tasks', icon: 'tasks' },
   { path: '/schedules', label: 'Schedules', icon: 'schedules' },
   { path: '/batches', label: 'Batch Planner', icon: 'batches' },

@@ -63,3 +63,12 @@ test('unknown path still falls back to null (dashboard)', () => {
   assert.equal(matchRoute('/nope/noway'), null);
   assert.equal(matchRoute('/devices/abc123/definitely-not-a-route'), null);
 });
+
+test('static /devices/fleet wins over the :id param route', () => {
+  const m = matchRoute('/devices/fleet');
+  assert.ok(m, 'fleet route must match');
+  assert.equal(m.page, 'devices-fleet');
+  assert.deepEqual(m.params, {});
+  // a real device id still resolves to the detail page, not fleet:
+  assert.equal(matchRoute('/devices/f4f7e613-fba7-4395-bba3-ff591ad83482').page, 'devices-detail');
+});
