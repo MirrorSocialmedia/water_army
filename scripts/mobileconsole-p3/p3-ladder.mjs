@@ -95,6 +95,22 @@ async function openTiles(page, ctx, names, log) {
   const res = await ctx.request.get(`${API}/api/devices/redroid`);
   const body = await res.json();
   const byName = Object.fromEntries((body.devices ?? []).map((d) => [d.name, d.id]));
+  // wait until enough global slots are actually free (the previous level's
+  // closed tiles may still be draining — closed tiles' DELETE can race the
+  // context teardown, and the 30s lease TTL is the backstop; P3 L5 finding
+  // 2026-10-23: opening within ~2s of the previous close-all hit 5/5 on
+  // two tiles for exactly this reason).
+  const tDrain = Date.now();
+  for (;;) {
+    const r = await ctx.request.get(`${API}/api/device-streams`);
+    const u = (await r.json()).usage;
+    if (u.active <= 5 - names.length) break;
+    if (Date.now() - tDrain > 45_000) {
+      log(`WARN: only ${5 - u.active}/5 slots free after 45s (usage=${u.active}) — proceeding anyway`);
+      break;
+    }
+    await new Promise((x) => setTimeout(x, 2_000));
+  }
   for (const name of names) {
     // hash-only goto does NOT reload the document — the fleet page mounts
     // after goto, and the chips render only once the devices fetch lands
@@ -260,9 +276,21 @@ async function runLevel(browser, L, idx) {
       if (await closeBtn.count() > 0) await closeBtn.click().catch(() => {});
     }
     await page.waitForTimeout(4_000);
-    const usageRes = await ctx.request.get(`${API}/api/device-streams`);
-    const usage = (await usageRes.json()).usage;
-    level.usageAfterClose = usage;
+    // wait for ALL leases to drain before the context dies — the closed
+    // tiles' DELETE requests can be aborted by the teardown, and the next
+    // level must start from a clean 0/5 (P3 L5 finding 2026-10-23)
+    const tU = Date.now();
+    for (;;) {
+      const r = await ctx.request.get(`${API}/api/device-streams`);
+      const u = (await r.json()).usage;
+      level.usageAfterClose = u;
+      if (u.active === 0) break;
+      if (Date.now() - tU > 45_000) {
+        level.events.push(`${new Date().toISOString()} usage stuck at ${u.active}/5 after 45s (TTL 30s backstop will clear it)`);
+        break;
+      }
+      await new Promise((x) => setTimeout(x, 2_000));
+    }
 
     const byteByDev = await attributeSockets(ctx, obs);
     for (let i = 0; i < L; i += 1) {
