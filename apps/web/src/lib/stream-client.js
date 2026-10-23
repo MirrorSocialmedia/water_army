@@ -104,6 +104,12 @@ export class StreamClient {
     try {
       const out = await api.post(`/api/devices/redroid/${encodeURIComponent(this.deviceId)}/streams`, { mode: this.mode });
       this.lease = out.lease;
+      // P2 E2E finding: streamWsPath is a TOP-LEVEL field of the acquire
+      // response ({lease, ticket, streamWsPath, usage}) — reading it off
+      // lease gave undefined → new WebSocket('ws://hostundefined') threw a
+      // SyntaxError that start()'s caller swallowed → banner stuck
+      // CONNECTING with zero WS attempts on the wire.
+      this.wsPath = out.streamWsPath;
     } catch (e) {
       if (e instanceof ApiError) {
         switch (e.code) {
@@ -131,11 +137,19 @@ export class StreamClient {
 
   wsUrl() {
     const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    return `${proto}://${window.location.host}${this.lease.streamWsPath}`;
+    return `${proto}://${window.location.host}${this.wsPath}`;
   }
 
   _openWs() {
-    const ws = new WebSocket(this.wsUrl());
+    if (!this.wsPath) {
+      return this._setState('ERROR', { error: new Error('server did not return streamWsPath') });
+    }
+    let ws;
+    try {
+      ws = new WebSocket(this.wsUrl());
+    } catch (e) {
+      return this._setState('ERROR', { error: e, note: 'WebSocket construction failed' });
+    }
     ws.binaryType = 'arraybuffer';
     this.ws = ws;
     ws.onopen = () => this._setState('CONNECTING'); // sidecar 'LIVE' text frame confirms
@@ -317,6 +331,7 @@ export class StreamClient {
       try {
         const out = await api.post(`/api/device-streams/${encodeURIComponent(this.lease.id)}/reconnect`);
         this.lease = out.lease; // refreshed summary (version bumped)
+        this.wsPath = out.streamWsPath ?? this.wsPath;
         this.reconnectAttempt = 0;
         this._setState('CONNECTING');
         this._openWs();

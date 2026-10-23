@@ -129,3 +129,57 @@ test('input success rate = inputSent / (inputSent + local rejections) stays ≥ 
   assert.equal(client.stats.inputSent, 2);
   assert.equal(client.stats.inputRejected, 3);
 });
+
+// ---- wsPath contract (P2 E2E finding) ------------------------------------------
+// The acquire/reconnect response carries streamWsPath at TOP LEVEL
+// ({lease, ticket, streamWsPath, usage}). The old client read
+// lease.streamWsPath (undefined) → new WebSocket('ws://hostundefined')
+// threw a SyntaxError that start()'s caller swallowed → banner stuck
+// CONNECTING, zero WS traffic on the wire.
+
+test('wsUrl() builds from the top-level wsPath field', () => {
+  globalThis.window = { location: { protocol: 'http:', host: '127.0.0.1:16492' } };
+  const { client } = makeClient();
+  client.wsPath = '/api/device-streams/lease-123/ws';
+  assert.equal(client.wsUrl(), 'ws://127.0.0.1:16492/api/device-streams/lease-123/ws');
+  delete globalThis.window;
+});
+
+test('wsUrl() uses wss under https origins', () => {
+  globalThis.window = { location: { protocol: 'https:', host: 'console.example' } };
+  const { client } = makeClient();
+  client.wsPath = '/api/device-streams/lease-123/ws';
+  assert.equal(client.wsUrl(), 'wss://console.example/api/device-streams/lease-123/ws');
+  delete globalThis.window;
+});
+
+test('_openWs() without wsPath → ERROR state, no WebSocket constructed', () => {
+  const constructed = [];
+  globalThis.WebSocket = class {
+    constructor(url) { constructed.push(url); }
+  };
+  const { client, states } = makeClient();
+  client._openWs();
+  assert.equal(constructed.length, 0);
+  assert.equal(states.at(-1).s, 'ERROR');
+  assert.match(states.at(-1).info.error.message, /streamWsPath/);
+  delete globalThis.WebSocket;
+});
+
+test('_openWs() catches a throwing WebSocket constructor → ERROR, no crash', () => {
+  // simulates the original bug: malformed URL (hostundefined) makes the
+  // browser WebSocket constructor throw a SyntaxError
+  globalThis.WebSocket = class {
+    constructor(url) {
+      if (url.includes('undefined')) throw new SyntaxError(`Invalid URL: ${url}`);
+    }
+  };
+  const { client, states } = makeClient();
+  client.wsPath = 'undefined';
+  globalThis.window = { location: { protocol: 'http:', host: '127.0.0.1:16492' } };
+  client._openWs();
+  delete globalThis.window;
+  assert.equal(states.at(-1).s, 'ERROR');
+  assert.match(states.at(-1).info.note, /WebSocket construction failed/);
+  delete globalThis.WebSocket;
+});
