@@ -121,7 +121,7 @@ wss.on('connection', (ws, req) => {
       clearTimeout(conn.timer);
       if (m?.t !== 'session') return fail('SIDECAR_BAD_FIRST_FRAME', 'expected session frame', 400);
       const { leaseId, serial, userId, mode, videoSource, quality } = m;
-      if (typeof leaseId !== 'string' || !/^[a-z0-9]{8,64}$/.test(leaseId)) {
+      if (typeof leaseId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(leaseId)) {
         return fail('SIDECAR_BAD_LEASE_ID', 'invalid leaseId', 400);
       }
       if (sessions.has(leaseId)) return fail('SIDECAR_SESSION_EXISTS', 'lease already streaming', 409);

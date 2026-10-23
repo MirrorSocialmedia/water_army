@@ -132,7 +132,7 @@ test('sidecar: valid auth but non-loopback serial → SIDECAR_SERIAL_NOT_ALLOWED
   const sidecar = await startSidecar();
   try {
     const frames = await wsCollect(TOKEN, {
-      t: 'session', leaseId: 'a1234567890', serial: '10.9.8.7:16500',
+      t: 'session', leaseId: 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d', serial: '10.9.8.7:16500',
       userId: 'u1', mode: 'viewer', videoSource: 'screencap', quality: 'low',
     });
     assert.ok(frames.some((f) => f.t === 'error' && f.code === 'SIDECAR_SERIAL_NOT_ALLOWED'));
@@ -146,7 +146,7 @@ test('sidecar: serial outside the allowlist RANGE → SIDECAR_SERIAL_NOT_ALLOWED
   const sidecar = await startSidecar();
   try {
     const frames = await wsCollect(TOKEN, {
-      t: 'session', leaseId: 'a1234567890', serial: '127.0.0.1:15000',
+      t: 'session', leaseId: 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d', serial: '127.0.0.1:15000',
       userId: 'u1', mode: 'viewer', videoSource: 'screencap', quality: 'low',
     });
     assert.ok(frames.some((f) => f.t === 'error' && f.code === 'SIDECAR_SERIAL_NOT_ALLOWED'));
@@ -161,6 +161,20 @@ test('sidecar: bad lease id shape → SIDECAR_BAD_LEASE_ID', async () => {
   try {
     const frames = await wsCollect(TOKEN, {
       t: 'session', leaseId: 'UPPER_CASE_ID!!', serial: '127.0.0.1:16500',
+      userId: 'u1', mode: 'viewer', videoSource: 'screencap', quality: 'low',
+    });
+    assert.ok(frames.some((f) => f.t === 'error' && f.code === 'SIDECAR_BAD_LEASE_ID'));
+  } finally {
+    sidecar.kill();
+    await new Promise((r) => setTimeout(r, 300));
+  }
+});
+
+test('sidecar: lease id must be UUID shape (stream_leases.id is @db.Uuid — cuid-style ids rejected)', async () => {
+  const sidecar = await startSidecar();
+  try {
+    const frames = await wsCollect(TOKEN, {
+      t: 'session', leaseId: 'a1234567890', serial: '127.0.0.1:16500',
       userId: 'u1', mode: 'viewer', videoSource: 'screencap', quality: 'low',
     });
     assert.ok(frames.some((f) => f.t === 'error' && f.code === 'SIDECAR_BAD_LEASE_ID'));

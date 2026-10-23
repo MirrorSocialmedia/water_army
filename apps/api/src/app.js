@@ -520,7 +520,10 @@ export async function buildApp(opts = {}) {
       socket.destroy();
       return;
     }
-    const m = /^\/api\/device-streams\/([a-z0-9]{8,64})\/ws$/i.exec(url.pathname);
+    // stream_leases.id is @db.Uuid (P1) — the path id MUST match the UUID
+    // shape; anything else is 404 (not a stream path). [gen3 fix: the WIP
+    // regex [a-z0-9]{8,64} rejected every real (hyphenated) lease id.]
+    const m = /^\/api\/device-streams\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/ws$/i.exec(url.pathname);
     const reject = (status, code, message) => {
       const requestId = crypto.randomUUID();
       app.log.warn({ requestId, code, status, path: url.pathname, leaseId: m?.[1] ?? null }, 'stream ws upgrade rejected');
