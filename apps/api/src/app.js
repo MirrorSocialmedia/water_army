@@ -513,6 +513,13 @@ export async function buildApp(opts = {}) {
   const WS_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
   const WS_REASONS = { 401: 'Unauthorized', 403: 'Forbidden', 404: 'Not Found', 409: 'Conflict', 500: 'Internal Server Error', 502: 'Bad Gateway', 503: 'Service Unavailable', 504: 'Gateway Timeout' };
   app.server.on('upgrade', (req, socket, head) => {
+    // A raw socket with no 'error' listener crashes the WHOLE process on
+    // ECONNRESET (observed live in P2 E2E: a client aborted right after a
+    // 403 reject → the buffered write reset → unhandled 'error' event took
+    // down the API, sidecar and every active stream). Upgrade-phase errors
+    // just mean "the client went away" → destroy quietly. Once the tunnel
+    // is up, pipeTunnel attaches its own (actionable) error handlers.
+    socket.on('error', () => { try { socket.destroy(); } catch { /* already gone */ } });
     let url;
     try {
       url = new URL(req.url ?? '/', 'http://127.0.0.1');

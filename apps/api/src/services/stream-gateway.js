@@ -145,6 +145,10 @@ export function createStreamGateway({ db, config, streamLeaseService, log, resol
       });
       req.on('upgrade', (res, sock, head) => {
         sock.setNoDelay(true);
+        // bridge the gap before connectAndHandshake's first wait() attaches
+        // its actionable error handler — a reset in that window would be an
+        // unhandled 'error' event on the raw socket (process crash).
+        sock.on('error', () => {});
         resolve({ sock, head: head ?? Buffer.alloc(0) });
       });
       req.on('response', (res) => {

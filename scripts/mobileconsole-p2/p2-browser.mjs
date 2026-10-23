@@ -115,6 +115,30 @@ try {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   const page = await login(ctx, ADMIN_USER, ADMIN_PASS);
 
+  // Independent wire observer (P2 run #9 debugging): count what the BROWSER's
+  // own WebSocket actually receives, outside the app's _onBinary path.
+  // Writes ${EVID}/ws-obs.json — binary frames with their PNGF magic where
+  // present. Distinguishes "frames never reach the browser" from "browser
+  // decodes them wrong".
+  const wsObs = { sockets: [], binary: 0, text: 0, firstBinary: null, lastError: null };
+  page.on('websocket', (ws) => {
+    const entry = { url: ws.url(), openedAt: new Date().toISOString(), binary: 0, text: 0, closed: null };
+    wsObs.sockets.push(entry);
+    ws.on('framereceived', (ev) => {
+      const p = ev.payload;
+      if (Buffer.isBuffer(p)) {
+        entry.binary += 1; wsObs.binary += 1;
+        if (!wsObs.firstBinary && p.length >= 16) {
+          wsObs.firstBinary = { len: p.length, magic: p.readUInt32BE(0).toString(16), w: p.readUInt32BE(4), h: p.readUInt32BE(8) };
+        }
+      } else {
+        entry.text += 1; wsObs.text += 1;
+      }
+    });
+    ws.on('close', () => { entry.closed = new Date().toISOString(); });
+    ws.on('error', (e) => { wsObs.lastError = String(e).slice(0, 200); });
+  });
+
   // T21 — device list → open console (MD §15.3: 由 list open 正確 device)
   await page.goto(`${WEB}/#/devices`, { waitUntil: 'networkidle' });
   let t21 = false;
@@ -181,7 +205,7 @@ try {
       await page.mouse.click(bb.x + bb.width / 2, bb.y + bb.height * 0.02);
       await page.waitForTimeout(2500);
       t24 = true; // device-side proof = logcat (harness); here: input accepted, no error banner
-      const fb = page.evaluate(() => document.querySelector('.pf-bad')?.textContent ?? '');
+      const fb = String(await page.evaluate(() => document.querySelector('.pf-bad')?.textContent ?? ''));
       t24 = !fb.includes('INPUT_REJECTED') && !fb.includes('STREAM_NOT_LIVE');
     } catch (e) {
       console.log(`T24 error: ${e.message}`);
@@ -196,7 +220,7 @@ try {
     try {
       await page.locator('.keybar .keybtn:has-text("Home")').click();
       await page.waitForTimeout(2500);
-      const fb = page.evaluate(() => document.querySelector('.pf-bad')?.textContent ?? '');
+      const fb = String(await page.evaluate(() => document.querySelector('.pf-bad')?.textContent ?? ''));
       t25 = !fb.includes('INPUT_REJECTED') && !fb.includes('STREAM_NOT_LIVE');
     } catch (e) {
       console.log(`T25 error: ${e.message}`);
@@ -288,6 +312,8 @@ try {
   }
   mark('T26', t26, 'viewer = read-only: video visible (frames>0), 唯讀 banner, no keybar (MD §15.2)');
 
+  fs.writeFileSync(`${EVID}/ws-obs.json`, JSON.stringify({ ...wsObs, finishedAt: new Date().toISOString() }, null, 2));
+  console.log(`WS-observer: sockets=${wsObs.sockets.length} binary=${wsObs.binary} text=${wsObs.text} firstBinary=${JSON.stringify(wsObs.firstBinary)} lastError=${wsObs.lastError}`);
   fs.writeFileSync(`${EVID}/p2-results.json`, JSON.stringify({ results, finishedAt: new Date().toISOString() }, null, 2));
 } finally {
   await browser.close();
