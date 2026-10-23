@@ -95,14 +95,24 @@ async function canvasPainted(page, { timeoutMs = 60_000 } = {}) {
   ).then(() => true).catch(() => false);
 }
 
-async function frameCount(page) {
-  return page.evaluate(() => {
-    const dts = [...document.querySelectorAll('dt')];
-    const dt = dts.find((x) => x.textContent === '幀');
-    if (!dt || !dt.nextElementSibling) return 0;
-    const m = /(\d+)/.exec(dt.nextElementSibling.textContent);
-    return m ? Number(m[1]) : 0;
-  });
+async function frameCount(page, { timeoutMs = 15_000 } = {}) {
+  // POLL (run #11 forensics): the canvas is painted by img.onload but the DOM
+  // dd lags one React flush behind — a one-shot read right after canvasPainted
+  // caught the stale '0 帧'. A live stream counts up at ~3.5fps, so waiting
+  // for the first positive value is both safe and fast.
+  const t0 = Date.now();
+  for (;;) {
+    const n = await page.evaluate(() => {
+      const dts = [...document.querySelectorAll('dt')];
+      const dt = dts.find((x) => x.textContent === '幀');
+      if (!dt || !dt.nextElementSibling) return 0;
+      const m = /(\d+)/.exec(dt.nextElementSibling.textContent);
+      return m ? Number(m[1]) : 0;
+    }).catch(() => 0);
+    if (n > 0) return n;
+    if (Date.now() - t0 > timeoutMs) return n;
+    await new Promise((r) => setTimeout(r, 500));
+  }
 }
 
 async function bannerText(page) {
@@ -189,7 +199,7 @@ try {
   // failure triages itself: live=?.painted=?.frames=? is the run #10 blind spot)
   const live = await waitLive(page);
   const painted = live ? await canvasPainted(page, { timeoutMs: 20_000 }) : false;
-  const frames = await frameCount(page); // always read — the painted gate used to mask the real count
+  const frames = await frameCount(page); // polls up to 15s for the React-flushed count
   const source = await page.evaluate(() => {
     const dts = [...document.querySelectorAll('dt')];
     const dt = dts.find((x) => x.textContent === '串流模式');
@@ -231,30 +241,35 @@ try {
   mark('T25', t25, 'controller Home key accepted (device logcat proof in t245-logcat-matched.txt)');
 
   // T27 — sidecar SIGKILL → RECONNECTING → re-auth (new ticket) → LIVE again
+  // (run #11 forensics: the old version polled waitLive IMMEDIATELY after the
+  // kill — the first poll matched the STALE LIVE banner (banner change lags
+  // the client's onclose by ~0.5s) → false PASS in every run, and T28's close
+  // click 0.3s later unmounted the page and killed the pending reconnect
+  // timer, so the real reconnect path was never exercised.)
   let t27 = false;
   let sawReconnecting = false;
   if (painted) {
     try {
       const pid = execSync('pgrep -f "[s]tream-sidecar/src/server.js"').toString().trim().split('\n')[0];
       process.kill(Number(pid), 'SIGKILL');
-      // watch the banner for the RECONNECTING text (it may be brief)
-      const watcher = (async () => {
-        const deadline = Date.now() + 8000;
-        while (Date.now() < deadline) {
-          const t = await bannerText(page);
-          if (t.includes('重連')) { sawReconnecting = true; return; }
-          await new Promise((r) => setTimeout(r, 250));
-        }
-      })();
-      const backLive = await waitLive(page, { timeoutMs: 90_000 });
-      await watcher.catch(() => {});
-      t27 = Boolean(backLive);
+      // 1) the client MUST notice the drop: banner leaves LIVE → 重連 text
+      sawReconnecting = await page.waitForFunction(
+        () => {
+          const b = document.querySelector('.stream-banner');
+          return b && b.textContent.includes('重連') && !b.textContent.includes('已連線');
+        },
+        null,
+        { timeout: 10_000, polling: 100 },
+      ).then(() => true).catch(() => false);
+      // 2) the reconnect must complete: fresh ticket + fresh WS + LIVE again
+      const backLive = await waitLive(page, { timeoutMs: 30_000 });
+      t27 = Boolean(sawReconnecting && backLive);
       await shot(page, 't27-reconnected.png');
     } catch (e) {
       console.log(`T27 error: ${e.message}`);
     }
   }
-  mark('T27', t27, `sidecar SIGKILL → ${sawReconnecting ? 'RECONNECTING seen' : '(reconnecting text missed — verified by LIVE return)'} → re-auth → LIVE again (MD §2.1.8/§10)`);
+  mark('T27', t27, `sidecar SIGKILL → ${sawReconnecting ? 'RECONNECTING seen' : 'RECONNECTING NOT seen'} → re-auth → LIVE again (MD §2.1.8/§10)`);
 
   // T28 — close/release → lease terminal + usage 0
   let t28 = false;
@@ -299,7 +314,7 @@ try {
     await vpage.click('button.console-open-btn');
     const vLive = await waitLive(vpage);
     const vPainted = vLive ? await canvasPainted(vpage, { timeoutMs: 20_000 }) : false;
-    const vFrames = await frameCount(vpage); // always read (diag)
+    const vFrames = await frameCount(vpage); // polls (React flush lag)
     const vBanner = vLive ? await bannerText(vpage) : '';
     const vReadOnly = vBanner.includes('唯讀');
     const vNoKeybar = await vpage.locator('.keybar .keybtn').count() === 0;
