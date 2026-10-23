@@ -853,3 +853,116 @@ MD §13.2 嘅 per-actor 寫 budget（20/60s）係為**人工誤操作**設嘅；
 - **Sandbox E2E**（`scripts/br-b6-e2e/`，163xx scratch、`br-b6-*` 前綴、ADB-mock image）：200 identities / 4 batches 全 cycle + 重複 create/start、worker SIGKILL、API 重啟、transient/permanent 故障、200 終態 audit。
 - **故障注入**（`scripts/br-b6-e2e/fault-driver.mjs`）：Redis 斷 15s / PG 斷 15s / worker kill + Redis 斷（組合）— 斷言 = 每 identity 一個終態 + `attempt_started` 全局 unique + 零殘留容器。Docker daemon 斷 = hermetic only（shared daemon 有 user compose = 紅線；S4③ fail-closed 已實錚）。
 - **真機階梯**（`scripts/br-b6lt/`，165xx scratch、`br-b6lt-*` 前綴、pinned digest `matrixa-r3`）：1→5→10→25→50（**絕唔一開始開 50**）；5s VRAM+host sampler（`nvidia-smi`）+ halt monitor（SGLang 30000 共卡 — 任何 GPU free < 1500MiB / SGLang creep / health fail / host RAM-load-disk 超線 → cancel + 縮下一階）；每階段 report → `logs/br-b6-loadtest/`。
+
+## 19. Mobile Console 串流架構決定（MC-1..MC-6，2026-10-23 — Phase 0 PoC 前決策）
+
+### 19.1 候選比較（MD §5.1 全項）
+
+| 項 | 官方 scrcpy（Genymobile/scrcpy） | ws-scrcpy-web（bilbospocketses/ws-scrcpy-web） |
+|----|------|------|
+| URL | https://github.com/Genymobile/scrcpy | https://github.com/bilbospocketses/ws-scrcpy-web |
+| 固定版本 | **v5.0.1**（2026-10-08 release，實測取最新 stable） | main 分支浮動（pushed 2026-10-13）；release 命名 8.x 頻道 — **無可固定之穩定 tag** |
+| License | **MIT**（LICENSE 實測） | **GPL-3.0**（repo metadata + README 實測） |
+| 授權義務 | 無 copyleft；只須保留 copyright notice | 合併/修改/再散布 = GPL-3.0 传染；即使 internal-only 部署，任何 modification（拆功能/換 auth）都構成衍生作品 → 全倉 compliance 負擔；**且其 admin 面 = 單密碼 + 內建 shell(node-pty)/檔案/命令功能，無法在不修改下安全關閉** → 修改即觸發 GPL，關閉又做不到 = 雙重不可行 |
+| Node/ADB/scrcpy-server 要求 | 只需 adb（任意近期版，實測 37.0.1 OK）+ scrcpy-server jar（隨 release 發布，本項目 pin v5.0.1） | Node 20+ + adb + 自帶 scrcpy-server 版本（跟其 release 走，浮動） |
+| Redroid ADB 相容 | ADB-over-TCP（`adb -s ip:port`）原生支持；`adb forward tcp:PORT localabstract:scrcpy_xxxxxxxx` 抽象 socket 隧道（v5 架構）— PoC 實測 | 同左（其底層亦用 vanilla scrcpy），但多一層 Node server 抽象 |
+| 可否關閉 shell/檔案/APK | **可以** — 官方 client 的 shell/file 功能在 client 端；server jar 本身只有 mirror+control+audio+record 能力，**無 shell 通道**（v5 server 源碼實測：無 shell 處理路徑）；我方 sidecar 只實作 mirror+control 子集 | **不可以安全關閉** — shell/檔案/命令係 core feature（node-pty 直接依賴），須改碼才能關 = 衍生作品 |
+| 瀏覽器要求 | H.264 硬解 + WebSocket；**WebCodecs**（Chromium/Firefox 130+）；secure context（127.0.0.1 天然 secure；LAN 須 HTTPS） | 同左（WebCodecs） |
+| CVE/更新策略 | Genymobile 官方維護（pushed 2026-10-22）；pin release + sha256；跟版 = 改 pin + ADR 回寫 | 個人維護（stars 69，fork 16）；停更風險高 |
+| 健康/清理/觀測 | server 自帶 `cleanup=true`（結束刪 jar）、stderr 可觀測、session 結束自清理 | 有，但隨其 server 架構（黑箱） |
+
+**歷史註**：原 `NetrisTV/ws-scrcpy`（MIT，2.6k stars）已停止維護（Genymobile/scrcpy issue #4533 實測引述）；`coder104/ws-scrcpy*` repo 現為 404。MD 所指「ws-scrcpy-web」= bilbospocketses 現存專案（GPL-3.0）。
+
+### 19.2 決定：MC-1 — scrcpy v5.0.1 server + 自研薄 Node sidecar（`apps/stream`）
+
+- **拒絕 ws-scrcpy-web**（GPL-3.0 + 無法安全拆管理面 + 維護風險）；**拒絕 NetrisTV/ws-scrcpy**（停更）。
+- 採用**官方 scrcpy v5.0.1 協議**（MIT），由本項目 Node sidecar 實作 client 端：
+  - 版本鎖定：`scrcpy-server-v5.0.1`，**sha256 `764eb6f79811d5211fe9df341120882ba9994c7a61b897d7bf3fb662e53bc536`**（733,930 bytes，release asset 實測）。
+  - 協議關鍵（v5.0.1 server 源碼實測，非猜）：
+    - 啟動 = `adb -s <serial> shell "CLASSPATH=/data/local/tmp/scrcpy-server.jar app_process / com.genymobile.scrcpy.Server 5.0.1 scid=<8hex> log_level=INFO video=true video_bit_rate=<n> max_size=<n> max_fps=<n> audio=false control=true tunnel_forward=true"` — **首參 = client 版本字串，server 強制校驗相等**；`scid` 決定抽象 socket 名 `scrcpy_<8hex>`。
+    - `tunnel_forward=true` → server 建 `LocalServerSocket`，**按 video→audio→control 順序 accept**；client 用 `adb forward tcp:<p> localabstract:scrcpy_<scid>` 後**按同序**連 `127.0.0.1:<p>`。
+    - video socket 流 = `[64B deviceName(zero-padded)][4B codecId BE]([4B sessionFlags(B31=1)+4B w+4B h])*` + 每幀 `[8B ptsAndFlags(B63=config,B61=keyframe) + 4B size BE] + payload`。H264 codecId = `0x68323634`（4B ASCII "h264"）。
+    - control socket = 純 control message 流：`1B type + payload`；MVP 只用 0=INJECT_KEYCODE(13B)、1=INJECT_TEXT(4B len+UTF8, ≤300B)、2=INJECT_TOUCH_EVENT(32B)、3=INJECT_SCROLL_EVENT(18B)、4=BACK_OR_SCREEN_ON(1B)、5/6/7/11=面板/rotated(0B)；**明確不實作** 8/9=clipboard、12-14=UHID、16=START_APP、22=SCAN_FILE（安全面縮小；UI 不暴露）。
+    - dummy byte（`sendDummyByte=true` 預設）：第一條流首 byte=0，用於快速探測連線死。
+- **sidecar 自帶 pinned adb**：platform-tools **37.0.1-15733141**（host 現行版實測；image 內固定 binary + sha256）。sidecar adb 層 = 固定白名單（`connect`/`get-state`/`forward`/`forward --remove`/`push`（只准 scrcpy jar 單檔）/固定 `app_process` 啟動模板）— **無 `shell:true` 任意命令、無用戶可指定參數**（跟 `adb-whitelist.js` 同款紀律；MD §5.2/§11.10）。
+- 新增 npm 依賴：**`ws@8.22.0`**（pin 精確版，npm registry 實測 latest；純 JS、MIT、scrcpy 無關的 WS server；API 端與 sidecar 端各用一次）。無其他新增依賴。
+
+### 19.3 決定：MC-2 — 拓撲與 ADB 可達性（audit 發現 1/2 的解法）
+
+`Browser → web(:3012, WS upgrade proxy) → api(:3000, auth/RBAC/lease/ticket) → stream sidecar → adb → device`
+
+- **sidecar = API 用 dockerode spawn 嘅自管容器**（跟 device/gost 容器同一機制，`app.managed=true, app.purpose=mobileconsole-stream`），掛 **devices network**（172.38.200.0/24，API 自管）；**零 docker socket、read-only rootfs、cap_drop ALL、no-new-privileges、非 root、無 port publish**。
+- **ADB 可達性**（audit 實測：api image 無 adb；bridge 容器唔到 host loopback）：
+  - **production**：sidecar 容器內自帶 adb server（netns-local 5037），直連 **device 容器 IP:5555**（同 devices L2；redroid adbd = tcpip 模式）；`adb forward` 綁 sidecar 自身 loopback。
+  - **scratch（host-process API，G1/G2 食譜）**：sidecar = host process，用 host adb server 連 `127.0.0.1:<165xx>`（G2 實證路徑）。
+  - 統一：API spawn 時決定 `adbTarget`（`loopback:<port>` 或 `<device-ip>:5555`）傳 sidecar；sidecar **只接受** `127.0.0.1 + 核准 port 範圍` 或 `devices subnet 172.38.200.0/24 + port 5555` — 客戶端永遠唔可以指定 host/port（反 SSRF，MD §5.2）。
+- **web 反代補 WS upgrade 透傳**（audit 發現 3）：`apps/web/server.js` 加 `server.on('upgrade')` — 只放 `/api/` 前綴、覆寫 XFF（跟 `proxyApi` 同款防 spoof）、api 端再驗 session/Origin。
+
+### 19.4 決定：MC-3 — stream ticket 與 lease 綁定
+
+- `POST /devices/redroid/:id/streams`（api，operator+ 取 controller / viewer 取 read-only，RBAC 按現行角色）→ 返回 **stream ticket**：`randomBytes(32)` base64url，**TTL 60s、單次使用**，payload 綁 `{userId, deviceId, leaseId, mode, permission}`，HMAC（`STREAM_TICKET_SECRET`，env，唔入 repo/唔入 log）；**ticket 唔入 query string**（WS handshake 用 `Sec-WebSocket-Protocol: ticket.<value>` subprotocol 傳 — 唔經過 access log 嘅 URL 層；api 端 upgrade handler 校驗）。
+- 驗完 ticket → api 與 sidecar 之間**換長壽 per-lease WS 通道**（api↔sidecar 用 service token，同 worker 模式）；之後 heartbeat/lease 過期由 server 時間裁定（MD §4.1）。
+- 重連 = 新 ticket + 重新驗權（唔恢復過期控制權，MD §2.1.8 / §10）。
+
+### 19.5 決定：MC-4 — 容量與降級
+
+- `MAX_CONCURRENT_DEVICE_STREAMS`：env，**缺省 5、上限 5**；非法值（非整數 / <1 / >5）→ 啟動 fail-safe 落 5 + 明確 log error（MD §4.1）。
+- 品質預設：**low**（max_size=720, video_bit_rate=2M, max_fps=15）→ 中（1080/4M/30）可選；5 路 ladder 用 low 預設（MD §4.2）。
+- 延遲建立：tile open 先 acquire lease + 啟動 sidecar stream；close = 停影像 + 釋放 slot（冪等）。
+- 每路 sidecar stream = 單一 TCP 連線對（video+control 各一），無 fork（Node 單 process 內 async）；sidecar 自身 guard：同時 stream 數 = api lease 計數（sidecar 自身亦硬性 fail-closed 上限 5，雙重保險）。
+
+### 19.6 PoC 實測結果（2026-10-23 02:19Z，P0 收尾）
+
+| # | 項 | 結果 | 證據 |
+|---|-----|------|------|
+| 1 | redroid A10 (gpuMode:host) H.264 MediaCodec 編碼 | **NOT VERIFIED — 圖像級 blocker（非 code bug）** | 見 §19.9：media HAL 只有 gralloc mapper 2.x，scrcpy 同 screenrecord 零 frame；screencap（繞過 MediaCodec）正常 |
+| 2 | WebCodecs 解 H.264（headless Chromium） | **PASS**（環境修正：實測 cache 只有 chromium-**1217**=Chrome 147 / 1208=Chrome 145，**冇 1228** — 原草稿筆誤；且 WebCodecs 只喺真實 origin page 出現，`about:blank` 冇 → E2E 頁面必須走真 http origin） | `browser-evidence.json`: `webcodecs:true, chromeVersion:Chrome/147.0.0.0, configured:true` |
+| 3 | 跨 bridge 網絡可達性 | **production 路徑 PASS**：sidecar 容器掛 devices L2 → device IP:5555 = `SAME_L2_OK`；cross-bridge（api net → device IP）= FAIL 屬預期設計（隔離），因為 production 中同 device 通訊嘅係 sidecar（devices L2）而唔係 api 容器 | `probe.txt` |
+| 4 | `adb forward` 綁定地址 | **PASS**：`tcp:<port>` forward 由 sidecar 喺 127.0.0.1 loopback 連回成功（video + control 兩條） | sidecar events `forwards_up` + connect 成功 |
+| 5 | 5 路 × low 品質 host CPU/GPU 開銷 | 留 Phase 3 ladder 實測（RAM gate live 下） | — |
+
+**browser 級串流（screencap 降級模式）= PASS**：video `decoded=8 codecUsed=screencap-png`、touch `swipeDiffPct=23.83` + device logcat `SHADE_EXPAND_FROM_STATUS_BAR` / `NOTIFICATION_SHADE_EXPAND_COLLAPSE::Expand`（注入 touch 真係打開咗通知欄）+ Home keycode → `KeyguardService setOccluded` 事件。證據：`logs/mobileconsole-poc/browser-evidence.json` + `0{1,2,3}-*.png` + `sidecar-events.jsonl`。
+
+**wire 協議關鍵陷阱（PoC 實測，產品 sidecar 必須處理）：**
+- **scid 必須係 int32 範圍（≤ 0x7FFFFFFF）**：server `Options.parse` 用 `Integer.parseInt(scid, 16)`，隨機 8-hex 超範圍 → server 起咗都無 socket → 永久 timeout。生成法：`Math.floor(Math.random()*0x7fffffff).toString(16).padStart(8,'0')`。
+- **JVM cold-start race**：`adb forward` 成功 ≠ server 接受連線（JVM 要數秒先 bind `localabstract:scrcpy_<scid>`；之前嘅 connect 會被 adb 接受即斷，~3ms）。sidecar 必須 **connect retry + 首 byte probe（dummy byte）**，對齊上游 client（100×100ms）；本 PoC 用 30s deadline / 250ms interval。video（或 control-only 模式嘅 control）= first socket，收 dummy byte；scrcpy 模式嘅 control = 單次 attempt（防 double-queue 誤接受）。
+- **device meta（64B name）落喺 first socket**：video=true 時喺 video 流；`video=false control=true`（control-only）時喺 control 流 — 讀完 dummy byte 後必讀 64B。
+- **`cleanup=true` 副作用**：server 正常退出會刪 `/data/local/tmp/scrcpy-server.jar` — 若前一個 server 乾淨收場，下一個 launch 會 `ClassNotFoundException`。sidecar 每 run 重新 push + sha256 校驗 = 冪等（已實裝）；產品 sidecar 建議 `cleanup=false` + 開機 push 一次（减少每 stream 一次 push）。
+- **browser WS `binaryType` 必須設 `'arraybuffer'`**：Chromium 預設 `'blob'`，`new Uint8Array(blob)` = 空 buffer → 所有 binary frame 靜默丟失（PoC run #2/#3 假死根因，wsReadyState=1 無 error 無 close，只係 frames=0）。
+
+### 19.7 PoC 範圍（P0 交付）
+
+1 台 disposable 真機（`redroid-brmc-poc`，G2 食譜 720x1280/320/30 + host GPU + privileged + 4GiB，ADB 16500）：
+- sidecar PoC script：push jar（sha256 校驗）→ launch（固定模板）→ forward → 讀 video 流（解 frame header，計幀）→ 發 touch/key → 證據。
+- **browser 級**：headless Chromium + WebCodecs 頁面解 H.264 畫 canvas + mouse→touch 回傳；截圖 + 點擊前後 frame diff = touch 生效證據。
+- probe 容器：跨 bridge 可達性 + adb forward 綁定地址。
+
+### 19.8 實測補充：scid int32 與 connect race（PoC 期間發現，已修）
+
+- 見 §19.6 wire 協議陷阱清單（scid / connect retry / dummy byte / device meta / cleanup / binaryType）。
+- 上游對齊：scrcpy v5.0.1 `app/src/main/jni/server.c` client = connect + read-1-byte（dummy）+ 100 attempts × 100ms；`Server.java` accept 順序 video→audio→control；`sendDummyByte` 預設 true；`sendDeviceMeta` 預設 true 且寫入 **first socket**。
+
+### 19.9 redroid image gralloc 限制（產品決策項）
+
+**事實（2026-10-23 實測，`redroid:14.0.0-240527-matrixa-r3`，gpuMode:host，host=RTX A10）**：
+- MediaCodec surface-encoder 路徑完全死：scrcpy（`OMX.google.h264.encoder`，setupVideoEncoder succeeded、virtual display 建咗）同 `screenrecord --time-limit 5` 都產出 **零有效 frame**（screenrecord mp4 = ffprobe `Invalid data`）。
+- 根因：media HAL process（`media.codec hw/android.hardware.media.omx@1.0-service`）打 `Gralloc4: mapper 4.x is not supported` + `Gralloc3: mapper 3.x is not supported`；`/vendor/lib64/hw/` 只有 `android.hardware.graphics.mapper@2.0-impl-2.1.so`（mapper 3.x/4.x 無 impl）→ encoder 分唔到 input GraphicBuffer。
+- 已知上遊問題：redroid-doc issue #427（scrcpy black screen，error signature 相同，closed as not planned）。
+- **screencap（SurfaceFlinger 直接 capture → PNG）正常**：720x1280 PNG ~270ms/frame（~2-4fps）。
+- 顯示渲染本身正常（launcher 內容完整）— 問題局限喺 encoder buffer 路徑。
+
+**影響與決定**：
+- PoC 加 `VIDEO_SOURCE=scrcpy|screencap` 降級開關（MD §4.2「降級」語義）：screencap 模式 = 同一 scrcpy control 協議（`video=false control=true`）+ sidecar 輪詢 `adb exec-out screencap -p` → WS binary（16B `PNGF` header + PNG）。產品 E2E（P2/P3）喺此 image 上必須用 screencap 模式；H.264 真機路徑 = **NOT VERIFIED on this image**。
+- **產品決策項（上報 boss）**：(a) redroid image 層修復 media HAL gralloc（等 image 更新 / 另一 gpu_mode / 另一 image 驗證）；(b) 產品保留 screencap 降級模式作 permanent fallback（latency 高，唔係「低延遲」，但可操作）；(c) 兩者都做（推薦）。
+
+### 19.10 P0 交付清單（evidence 根：`/home/kenneth/.openclaw/workspace/logs/mobileconsole-poc/`）
+
+| 交付 | 狀態 | 證據 |
+|------|------|------|
+| scrcpy race fix（connectWithRetry + BufferedSocket） | PASS | `sidecar-events.jsonl`: `video_retry#1 closed-before-ready → video_connected#2` |
+| browser 見畫面（真 device 內容入 canvas） | PASS（screencap 降級模式） | `01-home.png`（launcher 渲染）+ `browser-evidence.json decoded=8` |
+| touch 映射證據 | PASS | `swipeDiffPct=23.83` + device logcat `SHADE_EXPAND_FROM_STATUS_BAR` + 14×`INJECT_TOUCH_EVENT` sidecar events |
+| key 路徑 | PASS（裝置級） | 2×`INJECT_KEYCODE` + logcat `KeyguardService setOccluded` |
+| H.264 真機串流 | **NOT VERIFIED**（image gralloc blocker） | §19.9 + `logcat-gralloc-evidence.txt` + `gralloc-root-cause.md` |
+| ADR-019 授權評估 | PASS | §19.1（GPL-3.0 義務分析 → scrcpy MIT 路線） |
+| 版本 pin | PASS | scrcpy-server v5.0.1 sha256 `764eb6f7…c536`；platform-tools 37.0.1-15733141；ws@8.22.0（產品）/ PoC 暫用 openclaw ws@8.20.0（已註明）；Chromium 1217(147)/1208(145) |

@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="zh-HK">
+<head>
+<meta charset="utf-8">
+<title>MC PoC Console (scrcpy v5.0.1 relay)</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #101418; color: #cfd8dc; font: 14px/1.4 system-ui, sans-serif; }
+  #bar { display: flex; gap: 14px; align-items: center; padding: 8px 12px; background: #1a2129; flex-wrap: wrap; }
+  #bar .stat b { color: #4fc3f7; font-weight: 600; }
+  canvas { display: block; margin: 10px auto; background: #000; border: 2px solid #2c3a47; touch-action: none; cursor: crosshair; }
+  .btn { background: #263238; color: #eceff1; border: 1px solid #37474f; border-radius: 6px; padding: 5px 12px; cursor: pointer; }
+  .btn:hover { background: #37474f; }
+  #err { color: #ef5350; font-weight: 600; }
+  .pill { padding: 2px 10px; border-radius: 10px; font-size: 12px; background: #37474f; }
+  .pill.live { background: #1b5e20; }
+  .pill.dead { background: #b71c1c; }
+</style>
+</head>
+<body>
+<div id="bar">
+  <span class="pill" id="phase">CONNECTING</span>
+  <span class="stat">device <b id="dev">-</b></span>
+  <span class="stat">codec <b id="codec">-</b></span>
+  <span class="stat">res <b id="res">-</b></span>
+  <span class="stat">frames <b id="frames">0</b></span>
+  <span class="stat">fps <b id="fps">0</b></span>
+  <span class="stat">mbps <b id="mbps">0</b></span>
+  <span class="stat">decoded <b id="decoded">0</b></span>
+  <span class="stat">decodeErr <b id="decerr">0</b></span>
+  <span class="stat">diff% <b id="diff">-</b></span>
+  <span id="err"></span>
+</div>
+<canvas id="cv" width="405" height="720"></canvas>
+<div id="bar" style="justify-content:center">
+  <button class="btn" data-kc="3">Home</button>
+  <button class="btn" data-kc="4">Back</button>
+  <button class="btn" data-kc="187">Recents</button>
+  <button class="btn" data-kc="26">Power</button>
+</div>
+<script>
+(() => {
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d', { alpha: false });
+  const $ = (id) => document.getElementById(id);
+  const poc = {
+    frames: 0, decoded: 0, decodeErrors: 0, configured: false, codecUsed: null,
+    codecAttempts: [], baseline: null, device: null, width: 0, height: 0,
+    stats: {},
+    captureBaseline() {
+      const t = document.createElement('canvas'); t.width = 32; t.height = 32;
+      const tc = t.getContext('2d'); tc.drawImage(cv, 0, 0, 32, 32);
+      poc.baseline = tc.getImageData(0, 0, 32, 32).data;
+    },
+    diffPct() {
+      if (!poc.baseline) return -1;
+      const t = document.createElement('canvas'); t.width = 32; t.height = 32;
+      const tc = t.getContext('2d'); tc.drawImage(cv, 0, 0, 32, 32);
+      const d = tc.getImageData(0, 0, 32, 32).data;
+      let diff = 0;
+      for (let i = 0; i < d.length; i += 4) {
+        if (Math.abs(d[i] - poc.baseline[i]) > 30 || Math.abs(d[i + 1] - poc.baseline[i + 1]) > 30 || Math.abs(d[i + 2] - poc.baseline[i + 2]) > 30) { diff++; i += 12; }
+      }
+      const pct = diff / (32 * 32) * 100;
+      $('diff').textContent = pct.toFixed(1);
+      return pct;
+    },
+  };
+  window.__poc = poc;
+
+  const canvas = { width: 405, height: 720 };
+  const setCanvasSize = (w, h) => {
+    if (!w || !h || (w === canvas.width && h === canvas.height)) return;
+    canvas.width = w; canvas.height = h;
+    cv.width = w; cv.height = h;
+    cv.style.width = Math.min(480, w) + 'px';
+    cv.style.height = Math.min(840, h) + 'px';
+  };
+
+  // ---------- H.264 SPS parsing (profile/level) for WebCodecs 'avc1.XXXXXX' ----------
+  function bitReader(bytes) {
+    let bit = 0; let idx = 0;
+    return {
+      u(n) {
+        let v = 0;
+        for (let i = 0; i < n; i++) {
+          v = (v << 1) | ((bytes[idx >> 3] >> (7 - (idx & 7))) & 1);
+          idx++;
+        }
+        return v >>> 0;
+      },
+      ue() { // exp-golomb
+        let z = 0;
+        while (this.u(1) === 0) z++;
+        return z === 0 ? 0 : ((1 << z) - 1) + this.u(z);
+      },
+    };
+  }
+  // CSD may be avcC or annex-B; returns {codec, description(Uint8Array)|null, spsProfile...}
+  function parseCsd(csd) {
+    const out = { codec: null, description: null };
+    try {
+      if (csd[0] === 1) { // avcC
+        const profile = csd[1], constraint = csd[2], level = csd[3];
+        out.codec = 'avc1.' + profile.toString(16).padStart(2, '0') + constraint.toString(16).padStart(2, '0') + level.toString(16).padStart(2, '0');
+        out.description = new Uint8Array(csd);
+      } else if (csd[0] === 0 && csd[1] === 0 && (csd[2] === 1 || (csd[2] === 0 && csd[3] === 1))) { // annex-B
+        // extract SPS (type 7) and PPS (type 8)
+        const nals = [];
+        let i = 0;
+        while (i < csd.length - 3) {
+          let start = -1;
+          if (csd[i] === 0 && csd[i + 1] === 0 && csd[i + 2] === 1) start = i + 3;
+          else if (i + 3 < csd.length && csd[i] === 0 && csd[i + 1] === 0 && csd[i + 2] === 0 && csd[i + 3] === 1) start = i + 4;
+          if (start < 0) { i++; continue; }
+          const type = csd[start] & 0x1f;
+          let end = csd.length;
+          for (let j = start + 1; j < csd.length - 3; j++) {
+            if (csd[j] === 0 && csd[j + 1] === 0 && (csd[j + 2] === 1 || (j + 3 < csd.length && csd[j + 2] === 0 && csd[j + 3] === 1))) { end = j; break; }
+          }
+          nals.push({ type, data: csd.subarray(start, end) });
+          i = end;
+        }
+        const sps = nals.find((n) => n.type === 7);
+        const pps = nals.find((n) => n.type === 8);
+        if (!sps) throw new Error('no SPS in annex-B CSD');
+        const b = bitReader(sps.data);
+        b.u(1); // forbidden
+        const profile = b.u(8);
+        const constraint = b.u(8);
+        const level = b.u(8);
+        b.ue(); // sps_id
+        if (profile === 100 || profile === 110 || profile === 122 || profile === 244) {
+          b.ue(); b.ue(); // log2 max frames
+          b.u(4); b.ue(); b.ue();
+          for (let f = 0; f < 3; f++) { if (b.u(1)) { b.ue(); b.ue(); } }
+          if (b.u(1)) { const n = b.ue(); for (let k = 0; k < n; k++) { b.u(16); b.u(16); } }
+        }
+        b.ue(); // log2_max_frame_num
+        b.ue(); b.u(1); if (b.u(1)) { b.ue(); b.ue(); b.ue(); }
+        const pocType = b.ue();
+        if (pocType === 0) b.u(1);
+        b.ue();
+        const refFrames = b.ue();
+        b.u(1);
+        const gap = b.u(1);
+        const picW = b.ue() * 16, picH = b.ue() * 16;
+        const frameOnly = b.u(1);
+        if (!frameOnly) b.u(1);
+        if (b.u(1)) { b.u(1); b.u(1); }
+        b.u(1);
+        if (gap) b.u(0); // dummy
+        let extra = 0;
+        const mod = picW % 16; if (mod) extra += 32 - (mod << 1);
+        const mod2 = picH % 16; extra += mod2 ? 32 - mod2 * (frameOnly ? 2 : 1) : 0;
+        b.u(extra);
+        // build avcC
+        const spsBytes = sps.data, ppsBytes = pps ? pps.data : new Uint8Array(0);
+        const desc = new Uint8Array(7 + spsBytes.length + (pps ? 3 + ppsBytes.length : 0));
+        let o = 0;
+        desc[o++] = 1; desc[o++] = profile; desc[o++] = constraint; desc[o++] = level; desc[o++] = 0xff; desc[o++] = 0xe1;
+        desc[o++] = spsBytes.length >> 8; desc[o++] = spsBytes.length & 0xff;
+        desc.set(spsBytes, o); o += spsBytes.length;
+        if (pps) { desc[o++] = 1; desc[o++] = ppsBytes.length >> 8; desc[o++] = ppsBytes.length & 0xff; desc.set(ppsBytes, o); }
+        out.codec = 'avc1.' + profile.toString(16).padStart(2, '0') + constraint.toString(16).padStart(2, '0') + level.toString(16).padStart(2, '0');
+        out.description = desc;
+      } else { throw new Error('unrecognized CSD format'); }
+    } catch (e) { out.error = String(e); }
+    return out;
+  }
+
+  // ---------- WebCodecs ----------
+  let decoder = null, csd = null, configureDone = false;
+  function tryConfigure(cand) {
+    poc.codecAttempts.push({ codec: cand.codec, description: !!cand.description });
+    try {
+      const cfg = { codec: cand.codec };
+      if (cand.description) cfg.description = cand.description;
+      decoder.configure(cfg);
+      configureDone = true; poc.configured = true; poc.codecUsed = cand.codec;
+      $('codec').textContent = cand.codec + (cand.description ? '+CSD' : ' (noCSD)');
+      return true;
+    } catch (e) { $('err').textContent = 'configure fail: ' + e.message; return false; }
+  }
+  function onConfigPacket(payload) {
+    csd = new Uint8Array(payload);
+    const parsed = parseCsd(csd);
+    if (parsed.codec) {
+      if (!tryConfigure(parsed) && !tryConfigure({ codec: 'avc1.640028', description: null }) &&
+          !tryConfigure({ codec: 'avc1.42001e', description: null })) {
+        poc.decodeErrors++; $('decerr').textContent = poc.decodeErrors;
+      }
+    } else {
+      if (!tryConfigure({ codec: 'avc1.640028', description: null }) &&
+          !tryConfigure({ codec: 'avc1.42001e', description: null })) poc.decodeErrors++;
+    }
+  }
+  async function onFrame(payload) {
+    if (typeof VideoDecoder === 'undefined') return;
+    if (!decoder) {
+      decoder = new VideoDecoder({
+        output: (frame) => {
+          ctx.drawImage(frame, 0, 0, cv.width, cv.height);
+          frame.close();
+          poc.decoded++;
+          $('decoded').textContent = poc.decoded;
+        },
+        error: (e) => { poc.decodeErrors++; $('decerr').textContent = poc.decodeErrors; $('err').textContent = 'decode err: ' + e; },
+      });
+    }
+    if (!configureDone) return; // wait for CSD
+    const isKey = globalThis.__isKey; globalThis.__isKey = false;
+    globalThis.__ts = (globalThis.__ts ?? 0) + 33000;
+    const frame = new VideoFrame({ data: payload, timestamp: globalThis.__ts, duration: 33000, codec: poc.codecUsed || 'avc1.640028' });
+    try {
+      if (isKey) await decoder.flush();
+      decoder.decode({ frame, keyFrame: !!isKey }); // decode takes ownership
+    } catch (e) {
+      poc.decodeErrors++;
+      try { frame.close(); } catch {}
+    }
+  }
+  // scrcpy v5.0.1 header classification (client demuxer parity):
+  //   byte0 & 0x80 -> session (resize); 0x40 -> config (CSD); 0x20 -> keyframe
+  const kindOf = (h) => (h[0] & 0x80) ? 'session' : (h[0] & 0x40) ? 'config' : (h[0] & 0x20) ? 'key' : 'frame';
+
+  // ---------- screencap fallback (PNG frames; no WebCodecs needed) ----------
+  // binary frame: [4B 'PNGF'][4B width][4B height][4B seq][PNG bytes]
+  const PNGF_MAGIC = 0x504e4746;
+  function onPngFrame(pngBytes, w, h) {
+    poc.width = w; poc.height = h;
+    if (!poc.configured) {
+      poc.configured = true; poc.codecUsed = 'screencap-png';
+      $('codec').textContent = 'screencap-png';
+      $('res').textContent = w + 'x' + h;
+    }
+    setCanvasSize(w, h);
+    const img = new Image();
+    const url = URL.createObjectURL(new Blob([pngBytes], { type: 'image/png' }));
+    img.onload = () => {
+      try { ctx.drawImage(img, 0, 0, cv.width, cv.height); poc.decoded++; $('decoded').textContent = poc.decoded; }
+      catch (e) { poc.decodeErrors++; $('decerr').textContent = poc.decodeErrors; }
+      URL.revokeObjectURL(url);
+    };
+    img.onerror = () => { poc.decodeErrors++; $('decerr').textContent = poc.decodeErrors; URL.revokeObjectURL(url); };
+    img.src = url;
+  }
+
+  // ---------- WebSocket ----------
+  const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
+  poc.ws = ws;
+  // CRITICAL: Chromium WS default binaryType='blob' -> new Uint8Array(blob) = empty
+  // buffer -> every binary frame silently dropped (PoC run #2 postmortem).
+  ws.binaryType = 'arraybuffer';
+  ws.onmessage = (ev) => {
+    if (typeof ev.data === 'string') {
+      const m = JSON.parse(ev.data);
+      if (m.kind === 'meta') {
+        poc.device = m.deviceName; poc.width = m.width; poc.height = m.height; poc.mode = m.mode;
+        $('dev').textContent = m.deviceName; $('res').textContent = m.width + 'x' + m.height;
+        setCanvasSize(m.width, m.height);
+      } else if (m.kind === 'state') {
+        poc.stats = m;
+        $('phase').textContent = m.phase; $('phase').className = 'pill ' + (m.phase === 'LIVE' ? 'live' : m.phase === 'DEAD' ? 'dead' : '');
+        $('frames').textContent = m.frames; $('fps').textContent = m.fps; $('mbps').textContent = m.mbps;
+      } else if (m.kind === 'dead') {
+        $('phase').textContent = 'DEAD'; $('phase').className = 'pill dead';
+        $('err').textContent = m.reason || 'stream dead';
+      }
+      return;
+    }
+    // binary: 12B scrcpy header + payload  (or 16B 'PNGF' header + PNG in screencap mode)
+    const buf = new Uint8Array(ev.data);
+    if (buf.length >= 16 && new DataView(buf.buffer, buf.byteOffset, 4).getUint32(0) === PNGF_MAGIC) {
+      const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+      onPngFrame(buf.slice(16), dv.getUint32(4), dv.getUint32(8));
+      poc.frames++;
+      $('frames').textContent = poc.frames;
+      return;
+    }
+    if (buf.length < 12) return;
+    const header = buf.subarray(0, 12);
+    const payload = buf.slice(12);
+    const kind = kindOf(header);
+    if (kind === 'session') {
+      const dv = new DataView(buf.buffer, buf.byteOffset, 12);
+      const w = dv.getUint32(4);
+      const h = dv.getUint32(8);
+      poc.width = w; poc.height = h;
+      $('res').textContent = w + 'x' + h;
+      setCanvasSize(w, h);
+      return;
+    }
+    if (kind === 'config') onConfigPacket(payload);
+    else { globalThis.__isKey = kind === 'key'; onFrame(payload); }
+    poc.frames++;
+    $('frames').textContent = poc.frames;
+  };
+  ws.onclose = (e) => { poc.wsClose = { code: e.code, reason: String(e.reason) }; $('phase').textContent = 'WS_CLOSED'; };
+  ws.onerror = (e) => { poc.wsError = 'ws-onerror fired'; };
+
+  // ---------- input (mouse -> touch) ----------
+  let down = false;
+  const toDevice = (e) => {
+    const r = cv.getBoundingClientRect();
+    const x = (e.clientX - r.left) / r.width * poc.width;
+    const y = (e.clientY - r.top) / r.height * poc.height;
+    return { x, y };
+  };
+  const send = (m) => { if (ws.readyState === 1) ws.send(JSON.stringify(m)); };
+  cv.addEventListener('pointerdown', (e) => {
+    e.preventDefault(); down = true;
+    const p = toDevice(e);
+    send({ type: 'touch', action: 'down', x: p.x, y: p.y, pointerId: 0 });
+  });
+  cv.addEventListener('pointermove', (e) => {
+    if (!down) return;
+    const p = toDevice(e);
+    send({ type: 'touch', action: 'move', x: p.x, y: p.y, pointerId: 0 });
+  });
+  window.addEventListener('pointerup', (e) => {
+    if (!down) return;
+    down = false;
+    const p = toDevice(e);
+    send({ type: 'touch', action: 'up', x: p.x, y: p.y, pointerId: 0 });
+  });
+  document.querySelectorAll('.btn').forEach((b) => {
+    b.addEventListener('click', () => {
+      send({ type: 'key', action: 'down', keycode: Number(b.dataset.kc) });
+      setTimeout(() => send({ type: 'key', action: 'up', keycode: Number(b.dataset.kc) }), 120);
+    });
+  });
+})();
+</script>
+</body>
+</html>
