@@ -7,6 +7,7 @@
  * is restricted to 127.0.0.1 on the host.
  */
 import http from 'node:http';
+import net from 'node:net';
 import { createReadStream, existsSync, statSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
@@ -103,6 +104,58 @@ const server = http.createServer((req, res) => {
     sendStatic(req, res);
   }
 });
+
+// --- P2: WebSocket upgrade passthrough for the console stream endpoint --------
+// The zero-dep proxy has no WS support by default (audit finding #1). The ONLY
+// upgrade we tunnel is the authenticated console stream WS (MD §8.1);
+// everything else is refused. After the upstream answers 101 we blind-pipe the
+// two TCP sockets — the web layer never parses or logs stream bytes.
+const WS_STREAM_PATH = /^\/api\/device-streams\/[^/]+\/ws$/;
+
+function tunnelUpgrade(req, socket, head) {
+  const isStreamWs = WS_STREAM_PATH.test(new URL(req.url, 'http://localhost').pathname);
+  if (!isStreamWs) {
+    socket.write('HTTP/1.1 404 Not Found\r\ncontent-length: 0\r\nconnection: close\r\n\r\n');
+    socket.destroy();
+    return;
+  }
+  const upstream = new URL(UPSTREAM);
+  const upstreamHost = upstream.hostname || '127.0.0.1';
+  const upstreamPort = Number(upstream.port || 3000);
+
+  // Rebuild the request head for the upstream, preserving the upgrade + WS
+  // handshake headers (host rewritten to the upstream; cookie/origin forwarded
+  // so the API's own server-side auth chain — the authoritative check — runs).
+  const lines = [`${req.method} ${req.url} HTTP/1.1`, `host: ${upstreamHost}:${upstreamPort}`];
+  for (const [k, v] of Object.entries(req.headers)) {
+    if (k === 'host') continue;
+    lines.push(`${k}: ${v}`);
+  }
+  const headBuf = Buffer.from(lines.join('\r\n') + '\r\n\r\n');
+
+  const upstreamSock = net.connect(upstreamPort, upstreamHost);
+  let settled = false;
+  const killBoth = (why) => {
+    if (settled) return;
+    settled = true;
+    try { upstreamSock.destroy(); } catch {}
+    try { socket.destroy(); } catch {}
+    if (why) console.warn(`ws tunnel torn down: ${why}`);
+  };
+  upstreamSock.on('connect', () => {
+    upstreamSock.write(headBuf);
+    // Initial bytes already buffered by node for the upgrade (may include the
+    // first WS frames the browser sent eagerly) — go straight after the head.
+    if (head && head.length) upstreamSock.write(head);
+  });
+  upstreamSock.on('data', (d) => { if (!socket.destroyed) socket.write(d); });
+  upstreamSock.on('error', (e) => killBoth(e.message));
+  upstreamSock.on('close', () => { if (!socket.destroyed) socket.end(); settled = true; });
+  socket.on('data', (d) => { if (!upstreamSock.destroyed) upstreamSock.write(d); });
+  socket.on('error', (e) => killBoth(e.message));
+  socket.on('close', () => { if (!upstreamSock.destroyed) upstreamSock.end(); settled = true; });
+}
+server.on('upgrade', tunnelUpgrade);
 
 server.listen(PORT, HOST, () => {
   // eslint-disable-next-line no-console

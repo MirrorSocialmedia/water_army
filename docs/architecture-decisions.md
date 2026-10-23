@@ -1023,3 +1023,34 @@ MD §13.2 嘅 per-actor 寫 budget（20/60s）係為**人工誤操作**設嘅；
 **E2E 基建陷阱（實測，已修入 script，防下次踩）**：(a) `sg docker -c "psql -c \"…\""` 二次 shell 展開會食 `$`（argon2 hash 被食）→ DB helper 一律 **stdin**（`printf | docker exec -i psql`）；(b) 同 shell background 咗 API 嘅 script，race 測試後嘅 `wait` 必須帶 **explicit pids**（bare `wait` 會等 API 永遠唔 return）；(c) 背景 wrapper 嘅 cmdline 唔好含 script 路徑（pkill bracket trick 防唔到 cross-process self-match）。
 
 **新增依賴**：無（`ws` 仍係 P2 先 pin；ticket 用 node:crypto HMAC + 現有 ioredis）。
+
+## 20. Mobile Console 視頻源降級優先決策（ADR-020，2026-10-23 12:40 — 來源 = 老細批准）
+
+**狀態**：已批准、已實裝（P2/P3 起為常規預設）
+**背景**：P0 PoC 證實 pinned redroid image（matrixa-r3, digest 591296d5）media HAL 無 gralloc mapper 3.x/4.x → 所有 MediaCodec surface-encoder（scrcpy H.264 + screenrecord）**零 frame**；screencap（SF 直接 capture）正常（~3-4 FPS / 22.5Mbps 實測，evidence：`logs/mobileconsole-poc/`）。產品層面需要喺 H.264 image 修復之前定咗常規路徑。
+
+**決策（老細 2026-10-23 12:40 批准方案 (a) 降級優先）**：
+- `VIDEO_SOURCE=screencap` = **常規預設 + 穩定 fallback**；H.264 只在 redroid 圖象修復並通過驗收後先自動升級。
+- 此決策批准降級優先策略，**唔代表 H.264 已修復，唔代表五路串流已通過驗收**（H.264 單路/五路 = NOT VERIFIED，見 P0/P3 報告）。
+
+**8 項 hard requirements 同落地位置**：
+
+| # | 要求 | 落地 |
+|---|------|------|
+| 1 | `screencap` = 預設 + 穩定 fallback；H.264 未過測試唔可阻塞 P3 | `apps/api/src/config.js` `streamVideoSource` default = `'screencap'`（非法值 throw = 安全降級前拒絕啟動）；P3 ladder 全程用預設 screencap 跑 |
+| 2 | P3 五路「穩定」定義 = 5 部正確畫面 + 可接收手動操作 + 連續 5min 無持續黑屏/串流失效；~3-4 FPS 即合格（唔要求流暢視頻） | `scripts/mobileconsole-p3/` ladder 驗收腳本（按此定義斷言：每 tile canvas non-blank + 每 device input 成功 + 5min 窗口 frame gap 上界） |
+| 3 | P3 五路並行必須記錄：實際總頻寬、CPU、RAM、FPS、畫面更新延遲、輸入操作成功率；22.5Mbps/路 = 只係測量基準，唔可當固定上限 | ladder 腳本每 10s 採樣 `ss`/`ps`/`/proc/meminfo` + sidecar per-session bytes/frames + browser frame timestamps → `logs/mobileconsole-p3/p3-metrics-5.jsonl` |
+| 4 | H.264 圖象修復後：先獨立測試設備驗證（編碼 + 畫面正確 + 無黑屏/損壞 + 觸控鍵盤正常）→ 先入五路 ladder | 未來階段流程（P3 報告 + runbook 記錄此 gate；本期唔實裝 H.264 驗證自動化，因 image 未修復） |
+| 5 | H.264 單路 + 五路均通過後先可設預設；auto-upgrade 必須有明確 health check + 成功條件（唔可信映像版本/程序啟動成功） | `STREAM_VIDEO_SOURCE=auto` 保留作未來升級路徑；health check = **收到有效 video frame**（zero-frame 10s 窗口 + stall 15s 窗口 + encoder 崩潰偵測 — `apps/stream-sidecar/src/session.js` watchdog），成功條件 = frame 流持續，**唔係**程序啟動成功 |
+| 6 | 降級路徑實裝：H.264 無有效畫面 / encoder 崩潰 / 串流中斷 → 清理失敗串流資源 → 退回 screencap → UI 顯示目前使用模式 + 降級原因 | `session.js`：`auto` 模式下任何 scrcpy 端失敗（zero-frame / encoder crash mid-stream / socket 死亡）→ `_teardownMode()`（kill server + destroy sockets + remove forwards）→ `_run('screencap')` + `degraded` frame 帶 reason；screencap 自身零 frame → kill（diagnosable reason）。UI：`stream-client.js` `stats.degraded/degradeReason` 持久顯示 + `DeviceConsole.jsx` banner + tile「串流模式」行永遠顯示當前 mode + 降級原因 |
+| 7 | 向後相容：保留 `VIDEO_SOURCE=scrcpy|screencap`；加 auto 模式 = 同步更新 config 驗證/API/UI/文件/測試，唔破壞既有部署 | config 驗證集 = `auto|scrcpy|screencap`（非法 throw）；`scrcpy` 強制 H.264（無 fallback，失敗 = session dead，符合強制語義）；`screencap` = 直接 screencap（auto-degrade 唔適用）；`auto` = 本 ADR 嘅 try-H.264-then-fallback 行為。API/UI 唔暴露 videoSource 選項（server-side config，避免 client 繞過決策）；單位測試覆蓋三值 + 非法值 |
+| 8 | 最終交付：單路 + 五路**原始測試證據**；未實測 = NOT VERIFIED | P2 E2E 證據（`logs/mobileconsole-p2/`：screenshots + browser.out + logcat + summary json）；P3 ladder 證據（`logs/mobileconsole-p3/`）；H.264 單路/五路 = **NOT VERIFIED**（image gralloc blocker 未修）— 最終報告逐項列明 |
+
+**實裝備忘（gen3 審 WIP 時修入嘅 bug — 防下次踩）**：
+1. `session.js` kill() re-entrancy guard 原為 session-lifetime（`_killCount`）→ degrade 後嘅新 screencap 路徑死咗都 kill 唔到；改 **per-mode reset**（`_run()` 入面 `_killCount = 0`）。
+2. 降級後舊 scrcpy video socket 嘅延遲 close/error 事件會誤殺新 session → 加 **`_modeSeq` generation guard**（stale event no-op）+ `_teardownMode()` 明確 destroy videoSocket。
+3. `frames`/`liveSince` 原為 session 累積值 → 零幀偵測會用舊 anchor 誤殺健康嘅新 screencap tier；改 **per-mode `_modeFrames` + per-mode `liveSince`**（summary 仍報 session 累積值）。
+4. `cleanup=true`（scrcpy 正常退出刪共享 jar）喺 5 路並行下 = 跨 session jar race → 改 **`cleanup=false`**（每 session start 已 re-push + sha256 verify，冪等）。
+5. `stream-gateway.js` 用 `device.adbHost`（Device model 無此欄）→ serial = `undefined:<port>` → 所有 WS 403；serial 改 **由 `127.0.0.1:<adbPort>` 構建**（host 永遠 loopback — audit finding #3；port 必喺 `REDROID_ADB_RANGE_*` allowlist）。
+6. `plugins/stream-sidecar.js` restart loop：`starting` promise 從唔清 → 首次 health fail 後 restart 永不觸發（sidecar 永久 dead）；改 `finally { starting = null }`。
+7. `screencap` tier 零幀原本無 watchdog（`lastFrameAt` 永遠 null → stall 分支唔觸發）→ 加 screencap 零幀 kill（`SIDECAR_ZERO_FRAME_MS` 窗口）。

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useApi } from '../hooks/useApi';
 import { api } from '../api/client';
+import { navigate } from '../router';
 import { StateFrame } from '../components/StateFrame';
 import { timeAgo, stateBadgeClass, formatDateTime } from '../components/container-utils';
 import {
@@ -39,6 +40,7 @@ function ZoneCard({ title, zone, renderDetail }) {
 
 export function DeviceDetail({ deviceId }) {
   const me = useApi(() => api.get('/api/auth/me'));
+  const canControl = ['admin', 'operator'].includes(me.data?.user?.role);
   const role = me.data?.user?.role;
   const canWrite = role === 'admin' || role === 'operator';
 
@@ -146,6 +148,18 @@ export function DeviceDetail({ deviceId }) {
             <div className="card-head">
               <h1>{device.name}</h1>
               <span className={`pill state-badge ${stateBadgeClass(device.containerState)}`}>{device.containerState}</span>
+              {device.containerState === 'running' ? (
+                <button
+                  type="button"
+                  className="console-open-btn"
+                  onClick={() => { navigate(`/devices/${encodeURIComponent(device.id)}/console${canControl ? '' : '?mode=viewer'}`); }}
+                  title="Mobile Console — 串流畫面 + 手動操作 (MD §3.2)"
+                >
+                  開啟控制台
+                </button>
+              ) : (
+                <span className="muted" title="裝置未在運行 — 先啟動才能串流">控制台需裝置運行中</span>
+              )}
             </div>
 
             <div className="cards">

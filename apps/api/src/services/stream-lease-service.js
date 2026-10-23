@@ -424,6 +424,44 @@ export function createStreamLeaseService({ db, redis = null, config = {}, log, a
     return { lease: summarize(fresh), usage: await usage(), idempotent: up.count === 0 };
   }
 
+  // --- reconnect (MD §2.1.8 斷線重連 re-auth; ADR-019 §19.12) -------------------
+  /**
+   * Re-issue a one-shot ticket for an ACTIVE lease the caller owns (or admin).
+   * This is the ONLY way a dropped browser WS reconnects: a fresh ticket +
+   * full server-side re-verification at the new WS upgrade (MD §2.1.8 — an
+   * expired/revoked lease never regains control by reconnecting alone).
+   */
+  async function reconnect({ leaseId, user, requestId = null, ip = null }) {
+    const row = await findLeaseOr404(leaseId);
+    const isOwner = row.userId === user.id;
+    const isAdmin = (ROLE_LEVEL[user?.role] ?? 0) >= ROLE_LEVEL.admin;
+    if (!isOwner && !isAdmin) {
+      throw err('STREAM_LEASE_OWNER_MISMATCH', 'only the lease owner (or an administrator) may reconnect this lease', 403);
+    }
+    if (row.status !== 'ACTIVE') {
+      throw err('STREAM_LEASE_CLOSED', `stream lease is ${row.status.toLowerCase()} (re-acquire to stream again)`, 409);
+    }
+    if (row.expiresAt <= clock()) {
+      throw err('STREAM_LEASE_EXPIRED', 'stream lease expired (re-acquire for a fresh ticket)', 409);
+    }
+    const ticket = issueTicket(row);
+    await auditSafe({
+      actorUserId: user.id,
+      action: 'stream.lease.reconnected',
+      resourceType: 'stream_lease',
+      resourceId: row.id,
+      requestId,
+      ip,
+      status: 'success',
+      details: { mode: row.mode, deviceId: row.deviceId }, // no ticket in audit (MD §13)
+    });
+    return {
+      lease: summarize(row),
+      ticket, // single-use, 60s TTL
+      streamWsPath: `/api/device-streams/${row.id}/ws`,
+    };
+  }
+
   // --- reconciliation (MD §10) ---------------------------------------------------
   /**
    * API-restart reconcile: the issuing process is dead → no stream of its can
@@ -531,6 +569,7 @@ export function createStreamLeaseService({ db, redis = null, config = {}, log, a
     list,
     heartbeat,
     close,
+    reconnect,
     validateTicket,
     reconcileStartup,
     reconcileExpired,

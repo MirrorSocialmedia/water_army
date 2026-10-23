@@ -53,6 +53,8 @@ import { batchContainerRoutes } from './routes/batch-containers.js';
 import { networkPolicyRoutes } from './routes/network-policy.js';
 import { systemRamGateRoutes } from './routes/system-ram-gate.js';
 import { deviceStreamRoutes } from './routes/device-streams.js';
+import { buildStreamSidecarManager, STREAM_SIDECAR_ENTRY } from './plugins/stream-sidecar.js';
+import { createStreamGateway } from './services/stream-gateway.js';
 import { createStreamLeaseService } from './services/stream-lease-service.js';
 
 function createUnavailableStreamLease() {
@@ -320,6 +322,29 @@ export async function buildApp(opts = {}) {
     );
   }
 
+  // --- P2: stream gateway (WS upgrade auth chain + sidecar tunnel, MD §8.1) ---
+  // The upgrade path cannot use Fastify hooks (raw socket), so session → user
+  // is re-resolved here with the SAME session store (server-side truth, never
+  // a client-supplied identity).
+  const streamGateway = createStreamGateway({
+    db,
+    config,
+    streamLeaseService,
+    log: app.log,
+    resolveUser: async (req) => {
+      const token = parseCookies(req.headers.cookie ?? '')[SESSION_COOKIE];
+      if (!token) return null;
+      const result = await sessions.verify(token);
+      if (result) {
+        try { await sessions.touch(result.session); } catch { /* non-fatal */ }
+        return result.user;
+      }
+      return null;
+    },
+  });
+  buildStreamSidecarManager({ app, config, entryPath: STREAM_SIDECAR_ENTRY });
+  app.decorate('streamGateway', streamGateway);
+
   app.decorate('config', config);
   app.decorate('db', db);
   app.decorate('redis', redis);
@@ -479,16 +504,118 @@ export async function buildApp(opts = {}) {
   systemRamGateRoutes(app);
   deviceStreamRoutes(app);
 
+  // --- P2: console WS endpoint (MD §8.1) ------------------------------------
+  // Raw upgrade (no Fastify route): the browser WebSocket API cannot set
+  // headers, so auth = session cookie + one-shot stream_ticket cookie, all
+  // re-verified server-side (streamGateway.authenticateUpgrade). After a
+  // clean sidecar handshake we write the 101 and blind-pipe the two sockets;
+  // the gateway never inspects stream bytes (video is NOT logged — MD §15.2).
+  const WS_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
+  const WS_REASONS = { 401: 'Unauthorized', 403: 'Forbidden', 404: 'Not Found', 409: 'Conflict', 500: 'Internal Server Error', 502: 'Bad Gateway', 503: 'Service Unavailable', 504: 'Gateway Timeout' };
+  app.server.on('upgrade', (req, socket, head) => {
+    let url;
+    try {
+      url = new URL(req.url ?? '/', 'http://127.0.0.1');
+    } catch {
+      socket.destroy();
+      return;
+    }
+    const m = /^\/api\/device-streams\/([a-z0-9]{8,64})\/ws$/i.exec(url.pathname);
+    const reject = (status, code, message) => {
+      const requestId = crypto.randomUUID();
+      app.log.warn({ requestId, code, status, path: url.pathname, leaseId: m?.[1] ?? null }, 'stream ws upgrade rejected');
+      try {
+        socket.write(
+          `HTTP/1.1 ${status} ${WS_REASONS[status] ?? 'Error'}\r\n` +
+            'content-type: application/json; charset=utf-8\r\n' +
+            'x-content-type-options: nosniff\r\n' +
+            `x-request-id: ${requestId}\r\n` +
+            'connection: close\r\n\r\n',
+        );
+        socket.end(JSON.stringify({ error: { code, message, requestId } }));
+      } catch { /* socket already gone */ }
+    };
+    void (async () => {
+      if (!m) return reject(404, API_ERROR.NOT_FOUND, 'not found');
+      // Origin (MD §15.2): browsers MUST send Origin on WS; fail closed if absent.
+      const origin = req.headers.origin;
+      if (!origin || !config.allowedOrigins.includes(origin)) {
+        return reject(403, 'ORIGIN_NOT_ALLOWED', 'cross-origin stream connection refused');
+      }
+      if (!app.streamSidecar.isReady()) {
+        return reject(503, 'STREAM_SIDECAR_UNAVAILABLE', 'stream sidecar unavailable (fail-closed)');
+      }
+      let verdict;
+      try {
+        verdict = await streamGateway.authenticateUpgrade({ leaseId: m[1], req });
+      } catch (e) {
+        return reject(e.statusCode ?? 500, e.apiCode ?? API_ERROR.INTERNAL, e.message ?? 'stream connection rejected');
+      }
+      let sidecar;
+      try {
+        sidecar = await streamGateway.connectAndHandshake({
+          lease: verdict.lease,
+          device: verdict.device,
+          serial: verdict.serial,
+          videoSource: config.streamVideoSource,
+          quality: config.streamQuality,
+        });
+      } catch (e) {
+        return reject(e.statusCode ?? 500, e.apiCode ?? API_ERROR.INTERNAL, e.message ?? 'stream handshake failed');
+      }
+      // 101 to the browser (manual upgrade — we own the response).
+      const accept = crypto.createHash('sha1').update(String(req.headers['sec-websocket-key'] ?? '') + WS_GUID).digest('base64');
+      try {
+        socket.write(
+          'HTTP/1.1 101 Switching Protocols\r\n' +
+            'upgrade: websocket\r\n' +
+            'connection: Upgrade\r\n' +
+            `sec-websocket-accept: ${accept}\r\n\r\n`,
+        );
+      } catch { return; }
+      // Bytes already buffered from the client go to the sidecar FIRST.
+      if (head && head.length) {
+        try { sidecar.sock.write(head); } catch { /* race — tunnel teardown handles it */ }
+      }
+      streamGateway.pipeTunnel({ clientSock: socket, sidecar, lease: verdict.lease, user: verdict.user });
+      app.log.info(
+        { leaseId: verdict.lease.id, deviceId: verdict.device.id, userId: verdict.user.id, mode: verdict.lease.mode },
+        'stream ws live',
+      );
+      void audit({
+        actorUserId: verdict.user.id,
+        action: 'stream.connect',
+        resourceType: 'StreamLease',
+        resourceId: verdict.lease.id,
+        requestId: null,
+        ip: req.socket?.remoteAddress ?? null,
+        status: 'ok',
+        details: { deviceId: verdict.device.id, mode: verdict.lease.mode, videoSource: config.streamVideoSource, quality: config.streamQuality },
+      }).catch(() => {});
+    })().catch((e) => {
+      app.log.error({ error: e.message }, 'stream ws upgrade handler crashed');
+      try { socket.destroy(); } catch { /* ignore */ }
+    });
+  });
+
   // MC P1 (MD §10): reconcile BEFORE the first request — the previous (dead)
   // API process's leases cannot be assumed alive; then run the expiry sweep.
   app.addHook('onReady', async () => {
-    if (!hasStreamSurface) return;
-    try {
-      await streamLeaseService.reconcileStartup();
-    } catch (e) {
-      app.log.error({ error: e.message }, 'stream lease startup reconcile FAILED (streams may show stale leases)');
+    if (hasStreamSurface) {
+      try {
+        await streamLeaseService.reconcileStartup();
+      } catch (e) {
+        app.log.error({ error: e.message }, 'stream lease startup reconcile FAILED (streams may show stale leases)');
+      }
+      streamLeaseService.startReconciler();
     }
-    streamLeaseService.startReconciler();
+    // MC P2: sidecar (no-op 'disabled' when STREAM_SIDECAR_TOKEN is unset —
+    // console streaming stays fail-closed 503 in that case).
+    try {
+      await app.streamSidecar.start();
+    } catch (e) {
+      app.log.error({ error: e.message }, 'stream sidecar startup FAILED (console streaming fail-closed)');
+    }
   });
 
   // --- lifecycle ---------------------------------------------------------------

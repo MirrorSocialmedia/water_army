@@ -402,3 +402,75 @@ input:focus { outline: 1px solid var(--accent); }
   justify-content: center;
   z-index: 50;
 }
+
+/* --- Mobile Console (MC P2, MD §3.2/§3.3) ------------------------------------ */
+.stream-banner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: baseline;
+  padding: 10px 14px;
+  border: 1px solid var(--ok);
+  border-radius: 8px;
+  background: var(--bg-card);
+}
+.stream-banner.stream-connecting,
+.stream-banner.stream-reconnecting,
+.stream-banner.stream-queued { border-color: var(--warn); }
+.stream-banner.stream-error,
+.stream-banner.stream-permission_denied,
+.stream-banner.stream-capacity_reached,
+.stream-banner.stream-session_expired,
+.stream-banner.stream-device_not_ready { border-color: var(--err); }
+.stream-banner.stream-closed { border-color: var(--muted, #777); }
+.stream-banner.stream-live_read_only,
+.stream-banner.stream-live_controlled_by_you,
+.stream-banner.stream-live_controlled_by_other { border-color: var(--ok); }
+
+.console-tile { text-align: center; }
+.console-stage {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  background: #000;
+  border-radius: 8px;
+  padding: 8px;
+  margin-bottom: 10px;
+}
+.console-canvas {
+  max-width: 100%;
+  max-height: 70vh;
+  width: auto;
+  height: auto;
+  border-radius: 4px;
+  background: #000;
+}
+.keybar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 6px 0;
+}
+.keybtn {
+  flex: 1 1 auto;
+  min-width: 84px;
+  padding: 10px 8px;
+  font-size: 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border, #444);
+  background: var(--bg-card);
+  color: inherit;
+  cursor: pointer;
+}
+.keybtn:hover { border-color: var(--ok); }
+.console-open-btn {
+  margin-left: auto;
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--ok);
+  background: transparent;
+  color: var(--ok);
+  cursor: pointer;
+  font-weight: 600;
+}
+.console-open-btn:hover { background: rgba(60, 200, 120, 0.12); }

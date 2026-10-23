@@ -1,0 +1,12 @@
+{
+  "name": "@water-army/stream-sidecar",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "MC screen-streaming sidecar — scrcpy/screencap media + control protocol (ADR-019). Hosts the per-lease stream sessions; the API is the authenticated gateway.",
+  "main": "src/server.js",
+  "dependencies": {
+    "pino": "10.4.0",
+    "ws": "8.22.0"
+  }
+}

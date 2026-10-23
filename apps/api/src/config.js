@@ -284,6 +284,41 @@ export function loadConfig(env = process.env, opts = {}) {
       }
       return v;
     })(),
+    // MC P2 (console streaming) — sidecar process management (ADR-019 §19.12).
+    // Token: >=32 chars required when console streaming is enabled; empty =
+    // sidecar disabled + WS endpoints fail closed with 503
+    // STREAM_SIDECAR_UNAVAILABLE (never start a sidecar without a token).
+    streamSidecarToken: e.STREAM_SIDECAR_TOKEN ?? '',
+    streamSidecarPort: optInt(e, 'SIDECAR_PORT', 16550),
+    streamSidecarMaxSessions: optInt(e, 'SIDECAR_MAX_SESSIONS', 5),
+    streamZeroFrameMs: optInt(e, 'SIDECAR_ZERO_FRAME_MS', 10_000),
+    // VIDEO_SOURCE (MD §4.2 degraded path + ADR-019 §19.9 + ADR-020 — boss
+    // decision 2026-10-23 12:40): DEFAULT = 'screencap' (the stable, PoC-
+    // verified path on the pinned redroid image). 'scrcpy' forces H.264; 'auto'
+    // keeps the try-H.264-then-fallback-to-screencap behaviour for the future
+    // auto-upgrade phase (ADR-020 req 5 — only after H.264 passes single +
+    // five-stream acceptance with an explicit health check). Backward
+    // compatible: both documented values (scrcpy|screencap) keep working
+    // (ADR-020 req 7).
+    streamVideoSource: (() => {
+      const v = (e.STREAM_VIDEO_SOURCE ?? 'screencap').toLowerCase();
+      if (!['auto', 'scrcpy', 'screencap'].includes(v)) {
+        throw new Error(`config error: STREAM_VIDEO_SOURCE must be auto|scrcpy|screencap (got '${v}')`);
+      }
+      return v;
+    })(),
+    streamQuality: (() => {
+      const v = (e.STREAM_QUALITY ?? 'medium').toLowerCase();
+      if (!['low', 'medium', 'high'].includes(v)) {
+        throw new Error(`config error: STREAM_QUALITY must be low|medium|high (got '${v}')`);
+      }
+      return v;
+    })(),
+    // scrcpy-server jar (pinned sha256 — ADR-019 §19.10). Path is env so the
+    // jar itself never has to live in the repo.
+    scrcpyJar: e.SCRCPY_JAR ?? '/tmp/scrcpy-server-v5.0.1',
+    scrcpyJarSha256: (e.SCRCPY_JAR_SHA256 ?? '').toLowerCase(),
+    scrcpyJarRemote: e.SCRCPY_JAR_REMOTE ?? '/data/local/tmp/scrcpy-server.jar',
     // P3 service identity: worker→API token (empty = service auth disabled).
     serviceToken: e.WORKER_API_TOKEN ?? '',
     // P3 provider default when POST /api/tasks/runs omits body.provider.

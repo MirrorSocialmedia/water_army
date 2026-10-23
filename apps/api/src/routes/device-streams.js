@@ -32,6 +32,23 @@ const STREAM_CREATE_BODY = {
   },
 };
 
+/**
+ * The one-shot ticket travels in a dedicated short-lived HttpOnly cookie
+ * (browser WS cannot set headers) — Path-scoped to /api/device-streams so it
+ * is only ever presented to the stream endpoints; 60s maxAge = ticket TTL;
+ * never in a URL, never in an access log (MD §11.8). The body ALSO carries
+ * the ticket for non-browser clients (the P1 e2e probe reads it from there).
+ */
+function ticketCookieOptions(app) {
+  return {
+    path: '/api/device-streams',
+    httpOnly: true,
+    sameSite: 'Strict',
+    maxAge: 60,
+    secure: app.config.cookieSecure,
+  };
+}
+
 export function deviceStreamRoutes(app) {
   app.post(
     '/api/devices/redroid/:id/streams',
@@ -44,6 +61,7 @@ export function deviceStreamRoutes(app) {
         requestId: req.id,
         ip: req.ip,
       });
+      reply.setCookie('stream_ticket', out.ticket, ticketCookieOptions(app));
       // 201 = lease resource created (codebase create-route convention).
       return reply.code(201).send(out);
     },
@@ -58,6 +76,19 @@ export function deviceStreamRoutes(app) {
     { preHandler: app.requireRole('viewer'), schema: { params: { type: 'object', additionalProperties: false, required: ['leaseId'], properties: { leaseId: LEASE_ID } } } },
     async (req) => {
       return app.streamLeaseService.heartbeat({ leaseId: req.params.leaseId, user: req.user, requestId: req.id, ip: req.ip });
+    },
+  );
+
+  // P2 (MD §2.1.8): reconnect re-auth — a fresh one-shot ticket for an ACTIVE
+  // lease (owner/admin). The old ticket is already consumed; reconnecting
+  // with the same one = 401 STREAM_TICKET_REPLAYED at the WS upgrade.
+  app.post(
+    '/api/device-streams/:leaseId/reconnect',
+    { preHandler: app.requireRole('viewer'), schema: { params: { type: 'object', additionalProperties: false, required: ['leaseId'], properties: { leaseId: LEASE_ID } } } },
+    async (req, reply) => {
+      const out = await app.streamLeaseService.reconnect({ leaseId: req.params.leaseId, user: req.user, requestId: req.id, ip: req.ip });
+      reply.setCookie('stream_ticket', out.ticket, ticketCookieOptions(app));
+      return reply.code(200).send(out);
     },
   );
 

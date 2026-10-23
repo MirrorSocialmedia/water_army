@@ -12,6 +12,7 @@ const ROUTES = [
   { path: '/containers/:id', page: 'containers-detail' },
   { path: '/devices', page: 'devices' },
   { path: '/devices/:id', page: 'devices-detail' },
+  { path: '/devices/:id/console', page: 'devices-console' },
   { path: '/tasks', page: 'tasks' },
   { path: '/tasks/:id', page: 'tasks-detail' },
   { path: '/schedules', page: 'schedules' },
