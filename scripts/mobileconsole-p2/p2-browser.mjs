@@ -305,19 +305,40 @@ try {
   // ================= VIEWER (read-only) flow ==================================
   const vctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   const vpage = await login(vctx, VIEWER_USER, VIEWER_PASS);
+  // viewer-side wire observer (same as admin) — T26 triage needs to know whether
+  // the VIEWER socket receives frames at all
+  const vWsObs = { sockets: [], binary: 0, text: 0, firstBinary: null, lastError: null };
+  vpage.on('websocket', (ws) => {
+    const entry = { url: ws.url(), openedAt: new Date().toISOString(), binary: 0, text: 0, closed: null };
+    vWsObs.sockets.push(entry);
+    ws.on('framereceived', (ev) => {
+      const p = ev.payload;
+      if (Buffer.isBuffer(p)) { entry.binary += 1; vWsObs.binary += 1; if (!vWsObs.firstBinary && p.length >= 16) vWsObs.firstBinary = { len: p.length, magic: p.readUInt32BE(0).toString(16) }; }
+      else { entry.text += 1; vWsObs.text += 1; }
+    });
+    ws.on('close', () => { entry.closed = new Date().toISOString(); });
+    ws.on('error', (e) => { vWsObs.lastError = String(e).slice(0, 200); });
+  });
   let t26 = false;
+  let vLive = false, vPainted = false, vFrames = 0, vReadOnly = false, vNoKeybar = false, vBanner = '', vUrl = '';
   try {
     await vpage.goto(`${WEB}/#/devices`, { waitUntil: 'networkidle' });
     await vpage.locator(`a.link:has-text("${DEVICE_NAME}")`).click();
-    await vpage.waitForSelector('h1', { timeout: 10000 });
+    await vpage.waitForURL(/#\/devices\/[^/?#]+/, { timeout: 10000 });
+    await vpage.waitForFunction(
+      (name) => ([...document.querySelectorAll('h1')].map((e) => e.textContent ?? '').join(' ')).includes(name),
+      DEVICE_NAME,
+      { timeout: 10000 },
+    );
     // viewer → the button routes to ?mode=viewer (canControl=false)
     await vpage.click('button.console-open-btn');
-    const vLive = await waitLive(vpage);
-    const vPainted = vLive ? await canvasPainted(vpage, { timeoutMs: 20_000 }) : false;
-    const vFrames = await frameCount(vpage); // polls (React flush lag)
-    const vBanner = vLive ? await bannerText(vpage) : '';
-    const vReadOnly = vBanner.includes('唯讀');
-    const vNoKeybar = await vpage.locator('.keybar .keybtn').count() === 0;
+    vLive = await waitLive(vpage);
+    vPainted = vLive ? await canvasPainted(vpage, { timeoutMs: 20_000 }) : false;
+    vFrames = await frameCount(vpage);
+    vBanner = vLive ? await bannerText(vpage) : await bannerText(vpage);
+    vReadOnly = vBanner.includes('唯讀');
+    vNoKeybar = (await vpage.locator('.keybar .keybtn').count()) === 0;
+    vUrl = vpage.url();
     t26 = Boolean(vLive && vPainted && vFrames > 0 && vReadOnly && vNoKeybar);
     await shot(vpage, 't26-viewer.png');
     // viewer closes its own stream (idempotent, releases the slot for the next run)
@@ -326,7 +347,8 @@ try {
   } catch (e) {
     console.log(`T26 error: ${e.message}`);
   }
-  mark('T26', t26, 'viewer = read-only: video visible (frames>0), 唯讀 banner, no keybar (MD §15.2)');
+  fs.writeFileSync(`${EVID}/t26-ws-obs.json`, JSON.stringify(vWsObs, null, 2));
+  mark('T26', t26, `viewer read-only: live=${vLive} painted=${vPainted} frames=${vFrames} readOnlyBanner=${vReadOnly} noKeybar=${vNoKeybar} url=${vUrl} banner=${vBanner.slice(0, 60)} wsObs=${vWsObs.sockets.length}sock/${vWsObs.binary}bin/${vWsObs.text}txt (MD §15.2)`, { evidence: 't26-viewer.png' });
 
   fs.writeFileSync(`${EVID}/ws-obs.json`, JSON.stringify({ ...wsObs, finishedAt: new Date().toISOString() }, null, 2));
   console.log(`WS-observer: sockets=${wsObs.sockets.length} binary=${wsObs.binary} text=${wsObs.text} firstBinary=${JSON.stringify(wsObs.firstBinary)} lastError=${wsObs.lastError}`);
