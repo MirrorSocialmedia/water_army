@@ -52,6 +52,31 @@ import { batchMonitorRoutes } from './routes/batch-monitor.js';
 import { batchContainerRoutes } from './routes/batch-containers.js';
 import { networkPolicyRoutes } from './routes/network-policy.js';
 import { systemRamGateRoutes } from './routes/system-ram-gate.js';
+import { deviceStreamRoutes } from './routes/device-streams.js';
+import { createStreamLeaseService } from './services/stream-lease-service.js';
+
+function createUnavailableStreamLease() {
+  const unavailable = () => {
+    const e = new Error('stream lease service unavailable — this deployment has no stream data surface');
+    e.apiCode = 'STREAM_LEASE_UNAVAILABLE';
+    e.statusCode = 503;
+    throw e;
+  };
+  return {
+    maxStreams: 0,
+    ttlMs: 0,
+    usage: unavailable,
+    acquire: unavailable,
+    list: unavailable,
+    heartbeat: unavailable,
+    close: unavailable,
+    validateTicket: unavailable,
+    reconcileStartup: async () => 0,
+    reconcileExpired: async () => 0,
+    startReconciler() {},
+    stopReconciler() {},
+  };
+}
 
 /** Public (unauthenticated) route prefixes — everything else may need a session. */
 const PUBLIC_PREFIXES = ['/api/health', '/api/auth/login'];
@@ -270,6 +295,31 @@ export async function buildApp(opts = {}) {
   });
   if (redroidEnv) app.decorate('redroidMockEnv', redroidEnv); // test seam — exists ONLY in mock mode
 
+  // MC P1 (Mobile Console MD §4.1/§8.1): stream lease + ticket service.
+  // Conditional wiring (same contract as BR-B3 batch lifecycle): a db without
+  // the stream surface (partial test fakes / pre-migration schemas) must keep
+  // buildApp alive — boot never crashes on a missing table. With the stub,
+  // every stream route fails closed with 503 STREAM_LEASE_UNAVAILABLE.
+  const hasStreamSurface = Boolean(
+    db?.streamLease && typeof db.streamLease.findMany === 'function' && db?.resourceLease && typeof db.resourceLease.create === 'function',
+  );
+  const streamLeaseService = hasStreamSurface
+    ? createStreamLeaseService({
+        db,
+        redis,
+        config,
+        log: app.log,
+        audit,
+        leaseService: createLeaseService({ db }),
+      })
+    : createUnavailableStreamLease();
+  if (hasStreamSurface) {
+    app.log.info(
+      { maxStreams: streamLeaseService.maxStreams, ttlMs: streamLeaseService.ttlMs },
+      'stream lease service ON — Mobile Console 5-screen streaming (MD §4.1)',
+    );
+  }
+
   app.decorate('config', config);
   app.decorate('db', db);
   app.decorate('redis', redis);
@@ -283,6 +333,7 @@ export async function buildApp(opts = {}) {
   app.decorate('batchMetrics', batchMetrics);
   app.decorate('redroidService', redroidService);
   app.decorate('ramGateService', ramGateService);
+  app.decorate('streamLeaseService', streamLeaseService);
   app.decorate('taskQueue', taskQueue);
   app.decorate('taskSseActive', 0); // P3 SSE concurrency cap counter
 
@@ -426,6 +477,19 @@ export async function buildApp(opts = {}) {
   batchContainerRoutes(app);
   networkPolicyRoutes(app);
   systemRamGateRoutes(app);
+  deviceStreamRoutes(app);
+
+  // MC P1 (MD §10): reconcile BEFORE the first request — the previous (dead)
+  // API process's leases cannot be assumed alive; then run the expiry sweep.
+  app.addHook('onReady', async () => {
+    if (!hasStreamSurface) return;
+    try {
+      await streamLeaseService.reconcileStartup();
+    } catch (e) {
+      app.log.error({ error: e.message }, 'stream lease startup reconcile FAILED (streams may show stale leases)');
+    }
+    streamLeaseService.startReconciler();
+  });
 
   // --- lifecycle ---------------------------------------------------------------
   app.addHook('onClose', async () => {

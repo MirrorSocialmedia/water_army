@@ -260,6 +260,30 @@ export function loadConfig(env = process.env, opts = {}) {
     batchContainerHealthTimeoutMs: optInt(e, 'BATCH_CONTAINER_HEALTH_TIMEOUT_MS', 60_000),
     batchContainerHealthPollMs: optInt(e, 'BATCH_CONTAINER_HEALTH_POLL_MS', 1_000),
     batchContainerHealthProbeTimeoutMs: optInt(e, 'BATCH_CONTAINER_HEALTH_PROBE_TIMEOUT_MS', 3_000),
+    // MC P1 (Mobile Console MD §4.1): global concurrent device stream cap.
+    // Raw env passed through UNRESOLVED on purpose: the service resolves it at
+    // boot (default 5, hard cap 5, invalid → fail-safe 5 + explicit config
+    // error log — MD §4.1 「非法值拒絕啟動或安全降至 5，並產生明確設定錯誤，
+    // 不可默默變成無上限」). optInt would hard-crash, which MD does not require.
+    maxConcurrentDeviceStreamsRaw: e.MAX_CONCURRENT_DEVICE_STREAMS ?? '',
+    // MC P1 stream ticket (MD §11.8): HMAC-SHA256 secret. Empty = ticketing
+    // unavailable → stream endpoints fail closed with 503
+    // STREAM_TICKET_UNAVAILABLE (never fall back to a guessable secret).
+    streamTicketSecret: e.STREAM_TICKET_SECRET ?? '',
+    // MC P1 stream lease TTL (server time; the client must heartbeat before
+    // expiry or the lease is reaped).
+    streamLeaseTtlMs: optInt(e, 'STREAM_LEASE_TTL_MS', 30_000),
+    // MC P1 expiry reconcile sweep interval (0 = disabled; tests drive
+    // reconcileExpired explicitly).
+    streamReconcileIntervalMs: (() => {
+      const raw = e.STREAM_RECONCILE_INTERVAL_MS;
+      if (raw === undefined || raw === '') return 15_000;
+      const v = Number(raw);
+      if (!Number.isInteger(v) || v < 0) {
+        throw new Error(`config error: STREAM_RECONCILE_INTERVAL_MS must be an integer >= 0 (got ${String(raw)})`);
+      }
+      return v;
+    })(),
     // P3 service identity: worker→API token (empty = service auth disabled).
     serviceToken: e.WORKER_API_TOKEN ?? '',
     // P3 provider default when POST /api/tasks/runs omits body.provider.

@@ -195,15 +195,20 @@ export function createLeaseService({ db, now = () => new Date(), ttlMs = DEFAULT
    * concurrency). Sequential scan over slot-0..slot-N-1 is fine at this
    * scale (≤50); the DB unique constraint is what makes it race-safe.
    *
+   * resourceType defaults to 'container_slot' (the original caller, MD §3.1);
+   * MC P1 passes 'stream_slot' (Mobile Console MD §4.1) — same primitive,
+   * different resource namespace (the [resource_type, resource_key] unique
+   * constraint keeps the namespaces disjoint).
+   *
    * @returns {Promise<{acquired:boolean, slot?:number, reason?:string, lease?:object|null}>}
    */
-  async function acquireSlot({ totalSlots, ownerRunId = null, ownerLabel = null, ttlMs, now: when } = {}) {
+  async function acquireSlot({ resourceType = 'container_slot', totalSlots, ownerRunId = null, ownerLabel = null, ttlMs, now: when } = {}) {
     if (!Number.isInteger(totalSlots) || totalSlots < 1) {
       throw new BatchError('INVALID_LEASE', 'totalSlots must be an integer >= 1');
     }
     for (let i = 0; i < totalSlots; i += 1) {
       const res = await acquire({
-        resourceType: 'container_slot',
+        resourceType,
         resourceKey: `slot-${i}`,
         ownerRunId,
         ownerLabel,

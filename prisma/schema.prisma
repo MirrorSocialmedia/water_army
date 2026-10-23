@@ -350,7 +350,8 @@ model Device {
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
-  template RedroidTemplate @relation(fields: [templateId], references: [id])
+  template     RedroidTemplate @relation(fields: [templateId], references: [id])
+  streamLeases StreamLease[]   // MC P1 (Mobile Console MD §8.1/§4.1)
 
   @@index([templateId])
   @@index([containerState])
@@ -472,6 +473,52 @@ model ResourceLease {
   @@index([leaseExpiresAt])
   @@index([ownerRunId])
   @@map("resource_leases")
+}
+
+// ---------------------------------------------------------------- stream_leases (MC P1, Mobile Console MD §4.1/§8.1)
+// Per-viewer-session stream leases for the 5-screen redroid console.
+//
+// Design (ADR-019 §19.11):
+//  - PG is the source of truth (Redis is coordination-only: ticket single-use).
+//  - GLOBAL slot (0..MAX-1) is claimed atomically through the existing
+//    resource_leases table (resourceType='stream_slot', this lease's own id as
+//    ownerRunId) via createLeaseService.acquireSlot — the DB unique constraint
+//    is the race guard; there is NO count-then-insert path (MD §4.1).
+//  - ONE active lease per device (MVP-strict, MD §4.1 allows "每設備一個 viewer
+//    session"): enforced by the PARTIAL UNIQUE INDEX below (status in
+//    PENDING/ACTIVE) — the 2nd concurrent acquire on the same device gets a
+//    23505 → STREAM_DEVICE_HELD (409), exactly one winner.
+//  - version = CAS counter. Every transition (heartbeat / close / expire /
+//    interrupt) is a single-statement updateMany carrying the expected
+//    version (and status) — a concurrent winner bumps the version and the
+//    loser matches 0 rows (MD §4.1: owner/version 條件防誤刪新 lease).
+//  - lastHeartbeatAt/expiresAt are SERVER time only (MD §4.1: 客戶端時間不能
+//    決定 lease 是否過期).
+//  - status: PENDING (acquiring slot) → ACTIVE → CLOSED | EXPIRED | INTERRUPTED.
+//    INTERRUPTED = set at API restart reconciliation (the issuing process died
+//    → its streams are dead; MD §10: cannot assume the stream is still alive).
+model StreamLease {
+  id              String    @id @default(uuid()) @db.Uuid
+  deviceId        String    @map("device_id") @db.Uuid
+  userId          String    @map("user_id") @db.Uuid
+  mode            String // viewer | controller (MD §8.1)
+  status          String    @default("PENDING") // PENDING|ACTIVE|CLOSED|EXPIRED|INTERRUPTED
+  version         Int       @default(1) // CAS counter (MD §4.1 owner/version 條件)
+  slotIndex       Int?      @map("slot_index") // global slot 0..MAX-1; set at PENDING→ACTIVE, nulled at terminal
+  createdAt       DateTime  @default(now()) @map("created_at")
+  lastHeartbeatAt DateTime  @map("last_heartbeat_at") // server time
+  expiresAt       DateTime  @map("expires_at") // server time; heartbeat extends
+  closedAt        DateTime? @map("closed_at")
+  closeReason     String?   @map("close_reason") // user_closed|expired|api_restart|device_deleted|denied
+  correlationId   String?   @map("correlation_id") // requestId that created the lease
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  device Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([deviceId, status])
+  @@index([status, expiresAt]) // expiry reconcile sweep
+  @@index([userId])
+  @@map("stream_leases")
 }
 
 // ---------------------------------------------------------------- state_events (BR-B1, MD §9.5)

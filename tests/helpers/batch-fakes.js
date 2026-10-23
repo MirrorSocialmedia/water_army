@@ -406,6 +406,18 @@ export function makeBatchFakeDb({ identities = [], batches = [], batchIdentities
         }
         return null;
       },
+      findMany: async ({ where = {} } = {}) => {
+        const out = [];
+        for (const row of leaseRows.values()) {
+          const matches =
+            (where.resourceType === undefined || row.resourceType === where.resourceType) &&
+            (where.resourceKey === undefined || row.resourceKey === where.resourceKey) &&
+            (where.ownerRunId === undefined || row.ownerRunId === where.ownerRunId) &&
+            leaseWindowMatches(row.leaseExpiresAt, where.leaseExpiresAt);
+          if (matches) out.push({ ...row });
+        }
+        return out;
+      },
       create: async ({ data }) => {
         const key = `${data.resourceType}\u0000${data.resourceKey}`;
         if (leaseRows.has(key)) throw P2002('resource_type, resource_key');

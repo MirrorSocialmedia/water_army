@@ -966,3 +966,60 @@ MD §13.2 嘅 per-actor 寫 budget（20/60s）係為**人工誤操作**設嘅；
 | H.264 真機串流 | **NOT VERIFIED**（image gralloc blocker） | §19.9 + `logcat-gralloc-evidence.txt` + `gralloc-root-cause.md` |
 | ADR-019 授權評估 | PASS | §19.1（GPL-3.0 義務分析 → scrcpy MIT 路線） |
 | 版本 pin | PASS | scrcpy-server v5.0.1 sha256 `764eb6f7…c536`；platform-tools 37.0.1-15733141；ws@8.22.0（產品）/ PoC 暫用 openclaw ws@8.20.0（已註明）；Chromium 1217(147)/1208(145) |
+
+### 19.11 P1 設計記錄（StreamLease / slot / ticket，2026-10-23）
+
+**資料模型**（migration `20261023024112_mc_stream_leases`，additive-only）：
+- `stream_leases`：`id(uuid) device_id user_id mode status version slot_index created_at last_heartbeat_at expires_at closed_at close_reason correlation_id`（MD §4.1 最少欄位全齊）。status FSM = `PENDING → ACTIVE → CLOSED | EXPIRED | INTERRUPTED`。
+- **PARTIAL UNIQUE INDEX** `stream_leases_device_active_ux ON (device_id) WHERE status IN ('PENDING','ACTIVE')` — 每裝置同時只可有一條 live lease（MD §4.1「MVP 可更嚴格限制每設備一個 viewer session」之選擇；viewer/controller 共存 = future work）。DB 約束 = 同裝置雙併發嘅真 guard（第二個 inserter = 23505 → `STREAM_DEVICE_HELD` 409）。
+- **全局 5 slot = 重用現有 `resource_leases` 表**（`resourceType='stream_slot'`，unique `[resource_type, resource_key]`）— 經 `createLeaseService.acquireSlot()`（shared）原子 claim：`ownerRunId = streamLease.id`（uuid），release = `release({resourceType:'stream_slot', resourceKey:'slot-N', ownerRunId: leaseId})`。零新表、零新約束；`acquireSlot` 加咗 `resourceType` 參數（default `'container_slot'` = 原有 batch 行為零改變，已用現有 1167 個 tests 驗證）。
+
+**原子性論證（MD §4.1「不能先 count 再 insert」）**：
+- 全局 cap：N 個併發 acquire → 每個 scan slot-0..4 嘅 `create` 撞 unique constraint → 每 slot key 只有一個 creator 成功 → 恰好 `maxStreams` 贏。
+- 每裝置：partial unique index 同理。
+- 過期 cleanup（MD §4.1 owner/version 條件）：reconcile sweep 讀 candidate 後用 `updateMany({id, version: candidate.version, status:'ACTIVE', expiresAt: {lt: now}})` — 之間如果有 heartbeat 贏咗（version bump + expiry 延長），CAS 匹配 0 rows → 新 lease 絕唔會被誤刪。
+- PENDING 冪等：acquire 中 slot claim 失敗 → compensation（release slot + delete PENDING row）→ 唔會留孤兒。
+
+**MAX_CONCURRENT_DEVICE_STREAMS（MD §4.1 config 規則）**：
+- env 缺失 → 5；`1..5` 整數 → 用；`0 / >5 / 非整數 / 垃圾` → **fail-safe 5 + pino.error 明確設定錯誤**（「安全降至 5，不可默默無上限」）。hard cap = 5（除非未來容量審查另做變更）。
+- `STREAM_LEASE_TTL_MS`（default 30s）/ `STREAM_RECONCILE_INTERVAL_MS`（default 15s，0=禁用）= 額外 knobs。
+
+**Stream ticket（MD §11.8）**：
+- HMAC-SHA256，格式 `base64url(payload).base64url(sig)`；payload = `{v:1, sub(userId), dev(deviceId), lease(leaseId), mode, exp}`；TTL **60s**；`STREAM_TICKET_SECRET`（≥16 字元，env）缺失 → **503 `STREAM_TICKET_UNAVAILABLE` fail-closed**（絕無 guessable fallback）。
+- 一次性：Redis `SET mc:stream:ticket:<sha256(ticket)> 1 EX 60 NX`（**Redis = 短期 coordination only**；PG = source of truth）。重放 = 401 `STREAM_TICKET_REPLAYED`。
+- 驗證順序（MD §10 stale 防線）：format → HMAC（timing-safe）→ version/exp（**server time**）→ user/device/lease/mode 綁定 → lease 仍 ACTIVE → （consume?）。過期 ticket 一律 401，lease 已 terminal 一律 401。
+- ticket 永遠唔入：log（PINO_REDACT_PATHS 已有 token 路徑）、audit details、`GET /device-streams` 回應、lease summary。
+- P1 唔設 HTTP 驗證端點（by design：P2 WS upgrade 係 consume point）；P1 E2E 用 `scripts/mobileconsole-p1/ticket-probe.mjs` 喺**真 scratch PG+Redis+同 secret** 下直接行使同一 service function 驗證 binding/replay/TTL。
+
+**錯誤碼（固定，MD §4.1「409/429 擇一」= 選 409）**：
+`STREAM_DEVICE_NOT_FOUND` 404 · `STREAM_DEVICE_NOT_RUNNING` 409 · `STREAM_DEVICE_HELD` 409 · `STREAM_CAPACITY_REACHED` 409（message 帶 `n/5`）· `STREAM_PERMISSION_DENIED` 403（controller 需 operator+；viewer mode = 任何已認證角色）· `STREAM_LEASE_NOT_FOUND` 404 · `STREAM_LEASE_OWNER_MISMATCH` 403 · `STREAM_LEASE_EXPIRED` 409 · `STREAM_LEASE_CLOSED` 409 · `STREAM_TICKET_INVALID` 401 · `STREAM_TICKET_REPLAYED` 401 · `STREAM_TICKET_UNAVAILABLE` 503 · `STREAM_INVALID_MODE` 400。
+
+**Reconciliation（MD §10）**：
+- **API restart**（`onReady` hook，第一 request 前）：所有 PENDING/ACTIVE → `INTERRUPTED`（closeReason=`api_restart`）+ release slot。P1 無 sidecar 存在 → issuing process 死 = stream 必死；P2 hook：INTERRUPTED 前先查 sidecar liveness registry（可 re-adopt）。
+- **Expiry sweep**（setInterval，default 15s，busy-flag 防重疊）：ACTIVE + expiresAt < now → `EXPIRED` + release slot（version CAS）。
+- **heartbeat**：owner 或 admin；server time 延長；已過期 lease 唔可 renew（409 `STREAM_LEASE_EXPIRED` — 要重新 acquire = 重新驗權，MD §2.1.8「不得因重連恢復過期控制權」）。
+- **close**：owner 或 admin；冪等（terminal 再 close = 200 + `idempotent:true`）；release slot 恰一次。
+
+**路由**（`apps/api/src/routes/device-streams.js`）：
+- `POST /api/devices/redroid/:id/streams {mode}` → **201** `{lease, ticket, streamWsPath, usage}`（MD §8.1；ticket 短期受限、無代理憑證、無 upstream URL）
+- `GET /api/device-streams` → `{leases:[summary], usage:{active,max}}`（零 secret）
+- `POST /api/device-streams/:leaseId/heartbeat` → 200（owner/admin）
+- `DELETE /api/device-streams/:leaseId` → 200 idempotent（owner/admin）
+- MD §8.1 嘅「control-lease 合併進 stream create」選擇 = `mode: controller`（避免第二套端點）。
+- `app.js` wiring：BR-B3 式條件（db 冇 stream surface 嘅 partial test fake → stub 503 `STREAM_LEASE_UNAVAILABLE`，boot 唔崩）。
+
+**E2E 結果**（`scripts/mobileconsole-p1/e2e-p1.sh`，scratch stack 16490/16494/16495，TTL=3s/interval=1s 加速；**run #9 2026-10-23T04:06:51Z = 23/23 PASS, 0 FAIL**，raw：`/home/kenneth/.openclaw/workspace/logs/mobileconsole-p1/p1-summary.json` + `p1-console.log`）：
+| Test | MD 對應 | 結果 |
+|------|---------|------|
+| T07 六併發搶 slot → 恰 5 成、1× 409 `STREAM_CAPACITY_REACHED`(5/5) | §4.1 競爭 | PASS（wins=5 cap_losses=1，usage 5/5） |
+| T08 兩 manager 搶最後格（預填 4）→ 恰一成 | §4.1 | PASS（A=201 B=409） |
+| T09 同裝置併發雙 acquire → 恰一成 + 409 HELD | §4.1 每裝置單 lease | PASS（A=201 B=409） |
+| T12 過期後 heartbeat 409 + sweep → EXPIRED + slot freed | §4.1/§10 | PASS（status=EXPIRED slots=0） |
+| T13 ticket binding/wrong-user/replay + T13b TTL 過期 401 | §11.8 | PASS（service-level probe，真 PG+Redis+同 secret） |
+| T16 API restart → ACTIVE 變 INTERRUPTED(api_restart) + slot freed | §10 | PASS（status=INTERRUPTED reason=api_restart slots=0） |
+| T15 MAX=99 → fail-safe 5 + config error log | §4.1 config | PASS（usage.max=5 + log 有明確設定錯誤） |
+| RBAC(T05) / held(T06) / close 冪等(T10) / non-owner 403(T11) / not-running 409(T14a) / unknown 404(T14b/c) / list 無 ticket 洩漏(T03) | §8.1/§15 | PASS |
+
+**E2E 基建陷阱（實測，已修入 script，防下次踩）**：(a) `sg docker -c "psql -c \"…\""` 二次 shell 展開會食 `$`（argon2 hash 被食）→ DB helper 一律 **stdin**（`printf | docker exec -i psql`）；(b) 同 shell background 咗 API 嘅 script，race 測試後嘅 `wait` 必須帶 **explicit pids**（bare `wait` 會等 API 永遠唔 return）；(c) 背景 wrapper 嘅 cmdline 唔好含 script 路徑（pkill bracket trick 防唔到 cross-process self-match）。
+
+**新增依賴**：無（`ws` 仍係 P2 先 pin；ticket 用 node:crypto HMAC + 現有 ioredis）。
