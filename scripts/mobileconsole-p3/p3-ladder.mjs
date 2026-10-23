@@ -135,6 +135,12 @@ async function openTiles(page, ctx, names, log) {
     await chip.waitFor({ state: 'visible', timeout: 15_000 });
     await chip.click({ timeout: 10_000 });
     log(`tile opened: ${name}`);
+    // Test pacing (NOT a product change): stream_ticket is a single browser
+    // cookie slot (MD §11.8) — each acquire's Set-Cookie overwrites the jar,
+    // so a tile's WS upgrade must go out while ITS ticket is still newest.
+    // 400ms makes the ordering deterministic (see p3-fleet.mjs T30 note;
+    // 2026-10-24 fleet E2E run #1 root-caused the back-to-back lottery).
+    await page.waitForTimeout(400);
   }
   // wait for every tile to reach a LIVE state (90s budget)
   const t0 = Date.now();
