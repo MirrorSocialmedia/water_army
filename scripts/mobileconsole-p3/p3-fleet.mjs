@@ -215,6 +215,13 @@ async function waitAllLive(page, n, budgetMs = 120_000) {
   for (const name of DEVICES) {
     await openChip(A.page, name);
     say(`tile opened: ${name}`);
+    // Test pacing (NOT a product change): the one-shot stream_ticket cookie is a
+    // SINGLE browser cookie slot (MD §11.8) — each acquire's Set-Cookie
+    // overwrites the jar, and a tile's WS upgrade must go out while ITS ticket
+    // is still the newest. A 400ms gap makes the acquire/upgrade ordering
+    // deterministic (the ladder's back-to-back opens win this lottery by
+    // timing only; see P3 report "known limitations — cookie slot").
+    await A.page.waitForTimeout(400);
   }
   const liveAll = await waitAllLive(A.page, 5);
   const s5 = (await waitSlot(A.page, 5, 30_000)) ? await slotCount(A.page) : -1;
