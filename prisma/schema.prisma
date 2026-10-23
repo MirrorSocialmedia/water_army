@@ -352,6 +352,7 @@ model Device {
 
   template     RedroidTemplate @relation(fields: [templateId], references: [id])
   streamLeases StreamLease[]   // MC P1 (Mobile Console MD §8.1/§4.1)
+  interventions ManualIntervention[] // MC P4 (Mobile Console MD Phase 4 / §6)
 
   @@index([templateId])
   @@index([containerState])
@@ -558,4 +559,102 @@ model AppSetting {
   updatedAt  DateTime @updatedAt @map("updated_at")
 
   @@map("app_settings")
+}
+
+// ---------------------------------------------------------------- manual_interventions (MC P4, Mobile Console MD §6)
+// Human-intervention event — the durable, queryable record of a stuck/
+// needs-review device (or task). NOT the source of truth for device state
+// (that stays on devices.net_* / adb_state / container_state); this is the
+// notification + audit + lifecycle surface on top of the reliable signals.
+//
+// Episode / dedupe (MD §6.3):
+//   - ONE open episode per device+category+source, guarded at the DB level by
+//     the PARTIAL UNIQUE INDEX manual_interventions_dedupe_open_ux
+//     (dedupeKey WHERE status IN open/acknowledged/in_progress). A repeat
+//     signal re-escalates the open episode (signalCount++, severity/disposition
+//     only go UP) instead of a notification storm.
+//   - resolved/dismissed leave the partial-unique window, so a LATER signal
+//     creates a NEW episode — a stale late signal can NEVER auto-reopen a
+//     terminal event (MD §6.3). Reopening is only the explicit operator
+//     `reopen` transition (version-guarded, audited).
+//
+// automationDisposition (MD §6.2): third-party CAPTCHA / anti-bot /
+//   account-integrity challenges MUST be 'blocked_pending_review' and are
+//   NEVER auto-resolved or used to auto-resume batch automation (MD §0.6).
+//
+// Secrets: title/summary/evidence are scrubbed (scrubObject) before write;
+//   evidence holds only redacted summaries + event ids + error codes — never
+//   screen pixels, full logcat, cookies, passwords or proxy URLs (MD §6.2/§13).
+//
+// version = CAS counter (MD §6.2/§9.6 style): every operator transition is a
+//   single-statement updateMany carrying the expected version + status, so a
+//   concurrent winner bumps the version and the loser matches 0 rows.
+model ManualIntervention {
+  id                    String    @id @default(uuid()) @db.Uuid
+  // Nullable FK (onDelete SetNull): when the device row is removed the event
+  // is KEPT and still readable via deviceNameSnapshot (MD §6.2).
+  deviceId              String?   @map("device_id") @db.Uuid
+  deviceNameSnapshot    String?   @map("device_name_snapshot") // human-readable, survives device delete
+  source                String // container_health|adb_health|boot_timeout|app_crash|qa_signal|network_state|operator_report|external_verification
+  category              String // DEVICE_OFFLINE|BOOT_TIMEOUT|APP_CRASH|APP_UNRESPONSIVE|PERMISSION_REQUIRED|MANUAL_REVIEW|NETWORK_BLOCKED|EXTERNAL_VERIFICATION|TASK_FAILED|OTHER
+  severity              String    @default("warning") // info|warning|high|critical
+  status                String    @default("open") // open|acknowledged|in_progress|resolved|dismissed
+  automationDisposition String    @default("not_applicable") @map("automation_disposition") // not_applicable|paused|blocked_pending_review
+  title                 String
+  summary               String?
+  evidence              Json? // redacted only (no pixels/logcat/secrets)
+  // true = heuristic signal (logcat signature etc.) — UI must label it and
+  // allow the operator to confirm / false-positive it (MD §6.1).
+  heuristic             Boolean   @default(false)
+  // How many times the source fired within this open episode (dedupe counter).
+  signalCount           Int       @default(1) @map("signal_count")
+  // CAS counter for the state machine (MD §6.2/§9.6).
+  version               Int       @default(1)
+  // Terminal-state operator note (resolve summary OR dismiss reason — both
+  // required by their routes; the column is shared). No secrets (scrubbed).
+  resolutionSummary     String?   @map("resolution_summary")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  acknowledgedAt        DateTime? @map("acknowledged_at")
+  resolvedAt            DateTime? @map("resolved_at") // set on resolve OR dismiss (terminal timestamp)
+  assigneeUserId        String?   @map("assignee_user_id") @db.Uuid // nullable; the operator who owns handling
+  dedupeKey             String    @map("dedupe_key")
+  relatedTaskRunId      String?   @map("related_task_run_id") @db.Uuid // nullable; ownership/scope checked by the caller
+
+  device    Device?                  @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+  history   ManualInterventionHistory[]
+
+  @@index([status, severity, updatedAt]) // MD §9 suggested index
+  @@index([deviceId, status, category]) // MD §9 suggested index
+  @@index([assigneeUserId])
+  @@map("manual_interventions")
+}
+
+// Partial unique: ONE open episode per dedupeKey (MD §6.3 race guard). Terminal
+// rows (resolved/dismissed) are outside the window, so a new signal after a
+// terminal state creates a fresh episode (never auto-reopens the old one).
+// (Applied in the migration SQL — Prisma cannot express partial indexes.)
+
+// ---------------------------------------------------------------- manual_intervention_history (MC P4)
+// Append-only transition/audit trail for one intervention (MD §6.2: "另建
+// audit/history 記錄狀態轉換及操作者"). Kept separate from audit_events so an
+// operator can pull a single event's full story in one join; the same
+// transitions ALSO write audit_events (operator + request context). No API
+// surface updates or deletes these rows (append-only convention, like
+// state_events).
+model ManualInterventionHistory {
+  id              String   @id @default(uuid()) @db.Uuid
+  interventionId  String   @map("intervention_id") @db.Uuid
+  fromStatus      String?  @map("from_status") // null = birth (created)
+  toStatus        String   @map("to_status")
+  action          String // created|signal|acknowledged|assigned|resolved|dismissed|reopened
+  actorUserId     String?  @map("actor_user_id") @db.Uuid // null = system signal
+  note            String? // short, scrubbed
+  detailsJson     Json?    @map("details_json") // scrubbed
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  intervention ManualIntervention @relation(fields: [interventionId], references: [id], onDelete: Cascade)
+
+  @@index([interventionId, createdAt])
+  @@map("manual_intervention_history")
 }

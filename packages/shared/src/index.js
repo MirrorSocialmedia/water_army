@@ -251,6 +251,20 @@ export {
 /** Secret scrubbing for persisted payloads (MD §13.3). */
 export { scrubObject } from './scrub.js';
 
+/** Manual-intervention domain + shared signal writer (MC MD Phase 4 / §6). */
+export {
+  INTERVENTION_STATUS,
+  INTERVENTION_OPEN_EPISODE,
+  INTERVENTION_TERMINAL,
+  INTERVENTION_NEEDS_ATTENTION,
+  INTERVENTION_SOURCE,
+  INTERVENTION_CATEGORY,
+  INTERVENTION_SEVERITY,
+  AUTOMATION_DISPOSITION,
+  interventionDedupeKey,
+  createInterventionSignalWriter,
+} from './intervention.js';
+
 /** Provider credential encryption — AES-256-GCM (MD §11.7/§13.2). */
 export {
   ProviderCryptoError,
