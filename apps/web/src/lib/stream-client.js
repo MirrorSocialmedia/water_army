@@ -24,7 +24,7 @@
  *    module — MD §3.3 密碼欄位等敏感輸入不得錄下).
  *  - focus/visibility loss → input is refused (MD §3.2 安全行為).
  */
-import { api, ApiError } from '../api/client';
+import { api, ApiError } from '../api/client.js'; // explicit .js — Node ESM importability (unit tests)
 
 export const STREAM_STATES = [
   'QUEUED',
@@ -85,7 +85,7 @@ export class StreamClient {
     this.reconnectAttempt = 0;
     this.reconnectTimer = null;
     this.inputBlocked = false; // focus/visibility safety (MD §3.2)
-    this.stats = { frames: 0, dropped: 0, lastFrameAt: null, source: null, codec: null, width: null, height: null, degraded: false, degradeReason: null };
+    this.stats = { frames: 0, dropped: 0, lastFrameAt: null, source: null, codec: null, width: null, height: null, degraded: false, degradeReason: null, inputSent: 0, inputRejected: 0 };
     this._visHandler = () => {
       // Leave the tab / lose window focus → refuse new input (the stream
       // stays up; an invisible tab must not be injecting device input).
@@ -193,6 +193,8 @@ export class StreamClient {
         this.onMeta(this.stats);
         return;
       case 'input-rejected':
+        this.stats.inputRejected += 1; // device-side rejection (counts against sent)
+        this.onMeta(this.stats);
         this.onInputResult({ ok: false, code: m.code, message: m.message });
         return;
       case 'dead':
@@ -339,21 +341,26 @@ export class StreamClient {
    */
   input(m) {
     if (this.inputBlocked) {
+      this.stats.inputRejected += 1;
       this.onInputResult({ ok: false, code: 'STREAM_INPUT_BLOCKED', message: '輸入已暫停（頁面失焦/隱藏中）' });
       return;
     }
     if (this.state !== 'LIVE_CONTROLLED_BY_YOU' && this.state !== 'LIVE_READ_ONLY') {
+      this.stats.inputRejected += 1;
       this.onInputResult({ ok: false, code: 'STREAM_NOT_LIVE', message: '尚未就緒' });
       return;
     }
     if (this.state === 'LIVE_READ_ONLY' || this.mode !== 'controller') {
+      this.stats.inputRejected += 1;
       this.onInputResult({ ok: false, code: 'STREAM_READ_ONLY', message: '唯讀模式 — 輸入會被拒絕' });
       return;
     }
     if (!this.ws || this.ws.readyState !== 1) {
+      this.stats.inputRejected += 1;
       this.onInputResult({ ok: false, code: 'STREAM_NOT_LIVE', message: '連線未建立' });
       return;
     }
+    this.stats.inputSent += 1;
     this.ws.send(JSON.stringify({ t: 'input', ...m }));
   }
 
