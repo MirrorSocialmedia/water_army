@@ -38,11 +38,26 @@ const SCRCPY_VERSION = '5.0.1';
 
 function adbExec(adb, args, { timeoutMs = 30_000 } = {}) {
   return new Promise((resolve) => {
-    execFile(adb, args, { timeout: timeoutMs, maxBuffer: 64 * 1024 * 1024 }, (err, out, errOut) => {
-      resolve({ code: err ? (err.code ?? 1) : 0, out: String(out ?? ''), err: String(errOut ?? '') });
+    // P2 E2E run #8 finding: execFile defaults to encoding 'utf8' — the
+    // callback's `out` arrives already utf8-decoded (0x89 → U+FFFD
+    // replacement bytes EF BF BD), so `exec-out screencap -p` binary was
+    // destroyed BEFORE our code saw it (even String() aside). encoding:
+    // 'buffer' makes out a raw Buffer; text callers use outText.
+    // (The String() bug this replaced also mattered: a string has no
+    // .buffer, so the screencap loop's DataView constructor threw and
+    // every session died 1s after ready.)
+    execFile(adb, args, { timeout: timeoutMs, maxBuffer: 64 * 1024 * 1024, encoding: 'buffer' }, (err, out, errOut) => {
+      const buf = Buffer.isBuffer(out) ? out : Buffer.from(out ?? '');
+      resolve({
+        code: err ? (err.code ?? 1) : 0,
+        out: buf,
+        outText: buf.toString('utf8'),
+        err: Buffer.isBuffer(errOut) ? errOut.toString('utf8') : String(errOut ?? ''),
+      });
     });
   });
 }
+export { adbExec };
 
 /**
  * Persistent-data socket reader (PoC BufferedSocket, verbatim behaviour):
@@ -130,8 +145,8 @@ export class StreamSession {
   async start() {
     // 1) device online?
     const st = await adbExec(this.adb, ['-s', this.serial, 'get-state']);
-    if (st.code !== 0 || st.out.trim() !== 'device') {
-      throw Object.assign(new Error(`adb device not online: ${st.out || st.err}`), { code: 'ADB_OFFLINE' });
+    if (st.code !== 0 || st.outText.trim() !== 'device') {
+      throw Object.assign(new Error(`adb device not online: ${st.outText || st.err}`), { code: 'ADB_OFFLINE' });
     }
     // 1b) stale forward cleanup (ADR-020 實備: sidecar SIGKILL leaves `adb
     // forward` entries in the SHARED host adb server). Scope = THIS serial,
@@ -144,7 +159,7 @@ export class StreamSession {
     const push = await adbExec(this.adb, ['-s', this.serial, 'push', this.jar, this.jarRemote], { timeoutMs: 60_000 });
     if (push.code !== 0) throw new Error(`jar push failed: ${push.err}`.slice(0, 200));
     const sum = await adbExec(this.adb, ['-s', this.serial, 'exec-out', 'sha256sum', this.jarRemote], { timeoutMs: 15_000 });
-    const remoteSha = sum.out.split(/\s+/)[0];
+    const remoteSha = sum.outText.split(/\s+/)[0];
     if (remoteSha !== this.jarSha256) throw new Error(`remote scrcpy jar sha256 mismatch (${remoteSha})`);
     this._evt({ event: 'jar_verified' });
     await this._run(this.videoSource === 'auto' ? 'scrcpy' : this.videoSource);
@@ -475,7 +490,7 @@ export class StreamSession {
       const [lo, hi] = this.fwdRange ?? [0, 65535];
       const re = /tcp:(\d+)\s+localabstract:scrcpy_[0-9a-f]{8}\b/gm;
       const ports = new Set();
-      for (const line of list.out.split('\n')) {
+      for (const line of list.outText.split('\n')) {
         let m;
         re.lastIndex = 0;
         while ((m = re.exec(line)) !== null) {

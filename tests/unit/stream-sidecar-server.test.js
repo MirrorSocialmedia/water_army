@@ -197,3 +197,49 @@ test('sidecar: no token env → refuses to start (fail-closed, exit 2)', async (
   assert.equal(code.code, 2);
   assert.match(code.out, /STREAM_SIDECAR_TOKEN/);
 });
+
+
+// ---- adbExec binary preservation (P2 E2E run #8 fix) ---------------------------
+// The old adbExec did `out: String(out ?? '')` — execFile hands back a Buffer
+// for raw exec-out output, and String() utf8-decodes it. For `exec-out
+// screencap -p` that is (1) a binary-corruption hazard and (2) a plain JS
+// string with no .buffer — the screencap loop's
+// `new DataView(res.out.buffer, res.out.byteOffset, res.out.byteLength)` threw
+// "First argument to DataView constructor must be an ArrayBuffer" and every
+// session died ~1s after ready (observed live in run #8: ready → dead loop,
+// then reconnects hitting SIDECAR_SESSION_EXISTS).
+test('adbExec preserves binary exec-out bytes (screencap PNG contract)', async () => {
+  const fs = await import('node:fs');
+  const { adbExec } = await import('../../apps/stream-sidecar/src/session.js');
+  // fake adb = a Node script (sh printf cannot emit reliable binary — \xNN is
+  // not interpreted by POSIX sh). Emits: PNG signature + IHDR width=720
+  // (0x2D0) height=1280 (0x500) + high bytes 0xFF/0x80 that utf8 would mangle.
+  const fakeAdb = '/tmp/mc-fake-adb-screencap.mjs';
+  fs.writeFileSync(
+    fakeAdb,
+    [
+      '#!/usr/bin/env node',
+      'process.stdout.write(Buffer.from([',
+      '0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a,',
+      '0x00,0x00,0x00,0x0d,0x49,0x48,0x44,0x52,',
+      '0x00,0x00,0x02,0xd0,0x00,0x00,0x05,0x00,',
+      '0xff,0x80,0x89,0x45,0x58,0x54,0x52,0x41]));',
+    ].join('\n'),
+  );
+  fs.chmodSync(fakeAdb, 0o755);
+  try {
+    const res = await adbExec(fakeAdb, ['-s', '127.0.0.1:16500', 'exec-out', 'screencap', '-p']);
+    assert.equal(res.code, 0);
+    assert.ok(Buffer.isBuffer(res.out), 'out must be a Buffer');
+    assert.equal(res.out.readUInt32BE(0), 0x89504e47, 'PNG magic preserved');
+    assert.equal(res.out[24], 0xff, 'high byte (>0x7f) survives');
+    assert.equal(res.out[25], 0x80, 'high byte (0x80) survives');
+    // the exact DataView access pattern the screencap loop uses
+    const dv = new DataView(res.out.buffer, res.out.byteOffset, res.out.byteLength);
+    assert.equal(dv.getUint32(16), 720, 'width from IHDR');
+    assert.equal(dv.getUint32(20), 1280, 'height from IHDR');
+    assert.equal(typeof res.outText, 'string', 'text callers get a utf8 string');
+  } finally {
+    fs.rmSync(fakeAdb, { force: true });
+  }
+});
