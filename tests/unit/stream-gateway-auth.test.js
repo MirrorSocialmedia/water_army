@@ -208,3 +208,35 @@ test('extractFrame: fixed/16-bit/64-bit lengths + masking round-trip', async () 
   assert.equal(mEmpty.payload.length, 0);
   assert.equal(mEmpty.next, 6);
 });
+
+// ---- wsTextFrame: gateway→sidecar handshake encoding (P2 E2E run #7 fix) --------
+// The sidecar /ws is a real `ws` WebSocketServer. The old handshake wrote raw
+// JSON (no frame header) → the sidecar parsed the first JSON byte as a frame
+// header (RSV2/RSV3 set) → "sidecar ws error" → STREAM_SIDECAR_UNAVAILABLE
+// loop. Handshake messages must be proper masked text frames.
+test('wsTextFrame: round-trips through extractFrame in all 3 length classes', async () => {
+  const { wsTextFrame, extractFrame } = await import('../../apps/api/src/services/stream-gateway.js');
+  for (const obj of [{ t: 'auth', token: 'x' }, { t: 'session', pad: 'y'.repeat(200) }, { t: 'big', pad: 'z'.repeat(70_000) }]) {
+    const frame = wsTextFrame(obj);
+    const m = extractFrame(frame);
+    assert.ok(m, `frame should be complete (${obj.pad?.length ?? 0}b payload)`);
+    assert.equal(m.opcode, 1, 'opcode must be text');
+    assert.deepEqual(JSON.parse(m.payload.toString('utf8')), obj, 'payload round-trip');
+    assert.equal(m.next, frame.length, 'frame consumes exactly');
+    // mask bit must be SET (client→server, RFC6455 §5.3)
+    assert.equal(frame[1] & 0x80, 0x80, 'mask bit set');
+  }
+});
+
+test('wsTextFrame: header bytes per length class (2/4/10 byte headers)', async () => {
+  const { wsTextFrame } = await import('../../apps/api/src/services/stream-gateway.js');
+  const small = wsTextFrame({ a: 1 }); // {"a":1} = 7-byte payload
+  assert.equal(small[0], 0x81);
+  assert.equal(small[1] & 0x7f, 7);
+  const med = wsTextFrame({ pad: 'q'.repeat(300) }); // 300+10 JSON overhead = 310 → 126 marker
+  assert.equal(med[1] & 0x7f, 126);
+  assert.equal(med.readUInt16BE(2), 310);
+  const big = wsTextFrame({ pad: 'w'.repeat(70_000) }); // 70000+10 = 70010 → 127 marker + 8-byte len
+  assert.equal(big[1] & 0x7f, 127);
+  assert.equal(big.readBigUInt64BE(2), BigInt(70_010));
+});

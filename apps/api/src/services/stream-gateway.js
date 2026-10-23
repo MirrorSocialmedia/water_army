@@ -168,7 +168,7 @@ export function createStreamGateway({ db, config, streamLeaseService, log, resol
     let buffer = Buffer.from(head);
     let sessionStarted = false;
 
-    const send = (obj) => sock.write(JSON.stringify(obj));
+    const send = (obj) => sock.write(wsTextFrame(obj));
     const wait = (pred, what) => new Promise((resolve, reject) => {
       const onErr = (e) => {
         cleanup();
@@ -352,4 +352,37 @@ function extractFrame(buf) {
 
 function safeJson(buf) {
   try { return JSON.parse(buf.toString('utf8')); } catch { return null; }
+}
+
+/**
+ * RFC6455 text-frame encoder for gateway→sidecar handshake messages.
+ * The sidecar /ws endpoint is a real `ws` WebSocketServer — writing raw
+ * JSON unframed makes its parser read the first JSON byte as a frame
+ * header ('{'=0x7B sets RSV2/RSV3 → "RSV2 and RSV3 must be clear",
+ * observed live in P2 E2E run #7) and the handshake dies with
+ * STREAM_SIDECAR_UNAVAILABLE. Client→server frames MUST be masked
+ * (RFC6455 §5.3); the tunnel phase is a blind pipe, so no further
+ * framing happens there. (Module scope: exported for unit tests.)
+ */
+export function wsTextFrame(obj) {
+  const payload = Buffer.from(JSON.stringify(obj), 'utf8');
+  const len = payload.length;
+  let header;
+  if (len < 126) {
+    header = Buffer.alloc(2);
+    header[1] = len | 0x80; // MASK bit set — client frames MUST be masked (§5.3)
+  } else if (len < 65536) {
+    header = Buffer.alloc(4);
+    header[1] = 126 | 0x80;
+    header.writeUInt16BE(len, 2);
+  } else {
+    header = Buffer.alloc(10);
+    header[1] = 127 | 0x80;
+    header.writeBigUInt64BE(BigInt(len), 2);
+  }
+  header[0] = 0x81; // FIN=1, opcode=1 (text)
+  const mask = randomBytes(4);
+  const masked = Buffer.alloc(len);
+  for (let i = 0; i < len; i += 1) masked[i] = payload[i] ^ mask[i % 4];
+  return Buffer.concat([header, mask, masked]);
 }
