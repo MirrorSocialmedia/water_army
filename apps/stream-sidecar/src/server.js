@@ -26,6 +26,7 @@
  *  - logs: redaction-safe (kind + byte length; never text content)
  */
 import http from 'node:http';
+import net from 'node:net';
 import process from 'node:process';
 import { timingSafeEqual } from 'node:crypto';
 import { WebSocketServer } from 'ws';
@@ -72,6 +73,31 @@ function allocPorts() {
   return null;
 }
 function freePorts(p) { usedPorts.delete(p.video); usedPorts.delete(p.control); }
+
+// ---- startup port sweep --------------------------------------------------------
+// allocPorts() is intentionally synchronous (called from the sync WS message
+// handler). Instead of probing per-allocation, we sweep the range ONCE at boot
+// and mark any pair member already bound on the host as permanently unavailable
+// (a port owned by the API/web/ADB stack will not free up during the sidecar's
+// life). Conservative: if a port frees up later we do NOT reclaim it — the
+// forward attempt would surface it anyway, and a stale adb forward fails loud
+// rather than silently sharing a port.
+function isPortFree(port) {
+  return new Promise((resolve) => {
+    const srv = net.createServer();
+    srv.once('error', () => resolve(false));
+    srv.listen({ port, host: '127.0.0.1' }, () => srv.close(() => resolve(true)));
+  });
+}
+async function sweepUsedPorts() {
+  const blocked = [];
+  for (let base = FWD_RANGE_START; base + 1 <= FWD_RANGE_END; base += 2) {
+    const [a, b] = await Promise.all([isPortFree(base), isPortFree(base + 1)]);
+    if (!a) { usedPorts.add(base); blocked.push(base); }
+    if (!b) { usedPorts.add(base + 1); blocked.push(base + 1); }
+  }
+  if (blocked.length) log.warn({ blocked }, 'fwd-range ports already bound at boot (excluded from pool)');
+}
 
 // ---- session registry --------------------------------------------------------------
 /** @type {Map<string, {ws:import('ws').WebSocket, session:StreamSession, ports:{video:number,control:number}}>} */
@@ -238,6 +264,7 @@ httpServer.on('upgrade', (req, socket, head) => {
   wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
 });
 
+await sweepUsedPorts();
 httpServer.listen(PORT, '127.0.0.1', () => {
   // WS rides the same 127.0.0.1 listener (noServer + handleUpgrade):
   // /health + /sessions over HTTP, /ws over WebSocket upgrade.

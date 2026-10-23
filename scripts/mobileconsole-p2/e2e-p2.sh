@@ -29,8 +29,11 @@ EVID=/home/kenneth/.openclaw/workspace/logs/mobileconsole-p2
 API=http://127.0.0.1:16490
 WEB=http://127.0.0.1:16492
 SIDECAR_PORT=16493
-SIDECAR_FWD_START=16484
-SIDECAR_FWD_END=16492
+# FWD range = 5 clean pairs, verified free + no collision with scratch API(16490)/WEB(16492).
+# (old 16484-16492 overlapped those ports — pair (16490,16491)/(16492,16493) would
+# have broken the 4th/5th concurrent session in P3; sidecar also sweeps bound ports at boot.)
+SIDECAR_FWD_START=16460
+SIDECAR_FWD_END=16469
 ADB="$HOME/.local/share/platform-tools/adb"
 DEVICE_SERIAL="127.0.0.1:16500"
 DEVICE_NAME="redroid-brmc-poc"
