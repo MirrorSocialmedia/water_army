@@ -38,7 +38,29 @@ async function login(context, user, pass) {
   await page.fill('input[autocomplete="username"]', user);
   await page.fill('input[type="password"]', pass);
   await page.click('button[type="submit"]');
-  await page.waitForURL(/#\/(dashboard|$)?/, { timeout: 15000 }).catch(() => {});
+  // fail loud: poll for EITHER the app shell (login form gone) OR an error box
+  // on the login page (401/429) — the old catch-all waitForURL regex silently
+  // continued into T21 when login had actually failed. Single waitForFunction
+  // (no racing waitFors — a losing branch would keep polling and could fire a
+  // late unhandled rejection).
+  const outcome = await page
+    .waitForFunction(
+      () => {
+        const errBox = document.querySelector('.error-box');
+        if (errBox) return { rejected: (errBox.textContent ?? '').slice(0, 160) };
+        if (!document.querySelector('.login-card')) return { ok: true };
+        return false;
+      },
+      null,
+      { timeout: 15000, polling: 250 },
+    )
+    .then((h) => h.jsonValue())
+    .catch((e) => {
+      throw new Error(`login did not land within 15s (url=${page.url()}; ${e.message.slice(0, 80)})`);
+    });
+  if (outcome && outcome.rejected !== undefined) {
+    throw new Error(`login rejected: ${outcome.rejected} url=${page.url()}`);
+  }
   return page;
 }
 
@@ -100,12 +122,26 @@ try {
     const devLink = page.locator(`a.link:has-text("${DEVICE_NAME}")`);
     await devLink.waitFor({ timeout: 15000 });
     await devLink.click();
-    await page.waitForSelector('h1', { timeout: 10000 });
+    // wait for the NAVIGATION (hash route change) — waitForSelector('h1')
+    // alone resolves on the stale list-page h1 and reads the wrong title
+    // (observed race: detail page not mounted yet → t21 false-negative).
+    await page.waitForURL(/#\/devices\/[^/?#]+/, { timeout: 10000 });
+    // then wait for the detail page to actually render the device name
+    await page.waitForFunction(
+      (name) => ([...document.querySelectorAll('h1')].map((e) => e.textContent ?? '').join(' ')).includes(name),
+      DEVICE_NAME,
+      { timeout: 10000 },
+    );
     const h1 = (await page.locator('h1').first().textContent()) ?? '';
     t21 = h1.includes(DEVICE_NAME);
     if (t21) await page.click('button.console-open-btn');
   } catch (e) {
     console.log(`T21 error: ${e.message}`);
+    // diagnostic snapshot for the next triage (no secrets: url + body head)
+    try {
+      const bodyHead = await page.evaluate(() => (document.body.textContent ?? '').slice(0, 400));
+      console.log(`T21 diag: url=${page.url()} body=${JSON.stringify(bodyHead)}`);
+    } catch {}
   }
   mark('T21', t21, 'web login + device list → console (correct device name in h1)');
   if (!t21) {
@@ -129,7 +165,7 @@ try {
   const live = await waitLive(page);
   const painted = live ? await canvasPainted(page) : false;
   const frames = painted ? await frameCount(page) : 0;
-  const source = page.evaluate(() => {
+  const source = await page.evaluate(() => {
     const dts = [...document.querySelectorAll('dt')];
     const dt = dts.find((x) => x.textContent === '串流模式');
     return dt?.nextElementSibling?.textContent ?? '';

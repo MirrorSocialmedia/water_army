@@ -38,15 +38,21 @@ const STREAM_CREATE_BODY = {
  * is only ever presented to the stream endpoints; 60s maxAge = ticket TTL;
  * never in a URL, never in an access log (MD §11.8). The body ALSO carries
  * the ticket for non-browser clients (the P1 e2e probe reads it from there).
+ *
+ * Fastify 5 removed the built-in reply.setCookie (P2 E2E finding: 500
+ * "reply.setCookie is not a function") — use the codebase convention:
+ * manual set-cookie header, same as the session cookie in routes/auth.js.
  */
-function ticketCookieOptions(app) {
-  return {
-    path: '/api/device-streams',
-    httpOnly: true,
-    sameSite: 'Strict',
-    maxAge: 60,
-    secure: app.config.cookieSecure,
-  };
+function ticketCookieHeader(app, ticket) {
+  const parts = [
+    `stream_ticket=${ticket}`,
+    'Path=/api/device-streams',
+    'HttpOnly',
+    'SameSite=Strict',
+    'Max-Age=60',
+  ];
+  if (app.config.cookieSecure) parts.push('Secure');
+  return parts.join('; ');
 }
 
 export function deviceStreamRoutes(app) {
@@ -61,7 +67,7 @@ export function deviceStreamRoutes(app) {
         requestId: req.id,
         ip: req.ip,
       });
-      reply.setCookie('stream_ticket', out.ticket, ticketCookieOptions(app));
+      reply.header('set-cookie', ticketCookieHeader(app, out.ticket));
       // 201 = lease resource created (codebase create-route convention).
       return reply.code(201).send(out);
     },
@@ -87,7 +93,7 @@ export function deviceStreamRoutes(app) {
     { preHandler: app.requireRole('viewer'), schema: { params: { type: 'object', additionalProperties: false, required: ['leaseId'], properties: { leaseId: LEASE_ID } } } },
     async (req, reply) => {
       const out = await app.streamLeaseService.reconnect({ leaseId: req.params.leaseId, user: req.user, requestId: req.id, ip: req.ip });
-      reply.setCookie('stream_ticket', out.ticket, ticketCookieOptions(app));
+      reply.header('set-cookie', ticketCookieHeader(app, out.ticket));
       return reply.code(200).send(out);
     },
   );

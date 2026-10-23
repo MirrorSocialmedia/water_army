@@ -56,7 +56,12 @@ export function DeviceConsole({ deviceId }) {
   const canControl = ['admin', 'operator'].includes(me.data?.user?.role);
 
   useEffect(() => {
-    if (!canvasRef.current) return undefined;
+    // Mount race (P2 E2E finding): the canvas only exists AFTER `detail`
+    // loads — the first render shows the loading shell. Starting the client
+    // on mount found canvasRef.current === null and silently never started
+    // the stream. Gate on detail.data; the once-guard (clientRef) prevents a
+    // duplicate client on later detail refreshes.
+    if (!canvasRef.current || clientRef.current) return undefined;
     const client = new StreamClient({
       deviceId,
       mode,
@@ -67,13 +72,16 @@ export function DeviceConsole({ deviceId }) {
     });
     clientRef.current = client;
     client.start().catch(() => {});
-    return () => {
-      clientRef.current = null;
-      client.close().catch(() => {});
-    };
     // mode is a one-shot at mount (changing it = re-open the console)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deviceId]);
+  }, [deviceId, detail.data]);
+
+  // unmount-only teardown (not per detail.data change — a re-run cleanup
+  // here would close the live client and re-create a second one)
+  useEffect(() => () => {
+    clientRef.current?.close().catch(() => {});
+    clientRef.current = null;
+  }, []);
 
   // 1s UI tick for "last frame Xs ago" (MD §3.2 tile info)
   useEffect(() => {
