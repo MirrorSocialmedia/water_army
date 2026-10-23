@@ -189,8 +189,8 @@ async function waitAllLive(page, n, budgetMs = 120_000) {
         let message = null;
         try {
           const b = await r.json();
-          code = b.code ?? null;
-          message = b.message ?? null;
+          code = b.error?.code ?? b.code ?? null; // API error envelope is {error:{code,message}}
+          message = b.error?.message ?? b.message ?? null;
         } catch { /* non-JSON — keep status only */ }
         httpSeen.push({ who, status: r.status(), code, message, at: new Date().toISOString() });
       } catch { /* listener must never throw */ }
@@ -240,15 +240,17 @@ async function waitAllLive(page, n, budgetMs = 120_000) {
   // server final arbiter: operator's own session, direct API acquire (s5)
   const r6 = await O.ctx.request.post(`${API}/api/devices/redroid/${devId[RACE_DEV]}/streams`, { data: { mode: 'controller' } });
   const r6body = await r6.json().catch(() => ({}));
+  // API error envelope is {error:{code,message}} (see P2 T29 zero-secret audit)
+  const r6code = r6body.error?.code ?? r6body.code ?? null;
   ev('t31-6th-refusal.json', {
     scenario: '6th stream refused',
     at: new Date().toISOString(),
     usage: '5/5 (admin holds all 5 tiles)',
     operatorPage: { usagePillReached55: opCapOk, chips: opChips, allChipsDisabledCapReached: allDisabled },
-    serverArbiter: { httpStatus: r6.status(), code: r6body.code ?? null, message: r6body.message ?? null },
+    serverArbiter: { httpStatus: r6.status(), code: r6code, message: r6body.error?.message ?? r6body.message ?? null },
   });
-  mark('T31', opCapOk && allDisabled && r6.status() === 409 && typeof r6body.code === 'string' && r6body.code.startsWith('STREAM_'),
-    `6th stream: operator chips all disabled at 5/5 (${opChips.filter((c) => c.disabled).length}/5, cap-reached pre-check) + server 409 ${r6body.code ?? '?'} — fixed code, 終極裁判 (MD §14 P3 第6格安全拒绝)`);
+  mark('T31', opCapOk && allDisabled && r6.status() === 409 && typeof r6code === 'string' && r6code.startsWith('STREAM_'),
+    `6th stream: operator chips all disabled at 5/5 (${opChips.filter((c) => c.disabled).length}/5, cap-reached pre-check) + server 409 ${r6code ?? '?'} — fixed code, 終極裁判 (MD §14 P3 第6格安全拒绝)`);
 
   // ---------------- T32: close one → 4/5 → re-acquire → LIVE -------------------
   const closeIdx = DEVICES.length - 1; // s5
