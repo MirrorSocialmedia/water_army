@@ -76,6 +76,10 @@ function FleetTile({ device, mode, onClosed }) {
       onInputResult: (r) => setInputFeedback(r),
     });
     clientRef.current = client;
+    // TEMP DIAG (P3 2026-10-23): screenshot-vs-CSV frame-count discrepancy —
+    // expose live clients for ground-truth comparison. Remove after diagnosis.
+    window.__mcFleetClients = window.__mcFleetClients || [];
+    window.__mcFleetClients.push({ name: device.name, client });
     client.start().catch(() => {});
     return undefined;
     // eslint-disable-next-line react-hooks/exhaustive-deps

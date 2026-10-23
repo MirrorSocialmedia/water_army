@@ -52,7 +52,12 @@ async function login(browser) {
 
 /** Per-tile DOM read. The RAW state code lives in the tile root class
  *  (`stream-live_controlled_by_you` etc.) — the badge shows the localized
- *  STATE_TEXT (「已連線…」), which is useless for code-level checks. */
+ *  STATE_TEXT (「已連線…」), which is useless for code-level checks.
+ *  Also reads the StreamClient ground truth (window.__mcFleetClients, the
+ *  dev hook in FleetConsole.jsx) so the CSV carries BOTH the rendered dd
+ *  value and the actual client counter in the same row (P3 2026-10-23:
+ *  one ladder run showed screenshot counters that no wire/CSV source could
+ *  reproduce — dual-source data makes that class of anomaly self-evident). */
 async function readTile(page, i) {
   return page.evaluate((idx) => {
     const tile = document.querySelectorAll('.fleet-tile')[idx];
@@ -67,11 +72,22 @@ async function readTile(page, i) {
     const m = /(\d+)/.exec(kvs['幀'] ?? '');
     const age = kvs['幀']?.includes('<1s') ? 0 : kvs['幀']?.match(/(\d+)s ago/) ? Number(kvs['幀'].match(/(\d+)s ago/)[1]) * 1000 : null;
     const inps = (kvs['輸入'] ?? '').match(/(\d+) sent \/ (\d+) rejected/);
+    // ground truth from the live client (dev hook)
+    let gtFrames = '';
+    let gtSent = '';
+    let gtRej = '';
+    try {
+      const c = (window.__mcFleetClients ?? []).find((x) => x.name === name);
+      if (c?.client?.stats) { gtFrames = c.client.stats.frames; gtSent = c.client.stats.inputSent; gtRej = c.client.stats.inputRejected; }
+    } catch { /* hook absent */ }
     return {
       name,
       state,
       stateText,
       frames: m ? Number(m[1]) : 0,
+      gtFrames,
+      gtSent,
+      gtRej,
       lastFrameAgeMs: age,
       inputSent: inps ? Number(inps[1]) : 0,
       inputRejected: inps ? Number(inps[2]) : 0,
@@ -181,7 +197,7 @@ async function runLevel(browser, L, idx) {
   const names = DEVICE_NAMES.slice(0, L);
   const csvPath = `${EVID}/p3-ladder-L${L}.csv`;
   const csv = fs.createWriteStream(csvPath, { flags: 'w' });
-  csv.write('ts,level,device,state,frames,last_frame_age_ms,input_sent,input_rejected\n');
+  csv.write('ts,level,device,state,frames,client_frames,input_sent,client_input_sent,input_rejected,last_frame_age_ms\n');
   const { ctx, page } = await login(browser);
   const level = { level: L, startedAt: new Date().toISOString(), tiles: {}, events: [] };
   const lastState = names.map(() => null);
@@ -221,7 +237,7 @@ async function runLevel(browser, L, idx) {
           lastState[i] = t.state;
           lastFrame[i] = now;
         }
-        csv.write(`${new Date().toISOString()},${L},${t.name},${t.state},${t.frames},${t.lastFrameAgeMs ?? ''},${t.inputSent},${t.inputRejected}\n`);
+        csv.write(`${new Date().toISOString()},${L},${t.name},${t.state},${t.frames},${t.gtFrames ?? ''},${t.inputSent},${t.gtSent ?? ''},${t.inputRejected},${t.lastFrameAgeMs ?? ''}\n`);
       }
       if (now >= nextInput) {
         // evidence for 「實際畫面是否更新」(MD §15.4): periodic full-grid shot
