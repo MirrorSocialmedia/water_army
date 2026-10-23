@@ -76,9 +76,18 @@ async function readTile(page, i) {
     let gtFrames = '';
     let gtSent = '';
     let gtRej = '';
+    let gtAgeMs = null;
     try {
       const c = (window.__mcFleetClients ?? []).find((x) => x.name === name);
-      if (c?.client?.stats) { gtFrames = c.client.stats.frames; gtSent = c.client.stats.inputSent; gtRej = c.client.stats.inputRejected; }
+      if (c?.client?.stats) {
+        gtFrames = c.client.stats.frames;
+        gtSent = c.client.stats.inputSent;
+        gtRej = c.client.stats.inputRejected;
+        // ms-precision frame age (P3 2026-10-24: the DOM label is second-
+        // quantized — '<1s' at 3.x fps makes the parsed age always 0; the
+        // hook's lastFrameAt (Date.now() ms) is the real latency source)
+        if (c.client.stats.lastFrameAt) gtAgeMs = Math.max(0, Date.now() - c.client.stats.lastFrameAt);
+      }
     } catch { /* hook absent */ }
     return {
       name,
@@ -88,7 +97,7 @@ async function readTile(page, i) {
       gtFrames,
       gtSent,
       gtRej,
-      lastFrameAgeMs: age,
+      lastFrameAgeMs: gtAgeMs ?? age,
       inputSent: inps ? Number(inps[1]) : 0,
       inputRejected: inps ? Number(inps[2]) : 0,
     };
