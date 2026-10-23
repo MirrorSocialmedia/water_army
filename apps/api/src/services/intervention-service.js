@@ -113,8 +113,13 @@ export function createInterventionService({ db, log, audit = null, now } = {}) {
    * ONE version-guarded updateMany. On 0 matched rows it re-reads and returns a
    * precise error (STALE_EVENT / ILLEGAL_TRANSITION) so the caller can surface
    * it and the operator can retry against fresh state.
+   *
+   * `note` (the operator's summary/reason string, ALREADY scrubbed by the
+   * caller where it is stored) is validated here when `requireNote` is set;
+   * `extra` carries ONLY model columns (it is spread into the updateMany
+   * data) — the note itself must never be a model column key.
    */
-  async function transition(id, action, { user, requestId, ip, extra = {}, requireNote = null } = {}) {
+  async function transition(id, action, { user, requestId, ip, extra = {}, requireNote = null, note = null } = {}) {
     const t = TRANSITIONS[action];
     if (!t) throw err('ILLEGAL_TRANSITION', `unknown action '${action}'`, 400);
     const row = await load(id);
@@ -149,9 +154,9 @@ export function createInterventionService({ db, log, audit = null, now } = {}) {
       }
     }
     if (requireNote) {
-      const note = String(extra[requireNote] ?? '').trim();
-      if (note.length === 0) throw err('NOTE_REQUIRED', `${requireNote} is required for ${action}`, 400);
-      if (note.length > 2000) throw err('NOTE_TOO_LONG', `${requireNote} exceeds 2000 chars`, 400);
+      const n = String(note ?? '').trim();
+      if (n.length === 0) throw err('NOTE_REQUIRED', `${requireNote} is required for ${action}`, 400);
+      if (n.length > 2000) throw err('NOTE_TOO_LONG', `${requireNote} exceeds 2000 chars`, 400);
     }
 
     const data = {
@@ -178,7 +183,7 @@ export function createInterventionService({ db, log, audit = null, now } = {}) {
       toStatus: t.to,
       action,
       actorUserId: user?.id ?? null,
-      note: extra[requireNote] ?? null,
+      note: requireNote ? String(note ?? '').trim() : null,
       details: extra.__historyDetails ?? null,
     });
     await auditSafe({
@@ -228,7 +233,8 @@ export function createInterventionService({ db, log, audit = null, now } = {}) {
       requestId,
       ip,
       requireNote: 'summary',
-      extra: { resolvedAt: clock(), resolutionSummary: scrubObject(String(summary)) },
+      note: String(summary ?? ''),
+      extra: { resolvedAt: clock(), resolutionSummary: scrubObject(String(summary ?? '')) },
     });
   }
 
@@ -238,7 +244,8 @@ export function createInterventionService({ db, log, audit = null, now } = {}) {
       requestId,
       ip,
       requireNote: 'reason',
-      extra: { resolvedAt: clock(), resolutionSummary: scrubObject(String(reason)) },
+      note: String(reason ?? ''),
+      extra: { resolvedAt: clock(), resolutionSummary: scrubObject(String(reason ?? '')) },
     });
   }
 
@@ -248,6 +255,7 @@ export function createInterventionService({ db, log, audit = null, now } = {}) {
       requestId,
       ip,
       requireNote: 'reason',
+      note: String(reason ?? ''),
       extra: {},
     });
   }

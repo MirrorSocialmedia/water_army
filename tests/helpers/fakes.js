@@ -69,6 +69,42 @@ export function makeFakeDb({ users = [] } = {}) {
   // ---- P5 models (in-memory, Prisma-shaped) --------------------------------
   const templateRows = new Map(); // redroid_templates, by id
   const deviceRows = new Map(); // devices, by id
+  const interventionRows = new Map(); // manual_interventions, by id (MC P4)
+  const historyRows = new Map(); // manual_intervention_history, by id (MC P4)
+  let historySeq = 0; // monotonic — (createdAt, id) ordering must be deterministic in tests
+
+  const OPEN_EPISODE_STATUSES = ['open', 'acknowledged', 'in_progress'];
+
+  function interventionMatchWhere(where = {}) {
+    return [...interventionRows.values()].filter((row) =>
+      Object.entries(where).every(([k, cond]) => {
+        const v = row[k];
+        if (cond === null) return v === null;
+        if (cond && typeof cond === 'object' && !Array.isArray(cond)) {
+          if (Array.isArray(cond.in)) return cond.in.includes(v);
+          if (cond.not !== undefined) return v !== null && v !== cond.not;
+          if (cond.gte !== undefined) return v !== null && v >= cond.gte;
+          if (cond.lte !== undefined) return v !== null && v <= cond.lte;
+          if (cond.contains !== undefined) return String(v ?? '').includes(cond.contains);
+          return true;
+        }
+        return v === cond;
+      }),
+    );
+  }
+
+  function applyInterventionData(row, data) {
+    const clean = {};
+    for (const [k, v] of Object.entries(data)) {
+      if (v === undefined) continue;
+      if (v && typeof v === 'object' && typeof v.increment === 'number') {
+        clean[k] = (row[k] ?? 0) + v.increment;
+      } else {
+        clean[k] = v;
+      }
+    }
+    return clean;
+  }
 
   // ---- P3 models (in-memory, Prisma-shaped) --------------------------------
   const runRows = new Map(); // by id
@@ -749,12 +785,160 @@ export function makeFakeDb({ users = [] } = {}) {
         return {};
       },
     },
+    // ---- MC P4: manual_interventions (Mobile Console MD Phase 4 / §6) ------
+    // In-memory emulation of the DB contract the production code relies on:
+    //  - PARTIAL UNIQUE (dedupe_key) WHERE status IN open-episode: create()
+    //    throws P2002 when an open episode with the same key exists — the
+    //    service's concurrent-creator fallback path is exercised for real.
+    //  - version = CAS counter: updateMany() matches {id, version, status in}
+    //    exactly like the production single-statement transitions.
+    //  - updatedAt is auto-bumped on create/update (Prisma @updatedAt).
+    manualIntervention: {
+      findUnique: async ({ where } = {}) => {
+        const row = interventionRows.get(where?.id);
+        return row ? { ...row } : null;
+      },
+      findFirst: async ({ where = {} } = {}) => {
+        const row = interventionMatchWhere(where)[0];
+        return row ? { ...row } : null;
+      },
+      findMany: async ({ where = {}, orderBy, skip = 0, take } = {}) => {
+        let rows = interventionMatchWhere(where).map((r) => ({ ...r }));
+        for (const spec of [...(orderBy ?? [])].reverse()) {
+          const [k, dir] = Object.entries(spec)[0] ?? [];
+          if (!k) continue;
+          rows.sort((a, b) => {
+            const av = a[k]; const bv = b[k];
+            // timestamp columns are Dates — compare numerically (String(Date)
+            // has second granularity and is a broken comparator for sub-second diffs)
+            if (av instanceof Date || bv instanceof Date) {
+              const avn = av instanceof Date ? av.getTime() : -Infinity;
+              const bvn = bv instanceof Date ? bv.getTime() : Infinity;
+              if (avn === bvn) return 0;
+              const r = avn < bvn ? -1 : 1;
+              return dir === 'desc' ? -r : r;
+            }
+            if (av === bv) return 0;
+            const r = av === null ? -1 : bv === null ? 1 : String(av) < String(bv) ? -1 : 1;
+            return dir === 'desc' ? -r : r;
+          });
+        }
+        return take === undefined ? rows.slice(skip) : rows.slice(skip, skip + take);
+      },
+      count: async ({ where = {} } = {}) => interventionMatchWhere(where).length,
+      create: async ({ data }) => {
+        if (data.id !== undefined && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(data.id))) {
+          throw Object.assign(new Error(`invalid input syntax for type uuid: "${data.id}"`), { code: 'P2007' });
+        }
+        // partial unique: open-episode rows only (MD §6.3 race guard)
+        const dup = [...interventionRows.values()].find(
+          (r) => r.dedupeKey === data.dedupeKey && OPEN_EPISODE_STATUSES.includes(r.status),
+        );
+        if (dup) {
+          throw Object.assign(new Error(`Unique constraint failed on the fields: (dedupe_key)`), { code: 'P2002' });
+        }
+        const ts = now();
+        const row = {
+          id: data.id ?? randomUUID(),
+          deviceId: data.deviceId ?? null,
+          deviceNameSnapshot: data.deviceNameSnapshot ?? null,
+          source: data.source,
+          category: data.category,
+          severity: data.severity ?? 'warning',
+          status: data.status ?? 'open',
+          automationDisposition: data.automationDisposition ?? 'not_applicable',
+          title: data.title,
+          summary: data.summary ?? null,
+          evidence: data.evidence ?? null,
+          heuristic: data.heuristic ?? false,
+          signalCount: data.signalCount ?? 1,
+          version: data.version ?? 1,
+          resolutionSummary: data.resolutionSummary ?? null,
+          createdAt: data.createdAt ?? ts,
+          updatedAt: data.updatedAt ?? ts,
+          acknowledgedAt: data.acknowledgedAt ?? null,
+          resolvedAt: data.resolvedAt ?? null,
+          assigneeUserId: data.assigneeUserId ?? null,
+          dedupeKey: data.dedupeKey,
+          relatedTaskRunId: data.relatedTaskRunId ?? null,
+        };
+        interventionRows.set(row.id, row);
+        return { ...row };
+      },
+      updateMany: async ({ where = {}, data }) => {
+        const matched = interventionMatchWhere(where);
+        for (const row of matched) {
+          Object.assign(row, applyInterventionData(row, data));
+          row.updatedAt = now();
+        }
+        return { count: matched.length };
+      },
+      groupBy: async ({ by = [], where = {} } = {}) => {
+        const rows = interventionMatchWhere(where);
+        const groups = new Map();
+        for (const row of rows) {
+          const key = by.map((k) => row[k]).join('\u0000');
+          if (!groups.has(key)) groups.set(key, { count: 0, keys: by.map((k) => row[k]) });
+          groups.get(key).count += 1;
+        }
+        return [...groups.values()].map((g) => ({
+          ...Object.fromEntries(g.keys.map((v, i) => [by[i], v])),
+          _count: { _all: g.count },
+        }));
+      },
+    },
+    manualInterventionHistory: {
+      create: async ({ data }) => {
+        const ts = now();
+        const row = {
+          id: data.id ?? `ih${String(++historySeq).padStart(10, '0')}`,
+          interventionId: data.interventionId,
+          fromStatus: data.fromStatus ?? null,
+          toStatus: data.toStatus,
+          action: data.action,
+          actorUserId: data.actorUserId ?? null,
+          note: data.note ?? null,
+          detailsJson: data.detailsJson ?? null,
+          createdAt: data.createdAt ?? ts,
+        };
+        historyRows.set(row.id, row);
+        return { ...row };
+      },
+      findMany: async ({ where = {}, orderBy } = {}) => {
+        let rows = [...historyRows.values()].filter((h) => {
+          if (where.interventionId !== undefined && h.interventionId !== where.interventionId) return false;
+          return true;
+        });
+        rows = rows.map((r) => ({ ...r }));
+        for (const spec of [...(orderBy ?? [])].reverse()) {
+          const [k, dir] = Object.entries(spec)[0] ?? [];
+          if (!k) continue;
+          rows.sort((a, b) => {
+            const av = a[k]; const bv = b[k];
+            if (av instanceof Date || bv instanceof Date) {
+              const avn = av instanceof Date ? av.getTime() : -Infinity;
+              const bvn = bv instanceof Date ? bv.getTime() : Infinity;
+              if (avn === bvn) return 0;
+              const r = avn < bvn ? -1 : 1;
+              return dir === 'desc' ? -r : r;
+            }
+            if (a[k] === b[k]) return 0;
+            const r = String(a[k]) < String(b[k]) ? -1 : 1;
+            return dir === 'desc' ? -r : r;
+          });
+        }
+        return rows;
+      },
+      count: async ({ where = {} } = {}) => [...historyRows.values()].filter((h) => (where.interventionId === undefined || h.interventionId === where.interventionId)).length,
+    },
+
     // teardown seam
     $disconnect: async () => {},
     __state: {
       userRows, userById, sessionRows, settingRows, auditRows,
       runRows, eventRows, approvalRows, providerRows,
       scheduleRows, definitionRows, templateRows, deviceRows,
+      interventionRows, historyRows,
     },
   };
   return db;

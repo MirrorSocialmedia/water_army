@@ -53,9 +53,11 @@ import { batchContainerRoutes } from './routes/batch-containers.js';
 import { networkPolicyRoutes } from './routes/network-policy.js';
 import { systemRamGateRoutes } from './routes/system-ram-gate.js';
 import { deviceStreamRoutes } from './routes/device-streams.js';
+import { manualInterventionRoutes } from './routes/manual-interventions.js';
 import { buildStreamSidecarManager, STREAM_SIDECAR_ENTRY } from './plugins/stream-sidecar.js';
 import { createStreamGateway } from './services/stream-gateway.js';
 import { createStreamLeaseService } from './services/stream-lease-service.js';
+import { createInterventionService, createUnavailableIntervention } from './services/intervention-service.js';
 
 function createUnavailableStreamLease() {
   const unavailable = () => {
@@ -237,6 +239,25 @@ export async function buildApp(opts = {}) {
   const redroidDockerService = redroidEnv
     ? createDockerService({ docker: redroidEnv.docker, db, config, log: app.log, audit })
     : dockerService;
+
+  // MC P4 (Mobile Console MD Phase 4 / §6): human-intervention events — the
+  // durable notification/audit surface on top of the reliable signals
+  // (network BLOCKED/FAILED, adb offline, boot timeout). Conditional wiring
+  // (same contract as the stream-lease surface): a db WITHOUT the
+  // intervention tables (partial test fakes / pre-migration schemas) keeps
+  // buildApp alive — with the stub every intervention route fails closed
+  // 503 INTERVENTION_UNAVAILABLE and the redroid signal hooks stay inert.
+  const hasInterventionSurface = Boolean(
+    db?.manualIntervention && typeof db.manualIntervention.findMany === 'function' &&
+    db?.manualInterventionHistory && typeof db.manualInterventionHistory.create === 'function',
+  );
+  const interventionService = hasInterventionSurface
+    ? createInterventionService({ db, log: app.log, audit })
+    : createUnavailableIntervention();
+  if (hasInterventionSurface) {
+    app.log.info('intervention service ON — Mobile Console human-intervention events (MD Phase 4)');
+  }
+
   const redroidService = createRedroidService({
     db,
     docker: redroidDocker,
@@ -246,6 +267,9 @@ export async function buildApp(opts = {}) {
     audit,
     // RAM-G1: host-RAM admission gate (null = pre-G1 behaviour).
     ramGate: ramGateService.gate,
+    // MC P4: intervention signal hooks (persistNet BLOCKED/FAILED, adb
+    // offline, boot timeout). null/unavailable stub = hooks inert.
+    intervention: interventionService,
     // Mock mode: the adb engine runs through the canned mock executor (calls
     // are recorded on redroidMockEnv.adb.calls for zero-shell assertions).
     adb: redroidEnv
@@ -359,6 +383,7 @@ export async function buildApp(opts = {}) {
   app.decorate('redroidService', redroidService);
   app.decorate('ramGateService', ramGateService);
   app.decorate('streamLeaseService', streamLeaseService);
+  app.decorate('interventionService', interventionService);
   app.decorate('taskQueue', taskQueue);
   app.decorate('taskSseActive', 0); // P3 SSE concurrency cap counter
 
@@ -503,6 +528,7 @@ export async function buildApp(opts = {}) {
   networkPolicyRoutes(app);
   systemRamGateRoutes(app);
   deviceStreamRoutes(app);
+  manualInterventionRoutes(app);
 
   // --- P2: console WS endpoint (MD §8.1) ------------------------------------
   // Raw upgrade (no Fastify route): the browser WebSocket API cannot set

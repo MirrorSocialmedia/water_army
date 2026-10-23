@@ -59,3 +59,20 @@ test('scrubObject: truncates long strings; bounded depth/nodes (no DoS via hosti
   assert.equal(scrubObject(null), null);
   assert.equal(scrubObject(42), 42);
 });
+
+test('scrubObject: a URL with embedded userinfo is ALWAYS redacted, regardless of key (MC P4 §6.2)', () => {
+  // The proxy URL carries the egress credential — key names like `proxyUrl`
+  // slip past the key rules, so the VALUE is the guard (MD §13: proxy URL
+  // 永不入 log/DB).
+  const proxy = 'socks5://userA:topsecret-passw0rd@proxy-a.example:7801';
+  const out = scrubObject({ proxyUrl: proxy, evidence: { dest: proxy }, note: `tunnel via ${proxy} failed`, plain: 'ok' });
+  assert.equal(out.proxyUrl, '***redacted***', 'proxyUrl key — redacted by value rule');
+  assert.equal(out.evidence.dest, '***redacted***', 'nested value — redacted');
+  assert.equal(out.note, '***redacted***', 'embedded in a longer string — the whole value is a secret');
+  assert.equal(out.plain, 'ok');
+
+  // plain URLs (no embedded credential) are NOT secrets — they survive
+  assert.equal(scrubObject({ page: 'https://example.com/docs' }).page, 'https://example.com/docs');
+  assert.equal(scrubObject({ ip: 'http://127.0.0.1:8080/api' }).ip, 'http://127.0.0.1:8080/api');
+  assert.equal(scrubObject({ page: 'ftp://files.example.com/x.txt' }).page, 'ftp://files.example.com/x.txt');
+});

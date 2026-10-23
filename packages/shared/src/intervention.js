@@ -297,6 +297,7 @@ export function createInterventionSignalWriter({ db, log = console, audit = null
         dedupeKey,
         signalCount: 1,
         version: 1,
+        updatedAt: t0, // explicit — keeps (updatedAt, id) list ordering deterministic
       };
       let created;
       try {

@@ -278,6 +278,13 @@ export function createMockAdb({ online = true, logcatLines, spawnError = null } 
       return { stdout: adbOnline ? `connected to ${target}\n` : `cannot connect to ${target}: Connection refused\n`, stderr: '' };
     }
     const shellArgv = argv.slice(argv.indexOf('shell') + 1);
+    if (!adbOnline) {
+      // Real adb fidelity: any shell op against an offline device fails with
+      // 'error: device offline' (the device answered the host protocol — it is
+      // genuinely down, not an engine failure). Without this the mock answered
+      // getprop '1' while offline, so the boot wait could never time out.
+      return { exitCode: 1, stdout: '', stderr: 'error: device offline\n' };
+    }
     const op = shellArgv[0];
     if (op === 'getprop') {
       const key = shellArgv[1];

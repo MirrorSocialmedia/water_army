@@ -581,9 +581,13 @@ export function createRedroidService({
   // suites never see a gate; production always constructs one when redis
   // has eval()). Admit BEFORE any side effect; release on stop/delete/rollback.
   ramGate: injectedRamGate,
+  // MC P4: intervention service (MD Phase 4) — the wired production signal
+  // hooks below fire into it. Unavailable stub / null = hooks inert.
+  intervention: injectedIntervention,
 } = {}) {
   const removeDataDir = injectedRemoveDataDir ?? removeRedroidDataDir;
   const ramGate = injectedRamGate ?? null;
+  const intervention = injectedIntervention ?? null;
 
   /** RAM-G1 denial → stable 409 with the machine reason in the message. */
   const ramGateDenied = (adm, what) =>
@@ -949,6 +953,23 @@ export function createRedroidService({
           relatedTaskId: null,
         },
       }).catch(() => {});
+      // MC P4 (MD §6.1): the authoritative network state entering BLOCKED or
+      // FAILED is a RELIABLE human-intervention signal — the net_* columns
+      // remain the gate; the durable event is the notification/audit surface.
+      // Non-fatal: a signal failure never breaks the net path (the shared
+      // writer is non-fatal by contract; this catch guards the seam itself).
+      if (intervention && (to === 'BLOCKED' || to === 'FAILED')) {
+        try {
+          await intervention.signalNetwork(updated ?? row, to, {
+            from,
+            reason: ev.reason ?? null,
+            errorCode: ev.errorCode ?? null,
+            errorDetail: ev.errorDetail ?? null,
+          });
+        } catch (e) {
+          log.warn({ device: row.name, to, error: e?.message }, 'intervention signalNetwork failed (non-fatal)');
+        }
+      }
     }
     return updated ?? row;
   }
@@ -1486,6 +1507,19 @@ export function createRedroidService({
     const { booted } = await waitForAdbBootCompleted({ adbEngine, target, deadline, pollMs });
     if (!booted) {
       await persistNet(row, 'FAILED', { reason: 'boot-timeout', errorCode: NET_ERRORS.TUNNEL_START_TIMEOUT, errorDetail: `boot_completed not seen within ${Math.round(bootTimeoutMs / 1000)}s`, source: 'provision' });
+      // MC P4 (MD §6.1): boot timeout = a dedicated BOOT_TIMEOUT episode
+      // (source boot_timeout) in addition to the network FAILED sink above —
+      // the operator sees WHY, not just 'network FAILED'. Non-fatal.
+      if (intervention) {
+        try {
+          await intervention.signalBootTimeout(row, {
+            reason: `boot_completed not seen within ${Math.round(bootTimeoutMs / 1000)}s`,
+            errorCode: NET_ERRORS.TUNNEL_START_TIMEOUT,
+          });
+        } catch (e) {
+          log.warn({ device: row.name, error: e?.message }, 'intervention signalBootTimeout failed (non-fatal)');
+        }
+      }
       throw fail('REDROID_TUNNEL_BOOT_TIMEOUT', 504, `Device '${row.name}' did not report boot_completed within ${Math.round(bootTimeoutMs / 1000)}s — tunnel not provisioned`);
     }
     // 3) binary check (R1): the image-baked tun2socks must be present +
@@ -1948,7 +1982,19 @@ export function createRedroidService({
       include: { template: true },
       orderBy: { name: 'asc' },
     });
-    return rows.map((r) => deviceView(r));
+    const views = rows.map((r) => deviceView(r));
+    // MC P4 (MD §3.1): per-device unresolved-intervention count for the
+    // device cards ("是否有人工介入未解決事件"). Non-fatal — a signal-path
+    // failure degrades to no badge, never breaks the list.
+    if (intervention) {
+      try {
+        const counts = await intervention.unresolvedByDevice();
+        for (const v of views) v.openInterventions = counts[v.id] ?? 0;
+      } catch (e) {
+        log.warn({ error: e?.message }, 'intervention unresolvedByDevice failed (non-fatal)');
+      }
+    }
+    return views;
   }
 
   async function getDeviceView(idOrName, { withDataDir = false } = {}) {
@@ -2185,6 +2231,18 @@ export function createRedroidService({
     }
 
     await db.device.update({ where: { id: row.id }, data: { containerState, adbState } });
+    // MC P4 (MD §6.1): a device that was last CONFIRMED online and now
+    // answers 'offline' to adbd is a reliable DEVICE_OFFLINE signal. Engine
+    // failures settle to 'unknown' above and never fire this (MD §8.3
+    // distinction — 'offline' means adbd answered the host protocol).
+    // Non-fatal: a signal failure never breaks the refresh.
+    if (intervention && row.adbState === 'online' && adbState === 'offline') {
+      try {
+        await intervention.signalAdbOffline(row, { adbError, adbNote });
+      } catch (e) {
+        log.warn({ device: row.name, error: e?.message }, 'intervention signalAdbOffline failed (non-fatal)');
+      }
+    }
     await audit({
       actorUserId: actorUserId ?? null,
       action: 'redroid.device.refresh',

@@ -8,6 +8,12 @@
  *  - Exception: a sensitive key whose value is a plain number/boolean/null is
  *    KEPT — numeric telemetry (e.g. OpenAI usage `promptTokens`) is not a
  *    secret; strings/objects under sensitive keys are redacted.
+ *  - VALUE-BASED (MC P4 §6.2): any string containing a URL WITH embedded
+ *    userinfo (scheme://user:pass@host — at any position in the string) is
+ *    redacted whole, regardless of the key name — a proxy URL carries the
+ *    egress credential (MD §13: proxy URL 永不入 log/DB) and a key named
+ *    `proxyUrl` would otherwise slip past the key rules. Plain URLs (no
+ *    embedded credential) are unaffected.
  *  - Deep-walk bounded (depth 6, 500 nodes) — hostile/abusive payloads from
  *    the model or tools cannot DoS the writer.
  *  - Long strings are truncated to `maxChars` (event payloads stay small).
@@ -24,6 +30,12 @@ const REDACTED = '***redacted***';
 const MAX_DEPTH = 6;
 const MAX_NODES = 500;
 
+// scheme://user:pass@ — requires a CREDENTIAL (user AND pass) in the
+// userinfo. Non-anchored (a URL buried in a longer string still carries the
+// secret). Requiring the colon avoids over-redacting user-only forms like
+// `ssh://git@github.com` (no password). 過 mask 無害，漏 mask 洩密.
+const URL_USERINFO = /[\w+.-]+:\/\/[^@\s/]+:[^@\s/]+@/;
+
 /**
  * @param {unknown} value any JSON-ish value
  * @param {number} [maxChars] per-string cap (default 2000)
@@ -37,7 +49,11 @@ export function scrubObject(value, maxChars = 2000) {
 function walk(value, depth, maxChars, budget) {
   if (value === null || value === undefined) return value;
   const t = typeof value;
-  if (t === 'string') return cap(String(value), maxChars);
+  if (t === 'string') {
+    const s = String(value);
+    if (URL_USERINFO.test(s)) return REDACTED; // embedded credential — always a secret
+    return cap(s, maxChars);
+  }
   if (t === 'number' || t === 'boolean') return value;
   if (!budget()) return '[truncated]';
 
