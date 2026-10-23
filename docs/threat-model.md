@@ -185,6 +185,29 @@ Worker 執行 tool 時經 HTTP 打回 API（`x-wa-service-token` = `WORKER_API_T
 
 ---
 
+## T8. 人工介入事件（P4-MC，MD Phase 4 新增面）
+
+**風險描述**
+1. **Secrets 洩漏進事件 evidence**：operator/AI 回報 stuck 事件時帶入 proxy URL（含 user:pass@）、password、cookie、token — evidence JSON 會落 DB + 渲染 UI + 入 log（MD §6.2/§13 紅線：零 secrets）。
+2. **CAPTCHA 自動解繞過**：系統偷偷自動解人機驗證（MD §0.6 紅線 — stuck 必須等人）。
+3. **報警風暴**：同一故障重複 signal 造成事件風暴 / 漏掉真事件（去重錯誤）。
+4. **假性關閉**：blocked_pending_review 事件被 dismiss 後 badge 清掉，但問題依然存在（事件消失 = 人以為處理咗）。
+5. **RBAC 越權介入**：viewer 執行 action；非法狀態 transition 被接受（狀態機 bug）。
+6. **審計缺失**：ack/assign/resolve 無痕 → 合規無從交代。
+
+**緩解措施**
+1. **寫入前 scrub（雙軌）**：evidence JSON 先經 `packages/shared/src/scrub.js` 純函數清洗先落 DB/audit/log — key-based（password/cookie/token/secret 類 key 遞迴 redact）+ **value-based**（任何字串含 `scheme://user:pass@` URL userinfo → 整值 redact，防 `proxyUrl` 類 key 名規避）；E2E T42 實測：API list/detail/DB row/渲染 UI 四層均無 secrets。
+2. **無自動解路徑**：系統**根本未實裝** CAPTCHA solver — `external_verification` 類事件唯一出口係人工 resolve（帶 note）；boot/network/adb stuck 一律 `blocked_pending_review`（MD §0.6）。
+3. **去重 = `device::category::source` partial unique index**（open episode 唯一）：重複 signal = `signalCount++` + `signal` history（冪等，防風暴）；E2E T41 實測 re-signal = `created:false` + signalCount=2。
+4. **dismiss policy**：`external_verification` 事件 dismiss → 409 `DISMISS_NOT_ALLOWED`（API + UI 雙層），事件保持 open、badge 唔清；其它類可 dismiss（假陽性）；被拒 dismiss 有審計（E2E T44 實測）。
+5. **RBAC + 狀態機**：viewer 任何 action = 403（route preHandler `requireRole`）；非法 transition = 409 `INVALID_TRANSITION`（transaction + 狀態預檢）；E2E T40/T43 實測。
+6. **雙軌審計**：每個 transition 寫 `audit_events`（actor/request_id/IP/status，同全平台同標準）+ 事件內 `ManualInterventionHistory` timeline（UI 可讀）；E2E T48 實測本 run 9 條 audit（created 4 / signal 1 / ack 1 / assign 1 / resolve 2）。
+7. **可見性**：topbar badge + `/interventions` 頁 + 裝置詳情 banner + 阻塞事件頁頂 banner（「被阻塞事件唔會自動恢復」）— 防事件被忽視。
+
+**殘留風險**：scrub 規則係字串/key 模式匹配 — 新形式嘅 secret（例如 base64 嵌入）可規避 → 靠生產 signal 路徑只發 machine code（唔帶 URL/憑證）+ operator 回報紀律（E2E 實測覆蓋已知路徑）；接受（MVP 範圍，MD §6.2 要求已落地）。
+
+---
+
 ## 風險摘要
 
 | # | 風險 | 嚴重度 | 主要控制 | 殘留 |
@@ -196,3 +219,4 @@ Worker 執行 tool 時經 HTTP 打回 API（`x-wa-service-token` = `WORKER_API_T
 | T5 | 權限越界 | High | 雙層授權、RBAC、CLI admin bootstrap、Argon2id、CSRF/Origin、審計 | 邏輯 bug（測試紀律控管） |
 | T6 | 排程重複/遺失 | Medium-High | PG source of truth、upsertJobScheduler 冪等、reconciliation、TTL 鎖、sync_error 可見 | 佇列繁忙致延遲（設計上 best-effort，UI 顯示） |
 | T7 | Service token 洩露 → 冒用 operator | Medium-High | timingSafeEqual、fail-closed、固定非人類身份、requireHuman 拒自批、redact list、worker 無 socket | 長生命周期 static token（runbook 輪替） |
+| T8 | 介入事件 evidence 洩 secrets / stuck 被靜默放過 | High | 寫入前雙軌 scrub（key + URL-userinfo value）、無 CAPTCHA 自動解路徑、dedupe partial unique、external-verification 禁 dismiss、RBAC + 狀態機 409、雙軌審計 | 新形式 secret 規避 scrub（生產路徑只發 machine code 緩解） |

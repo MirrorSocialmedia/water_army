@@ -96,6 +96,24 @@ worker 喺 terminal scheduled run（succeeded/failed/timed_out/skipped，**包�
 | POST | `/schedule-notifications/read-all` | operator+ | — | 200 `{marked}`（mark-read 係寫 → viewer 唔可以） |
 | POST | `/schedule-notifications/:id/read` | operator+ | `:id`（≤64 字） | 200 `{id,isRead:true}`；404 |
 
+## Manual Interventions（P4-MC 人工介入事件，MD Phase 4）
+
+狀態機 `open → acknowledged → in_progress → resolved | dismissed`（reopen: terminal → open，必帶 note）；去重 key = `device::category::source`（open episode 部分 unique index）；重複 signal = `signalCount++` + `signal` history，**唔新建**（MD §6.3）。evidence 全部**寫入前**經 scrub（key-based + URL-userinfo value-based，MD §6.2/§13 零 secrets）。RBAC：viewer 唯讀，operator/admin 可 action；`external_verification` 事件**禁 dismiss**（409 `DISMISS_NOT_ALLOWED`，MD §0.6）。所有 transition 寫 `audit_events` + `ManualInterventionHistory`。
+
+| Method | Path | Role | 參數 | 錯誤碼 / 備註 |
+|--------|------|------|------|--------------|
+| GET | `/manual-interventions/needs-attention-count` | viewer+ | — | 200 `{count, bySeverity}`（topbar badge，30s poll） |
+| GET | `/manual-interventions` | viewer+ | query `status/category/severity/deviceId/source/disposition`、`page/pageSize` | 200 `{items,total,page,pageSize}`（newest first；evidence 已 scrub；`disposition=blocked_pending_review` 可過篩） |
+| POST | `/manual-interventions` | operator+ | body `{source: operator_report, category, title, deviceId?, severity?, disposition?, evidence?}` | 201 `{intervention, created:true}`；重複 = 200 `{created:false, signalCount}`；400 `NOTE_REQUIRED`（note 空）/ `VALIDATION_ERROR`；404 裝置 |
+| GET | `/manual-interventions/:id` | viewer+ | — | 200（含 `history[]` timeline + signalCount）；404 |
+| POST | `/manual-interventions/:id/acknowledge` | operator+ | — | 200（open→acknowledged）；409 `INVALID_TRANSITION` |
+| POST | `/manual-interventions/:id/assign` | operator+ | body `{assigneeUserId? (UUID), note?}` | 200（→in_progress + assignee；預設 = 請求者）；409 |
+| POST | `/manual-interventions/:id/resolve` | operator+ | body `{note}`（必填） | 200（→resolved + resolvedAt）；400 `NOTE_REQUIRED`；409 |
+| POST | `/manual-interventions/:id/dismiss` | operator+ | body `{reason}`（必填） | 200（→dismissed）；**`external_verification` = 409 `DISMISS_NOT_ALLOWED`**（須人工 review 後 resolve）；409 |
+| POST | `/manual-interventions/:id/reopen` | operator+ | body `{note}`（必填） | 200（terminal→open）；400/409 |
+
+**生產 signal 路徑**（無 HTTP 入口，由 redroid service 內調用，均經 `recordSignal` 冪等 + scrub + audit）：`network` R3 狀態機 BLOCKED/FAILED（`persistNet`）、`adb_offline`（`refreshDevice` online→offline 轉換，只觸一次）、`boot_timeout`（tunnel boot 超時）、`container_offline`。
+
 ## Redroid Devices / Templates / Preflight（P5）
 
 | Method | Path | Role | 參數 | 錯誤碼 / 備註 |
@@ -221,4 +239,4 @@ proxy.network = null（無 proxy 綁定）或：
 
 ## 端點總計
 
-**96 條路由**（逐檔案計；BR-B6 實核 2026-10-22）：health 2 + auth 3 + containers 15（含 5 個 action + exceptions 3 條 + create-from-template）+ container templates 2 + dashboard 1 + tasks 15（runs 6 + approvals 3 + tools 1 + providers 4 + audit 1）+ task definitions 1 + schedules 10（含 POST preview）+ schedule notifications 4 + redroid templates/preflight 5 + redroid devices 11（含 3 個 action + proxy/retry）+ **batch monitor 5（BR-B5：identities/:id + monitor summary + metrics + reports 2）** + **batch control 21（BR-B2：identities list + preview + create + capacity 2 + batch get + start/pause/resume/cancel 4 + task-run retry/cancel/logs 3 + batch-containers list + reconcile + container start/health/stop/remove 4 + purge 1）**。所有寫操作（POST/PATCH/PUT/DELETE，`/auth/login` 除外）：RBAC + audit row（actor、request_id、IP、status、details scrub）+ Origin 檢查（browser mutating 請求）。
+**105 條路由**（逐檔案計；P4-MC 2026-10-24 實核）：health 2 + auth 3 + containers 15（含 5 個 action + exceptions 3 條 + create-from-template）+ container templates 2 + dashboard 1 + tasks 15（runs 6 + approvals 3 + tools 1 + providers 4 + audit 1）+ task definitions 1 + schedules 10（含 POST preview）+ schedule notifications 4 + **manual interventions 9（P4-MC：list/detail/count/create + 5 個 action）** + redroid templates/preflight 5 + redroid devices 11（含 3 個 action + proxy/retry）+ **batch monitor 5（BR-B5：identities/:id + monitor summary + metrics + reports 2）** + **batch control 21（BR-B2：identities list + preview + create + capacity 2 + batch get + start/pause/resume/cancel 4 + task-run retry/cancel/logs 3 + batch-containers list + reconcile + container start/health/stop/remove 4 + purge 1）**。所有寫操作（POST/PATCH/PUT/DELETE，`/auth/login` 除外）：RBAC + audit row（actor、request_id、IP、status、details scrub）+ Origin 檢查（browser mutating 請求）。

@@ -1054,3 +1054,44 @@ MD §13.2 嘅 per-actor 寫 budget（20/60s）係為**人工誤操作**設嘅；
 5. `stream-gateway.js` 用 `device.adbHost`（Device model 無此欄）→ serial = `undefined:<port>` → 所有 WS 403；serial 改 **由 `127.0.0.1:<adbPort>` 構建**（host 永遠 loopback — audit finding #3；port 必喺 `REDROID_ADB_RANGE_*` allowlist）。
 6. `plugins/stream-sidecar.js` restart loop：`starting` promise 從唔清 → 首次 health fail 後 restart 永不觸發（sidecar 永久 dead）；改 `finally { starting = null }`。
 7. `screencap` tier 零幀原本無 watchdog（`lastFrameAt` 永遠 null → stall 分支唔觸發）→ 加 screencap 零幀 kill（`SIDECAR_ZERO_FRAME_MS` 窗口）。
+
+## 21. Mobile Console 人工介入事件系統（ADR-021，2026-10-24 02:xx — 來源 = MD Phase 4）
+
+**狀態**：已實裝、E2E 通過（`scripts/mobileconsole-p4/`，真 API + 真 UI + 真裝置）
+**背景**：redroid 裝置跑自動化 workflow 會遇到人機驗證（CAPTCHA / 帳號完整性檢查）、網絡隧道失守、boot 超時、ADB 掉線。MD §0.6 紅線：**系統唔可以靜默卡死、唔可以自動解 CAPTCHA** — 所有 stuck 必須變成**可審計嘅人工介入事件**，等人處理；處理過程（ack/assign/resolve）要留痕。
+
+**決策**：
+
+1. **單一事件模型 + 狀態機**（`ManualIntervention` + `ManualInterventionHistory`，additive-only migration `20261024023000_mc_manual_interventions`）
+   - 狀態：`open → acknowledged → in_progress → resolved | dismissed`（`reopen` 只接受 terminal → open，帶 note）。
+   - 每個 transition 寫 history（actor + note + from/to）+ `audit_events`（雙軌：事件內 timeline 供 UI、audit 供合規）。
+   - 並發 transition 用 Prisma transaction + 狀態預檢（CAS 式）→ 非法 transition 回 409 `INVALID_TRANSITION`。
+
+2. **去重 = `device::category::source` partial unique**（MD §6.3：同一裝置同一類同一來源只有一個 open episode）
+   - 重複 signal **唔新建**：`signalCount++` + 更新 lastSignalAt + 寫 `signal` history（防報警風暴；重復訊號仍然入 timeline 做證據）。
+   - `source=operator_report` 無裝置時用 `orphan::OTHER::operator_report` key（orphan-safe）。
+
+3. **`blocked_pending_review` disposition（MD §0.6 紅線落地）**
+   - 產生路徑（全部受控、無自動解）：`external_verification`（operator/AI 回報 stuck，**永不自動解決**）、`network BLOCKED`（R3 狀態機 canary 連續失敗）、`network FAILED`（隧道失敗，critical）、`boot timeout`、`adb offline`（online→offline 轉換）、`container offline`。
+   - **dismiss policy**：`external_verification` 事件 **唔可以被 dismiss**（409 `DISMISS_NOT_ALLOWED`，UI/API 雙層）— 必須經人工 review 後 resolve；其它類可 dismiss（假陽性）。被拒 dismiss 後事件保持 open，badge 唔會假性清掉。
+
+4. **零 secrets（MD §6.2/§13）**：evidence JSON 喺**寫入前**經 `scrub.js` 純函數清洗
+   - key-based：password/cookie/token/secret 類 key → `***redacted***`（遞迴、大小寫不敏感）。
+   - **value-based（P4 新增）**：任何字串含 `scheme://user:pass@`（URL userinfo）→ 整個值 redact — 防 `proxyUrl` 呢類 key 名規避 key 規則（實測發現嘅真實漏洞，E2E T42 覆核）。
+   - 生產 signal 路徑只發 machine code（`REDROID_TUNNEL_BOOT_TIMEOUT` 等）+ 已 scrub 嘅 metadata — 唔帶 proxy URL/screen pixels/鍵盤文字。
+
+5. **RBAC（MD §11.2）**：`viewer` 唯讀（list/detail/count 可，任何 action 403 `FORBIDDEN`）；`operator/admin` 可 create/ack/assign/resolve/dismiss/reopen。assign 預設給請求者（operator 身份），`assigneeUserId` 可覆寫（必須 UUID）。
+
+6. **UI（`/interventions` Needs Attention 頁）**
+   - 只顯示 actionable 狀態（open/acknowledged/in_progress）；severity + disposition 排序；blocked_pending_review 頁頂 banner（MD §7.1：被阻塞事件唔會自動恢復）。
+   - topbar badge = open count（30s silent poll + 路由切換即 refresh）；裝置詳情頁 banner + 按裝置過濾 deep link。
+   - **Open device deep link 重用現有 console lease/slot**（唔開新槽）；slot 5/5 滿時 deep link 位顯示「5/5 已滿 — 先關閉一個畫面」，**唔靜默超分**（MD §7.1）；viewer 跳 console 加 `?mode=viewer`（唯讀串流）。
+
+7. **生產訊號接線（真 path，非 mock）**：`persistNet`（R3 tick → BLOCKED/FAILED）、`refreshDevice`（adb online→offline 轉換，只一次）、boot tunnel timeout、container offline。全部經 `interventionService.recordSignal`（冪等 + scrub + audit）。
+
+**實裝備忘（E2E 實測陷阱 — 防下次踩）**：
+1. 重複 signal 會寫 `signal` history row — 斷言 history 時 timeline 係 `created → signal → acknowledge → assign → resolve`（5 行），唔係 4 行。
+2. HTTP 錯誤封套係**嵌套** `{error: {code, message, requestId}}` — 測試讀 `.error.code`，唔係 `.code`。
+3. E2E 環境 ADB server 會靜默遺失裝置（`adb devices` 清空）→ sidecar `SIDECAR_START_FAILED` → 串流 502。重跑前 `adb connect 127.0.0.1:16500..16504` 先。
+4. scratch API 係長駐 process — 改咗 shared code（例如 scrub 新規則）之後**必須重啟 API** 先至載入（run #1 T42 假紅就係呢個原因）。
+5. psql `-tA` 輸出帶 trailing newline — `split('\n').length` 斷言要先 `trim()`。
