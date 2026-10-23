@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { AlertTriangle } from 'lucide-react';
 import { useApi } from '../hooks/useApi';
 import { api } from '../api/client';
 import { navigate } from '../router';
@@ -161,6 +162,20 @@ export function DeviceDetail({ deviceId }) {
                 <span className="muted" title="裝置未在運行 — 先啟動才能串流">控制台需裝置運行中</span>
               )}
             </div>
+
+            {/* P4 (MD §7.1): event banner — an open human-intervention episode
+                on THIS device. openInterventions = open/ack/in_progress count
+                (null = unknown — the banner stays hidden, never a fake 0). */}
+            {typeof device.openInterventions === 'number' && device.openInterventions > 0 ? (
+              <div className="alert-banner critical">
+                <AlertTriangle size={18} />
+                <div>
+                  <strong>{device.openInterventions} 個未解決人工介入事件</strong>
+                  <p className="muted">此裝置有需人工處理的事件（被阻塞的事件不會自動恢復，MD §0.6/§7.1）。</p>
+                </div>
+                <a className="btn btn-sm" href={`#/interventions?deviceId=${encodeURIComponent(device.id)}`}>到 Needs Attention 處理</a>
+              </div>
+            ) : null}
 
             <div className="cards">
               <div className="card">

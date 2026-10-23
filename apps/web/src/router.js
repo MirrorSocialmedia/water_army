@@ -15,6 +15,10 @@ const ROUTES = [
   { path: '/devices/fleet', page: 'devices-fleet' },
   { path: '/devices/:id', page: 'devices-detail' },
   { path: '/devices/:id/console', page: 'devices-console' },
+  // P4: Needs Attention (human intervention events, MD §7.1). Static — no
+  // param collision. Placed with the device routes (its primary deep-link
+  // target is a device console).
+  { path: '/interventions', page: 'interventions' },
   { path: '/tasks', page: 'tasks' },
   { path: '/tasks/:id', page: 'tasks-detail' },
   { path: '/schedules', page: 'schedules' },
@@ -79,6 +83,7 @@ export const NAV_ITEMS = [
   { path: '/containers', label: 'Containers', icon: 'container' },
   { path: '/devices', label: 'Devices', icon: 'device' },
   { path: '/devices/fleet', label: 'Fleet Console', icon: 'device' },
+  { path: '/interventions', label: 'Needs Attention', icon: 'attention' },
   { path: '/tasks', label: 'Tasks', icon: 'tasks' },
   { path: '/schedules', label: 'Schedules', icon: 'schedules' },
   { path: '/batches', label: 'Batch Planner', icon: 'batches' },

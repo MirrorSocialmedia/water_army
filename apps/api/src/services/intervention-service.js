@@ -403,6 +403,14 @@ export function createInterventionService({ db, log, audit = null, now } = {}) {
     return map;
   }
 
+  /** Single-device unresolved count (device detail banner, MD §7.1). */
+  async function unresolvedCountForDevice(deviceId) {
+    if (!deviceId) return 0;
+    return db.manualIntervention.count({
+      where: { deviceId, status: { in: INTERVENTION_OPEN_EPISODE } },
+    });
+  }
+
   return {
     // signal entry points
     recordSignal,
@@ -421,6 +429,7 @@ export function createInterventionService({ db, log, audit = null, now } = {}) {
     get,
     needsAttentionCount,
     unresolvedByDevice,
+    unresolvedCountForDevice,
     // internals (tests)
     _load: load,
   };
@@ -456,5 +465,6 @@ export function createUnavailableIntervention() {
     get: noopAsync,
     needsAttentionCount: async () => 0,
     unresolvedByDevice: async () => ({}),
+    unresolvedCountForDevice: async () => 0,
   };
 }

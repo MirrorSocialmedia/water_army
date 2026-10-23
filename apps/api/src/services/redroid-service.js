@@ -2000,7 +2000,18 @@ export function createRedroidService({
   async function getDeviceView(idOrName, { withDataDir = false } = {}) {
     const row = await findDevice(idOrName);
     if (!row) throw fail('REDROID_DEVICE_NOT_FOUND', 404, `Device '${idOrName}' not found`);
-    return deviceView(row, { withDataDir });
+    const view = deviceView(row, { withDataDir });
+    // P4 (MD §7.1): the device detail page shows an intervention banner when
+    // the device has an open episode. Non-fatal — a count failure must not
+    // break the detail page (the event center is the authoritative surface).
+    if (intervention) {
+      try {
+        view.openInterventions = await intervention.unresolvedCountForDevice(row.id);
+      } catch {
+        view.openInterventions = null; // unknown — the banner stays hidden, never a fake 0
+      }
+    }
+    return view;
   }
 
   /**

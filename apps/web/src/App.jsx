@@ -10,6 +10,7 @@ import Devices from './pages/Devices';
 import DeviceDetail from './pages/DeviceDetail';
 import DeviceConsole from './pages/DeviceConsole';
 import FleetConsole from './pages/FleetConsole';
+import Interventions from './pages/Interventions';
 import Tasks from './pages/Tasks';
 import TaskDetail from './pages/TaskDetail';
 import Schedules from './pages/Schedules';
@@ -29,6 +30,7 @@ const PAGES = {
   'devices-detail': (props) => <DeviceDetail deviceId={props.params.id} />,
   'devices-console': (props) => <DeviceConsole deviceId={props.params.id} />,
   'devices-fleet': (props) => <FleetConsole user={props.user} />,
+  interventions: (props) => <Interventions user={props.user} />,
   tasks: Tasks,
   'tasks-detail': (props) => <TaskDetail runId={props.params.id} />,
   schedules: Schedules,
