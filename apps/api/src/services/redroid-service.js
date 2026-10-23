@@ -177,6 +177,42 @@ export function tun2socksAssetUrl(version = TUN2SOCKS_PIN.version, asset = TUN2S
 export const T2S_SETUP_FILE = '/data/local/tmp/.t2s-setup.sh';
 
 /**
+ * Wait for `sys.boot_completed=1` through the adb engine (provision boot
+ * wait, MD § redroid tunnel).
+ *
+ * P3 boot-ladder finding (2026-10-23, devices s2–s5): the FIRST `adb
+ * connect` runs at t0 — before adbd inside the container has started
+ * listening. A one-shot connect then fails, and the `getprop` polls (run
+ * with `-s <serial>`) can never reach a serial the adb server has never
+ * registered: new devices stayed 'offline' forever and were on track for
+ * a spurious REDROID_TUNNEL_BOOT_TIMEOUT. All five scratch devices came up
+ * 'device' the moment a manual `adb connect` landed.
+ *
+ * Fix: re-run the idempotent `adb connect` before EVERY getprop poll —
+ * "already connected" for registered devices, rescuing the t0 miss and
+ * mid-boot drops from the device list.
+ *
+ * Exported for hermetic unit tests with a fake adb engine.
+ * @returns {Promise<{booted: boolean}>}
+ */
+export async function waitForAdbBootCompleted({ adbEngine, target, deadline, pollMs, now = Date.now }) {
+  // First contact (best effort) — normally fails at t0 (adbd not up yet).
+  await adbEngine.run({ op: 'connect', target }).catch(() => {});
+  while (now() < deadline) {
+    await adbEngine.run({ op: 'connect', target }).catch(() => {});
+    try {
+      const r = await adbEngine.run({ op: 'getprop', target, prop: 'sys.boot_completed' });
+      if (!r.timedOut && r.exitCode === 0 && r.stdout?.trim() === '1') return { booted: true };
+    } catch {
+      /* adb engine validation error — do not loop forever */
+      return { booted: false };
+    }
+    await new Promise((res) => setTimeout(res, pollMs));
+  }
+  return { booted: false };
+}
+
+/**
  * Stage script (pure — unit-tested): base64-decode the inner script into the
  * device and make it 0700 (root-only: it configures routes). The b64 blob is
  * safe in a shell single-quoted arg (charset A-Za-z0-9+/=).
@@ -1442,17 +1478,12 @@ export function createRedroidService({
     const pollMs = config?.redroidTunnelPollMs ?? 5000;
     const deadline = Date.now() + bootTimeoutMs;
     const target = `127.0.0.1:${row.adbPort}`;
-    // 1) adb connect (first contact) — best effort
-    await adbEngine.run({ op: 'connect', target }).catch(() => {});
-    // 2) wait for boot_completed
-    let booted = false;
-    while (Date.now() < deadline) {
-      try {
-        const r = await adbEngine.run({ op: 'getprop', target, prop: 'sys.boot_completed' });
-        if (!r.timedOut && r.exitCode === 0 && r.stdout?.trim() === '1') { booted = true; break; }
-      } catch { /* adb engine validation error — do not loop forever */ break; }
-      await new Promise((res) => setTimeout(res, pollMs));
-    }
+    // 1) adb connect + wait for boot_completed. The connect is retried on
+    //    every poll (see waitForAdbBootCompleted): a one-shot t0 connect
+    //    lands before adbd is up and never registers the serial, so the
+    //    `-s <serial>` getprop polls would otherwise time out a healthy
+    //    boot (P3 finding 2026-10-23).
+    const { booted } = await waitForAdbBootCompleted({ adbEngine, target, deadline, pollMs });
     if (!booted) {
       await persistNet(row, 'FAILED', { reason: 'boot-timeout', errorCode: NET_ERRORS.TUNNEL_START_TIMEOUT, errorDetail: `boot_completed not seen within ${Math.round(bootTimeoutMs / 1000)}s`, source: 'provision' });
       throw fail('REDROID_TUNNEL_BOOT_TIMEOUT', 504, `Device '${row.name}' did not report boot_completed within ${Math.round(bootTimeoutMs / 1000)}s — tunnel not provisioned`);
