@@ -185,16 +185,17 @@ try {
   ).then(() => true).catch(() => false);
   mark('T23', t23ok, 'console shows device name + ADB 127.0.0.1:16500 (MD §15.3)');
 
-  // T22 — LIVE + real frames rendered
+  // T22 — LIVE + real frames rendered (message carries every sub-condition so a
+  // failure triages itself: live=?.painted=?.frames=? is the run #10 blind spot)
   const live = await waitLive(page);
-  const painted = live ? await canvasPainted(page) : false;
-  const frames = painted ? await frameCount(page) : 0;
+  const painted = live ? await canvasPainted(page, { timeoutMs: 20_000 }) : false;
+  const frames = await frameCount(page); // always read — the painted gate used to mask the real count
   const source = await page.evaluate(() => {
     const dts = [...document.querySelectorAll('dt')];
     const dt = dts.find((x) => x.textContent === '串流模式');
     return dt?.nextElementSibling?.textContent ?? '';
   }).catch(() => '');
-  mark('T22', Boolean(live && painted && frames > 0), `LIVE + canvas painted + frames=${frames} (source: ${source})`, { evidence: 't22-live.png' });
+  mark('T22', Boolean(live && painted && frames > 0), `live=${live} painted=${painted} frames=${frames} (source: ${source})`, { evidence: 't22-live.png' });
   if (live) await shot(page, 't22-live.png');
 
   // T24 — controller TAP (status bar → notification shade)
@@ -297,8 +298,8 @@ try {
     // viewer → the button routes to ?mode=viewer (canControl=false)
     await vpage.click('button.console-open-btn');
     const vLive = await waitLive(vpage);
-    const vPainted = vLive ? await canvasPainted(vpage) : false;
-    const vFrames = vPainted ? await frameCount(vpage) : 0;
+    const vPainted = vLive ? await canvasPainted(vpage, { timeoutMs: 20_000 }) : false;
+    const vFrames = await frameCount(vpage); // always read (diag)
     const vBanner = vLive ? await bannerText(vpage) : '';
     const vReadOnly = vBanner.includes('唯讀');
     const vNoKeybar = await vpage.locator('.keybar .keybtn').count() === 0;

@@ -151,6 +151,10 @@ DEV_ID=$(DB "SELECT id FROM devices WHERE name='$DEVICE_NAME'")
 log "device under test: $DEV_ID ($DEVICE_SERIAL, containerState=$(DB "SELECT container_state FROM devices WHERE id='$DEV_ID'"))"
 
 # --- T21–T29: browser flow (Playwright + real device) --------------------------------
+# Fresh logcat buffer per run — the T24/T25 evidence grep (`logcat -d -t 400`) must
+# never match events from a previous run (stale-proof: the buffer only holds this
+# run's device activity).
+"$ADB" -s "$DEVICE_SERIAL" logcat -c 2>/dev/null || true
 node "$REPO/scripts/mobileconsole-p2/p2-browser.mjs" \
   --web "$WEB" \
   --api "$API" \
