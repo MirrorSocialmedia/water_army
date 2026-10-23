@@ -129,6 +129,14 @@ log "P2 E2E start $(date -u)"
 start_api || { log "FATAL: API unhealthy"; exit 1; }
 start_web || { log "FATAL: web unhealthy"; exit 1; }
 
+# --- scratch-only E2E viewer user (P1 precedent: fixed id + argon2, cleanup at teardown)
+ARGON2_HASH=$(cd "$REPO" && node -e "import('@node-rs/argon2').then(async m => console.log(await m.default.hash('e2e-p1-pw')))" 2>/dev/null)
+[ -n "$ARGON2_HASH" ] || { log "FATAL: argon2 hash generation failed"; exit 1; }
+DB "INSERT INTO users (id, username, password_hash, role, is_active, created_at, updated_at)
+VALUES
+  ('e2e20000-0000-4000-8000-000000000001', 'mcviewer1', '$ARGON2_HASH', 'viewer', true, now(), now())
+ON CONFLICT (id) DO UPDATE SET role = EXCLUDED.role, password_hash = EXCLUDED.password_hash" >> "$RAW" 2>&1
+
 # --- T20: unauthenticated WS → 401 (raw ws client, no cookie) -----------------------
 node "$REPO/scripts/mobileconsole-p2/ws-401.mjs" "$WEB" > "$EVID/t20.out" 2>&1
 S=1; grep -q "GOT_401" "$EVID/t20.out" && S=0
@@ -168,6 +176,8 @@ stop_by_pidfile "$STATE/api.pid"
 sleep 1
 SP=$(sidecar_pid)
 [ -n "$SP" ] && kill "$SP" 2>/dev/null && log "sidecar $SP stopped"
+# cleanup scratch-only test user (P1 precedent — never leave e2e accounts behind)
+DB "DELETE FROM users WHERE username IN ('mcviewer1')" > /dev/null 2>&1
 
 # --- summary ---------------------------------------------------------------------------
 FLIST=""

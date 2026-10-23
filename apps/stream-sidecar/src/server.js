@@ -149,6 +149,7 @@ wss.on('connection', (ws, req) => {
         jarSha256: JAR_SHA256,
         jarRemote: JAR_REMOTE,
         zeroFrameMs: ZERO_FRAME_MS,
+        fwdRange: [FWD_RANGE_START, FWD_RANGE_END],
         log: log.child({ leaseId }),
         sendText: (t) => { if (ws.readyState === 1) ws.send(t); },
         sendBinary: (b) => { if (ws.readyState === 1) ws.send(b); },

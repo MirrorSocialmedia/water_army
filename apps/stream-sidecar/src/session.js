@@ -133,6 +133,11 @@ export class StreamSession {
     if (st.code !== 0 || st.out.trim() !== 'device') {
       throw Object.assign(new Error(`adb device not online: ${st.out || st.err}`), { code: 'ADB_OFFLINE' });
     }
+    // 1b) stale forward cleanup (ADR-020 實備: sidecar SIGKILL leaves `adb
+    // forward` entries in the SHARED host adb server). Scope = THIS serial,
+    // scrcpy abstract sockets ONLY, ports ONLY inside our configured fwd
+    // range — never touches other devices or user forwards (hard boundary).
+    await this._cleanupStaleForwards();
     // 2) push pinned jar + verify sha256 (idempotent; cleanup=true pitfall)
     const localSha = createHash('sha256').update(readFileSync(this.jar)).digest('hex');
     if (localSha !== this.jarSha256) throw new Error(`local scrcpy jar sha256 mismatch (${localSha})`);
@@ -461,6 +466,31 @@ export class StreamSession {
     // redaction-safe log: command type byte + length only
     this._evt({ event: 'control', cmd: buf[0], bytes: buf.length });
     return this.controlSocket.write(buf);
+  }
+
+  async _cleanupStaleForwards() {
+    try {
+      const list = await adbExec(this.adb, ['-s', this.serial, 'forward', '--list']);
+      if (list.code !== 0) return;
+      const [lo, hi] = this.fwdRange ?? [0, 65535];
+      const re = /tcp:(\d+)\s+localabstract:scrcpy_[0-9a-f]{8}\b/gm;
+      const ports = new Set();
+      for (const line of list.out.split('\n')) {
+        let m;
+        re.lastIndex = 0;
+        while ((m = re.exec(line)) !== null) {
+          const p = Number(m[1]);
+          if (p >= lo && p <= hi) ports.add(`tcp:${p}`);
+        }
+      }
+      if (ports.size === 0) return;
+      await Promise.all([...ports].map((p) => adbExec(this.adb, ['-s', this.serial, 'forward', '--remove', p])));
+      this._evt({ event: 'stale_forwards_removed', count: ports.size });
+    } catch (e) {
+      // non-fatal: if a port is truly blocked, the per-session forward below
+      // still fails closed with a diagnosable error.
+      this._evt({ event: 'stale_forward_cleanup_error', e: String(e).slice(0, 160) });
+    }
   }
 
   // ---- teardown --------------------------------------------------------------------
