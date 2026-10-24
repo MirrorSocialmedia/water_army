@@ -110,7 +110,10 @@ test('report: zero secrets — credential-shaped metadata is dropped, never leak
 
 test('report: failure message containing a credential-shaped value is scrubbed by the hard gate (500 path)', () => {
   const cycle = makeCycle({
-    failures: { 'id-2': { code: 'PROVIDER_ERROR', message: 'upstream replied: password=hunter2hunter2' } },
+    // P5: `password=...` free text is now caught EARLIER (layer 1 —
+    // scrubObject BARE_SECRET redacts the whole string), so this gate-layer
+    // regression uses a value shape that survives scrub: a raw JWT.
+    failures: { 'id-2': { code: 'PROVIDER_ERROR', message: 'upstream replied: eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.abc123456def' } },
   });
   // the value pattern trips assertNoSecrets → buildCycleReport throws
   assert.throws(() => buildCycleReport(cycle), /credential-shaped value/);

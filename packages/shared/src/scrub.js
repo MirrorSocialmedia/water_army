@@ -14,6 +14,11 @@
  *    egress credential (MD §13: proxy URL 永不入 log/DB) and a key named
  *    `proxyUrl` would otherwise slip past the key rules. Plain URLs (no
  *    embedded credential) are unaffected.
+ *  - VALUE-BASED #2 (P5, MD §11.4 密碼永不入 log/DB): any string containing
+ *    a bare secret assignment (`password=hunter2`, `token: abc`, `apiKey = x`)
+ *    is redacted whole — free-text notes/summaries are the one place key
+ *    rules can't see; 過 mask 無害 (a note saying "password: required" gets
+ *    masked; a real leak never survives).
  *  - Deep-walk bounded (depth 6, 500 nodes) — hostile/abusive payloads from
  *    the model or tools cannot DoS the writer.
  *  - Long strings are truncated to `maxChars` (event payloads stay small).
@@ -27,8 +32,9 @@
 // P5 hardening (MD §11.4/§13 「不記錄：…剪貼簿…畫面影像」): clipboard +
 // screen-capture keys are sensitive too — an operator evidence payload
 // (free-form JSON, MD §6.2) could otherwise persist a clipboard dump or a
-// base64 screenshot past the key rules.
-const SENSITIVE_KEY = /(^|[_\-.]|(?<=[a-z0-9])[A-Z])((authorization|auth|api[-_]?key|access[-_]?key|secret|token|password|passwd|credential|private[-_]?key|session[-_]?cookie|bearer|client[-_]?secret|clipboard|screenshot|screencapture|screenimage|screencap))(?:[_\-.]|(?=[A-Z])|$)/i;
+// base64 screenshot past the key rules. P5: proxyUrl added (MD §13: proxy
+// URL 永不入 log/DB — the URL itself carries the egress credential context).
+const SENSITIVE_KEY = /(^|[_\-.]|(?<=[a-z0-9])[A-Z])((authorization|auth|api[-_]?key|access[-_]?key|secret|token|password|passwd|credential|private[-_]?key|session[-_]?cookie|bearer|client[-_]?secret|clipboard|screenshot|screencapture|screenimage|screencap|proxy[-_]?url))(?:[_\-.]|(?=[A-Z])|$)/i;
 
 const REDACTED = '***redacted***';
 const MAX_DEPTH = 6;
@@ -39,6 +45,14 @@ const MAX_NODES = 500;
 // secret). Requiring the colon avoids over-redacting user-only forms like
 // `ssh://git@github.com` (no password). 過 mask 無害，漏 mask 洩密.
 const URL_USERINFO = /[\w+.-]+:\/\/[^@\s/]+:[^@\s/]+@/;
+
+// Bare secret assignments in free text (P5): `password=hunter2`,
+// `password: hunter2`, `token = abc` — a value (non-whitespace) must follow
+// the separator. Negative lookahead keeps ALREADY-masked placeholders
+// (`password=***` from maskCredentialShapedValues, BR-B5 contract) stable —
+// idempotent double-processing — while a real value still redacts whole.
+// 過 mask 無害 (a note saying "password: required" gets masked).
+const BARE_SECRET = /(?:password|passwd|pwd|secret|token|api[-_]?key|access[-_]?key|credential|authorization)\s*[=:]\s*(?!\*\*\*)\S/i;
 
 /**
  * @param {unknown} value any JSON-ish value
@@ -56,6 +70,7 @@ function walk(value, depth, maxChars, budget) {
   if (t === 'string') {
     const s = String(value);
     if (URL_USERINFO.test(s)) return REDACTED; // embedded credential — always a secret
+    if (BARE_SECRET.test(s)) return REDACTED; // bare `password=...` in free text (P5)
     return cap(s, maxChars);
   }
   if (t === 'number' || t === 'boolean') return value;

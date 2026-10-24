@@ -93,8 +93,11 @@ export function createInterventionService({ db, log, audit = null, now } = {}) {
           toStatus,
           action,
           actorUserId: actorUserId ?? null,
-          note: note ?? null,
-          detailsJson: details ?? undefined,
+          // P5 hardening: note/details are free-form operator text — scrub at
+          // this single chokepoint so no transition path (resolve/dismiss/
+          // reopen/signal) can persist a raw secret into the timeline.
+          note: note != null ? scrubObject(String(note)) : null,
+          detailsJson: details != null ? scrubObject(details) : undefined,
         },
       });
     } catch (e) {

@@ -104,3 +104,21 @@ test('scrubObject: clipboard + screen-capture keys are redacted (P5 hardening �
   assert.ok(JSON.stringify(out).includes(clip) === false, 'clipboard secret fully scrubbed');
   assert.ok(JSON.stringify(out).includes(shot) === false, 'screenshot data fully scrubbed');
 });
+
+test('scrubObject: bare secret assignments in free text + proxyUrl key (P5 hardening — log-leak canary regression)', () => {
+  // Regression found by the P5 E2E T57 canary: an operator note/summary can
+  // carry a password as a BARE string (`password=hunter2 used for the
+  // canary`) — key rules can't see into a plain string, and a user-only URL
+  // (`socks5://user@host`) has no credential to value-match. Result: the
+  // password + proxy URL sailed into DB + API read-back. Two new guards:
+  const pw = 'P5PW-canary-secret-xyz';
+  const proxy = 'socks5://canaryuser:canarypass@canary.p5scan.example:17801';
+  const summary = `password=${pw} used for canary; proxy ${proxy} was configured`;
+  assert.equal(scrubObject(summary), '***redacted***', 'bare `password=...` in free text → whole string redacted');
+  assert.equal(scrubObject('the token: abc123 was rotated'), '***redacted***', '`token: ...` form');
+  assert.equal(scrubObject({ proxyUrl: 'socks5://onlyuser@host.example:7801' }).proxyUrl, '***redacted***', 'proxyUrl key (no-credential URL) — key rule, MD §13');
+  // over-mask is accepted: prose mentioning the word still gets masked
+  assert.equal(scrubObject('please set password: before continuing'), '***redacted***');
+  // and nothing legitimate is broken
+  assert.deepEqual(scrubObject({ ok: 'no secrets here', url: 'https://example.com/x?y=1' }), { ok: 'no secrets here', url: 'https://example.com/x?y=1' });
+});
