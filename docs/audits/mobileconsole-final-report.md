@@ -136,9 +136,9 @@
 |---|---|---|---|---|
 | NV1 | **H.264 端到端** | redroid image gralloc blocker（P0 實測：scrcpy H.264 路徑喺該 image 無法取幀） | screencap 回退全鏈可用（P2/P3/P5 全部 LIVE）；sidecar H.264 代碼路徑存在但無真機流量 | 換 scrcpy 兼容 image（或 host 側 hw codec）後跑 P2 矩陣 + codec 斷言（sidecar 已留 `VIDEO_SOURCE=scrcpy` 開關） |
 | NV2 | **25/50 路並發負載** | 單機設計上限 5 路（MD §4.1）；25/50 屬多機 fleet 規模，超出本 MD 單機範圍 | 5 路 = 75.8 Mbps / host CPU 41% avg（P3）— 線性外推單機 ~25 路到 CPU 上限（80%） | 多機 fleet 調度（sidecar 水平拆分 + lease 分布式 cap）落位後另開負載單 |
-| NV3 | **自然觸發 intervention**（production signal 自動入 Needs Attention） | E2E 只用受控 `operator_report` 注入（MD 允許嘅 qa/test 路徑）；自然觸發要真 network/adb/boot 事故 | 4 條 production signal 寫入函數（network/adbOffline/bootTimeout/containerOffline）unit+integration 覆蓋 + T40–T49 狀態機全鏈 | 真機事故注入（拔網/kill container）後核 Needs Attention 計數 — 低優先（寫入路徑同 operator_report 同一 writer，已驗） |
-| NV4 | **live egress（gost 代理實出網）** | 本環境出網受控；gost canary 通過但 console 場景（proxy URL 入 evidence → scrub → 實出網驗證）未做 | proxy 配置/校驗/URL scrub（MD §13）unit+T42 四層零 secret 實證 | 有出網許可嘅環境跑一次 proxy 配置 + canary 出網探測 |
-| NV5 | **cookie slot 並發（server fix）** | scrcpy 路徑专用（cookie jar slot 並發修正）；screencap 常規預設唔行 scrcpy 路徑 | scrcpy 路徑未啟用（NV1），該 fix 無真機流量 | 跟 NV1 一齊：H.264 啟用後做 slot 並發壓力 |
+| NV3 | **自然觸發 intervention**（production signal 自動入 Needs Attention） | ~~E2E 只用受控 `operator_report` 注入~~ → **老細 2026-10-24 14:09 重新定義：補受控全鏈 E2E（唔好依賴自然觸發作唯一測試方法）** | **已通過（2026-10-24 gen9）**：`nv3-fullchain.mjs` NV3-1..8 = 8/8 PASS ×2 — 受控事件→後端記錄→管理頁提示→**點擊通知開啟正確手機**（URL + header 雙斷言）→真人 operator ack/assign/resolve→狀態 open→resolved + 計數歸零四面（詳 ADR-023 §23.2）；自然觸發降級為可選（4 條 production writer unit+integration 已覆蓋，同一 writer） | 自然觸發（拔網/kill container）可選補驗 — 低優先 |
+| NV4 | **live egress（gost 代理實出網）** | 本環境出網受控；gost canary 通過但 console 場景（proxy URL 入 evidence → scrub → 實出網驗證）未做 | proxy 配置/校驗/URL scrub（MD §13）unit+T42 四層零 secret 實證 | 有出網許可嘅環境跑一次 proxy 配置 + canary 出網探測（老細 14:09：保持 NOT VERIFIED） |
+| NV5 | ~~cookie slot 並發（server fix）~~ → **cookie slot 並發（screencap 路徑實證）** | ~~scrcpy 路徑专用~~ → **前提更正（ADR-023 §23.3）：cookie slot 喺認證層，screencap/scrcpy 共用、與 H.264 無依賴** | **原問題已通過（2026-10-24 gen9）**：`nv5-cookie-slot.mjs` NV5-1..5 — 五路建立 5/5 LIVE + lease 全對 + 權限 403 矩陣 + 單路強殺其餘 4 路全程 LIVE（cookie 重寫唔影響其他 tile）+ close→0/5。**新已知限制（待拍板）**：sidecar 全倒風暴下 rate limit（10/min 固定窗口、create+reconnect 共享）→ 自動恢復 0/5（24 POST 中 429×20）+ 人工恢復 4/5（第 5 部 92s 恢復失敗）— 修 = limiter 策略變更 = 交老細拍板 | 跟 NV1 一齊（H.264 啟用後 slot 壓力）+ 老細拍板 limiter 策略後回歸 |
 | NV6 | **GPU verified 狀態** | 5 機 redroid `gpuMode:host` 跑通（boot+串流+輸入全實測），但 GPU 渲染正確性（vs CPU 回退）無幀級比對 | `configured_unverified` 標記（honest state）；串流幀 rate/延遲正常（P3） | 幀 hash 比對（GPU vs 强制 CPU）— 低優先，唔影響功能 |
 
 ## 6. 容量 / 性能摘要（引 P3 報告）
@@ -207,3 +207,25 @@ Flag（dev-only loopback，接受殘留，非 secret）：
   - `a74b423` P5 stage 3 — security E2E matrix (T50–T61)
   - （stage 2b bare-secret+proxyUrl+note scrub / stage 3b E2E harness / stage 4 docs / 本報告 — 收口 commit）
 - Push：origin/main（收口後填 final hash）
+
+## 11. 驗收矩陣（四類標記全項，2026-10-24 — 決定來源 = 老細 2026-10-24 14:09，詳 ADR-023 §23）
+
+標記四類：**已通過**（有實錚證據）/ **已實作但未驗證**（代碼存在、無真機/實錚流量）/ **已知限制**（實錚量到、非缺陷、有邊界）/ **暫緩**（老細決定暫不驗收）。
+
+| 項 | 狀態 | 證據 |
+|---|---|---|
+| P0 — PoC（redroid 真機 + adb + screencap 可行性） | 已通過 | P0 實測（ADR-020；`docs/audits/mobileconsole-poc` 證據） |
+| P1 — 單機 console API（lease/ticket/sidecar/WS） | 已通過 | T10–T19 E2E + unit/integration（`scripts/mobileconsole-p1/`） |
+| P2 — 單機 console E2E（畫面/觸控/鍵盤/重連/釋放） | 已通過 | T20–T29 真機 + 瀏覽器 E2E（`scripts/mobileconsole-p2/`）；T22 黑屏/畫面、T24 觸控、T25 鍵盤（= NV6 基本級） |
+| P3 — 五路 fleet 並行 + 負載 | 已通過 | T30–T34 E2E + ladder；75.8 Mbps / CPU 41.2% avg / STALL=0（`docs/audits/mobileconsole-p3-load-report.md`） |
+| P4 — 人工介入（狀態機 + dedupe + RBAC + zero-secret） | 已通過 | T40–T49 E2E（`scripts/mobileconsole-p4/`）+ **NV3 受控全鏈 8/8**（點擊通知開啟正確手機 = 本單補齊） |
+| P5 — 安全 hardening（rate limit / inbound guard / scrub / E2E matrix） | 已通過 | T50–T61 E2E（`scripts/mobileconsole-p5/`）；ADR-022 |
+| NV1 — H.264 端到端 | **暫緩**（老細 14:09：screencap 預設維持；H.264 = 未驗證可選；screencap 成為明確瓶頸先重評估） | sidecar `VIDEO_SOURCE=scrcpy` 開關存在、無真機流量 = 已實作但未驗證（暫緩中） |
+| NV2 — 25/50 路並發 | **暫緩**（老細 14:09：5 路 = 產品驗收範圍，唔准推斷 25/50 已過） | 5 路實錚；25/50 超出單機設計範圍 |
+| NV3 — 人工介入受控全鏈 E2E | **已通過**（老細 14:09 指定補驗項） | `nv3-fullchain.mjs` NV3-1..8 = 8/8 PASS ×2（2026-10-24）：受控事件→後端記錄→管理頁提示→**點擊通知開啟正確手機**（console URL = event 裝置 id + header = event 裝置名）→真人 ack/assign/resolve→open→resolved + 計數歸零四面 + re-run safe。證據 `logs/mobileconsole-nv/e2e/nv3-*` |
+| NV4 — live egress（gost 實出網） | **暫緩 / 保持 NOT VERIFIED**（老細 14:09：未獲准網絡環境前，hermetic 結果唔得當生產出口已過） | proxy 配置/校驗/scrub unit + T42 已驗；實出網未做 |
+| NV5 — cookie slot 並發（screencap 路徑） | **已通過**（原問題：連線建立 / 資源租約 / 權限 / 釋放 = 老細 14:09 指定四項全部實錚） | 代碼分析：cookie slot 喺認證層、screencap/scrcpy 共用、與 H.264 無依賴（P5 報告「scrcpy 專用」前提更正）；行為：`nv5-cookie-slot.mjs` NV5-1/2/3/5 PASS — 五路 5/5 LIVE + lease 全對 + 跨用戶 403 矩陣 + 單路強殺其餘 4 路全程 LIVE（cookie 重寫零影響）+ close→0/5。證據 `logs/mobileconsole-nv/e2e/nv5-*` |
+| NV5b — sidecar 全倒風暴 × rate limit（NV5 觀察新發現） | **已知限制（待老細拍板）** | sidecar SIGKILL（5 路同時）：自動恢復 0/5（24 /reconnect = 200×4 + 429×20；P5 10/min 固定窗口 create+reconnect 共享 < 風暴需求）；人工恢復 4/5（第 5 部 92s 失敗 — 恢復路徑同樣被限）。修 = limiter 策略變更（reconnect 獨立預算 / 提 cap / upgrade 冪等）= 產品安全行為變更 → 交老細拍板，未自行修改。逐 POST timeline：`nv5-4-storm2.json` |
+| NV6 — GPU 渲染驗證 | 基本級**已通過** / 進階**暫緩**（老細 14:09：暫緩進階逐幀比對，基本測試仍須保留） | 基本級（已保留、喺 1276 全綠 suite 內）：T22 `live && painted && frames>0`（painted = canvas 非黑像素 = 黑屏/畫面正確性）、T24 觸控 + 裝置 logcat 證據、T25 鍵盤（Home）+ logcat 證據、T27 重連、T28 釋放。進階（GPU vs CPU 幀 hash 比對）= 暫緩 |
+
+**總判定**：5 部手機 Screencap 模式下可靠監看 + 手動操作（老細 14:09 目標）= 範圍內全項已通過；已知限制 1 項（NV5b，待拍板）；暫緩 4 項（NV1/NV2/NV4/NV6 進階）= 全部照錄老細 14:09 決定，無未驗證改標已通過。

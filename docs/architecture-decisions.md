@@ -12,6 +12,7 @@
 | ADR-020 | 視頻源降級優先（scrcpy 失敗 → screencap 自動降級；H.264 = NOT VERIFIED） | 已實裝（screencap tier 全鏈實錚） | §20 |
 | ADR-021 | 人工介入事件系統（狀態機 + dedupe + blocked_pending_review + 零 secrets） | 已實裝、E2E T40–T49 通過 | §21 |
 | ADR-022 | P5 security hardening（rate limit 落點 / sidecar inbound guard / scrub 補漏 / E2E matrix） | 已實裝、E2E T50–T61 通過 | §22 |
+| ADR-023 | NV follow-up（NV1/NV2/NV4 暫緩；NV3 受控全鏈 8/8；NV5 cookie slot 非 scrcpy 限定 + rate-limit×storm 新發現；NV6 基本級核對） | 已實裝、NV E2E 通過（2026-10-24） | §23 |
 
 ---
 
@@ -1133,3 +1134,44 @@ MD §13.2 嘅 per-actor 寫 budget（20/60s）係為**人工誤操作**設嘅；
    - 已知邊界：5 機 = 全局 5 slot → 「全局 CAPACITY_REACHED」同「device HELD」喺 E2E 層唔可分辨（全球 cap 由 unit test 覆蓋：`tests/unit/stream-lease.test.js`）。
 
 **實裝位置**：`apps/api/src/security/rate-limit.js`（createRequestLimiter）+ `apps/api/src/app.js`（兩個 limiter 註冊）+ `device-streams.js`/`manual-interventions.js`（preHandler）+ `apps/stream-sidecar/src/server.js`（maxPayload + input bucket）+ `packages/shared/src/scrub.js`（key 規則）+ `tests/{unit,p5-*,integration}` + `scripts/mobileconsole-p5/`。
+
+## 23. Mobile Console NV follow-up（ADR-023，2026-10-24 — 來源 = 老細產品決策 2026-10-24 14:09）
+
+**決定記錄（verbatim 節錄）**：老細 2026-10-24 14:09 —「維持 Screencap 作為預設，不因 H.264 未驗證而阻塞現有功能。NV1 H.264：暫緩（保持 screencap default；H.264 = 未驗證可選模式；只有 screencap 成為明確瓶頸先重評估）。NV2 25/50：暫緩（5 路 = 產品驗收範圍，唔准推斷 25/50 已過）。NV3 人工介入：補一項端到端測試 — 受控測試事件 → 事件產生 → 後端記錄 → 管理頁提示 → **點擊通知開啟正確手機** → 人工處理後狀態更新，全鏈正常；唔好依賴第三方 App 自然觸發作唯一測試方法。NV4 live egress：保持 NOT VERIFIED（未獲准網絡環境前，hermetic 結果唔得當生產出口已過）。NV5 cookie slot 並發：先檢查佢同 H.264 嘅實際程式依賴；除非有證據證明必須依賴 H.264，否則先用 Screencap 跑五路並發測試，確認連線建立、資源租約、權限、釋放均正常。NV6 GPU：暫緩進階逐幀比對，但基本畫面正確性、黑屏檢查、觸控/鍵盤操作測試仍須保留。」目標：最多 5 部手機 Screencap 模式下可靠監看 + 手動操作；唔好擴大工程範圍。
+
+**決定與執行結果**：
+
+1. **NV1 / NV2 / NV4 = 暫緩 / 保持 NOT VERIFIED（照錄決定，唔阻塞現有功能）**
+   - H.264 維持未驗證可選模式（sidecar `VIDEO_SOURCE=scrcpy` 開關存在、無真機流量）；screencap 維持預設。
+   - 25/50 路唔准推斷已過（5 路 = 單機設計上限 = 產品驗收範圍）。
+   - live egress 維持 NOT VERIFIED：未獲准網絡環境前，hermetic 結果唔得當生產出口已過。
+
+2. **NV3 = 已通過（受控全鏈 E2E — gen9 新增 `scripts/mobileconsole-nv/nv3-fullchain.mjs`，NV3-1..8，8/8 PASS ×2 次）**
+   - T40–T49 覆蓋審計：狀態機 / dedupe / RBAC / zero-secret 已有；缺口 = 「點擊管理頁通知 → 開啟**正確**裝置 console」全鏈斷言（T45 只驗 deep link 存在，唔斷言開到嘅裝置 = event 裝置）。
+   - 本單補齊：受控 `operator_report` 事件（s3）→ 201 + PG row + audit `intervention.created` → topbar badge=1（30s poll）→ 點擊通知 chip → event center row → Open device → console URL = event 裝置 id + header `redroid-brmc-s3 — Mobile Console`（= event 嗰部機）→ LIVE（screencap）+ 唯一 ACTIVE lease 綁 event 裝置（owner=admin）→ 真人 operator ack/assign/resolve(note) → open→resolved + count 0 四面（API/UI badge/row/device banner）+ history [created,acknowledge,assign,resolve] → cleanup 0/5 re-run safe。
+   - 證據：`logs/mobileconsole-nv/e2e/nv3-*`（JSON + 截圖）。
+   - 自然觸發 intervention 降級為可選項（老細 14:09：唔好依賴自然觸發作唯一測試方法）— 4 條 production signal 寫入函數 unit+integration 已覆蓋（同 operator_report 同一 writer），唔屬驗收必須。
+
+3. **NV5 = 原問題已通過 + 新發現（rate limit × 五路重連風暴）— 見下**
+   - **代碼分析（更正 P5 報告「scrcpy 路徑专用」前提）**：cookie slot（stream_ticket cookie）喺**認證層** — `POST /streams`（acquire）同 `POST /reconnect` 都經 gateway ticket 驗證（HMAC + user/device/mode 綁定 + 單用）→ 成功 set-cookie → client 帶 cookie → WS upgrade 時讀 cookie 完成認證；`videoSource`（screencap/scrcpy）喺認證**之後**先分支、只影響 sidecar 取幀循環。兩條路徑**共用同一 cookie slot 機制，與 H.264 無依賴** → 「NV5 跟 NV1 一齊暫緩」前提唔成立，screencap 五路並發測試必須跑（老細 14:09 都指示先跑）。
+   - **行為驗證（gen9 新增 `nv5-cookie-slot.mjs`，NV5-1..5，4/5 PASS、NV5-4 = 觀察項）**：
+     - NV5-1 五路建立 PASS：0/5→5/5 全 LIVE（screencap），lease inventory owner/mode/device 全對。
+     - NV5-2 權限 @5/5 PASS：operator 對 5 個 admin lease 嘅 heartbeat/close/reconnect 全 403 OWNER_MISMATCH；admin control 200；零副作用。
+     - NV5-3 單路強殺（client 側 WS kill，行 `_tryReconnect` 真路徑）PASS：victim t+3s 自動 LIVE（1 次 /reconnect = 200）；**其餘 4 路全程 LIVE + 幀數嚴格遞增** — /reconnect 重寫 cookie jar 唔影響已升級嘅其他 tile（cookie 只喺 upgrade 時讀）→ 核心問題「重寫 cookie 會唔會搞親其他 tile」= 行為實證**唔會**。
+     - NV5-4 sidecar SIGKILL（5 路同時 — 觀察）：sidecar 2s 自癒（API supervisor 重啟 pid 7663→41536）但自動恢復 = **0/5**；/reconnect 24 次 = 200×4 + **429×20** — P5 rate limit（10/min/user、**固定窗口**、create+reconnect 共享、窗口錨定首個 request）< 5 機 fleet 風暴 legitimate 需求（24 POST/30s）；首個 POST 已 429（RA=48 = 窗口 budget 已被前面 phase 嘅 acquire 消耗）；4 個攞到 200 嘅 ticket 亦冇救到 tile（upgrade race sidecar 復甦 → 單用 ticket 燒咗）→ 5 路 4 次 backoff 全耗盡 → ERROR；人工恢復（close+re-acquire）4/5 成功（各 3s）、第 5 部 92s 後 FAILED（恢復路徑同樣被 429 擋）。
+   - **結論**：(a) NV5 原問題（cookie slot 並發）= screencap 路徑無跨 tile 損壞、無 H.264 依賴 → **已通過**（連線建立 / 資源租約 / 權限 / 釋放 = 老細 14:09 指定四項全部實錚）；(b) **新已知限制** = P5 DoS 保護（10/min）同五路重連風暴交互 → sidecar 全倒場景要人工介入、第 5 部機可 ~2min 內恢復失敗 → 修 = limiter 策略變更（reconnect 獨立預算 / 提 cap / ticket upgrade 冪等）= 產品安全行為變更 → **只報告交老細拍板、唔自行改**（老細 14:09：「有真 gap = 報告（修唔修按影響判斷：小修就做 + 回歸，大改產品行為 = 只報告交老細拍板，唔准自行擴大範圍）」）。
+   - 證據：`logs/mobileconsole-nv/e2e/nv5-*`（storm 逐 POST timeline = `nv5-4-storm2.json`）。
+
+4. **NV6 = 基本級已通過（suite 內存在、全綠）+ 進階級暫緩**
+   - 老細 14:09：「暫緩進階逐幀比對，但基本畫面正確性、黑屏檢查、觸控/鍵盤操作測試仍須保留」— 核對 = **已保留且喺 1276 全綠 suite 內**：
+     - **T22**（`p2-browser.mjs:208`）：`live && painted && frames>0`，painted = `canvasPainted`（canvas 非黑像素 sampling）= 基本畫面正確性 + 黑屏檢查；
+     - **T24**（:211–226）：controller TAP（status bar → notification shade）+ **裝置側 logcat 證據**（SHADE_EXPAND_FROM_STATUS_BAR）= 觸控；
+     - **T25**（:226–241）：controller Home key + **logcat 證據**（Keyguard occlusion）= 鍵盤；
+     - 相關：T27（sidecar SIGKILL → RECONNECTING → 新 ticket → LIVE，screencap 重連）、T28（close/release → 0/5）、T23（name/port 顯示）。
+   - GPU 逐幀比對（GPU vs 強制 CPU）維持暫緩（低優先、唔影響功能）。
+
+**隨帶修復（測試側、非產品）**：NV 腳本 psql helper 將 `psql -tA` 嘅 DML command tag（`DELETE 0`）誤計做「1 行 affected」→ 每次 pre-clean 假陽性「removed 1 stale row」；曾起 scratch write-trap（AFTER trigger 全 session capture）實證**零外物寫入**（表一直係空）；helper 加 tag filter（commit 85784c8），trap 拆埋（零殘留）。
+
+**順帶更正**：ADR-022 文案寫「sliding window」，實作 = **固定窗口**（bucket `resetAt` 錨定首個 request — `rate-limit.js` `createRequestLimiter`）；風暴分析（窗口被前面 acquire 消耗）以此實作為準。
+
+**狀態**：已通過（NV3 / NV5 原問題 / NV6 基本級）＋ 暫緩（NV1 / NV2 / NV4 / NV6 進階）＋ 已知限制待拍板（NV5 storm × rate limit）。驗收矩陣（四類標記全項）= 最終報告 §11。
