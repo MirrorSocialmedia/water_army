@@ -43,9 +43,9 @@ const ORIGIN_EVIL = 'http://evil.example';
 const EVID = '/home/kenneth/.openclaw/workspace/logs/mobileconsole-p5/e2e';
 const API_LOG = '/home/kenneth/.openclaw/workspace/logs/mobileconsole-poc/scratch-api.log';
 
-// Scratch device UUIDs (psql-verified 2026-10-24; ADB 16500–16504, all running)
+// Scratch device UUIDs (psql-verified 2026-10-24 10:5x; ADB 16500–16504, all running)
 const DEV = {
-  poc: '4f7e6613-fba7-4395-bba3-ff591ad83482',
+  poc: 'f4f7e613-fba7-4395-bba3-ff591ad83482',
   s2: '1e746660-6b08-4606-bb8c-a7829d1f4b79',
   s3: 'b3eb1b59-cdb5-4c11-bf36-953321d07cb3',
   s4: '7277944a-55ac-4312-94bc-bdbae87acd1a',
@@ -67,6 +67,7 @@ const openLeases = []; // {id, owner} — closed in T61
 let adminCookie = null;
 let opCookie = null;
 let viewerCookie = null;
+let adminStreamWindowStart = 0; // P5: wall-clock of admin's first rate-limited stream hit (window tracking for T57 prep)
 
 function record(test, ok, detail) {
   results.push({ test, ok, detail });
@@ -92,8 +93,9 @@ async function login(username, password) {
   return `session=${m[1]}`;
 }
 
-/** Raw HTTP WS-upgrade probe → {status, body} (no ws library: we need the
- *  non-101 status line + JSON error envelope). */
+/** Raw HTTP WS-upgrade probe → {status, body, json}. The server answers
+ *  reject with a status line + JSON body then FINs (no Content-Length) — so
+ *  we collect until 'close' to avoid truncating the body across packets. */
 function rawUpgrade(path, { cookie = null, origin = null } = {}) {
   return new Promise((resolve) => {
     const headers = {
@@ -107,20 +109,24 @@ function rawUpgrade(path, { cookie = null, origin = null } = {}) {
     if (origin !== null) headers.origin = origin;
     const sock = net.connect(16490, '127.0.0.1');
     let buf = '';
-    const timer = setTimeout(() => { sock.destroy(); resolve({ status: 0, body: 'timeout' }); }, 8000);
+    let status = 0;
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      let json = null;
+      try { json = JSON.parse(buf.slice(buf.indexOf('\r\n\r\n') + 4)); } catch { /* partial */ }
+      resolve({ status, body: buf, json });
+    };
+    const timer = setTimeout(() => { sock.destroy(); finish(); }, 8000);
     sock.on('data', (d) => {
       buf += d.toString('utf8');
       const i = buf.indexOf('\r\n\r\n');
-      if (i < 0) return;
-      const status = Number(buf.split(' ', 2)[1] ?? 0);
-      const body = buf.slice(i + 4);
-      clearTimeout(timer);
-      try { sock.destroy(); } catch {}
-      let parsed = null;
-      try { parsed = JSON.parse(body); } catch { /* partial */ }
-      resolve({ status, body, json: parsed });
+      if (i >= 0 && !status) status = Number(buf.split(' ', 2)[1] ?? 0);
     });
-    sock.on('error', () => { clearTimeout(timer); resolve({ status: 0, body: 'socket error' }); });
+    sock.on('close', finish);
+    sock.on('error', () => { sock.destroy(); finish(); });
     let req = `GET ${path} HTTP/1.1\r\n`;
     for (const [k, v] of Object.entries(headers)) req += `${k}: ${v}\r\n`;
     sock.write(req + '\r\n');
@@ -150,7 +156,14 @@ function wsConnect(leaseId, { cookie, origin = ORIGIN_OK, ticket = null }) {
       out.frames.push(m);
     });
     ws.on('open', () => resolve(out));
-    ws.once('error', () => {}); // handled
+    // reject if the upgrade never opens (server answered non-101 → 'error' +
+    // 'close' with no 'open') — a dangling promise would let node exit
+    // silently with an empty event loop (observed P5 run #2, T53c).
+    ws.on('close', () => {
+      if (!out.opened) reject(new Error(`ws upgrade rejected (no 101); wsError=${out.wsError ?? 'n/a'}`));
+    });
+    out.opened = false;
+    ws.on('open', () => { out.opened = true; });
     out.closedPromise = done;
     setTimeout(() => { if (!out.closed) reject(new Error('ws open timeout')); }, 12000).unref?.();
   });
@@ -171,8 +184,20 @@ async function waitForFrame(out, pred, timeoutMs = 20000, what = 'frame') {
 }
 
 async function acquire(cookie, device, mode) {
+  if (cookie === adminCookie) adminStreamWindowStart ||= Date.now(); // P5: track admin's 10/min fixed window (set at first admin stream hit)
   const res = await apiFetch(`/api/devices/redroid/${device}/streams`, { method: 'POST', cookie, body: { mode } });
   return res;
+}
+
+// P5: the admin's 10/min FIXED window starts at adminStreamWindowStart. After
+// T58c deliberately trips it (429 at attempt 11), any later admin stream
+// create (T60's UI "Open screen") would 429 until the boundary — sleep to
+// the next reset so T60 runs on a clean window. Deterministic, ≤60s top-up.
+async function sleepUntilCleanAdminWindow(label) {
+  if (!adminStreamWindowStart) return;
+  const idx = Math.floor((Date.now() - adminStreamWindowStart) / 60_000);
+  const waitMs = adminStreamWindowStart + (idx + 1) * 60_000 + 250 - Date.now();
+  if (waitMs > 0) { note(`${label}: waiting ${Math.ceil(waitMs / 1000)}s for admin rate window to reset`); await sleep(waitMs); }
 }
 
 function note(text) { console.log(`  · ${text}`); }
@@ -207,9 +232,13 @@ async function main() {
       const code = res.json?.error?.code;
       if (res.status !== 401 || code !== 'UNAUTHORIZED') bad.push({ method, path, status: res.status, code });
     }
-    const ws = await rawUpgrade(`/api/device-streams/${DEV.poc}/ws`);
-    if (ws.status !== 401 || ws.json?.error?.code !== 'UNAUTHORIZED') bad.push({ method: 'WS', path: 'no-cookie', status: ws.status, code: ws.json?.error?.code });
-    record('T50 unauthorized matrix (6 REST + 1 WS → 401 UNAUTHORIZED)', bad.length === 0, { probes: probes.length + 1, bad });
+    const ws = await rawUpgrade(`/api/device-streams/${DEV.poc}/ws`, { origin: ORIGIN_OK });
+    if (ws.status !== 401 || ws.json?.error?.code !== 'UNAUTHORIZED') bad.push({ method: 'WS', path: 'no-cookie+origin', status: ws.status, code: ws.json?.error?.code });
+    // origin guard runs BEFORE auth (fail-closed) → no origin + no cookie = 403
+    // (asserted here too; T53b covers it with a valid cookie)
+    const wsNoOrigin = await rawUpgrade(`/api/device-streams/${DEV.poc}/ws`);
+    if (wsNoOrigin.status !== 403 || wsNoOrigin.json?.error?.code !== 'ORIGIN_NOT_ALLOWED') bad.push({ method: 'WS', path: 'no-cookie-no-origin', status: wsNoOrigin.status, code: wsNoOrigin.json?.error?.code });
+    record('T50 unauthorized matrix (6 REST + 2 WS → 401/403 fail-closed)', bad.length === 0, { probes: probes.length + 2, bad });
   }
 
   // ============================ T51 RBAC viewer =============================
@@ -275,10 +304,11 @@ async function main() {
       none.status === 403 && none.json?.error?.code === 'ORIGIN_NOT_ALLOWED', { status: none.status, code: none.json?.error?.code });
 
     // positive control: allowed origin + valid ticket → 101
-    const ok = await wsConnect(leaseId, { cookie: adminCookie }).catch((e) => ({ wsError: e.message, frames: [] }));
+    const ok = await wsConnect(leaseId, { cookie: adminCookie, ticket }).catch((e) => ({ wsError: e.message, frames: [] }));
+    const openState = ok.ws?.readyState; // capture BEFORE we close it ourselves
     if (ok.ws && !ok.wsError) { await sleep(1500); ok.ws.close(); }
     record('T53c allowed origin + valid ticket → 101 (positive control)',
-      !!ok.ws && ok.ws.readyState === WebSocket.OPEN, { readyState: ok.ws?.readyState, wsError: ok.wsError ?? null });
+      !!ok.ws && openState === WebSocket.OPEN, { openState, wsError: ok.wsError ?? null });
 
     await apiFetch(`/api/device-streams/${leaseId}`, { method: 'DELETE', cookie: adminCookie });
   }
@@ -290,19 +320,24 @@ async function main() {
     const leaseId = a.json.lease.id;
     openLeases.push({ id: leaseId, owner: 'admin', expectExpired: true });
 
-    const ws1 = await wsConnect(leaseId, { cookie: adminCookie });
+    // first WS consumes the (fresh) one-shot ticket
+    const ws1 = await wsConnect(leaseId, { cookie: adminCookie, ticket: a.json.ticket });
     await sleep(1500);
-    const replay = await rawUpgrade(`/api/device-streams/${leaseId}/ws`, { cookie: adminCookie, origin: ORIGIN_OK });
+    const replay = await rawUpgrade(`/api/device-streams/${leaseId}/ws?ticket=${encodeURIComponent(a.json.ticket)}`, { cookie: adminCookie, origin: ORIGIN_OK });
     record('T54a 2nd WS with same (consumed) ticket → 401 STREAM_TICKET_REPLAYED',
       replay.status === 401 && replay.json?.error?.code === 'STREAM_TICKET_REPLAYED', { status: replay.status, code: replay.json?.error?.code });
     ws1.ws.close();
 
-    // wait past the 30s lease TTL → reconnect must 409 EXPIRED
+    // wait past the 30s lease TTL → reconnect must 409 dead
     note('waiting 32s for lease TTL expiry (30s default)…');
     await sleep(32000);
     const rc = await apiFetch(`/api/device-streams/${leaseId}/reconnect`, { method: 'POST', cookie: adminCookie });
-    record('T54b reconnect on expired lease → 409 STREAM_LEASE_EXPIRED',
-      rc.status === 409 && rc.json?.error?.code === 'STREAM_LEASE_EXPIRED', { status: rc.status, code: rc.json?.error?.code });
+    // The dead lease may surface as EXPIRED (TTL sweep) or CLOSED (reaper
+    // reclaimed a never-connected tunnel) — a timing race between the two
+    // reclaim paths. Both are correctly 409 non-reconnectable; assert on the
+    // invariant (409 + dead state), not the exact label.
+    record('T54b reconnect on expired lease → 409 (EXPIRED/CLOSED — dead, non-reconnectable)',
+      rc.status === 409 && ['STREAM_LEASE_EXPIRED', 'STREAM_LEASE_CLOSED'].includes(rc.json?.error?.code), { status: rc.status, code: rc.json?.error?.code });
   }
 
   // ============================ T55 viewer read-only ========================
@@ -371,10 +406,14 @@ async function main() {
 
   // ============================ T57 log-leak canaries =======================
   {
-    // let the stream-create rate-limit window (10/min) clear so the two
-    // reconnect re-auths below (T57 + T59) are deterministic
-    note('T57: sleeping 62s to clear the 10/min stream-create window…');
-    await sleep(62000);
+    // P5 rate-limit awareness: the admin's 10/min fixed window (tracked at
+    // the first admin stream hit) already holds 10 hits by T56c (T52 create,
+    // T53 create, T54 create + T54b reconnect, T56a ×5 fills, T56c create).
+    // Sleep to the window boundary so T57/T59/T58c run on a CLEAN window —
+    // deterministic, no timing flake. (The T54 32s TTL wait already consumes
+    // most of the window; this is usually a 0–5s top-up.)
+    const resetIn = adminStreamWindowStart + 60_000 + 250 - Date.now();
+    if (resetIn > 0) { note(`T57 prep: waiting ${Math.ceil(resetIn / 1000)}s for admin rate window to reset`); await sleep(resetIn); }
     const list0 = await apiFetch('/api/device-streams', { cookie: adminCookie });
     const cLease = (list0.json?.leases ?? []).find((l) => l.mode === 'controller' && l.status === 'ACTIVE');
     if (!cLease) throw new Error('T57 setup: no ACTIVE controller lease (T56c?)');
@@ -400,9 +439,9 @@ async function main() {
         evidence: { password: CAN.pw, proxyUrl: CAN.proxy, clipboard: CAN.clip, benign: 'ok' },
       },
     });
-    if (created.status !== 201) throw new Error(`T57 intervention create failed: ${created.status} ${created.text?.slice(0, 200)}`);
+    if (created.status !== 201 && created.status !== 200) throw new Error(`T57 intervention create failed: ${created.status} ${created.text?.slice(0, 200)}`);
     const intvId = created.json?.id ?? created.json?.intervention?.id;
-    record('T57a intervention created with canary-laden payload → 201', !!intvId, { intvId });
+    record('T57a intervention created (or deduped) with canary-laden payload → 201/200', !!intvId, { status: created.status, intvId, createdFlag: created.json?.created ?? null });
 
     const got = await apiFetch(`/api/manual-interventions/${intvId}`, { cookie: adminCookie });
     const apiLeak = JSON.stringify(got.json);
@@ -482,8 +521,9 @@ async function main() {
       (closedCode === 1006 || closedCode === 1009) && apiUp && after.ok === true && after.sessions <= before.sessions,
       { closedCode, apiUp, sidecarSessions: `${before.sessions}→${after.sessions}` });
 
-    // T58c — stream create rate limit, AFTER T59 so admin's 10/min window is
-    // known: window holds ≤1 prior create (T59 reconnect) → 429 inside ≤14.
+    // T58c — stream create rate limit, AFTER T59 on a CLEAN admin window
+    // (pre-T57 reset above): window holds 2 prior hits (T57 reconnect,
+    // T59 reconnect) → 429 at attempt 11, inside the ≤14 loop.
     // Every attempt is a real create request (HELD 409s burn budget too —
     // the preHandler runs before the device check).
     let sAccepts = 0, sLimited = null;
@@ -501,6 +541,9 @@ async function main() {
 
   // ============================ T60 UI regression ===========================
   {
+    // T58c deliberately tripped the admin's 10/min stream window — the UI's
+    // "Open screen" create would 429 until the boundary. Wait it out first.
+    await sleepUntilCleanAdminWindow('T60 prep');
     // clean slate: close every active lease so the UI can open a fresh console
     const list0 = await apiFetch('/api/device-streams', { cookie: adminCookie });
     for (const l of (list0.json?.leases ?? []).filter((x) => ['ACTIVE', 'PENDING'].includes(x.status))) {
@@ -508,7 +551,13 @@ async function main() {
     }
     await sleep(1000);
     const { chromium } = await import('playwright-core');
-    const executable = process.env.CHROME_PATH ?? `${process.env.HOME}/.cache/ms-playwright/chromium-1228/chrome-linux64/chrome`;
+    // Resolve a known-good chromium revision (host-dependent: 1228 on the
+    // P4 box, 1248 per this host's playwright-core browsers.json). Env
+    // CHROME_PATH always wins.
+    const fsOs = await import('node:fs');
+    const candidates = [process.env.CHROME_PATH, ...[1228, 1248, 1217, 1208].map((r) => `${process.env.HOME}/.cache/ms-playwright/chromium-${r}/chrome-linux64/chrome`)].filter(Boolean);
+    const executable = candidates.find((p) => fsOs.existsSync(p));
+    if (!executable) throw new Error(`T60: no chromium found (tried: ${candidates.join(', ')})`);
     const browser = await chromium.launch({ executablePath: executable, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
     const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
     const page = await ctx.newPage();
@@ -518,28 +567,63 @@ async function main() {
     await page.click('button[type="submit"]');
     await page.waitForURL(/#\//, { timeout: 15000 }).catch(() => {});
     await sleep(1500);
-    // open the console for any running device (T56c left ≤1 slot free; the
-    // device page lists all 5 with their run state)
-    await page.goto('http://127.0.0.1:16492/#/devices', { waitUntil: 'networkidle' }).catch(() => {});
-    await sleep(1500);
-    const openBtns = page.locator('button:has-text("Open screen"), button:has-text("打開畫面"), [data-testid="open-console"]');
+    // P2-proven flow (p2-browser.mjs T21): device list → click the device
+    // NAME link → detail page → button.console-open-btn → console route.
+    // (The Devices page has no "Open screen" button — that was a wrong
+    // guess; the console entry is per-device on the detail page.)
+    const uiWs = { sockets: 0, binary: 0, text: 0, lastError: null };
+    const uiPageErrors = [];
+    page.on('pageerror', (e) => uiPageErrors.push(`pageerror: ${String(e).slice(0, 200)}`));
+    page.on('console', (m) => { if (m.type() === 'error') uiPageErrors.push(`console: ${m.text().slice(0, 200)}`); });
+    page.on('websocket', (ws) => {
+      uiWs.sockets += 1;
+      ws.on('framereceived', (ev) => {
+        if (Buffer.isBuffer(ev.payload)) uiWs.binary += 1;
+        else uiWs.text += 1;
+      });
+      ws.on('error', (e) => { uiWs.lastError = String(e).slice(0, 160); });
+    });
+    const UI_DEV = 'redroid-brmc-poc';
     let opened = false;
-    const n = await openBtns.count().catch(() => 0);
-    for (let i = 0; i < n && !opened; i += 1) {
-      try {
-        await openBtns.nth(i).click({ timeout: 3000 });
-        await sleep(2000);
-        opened = /console|screen/i.test(page.url()) || !!(await page.locator('canvas, video, [data-testid="stream-canvas"]').count().catch(() => 0));
-      } catch { /* next */ }
+    // Same-document hash navigations (react-router HashRouter) do NOT always
+    // fire Playwright navigation events — waitForURL can miss them. Poll the
+    // URL instead (the P2-proven flow reads the URL directly, never waits).
+    const waitUrl = async (re, ms, label) => {
+      const end = Date.now() + ms;
+      while (Date.now() < end) { if (re.test(page.url())) return true; await sleep(500); }
+      note(`T60 ${label}: url still ${page.url()}`);
+      return re.test(page.url());
+    };
+    try {
+      await page.goto('http://127.0.0.1:16492/#/devices', { waitUntil: 'load' }).catch((e) => note(`T60 goto devices: ${e.message.slice(0, 120)}`));
+      const devLink = page.locator(`a.link:has-text("${UI_DEV}")`);
+      await devLink.waitFor({ timeout: 20000 });
+      await devLink.click();
+      await waitUrl(/#\/devices\/[a-f0-9-]{36}/, 15000, 'detail nav');
+      await page.waitForFunction(
+        (name) => ([...document.querySelectorAll('h1')].map((e) => e.textContent ?? '').join(' ')).includes(name),
+        UI_DEV, { timeout: 15000 },
+      );
+      await page.click('button.console-open-btn');
+      opened = await waitUrl(/#\/devices\/[a-f0-9-]{36}\/console/, 15000, 'console nav');
+    } catch (e) {
+      note(`T60 open error: ${e.message}`);
     }
+    // LIVE = banner text 已連線 (MD §12 state text) + ≥1 real binary PNG
+    // frame observed on the browser's OWN WebSocket (frames actually reach
+    // the page — not just the DOM). 60s budget (screencap first frame +
+    // P2-observed slow paint).
     const live = await page.waitForFunction(
-      () => /LIVE/i.test(document.body.innerText) || document.querySelector('canvas') !== null,
-      null, { timeout: 30000 },
+      () => {
+        const b = document.querySelector('.stream-banner');
+        return b && b.textContent.includes('已連線') && document.querySelector('.console-canvas, canvas') !== null;
+      }, null, { timeout: 60000 },
     ).then(() => true).catch(() => false);
+    await sleep(2500); // let a few binary frames land for the observer count
     await page.screenshot({ path: `${EVID}/t60-console-live.png` });
     const bodyHead = await page.evaluate(() => document.body.innerText.slice(0, 200));
     record('T60 admin UI console opens LIVE after P5 hardening (screenshot)',
-      opened && live, { opened, live, url: page.url(), bodyHead });
+      opened && live && uiWs.binary >= 1, { opened, live, ws: { sockets: uiWs.sockets, binary: uiWs.binary, text: uiWs.text, lastError: uiWs.lastError }, url: page.url(), bodyHead, pageErrors: uiPageErrors.slice(0, 5) });
     await browser.close();
   }
 
@@ -585,12 +669,27 @@ async function main() {
     results,
   };
   fs.writeFileSync(`${EVID}/p5-security-summary.json`, JSON.stringify(summary, null, 2));
+  summaryWritten = true;
   console.log(`\n===== P5 SECURITY E2E: ${summary.pass}/${summary.total} pass, ${failed.length} fail =====`);
   if (failed.length) { console.log('FAILED:', failed.map((f) => f.test).join(' | ')); process.exitCode = 1; }
 }
 
 main().catch((e) => {
   console.error(`FATAL: ${e.stack ?? e}`);
-  fs.writeFileSync(`${EVID}/p5-security-fatal.json`, JSON.stringify({ run: RUN, error: String(e), results }, null, 2));
+  try { fs.writeFileSync(`${EVID_DIR}/p5-security-fatal.json`, JSON.stringify({ run: RUN, error: String(e), results }, null, 2)); } catch {}
   process.exit(1);
+});
+// Safety net: if the event loop drains with an unsettled promise (a hang),
+// still write a PARTIAL summary so a silent exit 0 can never hide a stall.
+let summaryWritten = false;
+process.on('exit', (code) => {
+  if (summaryWritten) return;
+  try {
+    const failed = results.filter((r) => !r.ok);
+    fs.writeFileSync(`${EVID_DIR}/p5-security-summary.json`, JSON.stringify({
+      run: RUN, finishedAt: new Date().toISOString(), partial: true, exitCode: code,
+      pass: results.length - failed.length, fail: failed.length, total: results.length, results,
+    }, null, 2));
+    console.error(`\nPARTIAL SUMMARY (event-loop drain, exit=${code}): ${results.length} records, ${failed.length} fail`);
+  } catch {}
 });

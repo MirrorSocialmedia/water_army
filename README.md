@@ -222,6 +222,40 @@ curl -s -b /tmp/c.txt -X POST http://127.0.0.1:3012/api/tasks/runs \
 
 **live 實測（2026-10-15，compose stack）**：cron 1 分鐘 2 次 fire ✓ / interval 30s + pause 後靜音 ✓ / once 自動停用 ✓ / 重啟 reconcile 2 輪 `getJobSchedulers` 數量 = DB enabled 且零重複 ✓ / skip_if_running 建 skipped run（activeRunId 實指）+ queue 建 run 唔 skip ✓ / redis down → `sync_error` → 503 → 復原後 `/sync` 200 ✓ / run-now 冪等（同 key 同 run）✓ — 詳情 ADR §13。
 
+## Mobile Console（P0–P5 已交付 — 真人即時操作 Redroid 設備，MD Phase 0–5）
+
+**功能**：browser 開任何 running Redroid 設備嘅即時畫面 + 實時輸入（tap/swipe/text/scroll/key）；viewer 只讀、operator 以上可控制；人工介入事件系統（MD Phase 4）提供 stuck 時嘅人機交接（blocked 事件 → 人工 open console 處理 → resolve）。
+
+**用法**：Devices 頁 → 任何 running 設備 → 「Open screen」→ 彈出 console tile（5 格同屏，每格可 close/reconnect）；設備 stuck 時 intervention banner 提供深連結（viewer 直入 read-only console）。
+
+**權限（RBAC，MD §8.1/§13.2）**
+
+| 動作 | viewer | operator | admin |
+|------|--------|----------|-------|
+| 開 viewer（read-only）流 | ✓ | ✓ | ✓ |
+| 開 controller 流 | ✗ 403 `STREAM_PERMISSION_DENIED` | ✓ | ✓ |
+| 看自己/任何流（owner-or-admin） | ✓（只自己嘅） | ✓（只自己嘅） | ✓（全部） |
+| close/heartbeat/reconnect 流 | owner | owner | ✓（全部） |
+| 建 intervention（operator_report） | ✗ | ✓ | ✓ |
+| intervention action（ack/assign/resolve/dismiss） | ✗ | ✓ | ✓ |
+
+**設定（env，全部 fail-closed）**：`STREAM_TICKET_SECRET`（HMAC ticket；未設 = console 功能 503 唔啟動）＋ `STREAM_SIDECAR_TOKEN`（API↔sidecar 內網身份；未設 = sidecar 唔啟動）＋ `STREAM_VIDEO_SOURCE=auto|scrcpy|screencap`（預設 auto：scrcpy 失敗降級 screencap，ADR-020）＋ `STREAM_QUALITY=low|medium|high`（預設 medium）＋ `STREAM_MAX_STREAMS=5`／`STREAM_LEASE_TTL_MS=30000`／`SIDECAR_PORT`／`SIDECAR_FWD_RANGE_START/END`（adb forward port 池）＋ `SCRCPY_JAR` + `SCRCPY_JAR_SHA256`（sha256 唔配 = sidecar fail-closed 拒啟）＋ `REDROID_ADB_RANGE_START/END`（ADB allowlist，MD §5.2）。
+
+**限制（實測邊界）**：畫面 = screencap tier（PNG 幀，非 H.264 — H.264/scrcpy 路徑喺 A10 GPU 上未驗證，見 NOT VERIFIED）；全局同刻 5 路流（Redis resource-lease slot）；每 device 一 lease；lease TTL 30s（斷流重入用 reconnect，唔係重新 acquire）；sidecar 每會話輸入上限 30/s、frame 上限 64KiB（MD §11.9 P5 hardening）；stream create 10/min/user、intervention create 30/min/user（429 + Retry-After）。
+
+**NOT VERIFIED 總表（P0–P5 誠實清單 — 2026-10-24 P5 收口）**
+
+| # | 項 | 狀態 | 原因 / 備註 |
+|---|----|------|------|
+| NV1 | H.264 端到端（scrcpy 真幀） | **未驗證** | A10 gpuMode:host 下 scrcpy 路徑未實錚成功幀；產品自動降級 screencap（ADR-020），screencap tier 全鏈實錚（P2 E2E 10/10 + P3 五路 4/4 + P4/P5） |
+| NV2 | 25/50 並發負載 | **未驗證** | P3 只實錚 5 路（= 容量上限）× 穩定性 4/4；25/50 超出單 host 容量設計，需要 sidecar fleet（超出 MVP） |
+| NV3 | 自然觸發 intervention（真實 stuck） | **未驗證** | E2E 全部經 `POST /manual-interventions`（operator_report 路徑）注入；生產 producer（network/adb/boot/container 4 路）只實錚 unit/integration，未喺真 stuck 場景端到端驗證 |
+| NV4 | live egress（設備真實外網） | **未驗證** | Stage B R3/R4 拓撲 canary 已過（gost 容器第一跳），但 console 場景下設備 live 外網操作未實錚（MD 範圍外） |
+| NV5 | cookie slot 並發 server fix | **未驗證** | 已知 scrcpy/cookie-slot 並發 race 嘅 server 側修復未實錚（screencap tier 唔經該路徑，無影響；若啟用 scrcpy 需先補） |
+| NV6 | GPU verified 狀態 | **未驗證** | gpuStatus 顯示 `configured_unverified`（誠信如實，MD §10.4）— 唔假報 |
+
+**P0–P5 交付摘要**（證據喺 `docs/audits/` + `logs/mobileconsole-p*/`）：P0 ADB/screencap 可行性；P1 lease/ticket/sidecar 骨架 + 5 路容量；P2 單機 console E2E 10/10（畫面+輸入+read-only+重連）；P3 五路並行負載 穩定性 4/4 PASS（`mobileconsole-p3-load-report.md`）；P4 人工介入 E2E T40–T49 全 PASS（scrub 四層零 secrets、dedupe、RBAC、審計）；P5 security matrix T50–T61（unauthorized/RBAC/跨用戶/origin/重放/read-only/capacity/log-leak canary/rate limit/oversized frame/UI/零殘留）+ hardening（MD §11.9 rate limit、sidecar inbound guard、scrub clipboard/screenshot 補漏）。
+
 ## 安全模型（T1 威脅）
 
 - **Docker socket 隔離**：只有 `api` 掛 `/var/run/docker.sock`（read-only）；worker/web 無。worker 執行容器經 api（P2）；P3 嘅 AI tool 同樣只經 api（service token，worker 零 socket）。

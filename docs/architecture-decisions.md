@@ -4,6 +4,15 @@
 - 依據：施工 MD §0–§19（762 行全份已讀）
 - 結構：§1 repo 現況聲明 → §2 技術選型 → §3 MD §2 十條反制 → §4 環境現況 → §5 版本相容核實（實跑輸出）→ §6 尚待驗證項 → §7 已決/未決
 
+## ADR 索引（Mobile Console 編號 ADR；其餘決策見各 § 標題）
+
+| ADR | 標題 | 狀態 | 位置 |
+|-----|------|------|------|
+| ADR-019 | scrcpy 授權評估（GPL-3.0 義務分析 → scrcpy MIT 路線） | PASS | §19.1 |
+| ADR-020 | 視頻源降級優先（scrcpy 失敗 → screencap 自動降級；H.264 = NOT VERIFIED） | 已實裝（screencap tier 全鏈實錚） | §20 |
+| ADR-021 | 人工介入事件系統（狀態機 + dedupe + blocked_pending_review + 零 secrets） | 已實裝、E2E T40–T49 通過 | §21 |
+| ADR-022 | P5 security hardening（rate limit 落點 / sidecar inbound guard / scrub 補漏 / E2E matrix） | 已實裝、E2E T50–T61 通過 | §22 |
+
 ---
 
 ## 1. Repository 現況聲明（空 repo 實錄）
@@ -1095,3 +1104,32 @@ MD §13.2 嘅 per-actor 寫 budget（20/60s）係為**人工誤操作**設嘅；
 3. E2E 環境 ADB server 會靜默遺失裝置（`adb devices` 清空）→ sidecar `SIDECAR_START_FAILED` → 串流 502。重跑前 `adb connect 127.0.0.1:16500..16504` 先。
 4. scratch API 係長駐 process — 改咗 shared code（例如 scrub 新規則）之後**必須重啟 API** 先至載入（run #1 T42 假紅就係呢個原因）。
 5. psql `-tA` 輸出帶 trailing newline — `split('\n').length` 斷言要先 `trim()`。
+
+## 22. Mobile Console P5 security hardening（ADR-022，2026-10-24 — 來源 = MD Phase 5）
+
+**狀態**：已實裝、E2E 通過（`scripts/mobileconsole-p5/p5-security.mjs` T50–T61，真 API + 5 真機）
+**背景**：P0–P4 交付咗完整串流鏈，但 MD Phase 5 要求補上 security 收口 — 實測審查發現三類 gap。
+
+**決策**：
+
+1. **Rate limit 落點 = route preHandler、RBAC 之後（MD §11.9）**
+   - `stream create + reconnect`：per-user **10/min** sliding window；`intervention create`（operator_report 入口）：**30/min/user**。超限 → `429 RATE_LIMITED` + `Retry-After`（秒）。
+   - **點解喺 RBAC 之後**：401/403 唔燒 budget — 匿名 flood 由 login 限流 + 全平台 rate limit 處理，呢度只限「已認證用戶嘅資源濫用」；順序反埋會令攻擊者可用假 session 燒埋合法用戶 budget。
+   - **System signal 路徑唔經呢條 route**（network/adb/boot/container producer 直接調 `recordSignal`）→ critical 事件永遠唔會被限（MD §15.1）— E2E T58 實測 429 + Retry-After + dedupe 保持（一 dedupe key 一 row、signalCount 聚合）。
+   - 實作 = 通用 `createRequestLimiter`（per-key Map + sliding window，純內存、per-process — 與 login 限流同級；多 process 部署時 = per-process budget，本系統單 api process）。
+
+2. **Sidecar inbound DoS guard（盲管嘅代價必須喺邊界收）**
+   - API↔sidecar tunnel 係 blind pipe（frame 逐字节轉發）→ 惡意 browser client 可送任意大 frame。sidecar 原用 `ws` 預設 `maxPayload`（100MB）= 每會話 100MB memory spike 面。
+   - **WS `maxPayload` = 64KiB**：超額 frame → sidecar close 1009 → API tunnel 隨拆（client 見 1006/1009）；API/sidecar 本身唔崩（E2E T59：100KB frame → tunnel 拆、兩邊 health 照 200、sessions 數回落）。
+   - **輸入 token bucket 30/s/session**（burst 30）：超額 = `{t:'input-rejected', code:'STREAM_INPUT_RATE_LIMITED'}` frame（**唔斷流** — 畫面繼續）；E2E T（unit）+ 實測驗證。 adb 命令濫用面被限制喺 30 ops/s/路。
+
+3. **Scrub 補漏：clipboard + screen-capture key（MD §11.4/§13 「不記錄：…剪貼簿…畫面影像」）**
+   - 實測發現：`SENSITIVE_KEY` 原本冇 clipboard/screenshot 類 key — intervention evidence（free-form JSON，MD §6.2）可以帶 `{clipboard: <dump>}` / `{screenshot: <base64>}` 直落 DB + API + audit。
+   - 補上 `clipboard|screenshot|screencapture|screenimage|screencap`（boundary-aware，過 mask 無害原則）；unit test 覆核（camelCase `screenCapture`、nested、secret 零殘留）。
+   - E2E T57 canary 矩陣（4 canaries：鍵盤文字/密碼/proxy URL/剪貼簿）喺 API log（offset-scoped）+ DB row + API 讀返三層零命中；log 零 base64 PNG（`iVBORw0KGgo`）零 >10KB 行。
+
+4. **Security E2E matrix（T50–T61）= P5 驗收本身**
+   - unauthorized 矩陣（6 REST + 2 WS raw upgrade）/ viewer RBAC / 跨用戶 lease+ticket 劫持（owner check 喺 ticket 之前）/ Origin fail-closed（missing = 403，唔係放行）/ one-shot ticket 重放 401 / 過期 lease 409 / viewer 協議層 read-only / per-device 409 HELD + free-slot 201 / log-leak canary / rate limit 429 / oversized frame / UI console LIVE 回歸 / 零殘留收尾（usage 0 + run 事件刪除）。
+   - 已知邊界：5 機 = 全局 5 slot → 「全局 CAPACITY_REACHED」同「device HELD」喺 E2E 層唔可分辨（全球 cap 由 unit test 覆蓋：`tests/unit/stream-lease.test.js`）。
+
+**實裝位置**：`apps/api/src/security/rate-limit.js`（createRequestLimiter）+ `apps/api/src/app.js`（兩個 limiter 註冊）+ `device-streams.js`/`manual-interventions.js`（preHandler）+ `apps/stream-sidecar/src/server.js`（maxPayload + input bucket）+ `packages/shared/src/scrub.js`（key 規則）+ `tests/{unit,p5-*,integration}` + `scripts/mobileconsole-p5/`。

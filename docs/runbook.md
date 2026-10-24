@@ -503,3 +503,40 @@ digest pin + gost digest pin + 本 repo 嘅 tunnel setup sequence）喺專用 br
 | image 404 / port 池用盡 | `IMAGE_NOT_FOUND`（404）/ `PORT_POOL_EXHAUSTED`（503） | 404 = 永久失敗（第一次即 FAILED_FINAL，唔會重試耗）；503 = RETRY_WAIT 指數 backoff 到上限 | S4① hermetic 實測 |
 
 **Rate limit（429）**：人工 operator 20 寫/60s（batch 寫 + purge 獨立 budget）；**service lane（`x-wa-service-token`）豁免**（受 global cap 支配）；429 對 scheduler 係 retryable（park RETRY_WAIT，下 tick 重派）— 唔會誤判永久失敗。
+
+## 12. Mobile Console（串流）監控／故障排檢（MC P1–P5 — 2026-10-24）
+
+**拓撲速覽**：browser WS ↔ API gateway（`/api/device-streams/:id/ws`；認證 + 盲管）↔ stream-sidecar（子 process，API 自帶自管：crash → backoff 重啟 ×3 → fail-closed 503）↔ adb（`127.0.0.1:<adbPort>`，端口必喺 `REDROID_ADB_RANGE_START/END` allowlist）。Lease = `stream_leases` 表 + `resource_leases`（type=`stream_slot`，全局 5 slot）。Ticket = one-shot HMAC（60s，Redis single-use store）。
+
+**常用觀測**
+| 觀測 | 命令 / 位置 | 正常 |
+|---|---|---|
+| sidecar 健康 | `GET /health`（sidecar port）+ API log `stream-sidecar` 行 | `{ok:true, sessions:<0-5>}` |
+| 串流用量 | `GET /api/device-streams`（任意 cookie） | `{usage:{active:0-5, max:5}}` |
+| lease 狀態 | `psql -c "SELECT id,status,close_reason,expires_at FROM stream_leases ORDER BY created_at DESC LIMIT 10"` | 無懸空 ACTIVE（過期嘅應該係 EXPIRED） |
+| 全局 slot | `psql -c "SELECT * FROM resource_leases WHERE \"resourceType\"='stream_slot'"` | 無 ACTIVE 殘留（lease close 必 release） |
+| 輸入 reject 計數 | API log（sidecar pino 同檔）grep `input_rejected` | 只應見 `readonly`（viewer）/`rate_limited`（>30/s） |
+
+**症狀 → 診斷 → 處理**
+| 症狀 | 診斷 | 處理 |
+|---|---|---|
+| 開 console 502 `SIDECAR_START_FAILED` | sidecar `/health` 死；adb `devices` 唔見裝置 | 先 `adb connect 127.0.0.1:<16500-16504>` 再重試（P4 實測陷阱：ADB server 會靜默遺失裝置）；sidecar 死透 → 重啟 API（sidecar 隨 API 重啟） |
+| 開 console 503 `STREAM_SIDECAR_UNAVAILABLE` | sidecar 重啟 3 次全失敗（fail-closed） | 查 sidecar log（喺 API log 內，stdio inherit）→ 多係 `SCRCPY_JAR_SHA256` 唔配 / adb 全斷；修好 → 重啟 API |
+| 畫面出現後卡死（無新幀） | screencap 循環停：logcat / adb forward 死 | 重連（UI reconnect 按鈕 = `POST /device-streams/:id/reconnect` 新 ticket）；重連失敗 → close + 重開 |
+| 輸入無反應 + log 見 `input_rejected readonly` | viewer 模式 lease（read-only by construction，**唔係 bug**） | 用 operator+ 開 controller 流 |
+| 輸入無反應 + log 見 `input_rejected rate_limited` | 輸入 >30/s/session（P5 guard，MD §11.9） | 降速；正常人手操作唔會觸發 |
+| 409 `STREAM_DEVICE_HELD` | 該 device 已有 lease（DB partial unique） | 等 lease close/expire（TTL 30s）或 admin 主動 close |
+| 409 `STREAM_CAPACITY_REACHED` / UI「5/5 已滿」 | 全局 5 slot 滿（**唔會靜默超分**，MD §7.1） | 關閉一個畫面重試 |
+| 401 `STREAM_TICKET_REPLAYED` | ticket 重用（one-shot；reconnect 後舊 ticket 失效屬正常） | UI 自動行 reconnect；raw client 重新 acquire/reconnect 攞新 ticket |
+| 401 `STREAM_TICKET_INVALID`（expired） | ticket 超過 60s 未用 | 重新 acquire / reconnect |
+| 409 `STREAM_LEASE_EXPIRED`（reconnect） | lease 超過 30s 無 heartbeat | 重新 acquire |
+| 403 `STREAM_LEASE_OWNER_MISMATCH` | 非 owner 非 admin 動他人 lease | 正常拒絶（安全）；admin 可 close 清理 |
+| 429 `RATE_LIMITED`（stream create/reconnect） | >10 次/分鐘/user（P5，MD §11.9） | 跟 `Retry-After` 等；人手操作唔會觸發（flood 先會） |
+| WS 斷 1009 / client 見 1006 | 超過 64KiB frame（P5 guard）或隧道拆 | 正常客戶端唔會觸發（input frame 極細）；觸發 = 攻擊/bug → 查 audit |
+| API 重啟後 console 全斷 | 設計內：sidecar 同死、ACTIVE lease → `INTERRUPTED`（MD §10 reconcile） | 重開 console（舊 lease 唔會假復活） |
+
+**Redroid 串流運維守則**
+- 裝置 boot 完先開 console（`container_state=running` + adb online）；boot 中開 = 409 `STREAM_DEVICE_NOT_RUNNING`（誠實）。
+- 每 device 一 lease；viewer/controller 唔可同刻共存（future work）。
+- **零 secrets 紀律**：console 畫面/輸入/剪貼簿任何一層（log/DB/UI）唔應該出現密碼類內容 — P5 canary E2E 守此紅線（MD §11.4/§13）；發現 log 有敏感內容 = 即刻開 intervention（operator_report）+ 修 scrub。
+- 真機 teardown（scratch 環境）見 P5 final report：containers/nets/ports/dataDir/Redis lease 全清 + 零殘留驗證。

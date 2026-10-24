@@ -14,6 +14,8 @@ Base：`http://127.0.0.1:3012/api`（web 同源反代；api 本體唔 publish ho
 - **Docker 錯誤分類**（`DOCKER_ERROR`）：`CONTAINER_NOT_FOUND`→404／`IMAGE_NOT_FOUND`→404（缺 image reference — 404 係 **image** 嘅，非 container；R5 live 修正：dockerode 合成訊息 "(HTTP code 404) no such container - No such image: <ref>" 會誤導，分級優先於 container-404，message 清理做 `Image not found: <ref>`）／`DOCKER_DAEMON_UNAVAILABLE`→503／`DOCKER_PERMISSION_DENIED`→502／`DOCKER_TIMEOUT`→504／`DOCKER_DISABLED`→503／`OPERATION_PENDING`→503／其餘 `DOCKER_ERROR`→502。
 - **通用錯誤碼**：`VALIDATION_ERROR` 400／`NOT_FOUND` 404／`NOT_MANAGED` 403（managed gate）／`NAME_TAKEN` 409／`IN_USE` 409（template 使用中）／`RATE_LIMITED` 429／`INTERNAL` 500。
 
+- **Rate limit 總表**：login 5 失敗/60s/（客戶端 IP × 帳號）；**P5（MD §11.9）**：stream create + reconnect **10/min/user**、intervention create **30/min/user**（per-user sliding window，preHandler 喺 RBAC 之後 — 401/403 唔燒 budget；system signal 路徑唔經 route、唔會被限）→ `429 RATE_LIMITED` + `Retry-After`；sidecar 輸入 **30/s/session**（token bucket，超額 = `STREAM_INPUT_RATE_LIMITED` frame，唔斷流）。
+
 ## Health（無 auth）
 
 | Method | Path | 參數 | 錯誤碼 / 備註 |
@@ -237,6 +239,28 @@ proxy.network = null（無 proxy 綁定）或：
 | POST | `/api/task-runs/:runId/containers/remove` | operator+（service 可用） | — | **volume-retention remove**：容器走、identity data 留（冪等，已冇 = no-op）。**唯一**可以抹 data 嘅路徑係 purge |
 | POST | `/api/identities/:id/purge` | **admin + human only**（service 拒） | `{dryRun?: bool, confirm?: string}` | dryRun=true → 預覽（size/files/containers）零改動；dryRun=false → `confirm` 必須 = identity id（防錯字 token）→ ownership-gated stop/remove 容器 → 抹 data dir → 全動作 audit |
 
+## Stream Console（MC P1–P3 + P5 hardening — 真人即時操作 Redroid 設備）
+
+架構：browser WS ↔ **API gateway**（認證 + 盲管）↔ **stream-sidecar**（per-lease screencap/scrcpy 會話 + 輸入管道；ADR-019/020）。**Ticket 係 one-shot**（HMAC、60s TTL、綁 user/device/mode、consume 一次），經 `stream_ticket` HttpOnly cookie（Path=/api/device-streams）傳送；raw client 可用 `?ticket=` query（P1 probe 路徑）。Lease = server-side 資源（`stream_leases` 表 + Redis resource slot，max 5），TTL 30s（`STREAM_LEASE_TTL_MS`）+ heartbeat 延長；WS 連接本身 = liveness（API 自動 heartbeat）。
+
+**WS upgrade 認證鏈（每步 server-side 重驗，MD §8.1）**：Origin（fail-closed：missing/唔喺 allowlist → 403 `ORIGIN_NOT_ALLOWED`）→ session（401）→ lease 存在（404）→ owner/admin（403 `STREAM_LEASE_OWNER_MISMATCH`）→ lease ACTIVE + 未過期（409 `STREAM_LEASE_CLOSED`/`STREAM_LEASE_EXPIRED`）→ device running（409 `STREAM_DEVICE_NOT_RUNNING`）→ ADB port 喺 host allowlist（403 `STREAM_DEVICE_ADB_NOT_ALLOWED`）→ ticket 驗證 + consume（401 `STREAM_TICKET_INVALID`/`STREAM_TICKET_REPLAYED`）。全部 reject = 結構化 error envelope + audit row。
+
+**P5 inbound DoS guard（sidecar）**：WS `maxPayload` 64KiB（超額 frame → close 1009，API tunnel 隨拆）；輸入 token bucket 30/s（MD §11.9）。
+
+| Method | Path | Role | 參數 | 錯誤碼 / 備註 |
+|--------|------|------|------|--------------|
+| POST | `/devices/redroid/:id/streams` | viewer+（controller 需 operator+） | body `{mode: 'viewer'\|'controller'}`；`:id` = device UUID | 201 `{lease, ticket, streamWsPath}` + `Set-Cookie stream_ticket`；403 `STREAM_PERMISSION_DENIED`（controller 角色不足）/`STREAM_DEVICE_ADB_NOT_ALLOWED`；404 `STREAM_DEVICE_NOT_FOUND`；409 `STREAM_DEVICE_HELD`（device 已有 lease）/`STREAM_DEVICE_NOT_RUNNING`/`STREAM_CAPACITY_REACHED`（5/5）；**429 `RATE_LIMITED`（10/min/user，P5）** |
+| GET | `/device-streams` | viewer+ | — | 200 `{leases[], usage:{active,max}}`（allow-list 投影：零 secrets，MD §8.1/§13） |
+| POST | `/device-streams/:leaseId/heartbeat` | viewer+（owner/admin） | — | 200（TTL 延長）；403 `STREAM_LEASE_OWNER_MISMATCH`；404 `STREAM_LEASE_NOT_FOUND`；409 expired/closed |
+| POST | `/device-streams/:leaseId/reconnect` | viewer+（owner/admin） | — | 200 `{lease, ticket, streamWsPath}`（新 one-shot ticket；MD §2.1.8）；409 `STREAM_LEASE_EXPIRED`/`STREAM_LEASE_CLOSED`；**429（10/min/user，P5）** |
+| DELETE | `/device-streams/:leaseId` | viewer+（owner/admin） | — | 200（冪等；`idempotent:true` = 已 closed）；403/404 同上 |
+| WS | `/device-streams/:leaseId/ws` | owner/admin | cookie session + stream_ticket（或 `?ticket=`）+ Origin（allowlist） | 101 成功；reject 見上認證鏈（401/403/404/409 + 結構化 body） |
+
+**WS frame 協議**（client→server 只可發 input frame；server→client = 畫面 binary frame + 狀態 frame）：
+- client：`{t:'input', kind:'tap'|'swipe'|'text'|'scroll'|'key', ...}`（座標 = 0–1 比例；text 內容**永不入 log**，只記 kind + byte 數，MD §11.4/§13）；`{t:'close'}` = 正常收流。
+- server：`{t:'state', state:'LIVE'|'DEGRADED'|...}`、`{t:'degraded', source:'screencap', reason}`（scrcpy 失败降級，ADR-020）、`{t:'input-rejected', code}`（`STREAM_READ_ONLY` viewer 寫 / `STREAM_NOT_LIVE` / `STREAM_INPUT_RATE_LIMITED` P5）、`{t:'dead', reason}`、binary = 畫面 frame。
+- viewer lease = **read-only by construction**（sidecar session mode）：LIVE 畫面照常，任何 input → `STREAM_READ_ONLY`（協議層，非 UI 隱藏）。
+
 ## 端點總計
 
-**105 條路由**（逐檔案計；P4-MC 2026-10-24 實核）：health 2 + auth 3 + containers 15（含 5 個 action + exceptions 3 條 + create-from-template）+ container templates 2 + dashboard 1 + tasks 15（runs 6 + approvals 3 + tools 1 + providers 4 + audit 1）+ task definitions 1 + schedules 10（含 POST preview）+ schedule notifications 4 + **manual interventions 9（P4-MC：list/detail/count/create + 5 個 action）** + redroid templates/preflight 5 + redroid devices 11（含 3 個 action + proxy/retry）+ **batch monitor 5（BR-B5：identities/:id + monitor summary + metrics + reports 2）** + **batch control 21（BR-B2：identities list + preview + create + capacity 2 + batch get + start/pause/resume/cancel 4 + task-run retry/cancel/logs 3 + batch-containers list + reconcile + container start/health/stop/remove 4 + purge 1）**。所有寫操作（POST/PATCH/PUT/DELETE，`/auth/login` 除外）：RBAC + audit row（actor、request_id、IP、status、details scrub）+ Origin 檢查（browser mutating 請求）。
+**110 條路由**（逐檔案計；P5 2026-10-24 實核 = P4-MC 105 條 + **stream console 5**）：health 2 + auth 3 + containers 15（含 5 個 action + exceptions 3 條 + create-from-template）+ container templates 2 + dashboard 1 + tasks 15（runs 6 + approvals 3 + tools 1 + providers 4 + audit 1）+ task definitions 1 + schedules 10（含 POST preview）+ schedule notifications 4 + manual interventions 9（P4-MC）+ **stream console 5（MC P1–P3：create/list/heartbeat/reconnect/close；另有 1 條 WS upgrade path 唔計入 REST 路由）** + redroid templates/preflight 5 + redroid devices 11（含 3 個 action + proxy/retry）+ batch monitor 5（BR-B5）+ batch control 21（BR-B2）。所有寫操作（POST/PATCH/PUT/DELETE，`/auth/login` 除外）：RBAC + audit row（actor、request_id、IP、status、details scrub）+ Origin 檢查（browser mutating 請求）。
