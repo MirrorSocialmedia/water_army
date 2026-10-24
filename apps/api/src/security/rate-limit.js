@@ -60,3 +60,54 @@ export function createRateLimiter({ limit = 5, windowMs = 60_000, now = () => Da
   };
   return limiter;
 }
+
+/**
+ * Generic per-key REQUEST limiter (P5 hardening — Mobile Console MD §11.9:
+ * 「Rate limit stream create、control input 和通知建立」).
+ *
+ * Unlike createRateLimiter (login BRUTE-FORCE gate — counts FAILURES only),
+ * this counts EVERY request against the key: a flood of valid credentials
+ * must still be throttled (stream-create churn, intervention-creation spam).
+ * In-memory per-process (same MVP trade-off as the login limiter — a shared
+ * Redis limiter can slot in later without touching call sites).
+ *
+ * @param {{limit?:number, windowMs?:number, now?:()=>number}} opts
+ */
+export function createRequestLimiter({ limit = 10, windowMs = 60_000, now = () => Date.now() } = {}) {
+  const buckets = new Map();
+
+  function gc(t) {
+    if (buckets.size > 4096) {
+      for (const [k, v] of buckets) {
+        if (t >= v.resetAt) buckets.delete(k);
+      }
+    }
+  }
+
+  return {
+    /**
+     * Record one request for `key`. Returns allowed=false (with the
+     * retry-after hint) once MORE than `limit` requests fall inside the
+     * current window.
+     * @param {string} key
+     * @returns {{allowed:boolean, retryAfterMs:number}}
+     */
+    hit(key) {
+      const t = now();
+      gc(t);
+      let bucket = buckets.get(key);
+      if (!bucket || t >= bucket.resetAt) {
+        bucket = { count: 0, resetAt: t + windowMs };
+        buckets.set(key, bucket);
+      }
+      bucket.count += 1;
+      return bucket.count > limit
+        ? { allowed: false, retryAfterMs: Math.max(0, bucket.resetAt - t) }
+        : { allowed: true, retryAfterMs: 0 };
+    },
+    /** Test seam. */
+    reset() {
+      buckets.clear();
+    },
+  };
+}

@@ -136,9 +136,29 @@ export function manualInterventionRoutes(app) {
 
   // --- controlled signal entry point (operator_report / qa_signal / --------
   // --- external_verification). E2E "simulate hook" = this real route. -------
+  // P5 hardening (MD §11.9: rate limit notification creation): per-user
+  // 30/min (app.js). System signal paths (network/adb/boot — the wired
+  // production producers) do NOT pass through this route and are never
+  // throttled, so a critical event can never be dropped by the limiter
+  // (MD §15.1).
+  const interventionRatePreHandler = async (req, reply) => {
+    const gate = req.server.interventionCreateLimiter.hit(req.user.id);
+    if (!gate.allowed) {
+      req.log.warn({ code: 'RATE_LIMITED', userId: req.user.id }, 'intervention create rate limited');
+      reply.header('retry-after', Math.ceil(gate.retryAfterMs / 1000));
+      return reply.code(429).send({
+        error: {
+          code: 'RATE_LIMITED',
+          message: 'Too many intervention signals — try again later',
+          requestId: req.id,
+        },
+      });
+    }
+  };
+
   app.post(
     '/api/manual-interventions',
-    { preHandler: app.requireRole('operator'), schema: { body: CREATE_BODY } },
+    { preHandler: [app.requireRole('operator'), interventionRatePreHandler], schema: { body: CREATE_BODY } },
     async (req, reply) => {
       const b = req.body;
       if (!b.deviceId && !b.deviceNameSnapshot) {

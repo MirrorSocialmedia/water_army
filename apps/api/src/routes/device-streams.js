@@ -56,9 +56,28 @@ function ticketCookieHeader(app, ticket) {
 }
 
 export function deviceStreamRoutes(app) {
+  // P5 hardening (MD §11.9: rate limit stream create). Per-user sliding
+  // window (10/min, app.js). Runs AFTER requireRole so unauthenticated / 
+  // insufficient-role requests get their 401/403 first and never burn a
+  // budget slot. The 5-slot global cap remains the authoritative layer.
+  const streamRatePreHandler = async (req, reply) => {
+    const gate = req.server.streamCreateLimiter.hit(req.user.id);
+    if (!gate.allowed) {
+      req.log.warn({ code: 'RATE_LIMITED', userId: req.user.id }, 'stream request rate limited');
+      reply.header('retry-after', Math.ceil(gate.retryAfterMs / 1000));
+      return reply.code(429).send({
+        error: {
+          code: 'RATE_LIMITED',
+          message: 'Too many stream requests — try again later',
+          requestId: req.id,
+        },
+      });
+    }
+  };
+
   app.post(
     '/api/devices/redroid/:id/streams',
-    { preHandler: app.requireRole('viewer'), schema: { body: STREAM_CREATE_BODY, params: { type: 'object', additionalProperties: false, required: ['id'], properties: { id: DEVICE_ID } } } },
+    { preHandler: [app.requireRole('viewer'), streamRatePreHandler], schema: { body: STREAM_CREATE_BODY, params: { type: 'object', additionalProperties: false, required: ['id'], properties: { id: DEVICE_ID } } } },
     async (req, reply) => {
       const out = await app.streamLeaseService.acquire({
         deviceId: req.params.id,
@@ -90,7 +109,7 @@ export function deviceStreamRoutes(app) {
   // with the same one = 401 STREAM_TICKET_REPLAYED at the WS upgrade.
   app.post(
     '/api/device-streams/:leaseId/reconnect',
-    { preHandler: app.requireRole('viewer'), schema: { params: { type: 'object', additionalProperties: false, required: ['leaseId'], properties: { leaseId: LEASE_ID } } } },
+    { preHandler: [app.requireRole('viewer'), streamRatePreHandler], schema: { params: { type: 'object', additionalProperties: false, required: ['leaseId'], properties: { leaseId: LEASE_ID } } } },
     async (req, reply) => {
       const out = await app.streamLeaseService.reconnect({ leaseId: req.params.leaseId, user: req.user, requestId: req.id, ip: req.ip });
       reply.header('set-cookie', ticketCookieHeader(app, out.ticket));

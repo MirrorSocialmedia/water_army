@@ -46,6 +46,17 @@ const FWD_RANGE_START = Number(process.env.SIDECAR_FWD_RANGE_START ?? 16520);
 const FWD_RANGE_END = Number(process.env.SIDECAR_FWD_RANGE_END ?? 16549);
 const MAX_SESSIONS = Number(process.env.SIDECAR_MAX_SESSIONS ?? 5);
 const ZERO_FRAME_MS = Number(process.env.SIDECAR_ZERO_FRAME_MS ?? 10_000);
+// P5 hardening (Mobile Console MD §11.9: rate limit control input):
+// per-session token bucket on input frames (30/sec sustained, 30 burst).
+// The gateway tunnel is a blind pipe, so THIS is the input throttle —
+// the device + ADB are protected from a stuck/spamming controller client.
+const INPUT_RATE_PER_SEC = 30;
+const INPUT_BURST = 30;
+// P5 hardening (MD §11 DoS): the API pipes browser WS bytes here unframed.
+// Inbound frames are SMALL JSON (auth/session/input/close/ping) — cap at
+// 64 KiB so a hostile client cannot make the ws lib buffer a 100MB frame
+// (its default maxPayload) into the sidecar per stream.
+const WS_MAX_PAYLOAD = 64 * 1024;
 
 if (TOKEN.length < 32) {
   console.error('stream-sidecar: STREAM_SIDECAR_TOKEN must be >= 32 hex chars; refusing to start (fail-closed)');
@@ -117,10 +128,25 @@ function checkToken(t) {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-const wss = new WebSocketServer({ noServer: true });
+const wss = new WebSocketServer({ noServer: true, maxPayload: WS_MAX_PAYLOAD });
+
+// P5: per-connection input token bucket (MD §11.9).
+function createInputBucket() {
+  return { tokens: INPUT_BURST, last: Date.now() };
+}
+function takeInputToken(bucket) {
+  const t = Date.now();
+  bucket.tokens = Math.min(INPUT_BURST, bucket.tokens + ((t - bucket.last) / 1000) * INPUT_RATE_PER_SEC);
+  bucket.last = t;
+  if (bucket.tokens >= 1) {
+    bucket.tokens -= 1;
+    return true;
+  }
+  return false;
+}
 
 wss.on('connection', (ws, req) => {
-  const conn = { phase: 'await-auth', leaseId: null, timer: null };
+  const conn = { phase: 'await-auth', leaseId: null, timer: null, inputBucket: createInputBucket() };
   const fail = (code, message, httpStatus) => {
     try { ws.send(JSON.stringify({ t: 'error', code, message, httpStatus })); } catch {}
     ws.close(1008, code);
@@ -208,6 +234,11 @@ wss.on('connection', (ws, req) => {
       const rec = sessions.get(conn.leaseId);
       if (!rec) return;
       if (m?.t === 'input') {
+        if (!takeInputToken(conn.inputBucket)) {
+          log.warn({ leaseId: conn.leaseId, code: 'STREAM_INPUT_RATE_LIMITED' }, 'sidecar input rate limited');
+          try { ws.send(JSON.stringify({ t: 'input-rejected', code: 'STREAM_INPUT_RATE_LIMITED', message: 'input rate limit exceeded (30/s)' })); } catch {}
+          return;
+        }
         const res = rec.session.input(m);
         if (!res.ok) {
           log.warn({ leaseId: conn.leaseId, code: res.code, kind: m?.kind }, 'sidecar input rejected');

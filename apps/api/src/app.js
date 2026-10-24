@@ -25,7 +25,7 @@ import { parseCookies } from './security/cookie.js';
 import { originCheck } from './security/origin.js';
 import { requireRole } from './security/rbac.js';
 import { createServiceAuthHook } from './security/service-auth.js';
-import { createRateLimiter } from './security/rate-limit.js';
+import { createRateLimiter, createRequestLimiter } from './security/rate-limit.js';
 import { createAuditService } from './services/audit.js';
 import { createBatchLifecycleService } from './services/batch-lifecycle-service.js';
 import { createSessionService } from './services/session.js';
@@ -209,6 +209,17 @@ export async function buildApp(opts = {}) {
       })
     : createUnavailableBatchLifecycle();
   const rateLimiter = createRateLimiter({ limit: 5, windowMs: 60_000 });
+  // P5 hardening (Mobile Console MD §11.9: rate limit stream create +
+  // notification creation). Per-user, per-process (same MVP trade-off as the
+  // login limiter). Counts EVERY request (valid or not) — unlike the login
+  // brute-force gate, a flood of valid credentials must still be throttled.
+  //   - streamCreateLimiter: 10/min/user on POST /devices/redroid/:id/streams
+  //     (the 5-slot global cap is the second, authoritative layer).
+  //   - interventionCreateLimiter: 30/min/user on POST /manual-interventions
+  //     (controlled-signal entry; prevents notification-storm self-abuse,
+  //     MD §6.3).
+  const streamCreateLimiter = createRequestLimiter({ limit: 10, windowMs: 60_000 });
+  const interventionCreateLimiter = createRequestLimiter({ limit: 30, windowMs: 60_000 });
   const dockerService = createDockerService({ docker, db, config, log: app.log, audit });
 
   // BR-B5 (MD §11.2/§13): batch rotation monitor + metrics — the read-only
@@ -376,6 +387,8 @@ export async function buildApp(opts = {}) {
   app.decorate('sessions', sessions);
   app.decorate('audit', audit);
   app.decorate('rateLimiter', rateLimiter);
+  app.decorate('streamCreateLimiter', streamCreateLimiter);
+  app.decorate('interventionCreateLimiter', interventionCreateLimiter);
   app.decorate('requireRole', requireRole);
   app.decorate('dockerService', dockerService);
   app.decorate('batchLifecycle', batchLifecycle);
