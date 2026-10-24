@@ -122,6 +122,12 @@ async function usage(ctx) {
   const browser = await chromium.launch({ args: ['--no-sandbox'] });
 
   // ---- pre-flight: re-run safety + clean slate --------------------------------
+  // (2026-10-24: phantom-row investigation — log full row identity before delete;
+  //  PG statement logging is ON for this scratch run, docker logs mc-scratch-pg)
+  const phantoms = psql(`SELECT id, title, status, source, device_id, to_char(created_at,'HH24:MI:SS') FROM manual_interventions WHERE title LIKE 'nv3-e2e-%';`);
+  if (phantoms) say(`pre-clean phantoms: ${JSON.stringify(phantoms.split('\n'))}`);
+  const histPhantoms = psql(`SELECT intervention_id, action, actor_user_id FROM manual_intervention_history h WHERE EXISTS (SELECT 1 FROM manual_interventions i WHERE i.id = h.intervention_id AND i.title LIKE 'nv3-e2e-%');`);
+  if (histPhantoms) say(`pre-clean history phantoms: ${JSON.stringify(histPhantoms.split('\n'))}`);
   const before = psql(`DELETE FROM manual_interventions WHERE title LIKE 'nv3-e2e-%' RETURNING id;`);
   if (before) say(`pre-clean removed ${before.split('\n').length} stale nv3-e2e rows`);
 
