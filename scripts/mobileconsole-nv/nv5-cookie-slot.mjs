@@ -356,7 +356,8 @@ function tileByName(rows, name) {
     const tKill = now();
     const seenBefore = httpSeen.length;
     const samples = [];
-    const perTile = Object.fromEntries(DEVICES.map((d) => [d, { firstLiveMs: null, framesAtKill: (await tileRows(admin.page, 5)).find((r) => r.name === d)?.frames ?? -1 }]));
+    const rowsAtKill = await tileRows(admin.page, 5);
+    const perTile = Object.fromEntries(DEVICES.map((d) => [d, { firstLiveMs: null, framesAtKill: rowsAtKill.find((r) => r.name === d)?.frames ?? -1 }]));
     const scRestart = { pid: null, upMs: null };
     const t0 = now();
     while (now() - t0 < 150_000) {
