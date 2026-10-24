@@ -56,7 +56,12 @@ const ev = (name, obj) => {
   say(`evidence → ${p}`);
 };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const psql = (sql) => execSync(`PGPASSWORD=postgres psql -h 127.0.0.1 -p 16494 -U postgres -d water_army_mc -tA`, { encoding: 'utf8', input: sql }).toString().trim();
+const isPsqlTag = (l) => /^(INSERT|UPDATE|DELETE|SELECT|CREATE|DROP|ALTER|SET|COMMIT|ROLLBACK|TRUNCATE|GRANT|COPY|COMMENT) (0|1|\d+)( .*)?$/.test(l.trim());
+// NOTE (2026-10-24 incident): psql -tA still prints DML command tags
+// ("DELETE 0") on stdout even with no rows — a naive non-empty check reads
+// that as "1 row affected" (the NV "phantom row" false positive, which the
+// write-trap investigation conclusively ruled out: table was always empty).
+const psql = (sql) => execSync(`PGPASSWORD=postgres psql -h 127.0.0.1 -p 16494 -U postgres -d water_army_mc -tA`, { encoding: 'utf8', input: sql }).toString().trim().split('\n').filter((l) => l && !isPsqlTag(l)).join('\n');
 
 async function login(browser, user, pass) {
   const ctx = await browser.newContext({ viewport: { width: 1600, height: 1000 } });
