@@ -24,7 +24,11 @@
 // Boundary-aware: matches at key start, after _/. -, or at a camelCase hump
 // (dbPassword / secretKey). Trailing boundary = separator, next hump, or end.
 // Deliberately over-approximating (P2 precedent: 過 mask 無害，漏 mask 洩密).
-const SENSITIVE_KEY = /(^|[_\-.]|(?<=[a-z0-9])[A-Z])((authorization|auth|api[-_]?key|access[-_]?key|secret|token|password|passwd|credential|private[-_]?key|session[-_]?cookie|bearer|client[-_]?secret))(?:[_\-.]|(?=[A-Z])|$)/i;
+// P5 hardening (MD §11.4/§13 「不記錄：…剪貼簿…畫面影像」): clipboard +
+// screen-capture keys are sensitive too — an operator evidence payload
+// (free-form JSON, MD §6.2) could otherwise persist a clipboard dump or a
+// base64 screenshot past the key rules.
+const SENSITIVE_KEY = /(^|[_\-.]|(?<=[a-z0-9])[A-Z])((authorization|auth|api[-_]?key|access[-_]?key|secret|token|password|passwd|credential|private[-_]?key|session[-_]?cookie|bearer|client[-_]?secret|clipboard|screenshot|screencapture|screenimage|screencap))(?:[_\-.]|(?=[A-Z])|$)/i;
 
 const REDACTED = '***redacted***';
 const MAX_DEPTH = 6;

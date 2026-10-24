@@ -76,3 +76,31 @@ test('scrubObject: a URL with embedded userinfo is ALWAYS redacted, regardless o
   assert.equal(scrubObject({ ip: 'http://127.0.0.1:8080/api' }).ip, 'http://127.0.0.1:8080/api');
   assert.equal(scrubObject({ page: 'ftp://files.example.com/x.txt' }).page, 'ftp://files.example.com/x.txt');
 });
+
+test('scrubObject: clipboard + screen-capture keys are redacted (P5 hardening — MD §11.4/§13 「不記錄：剪貼簿…畫面影像」)', () => {
+  // An operator intervention evidence payload is free-form JSON (MD §6.2) —
+  // before P5 a {clipboard: ...} or {screenshot: base64} key sailed straight
+  // into the DB + API response + audit. Over-masking is harmless, leaking is
+  // not (P2 precedent).
+  const clip = 'clipboard-secret-token-abc123';
+  const shot = 'iVBORw0KGgoAAAANSUhEUgAA...'; // base64 PNG fragment
+  const out = scrubObject({
+    clipboard: clip,
+    clipboardContent: clip,
+    screenshot: shot,
+    screenImage: shot,
+    screenCapture: { data: shot },
+    screencap: shot,
+    safe: 'visible-text',
+  });
+  assert.equal(out.clipboard, '***redacted***');
+  assert.equal(out.clipboardContent, '***redacted***', 'camelCase hump form');
+  assert.equal(out.screenshot, '***redacted***');
+  assert.equal(out.screenImage, '***redacted***');
+  assert.equal(out.screenCapture, '***redacted***', 'screen*Capture* camelCase form — object redacted whole');
+  assert.equal(out.screencap, '***redacted***');
+  assert.equal(out.safe, 'visible-text', 'unrelated keys untouched');
+  // the secret itself must not survive anywhere in the scrubbed tree
+  assert.ok(JSON.stringify(out).includes(clip) === false, 'clipboard secret fully scrubbed');
+  assert.ok(JSON.stringify(out).includes(shot) === false, 'screenshot data fully scrubbed');
+});
