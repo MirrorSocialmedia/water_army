@@ -15,9 +15,9 @@ import { execSync } from 'node:child_process';
 import argon2 from '@node-rs/argon2';
 
 const API = process.env.MC_API ?? 'http://127.0.0.1:16490';
-const USER = { id: 'nv900000-0000-4000-8000-000000000002', username: 'mce2eop1', password: 'nv-e2e-op-pw', role: 'operator' };
+const USER = { id: 'a9f1c001-0000-4000-8000-000000000002', username: 'mce2eop1', password: 'nv-e2e-op-pw', role: 'operator' };
 
-const psql = (sql) => execSync(`PGPASSWORD=postgres psql -h 127.0.0.1 -p 16494 -U postgres -d water_army_mc -tA -c ${JSON.stringify(sql)}`, { encoding: 'utf8' }).toString().trim();
+const psql = (sql) => execSync(`PGPASSWORD=postgres psql -h 127.0.0.1 -p 16494 -U postgres -d water_army_mc -tA`, { encoding: 'utf8', input: sql }).toString().trim();
 
 const log = (m) => console.log(`[nv-seed ${new Date().toISOString()}] ${m}`);
 
@@ -28,10 +28,8 @@ async function main() {
     return;
   }
   const hash = await argon2.hash(USER.password);
-  const n = psql(`INSERT INTO users (id, username, password_hash, role, is_active, created_at, updated_at)
-VALUES ('${USER.id}', '${USER.username}', '${hash}', '${USER.role}', true, now(), now())
-ON CONFLICT (id) DO UPDATE SET role = EXCLUDED.role, password_hash = EXCLUDED.password_hash, is_active = true
-RETURNING id;`);
+  const sql = `INSERT INTO users (id, username, password_hash, role, is_active, created_at, updated_at) VALUES ('${USER.id}', '${USER.username}', '${hash}', '${USER.role}', true, now(), now()) ON CONFLICT (id) DO UPDATE SET role = EXCLUDED.role, password_hash = EXCLUDED.password_hash, is_active = true RETURNING id;`;
+  const n = psql(sql);
   log(`seeded ${USER.username} (operator): ${n ? 'ok' : 'FAIL'}`);
   // verify: real login against the live API
   const r = await fetch(`${API}/api/auth/login`, {

@@ -56,7 +56,7 @@ const ev = (name, obj) => {
   say(`evidence → ${p}`);
 };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const psql = (sql) => execSync(`PGPASSWORD=postgres psql -h 127.0.0.1 -p 16494 -U postgres -d water_army_mc -tA -c ${JSON.stringify(sql)}`, { encoding: 'utf8' }).toString().trim();
+const psql = (sql) => execSync(`PGPASSWORD=postgres psql -h 127.0.0.1 -p 16494 -U postgres -d water_army_mc -tA`, { encoding: 'utf8', input: sql }).toString().trim();
 
 async function login(browser, user, pass) {
   const ctx = await browser.newContext({ viewport: { width: 1600, height: 1000 } });
