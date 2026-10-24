@@ -176,7 +176,7 @@ async function usage(ctx) {
   const h0 = (detail0.history ?? []).map((h) => h.action);
   const dbRow = psql(`SELECT status, source, category, device_id, signal_count, dedupe_key FROM manual_interventions WHERE id='${iv.id}';`);
   const [dbStatus, dbSource, dbCategory, dbDeviceId, dbSignal, dbDedupe] = dbRow.split('|');
-  const auditN = Number(psql(`SELECT count(*) FROM audit_events WHERE action='intervention.create' AND resource_id='${iv.id}';`) || 0);
+  const auditN = Number(psql(`SELECT count(*) FROM audit_events WHERE action='intervention.created' AND resource_id='${iv.id}';`) || 0);
   const nv32 = h0[0] === 'created' && dbStatus === 'open' && dbDeviceId === eventDeviceId
     && dbSource === 'operator_report' && Number(dbSignal) === 1 && auditN >= 1;
   mark('NV3-2', nv32,
@@ -200,13 +200,17 @@ async function usage(ctx) {
   await row1.locator('a:has-text("Open device")').click();
   const onConsole = await admin.page.waitForFunction(() => location.hash.startsWith('#/devices/') && location.hash.includes('/console'), null, { timeout: 10_000 })
     .then(() => true).catch(() => false);
-  const consoleUrl = onConsole ? admin.page.url() : admin.page.url();
+  // hash nav re-render is async — wait for the console to actually render
+  // (stream-banner mount) before asserting its header (run-3 race: h1 read
+  // while the Interventions page was still in the DOM)
+  const consoleRendered = onConsole ? await admin.page.waitForSelector('.stream-banner', { timeout: 30_000 }).then(() => true).catch(() => false) : false;
+  const consoleUrl = admin.page.url();
   // THE assertion T45 never made explicit: the opened console is the EVENT device
   const urlIsEventDevice = consoleUrl.includes(`/devices/${eventDeviceId}/console`);
   const h1 = onConsole ? (await admin.page.locator('h1').first().textContent().catch(() => '')) : '';
   const headerIsEventDevice = h1.startsWith(EVENT_DEVICE);
-  mark('NV3-4', onEventCenter && rowVisible && onConsole && urlIsEventDevice && headerIsEventDevice,
-    `click notification: chip→event center=${onEventCenter}, row visible=${rowVisible}, 'Open device'→console=${onConsole}; URL device match=${urlIsEventDevice} (url=…${consoleUrl.slice(-60)}), console header='${h1}' (want ${EVENT_DEVICE} …) — 開嘅係 event 嗰部機`);
+  mark('NV3-4', onEventCenter && rowVisible && onConsole && consoleRendered && urlIsEventDevice && headerIsEventDevice,
+    `click notification: chip→event center=${onEventCenter}, row visible=${rowVisible}, 'Open device'→console=${onConsole} (rendered=${consoleRendered}); URL device match=${urlIsEventDevice} (url=…${consoleUrl.slice(-60)}), console header='${h1}' (want ${EVENT_DEVICE} …) — 開嘅係 event 嗰部機`);
   ev('nv3-4-deeplink.json', { run: RUN, id: iv.id, consoleUrl, urlIsEventDevice, consoleHeader: h1, headerIsEventDevice, eventDeviceId });
 
   // ---------------- NV3-5: correct phone LIVE (screencap) --------------------------
