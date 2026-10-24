@@ -157,13 +157,46 @@
 - **DoS 守衛**：request rate limit（10/min stream、30/min intervention，RBAC 後、429+Retry-After）+ sidecar inbound（64KiB frame cap、30/s 輸入 bucket）+ 5 路全域 cap + lease 三重回收（TTL/reaper/WS-dead）。
 - 完整 threat model：`docs/threat-model.md` T9 段（8 風險 × 8 緩解 × 殘餘）。
 
-## 8. Teardown + 零殘留驗證
+## 8. Teardown + 零殘留驗證（2026-10-24 12:09 實測）
 
-> （teardown 執行後填實數：containers/nets/ports/dataDir/Redis lease 各 = 0 驗證輸出；compose 用戶 stack 5/5 未動；30000=200。）
+執行順序：evidence 先備份（`logs/mobileconsole-p5/teardown/pre-teardown-state.txt`）→ 停 host process（api 15528 / web 57643，kill 前查 cgroup 無 docker-）→ `docker rm -f` 7 容器（5 redroid + mc-scratch-pg + mc-scratch-redis）→ 拆 2 網絡（br-mc-ladder + br-mc-probe）→ 清 dataDir → 清 /tmp/mobileconsole。
 
-## 9. Pre-push sensitive scan（ironclad #6）
+**過程發現 + 處理**：首次 `rm -rf` 與 redroid 容器 shutdown 競態 — privileged 容器退出前以 root 重建 dataDir 樹（host user EACCES）。按 TOOLS.md 實證法用 `alpine:3.20` 容器 root 清淨（`docker run --rm -v ...:/s alpine sh -c 'rm -rf /s/*'`）+ rmdir 頂層 → 消失穩定。
 
-> （scan 後填：全 repo grep production credential / API token / 真人資料 = 0 命中；dev-only localhost 密碼 flag 清單。）
+驗證（`logs/mobileconsole-p5/teardown/zero-residue-final.txt`）：
+
+| 項 | 預期 | 實測 |
+|---|---|---|
+| MC 容器（redroid-brmc-* + mc-scratch-*） | 0 | **0** ✓ |
+| 用戶 compose stack | 5/5 不動 | **5/5 healthy + sglang 未動** ✓ |
+| MC 網絡（br-mc-*） | 0 | **0** ✓ |
+| 端口 16490–16496 + 16500–16504 | 全 closed | **12/12 closed** ✓ |
+| dataDir /var/lib/water-army/redroid-mobileconsole | absent | **absent（穩定複驗）** ✓ |
+| Redis lease（ramgate:lease:device:* ×5 + live/metrics） | 0 | **scratch redis 容器已刪 = 全部 key 消失** ✓ |
+| adb devices | 0 | **0** ✓ |
+| scratch host process（api/web/sidecar） | 0 | **0**（16490/16492/16493 全 closed 交叉驗證）✓ |
+| SGLang :30000 | 200 | **200** ✓ |
+| /tmp/mobileconsole（secrets） | absent | **absent** ✓ |
+
+## 9. Pre-push sensitive scan（ironclad #6，2026-10-24）
+
+全 repo grep（排除 node_modules/.next/dist/.git）：
+
+| 類 | 模式 | 結果 |
+|---|---|---|
+| Cloud token/secret | `sk-*` / `AKIA*` / `ghp_*` / `xox*` / `AIza*` / PEM private key / JWT `eyJhbGciOi` | **0 命中**（僅 test fixture：`sk-supersecret-...`、假 JWT） |
+| Bearer/Authorization 硬編碼 | `Bearer <16+>` / `Authorization: '<12+>'` | **0 命中**（僅 `Bearer <jwt>` placeholder 模板） |
+| Scratch credential | `p5op-*` / `p5vw-*` / `MC_ADMIN_PASS=` 字面值 | **0 命中**（E2E 密碼全部 `openssl rand` 運行時生成；環境檔喺 /tmp 已清） |
+| P5 canary 字面值 | `P5TXT-` / `P5PW-` / `P5CLIP-` / `p5canary` | 僅 E2E script 運行時生成器 + scrub unit test fixture（非真實 canary） |
+| 真人資料 | email / HK 電話 / 真名 | **0 命中**（`852-00008936` 僅喺 gitignored `.dev/` 舊 e2e log，fixture 號碼） |
+| 外部 host+憑證 | 非 loopback host 帶 cred | **0 命中**（僅 `*.example` 保留域名 fixture + git@github.com 文檔示例） |
+
+**結論：PASS — 無 production credential / API token / 真人資料。**
+
+Flag（dev-only loopback，接受殘留，非 secret）：
+1. `e2e-p1-pw` — E2E 測試 fixture 密碼（scratch throwaway 用戶、loopback 16490、DB 隨 scratch 已刪）。
+2. `postgres:postgres` — scratch PG setup 腳本（loopback 16494，容器已刪）。
+3. `.example` 域名 proxy fixture（RFC 保留域名）。
 
 ## 10. 收口證據
 
