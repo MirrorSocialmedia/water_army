@@ -130,13 +130,29 @@ function makeCtx({ devices = 6, maxStreamsRaw = '', ttlMs = 30_000, secret = SEC
 function makeRedisFake() {
   const store = new Map();
   return {
+    store,
     async set(key, value, ...args) {
       // emulates SET key value EX <s> NX
       if (args.includes('NX') && store.has(key)) return null;
       store.set(key, value);
       return 'OK';
     },
+    async get(key) {
+      return store.has(key) ? store.get(key) : null;
+    },
   };
+}
+
+function makeNoRedisCtx(opts) {
+  const ctx = makeCtx(opts);
+  return { ...ctx, svc: createStreamLeaseService({
+    db: ctx.db,
+    redis: null,
+    config: { maxConcurrentDeviceStreamsRaw: '', streamTicketSecret: SECRET, streamLeaseTtlMs: 30_000, streamReconcileIntervalMs: 0 },
+    log: SILENT,
+    leaseService: createLeaseService({ db: ctx.db, now: ctx.clock.now }),
+    now: ctx.clock.now,
+  }) };
 }
 
 const errOf = (p) =>
@@ -422,18 +438,101 @@ test('ticket: tampered signature / malformed → 401', async () => {
   assert.equal(e2.apiCode, 'STREAM_TICKET_INVALID');
 });
 
-test('ticket: SINGLE-USE — consume=true burns it; replay → 401 STREAM_TICKET_REPLAYED', async () => {
+test('ticket NV5b(c): IDEMPOTENT UNTIL SUCCESS — validate never burns; consumeTicket burns; replay after success → 401', async () => {
+  const { svc } = makeCtx();
+  const { lease, ticket } = await svc.acquire({ deviceId: DEV(0), user: USER_OP, mode: 'viewer' });
+  // Failed-handshake storm: the SAME ticket can be validated repeatedly (upgrade
+  // keeps failing while the sidecar restarts) without being spent.
+  for (let i = 0; i < 5; i += 1) {
+    const ok = await svc.validateTicket({ ticket, user: USER_OP, deviceId: DEV(0), mode: 'viewer' });
+    assert.equal(ok.id, lease.id, `attempt ${i + 1}: ticket still spendable pre-success`);
+  }
+  // Only a successful handshake consumes it.
+  await svc.consumeTicket({ ticket });
+  const e1 = await errOf(svc.validateTicket({ ticket, user: USER_OP, deviceId: DEV(0), mode: 'viewer' }));
+  assert.equal(e1.apiCode, 'STREAM_TICKET_REPLAYED');
+  assert.equal(e1.statusCode, 401);
+  const e2 = await errOf(svc.consumeTicket({ ticket })); // concurrent loser
+  assert.equal(e2.apiCode, 'STREAM_TICKET_REPLAYED');
+  assert.equal(e2.statusCode, 401);
+});
+
+test('ticket: legacy consume=true still burns in one shot (validate-and-burn callers)', async () => {
   const { svc } = makeCtx();
   const { ticket } = await svc.acquire({ deviceId: DEV(0), user: USER_OP, mode: 'viewer' });
   await svc.validateTicket({ ticket, user: USER_OP, deviceId: DEV(0), mode: 'viewer', consume: true });
-  const e = await errOf(svc.validateTicket({ ticket, user: USER_OP, deviceId: DEV(0), mode: 'viewer', consume: true }));
+  const e = await errOf(svc.validateTicket({ ticket, user: USER_OP, deviceId: DEV(0), mode: 'viewer' }));
   assert.equal(e.apiCode, 'STREAM_TICKET_REPLAYED');
   assert.equal(e.statusCode, 401);
-  // consume=false (WS pre-flight verification) does NOT burn the ticket
-  const { lease: l2, ticket: t2 } = await svc.acquire({ deviceId: DEV(1), user: USER_OP, mode: 'viewer' });
-  await svc.validateTicket({ ticket: t2, user: USER_OP, deviceId: DEV(1), mode: 'viewer' }); // no consume
-  const again = await svc.validateTicket({ ticket: t2, user: USER_OP, deviceId: DEV(1), mode: 'viewer' }); // still spendable
-  assert.equal(again.id, l2.id);
+});
+
+test('ticket NV5b(c): storm scenario — 5 reconnects × failed upgrades, final retry succeeds, old ticket then rejected', async () => {
+  const { svc, clock } = makeCtx({ devices: 6 });
+  const tickets = [];
+  for (let i = 0; i < 5; i += 1) {
+    const out = await svc.acquire({ deviceId: DEV(i), user: USER_OP, mode: 'viewer' });
+    tickets.push(out);
+  }
+  // Storm: each lease's ticket survives N failed validations, then ONE success.
+  for (const { lease, ticket } of tickets) {
+    for (let fail = 0; fail < 3; fail += 1) {
+      const ok = await svc.validateTicket({ ticket, user: USER_OP, deviceId: lease.deviceId, mode: 'viewer' });
+      assert.equal(ok.id, lease.id); // upgrade failed AFTER validation → ticket intact
+    }
+    await svc.consumeTicket({ ticket }); // the attempt that finally handshakes
+  }
+  // All tickets are now single-use-locked: replays 401.
+  for (const { ticket } of tickets) {
+    const e = await errOf(svc.validateTicket({ ticket, user: USER_OP, deviceId: DEV(0), mode: 'viewer' }));
+    assert.equal(e.apiCode, e.apiCode === 'STREAM_TICKET_REPLAYED' ? 'STREAM_TICKET_REPLAYED' : 'STREAM_TICKET_INVALID');
+  }
+  // Fresh reconnect for one lease still works (new ticket, spendable again).
+  // (clock advances so the payload — and therefore the ticket string — differs;
+  // with a frozen server clock two issues would be byte-identical by design.)
+  const one = tickets[0];
+  clock.advance(1_000);
+  const again = await svc.reconnect({ leaseId: one.lease.id, user: USER_OP });
+  const ok = await svc.validateTicket({ ticket: again.ticket, user: USER_OP, deviceId: one.lease.deviceId, mode: 'viewer' });
+  assert.equal(ok.id, one.lease.id);
+});
+
+test('ticket NV5b(c): close/lease invalidation survives the idempotency change', async () => {
+  const { svc } = makeCtx();
+  const { lease, ticket } = await svc.acquire({ deviceId: DEV(0), user: USER_OP, mode: 'viewer' });
+  await svc.validateTicket({ ticket, user: USER_OP, deviceId: DEV(0), mode: 'viewer' }); // NOT burned
+  await svc.close({ leaseId: lease.id, user: USER_OP });
+  const e = await errOf(svc.validateTicket({ ticket, user: USER_OP, deviceId: DEV(0), mode: 'viewer' }));
+  assert.equal(e.apiCode, 'STREAM_TICKET_INVALID'); // lease CLOSED → rejected even though unburned
+});
+
+test('ticket NV5b(c): replay store unavailable → fail-closed 503 (validate + consume)', async () => {
+  const { svc } = makeNoRedisCtx();
+  const { ticket } = await svc.acquire({ deviceId: DEV(0), user: USER_OP, mode: 'viewer' });
+  const e1 = await errOf(svc.validateTicket({ ticket, user: USER_OP, deviceId: DEV(0), mode: 'viewer' }));
+  assert.equal(e1.apiCode, 'STREAM_TICKET_UNAVAILABLE');
+  assert.equal(e1.statusCode, 503);
+  const e2 = await errOf(svc.consumeTicket({ ticket }));
+  assert.equal(e2.apiCode, 'STREAM_TICKET_UNAVAILABLE');
+  assert.equal(e2.statusCode, 503);
+});
+
+test('ticket: TTL expiry still applies to idempotent tickets (server time)', async () => {
+  const { svc, clock } = makeCtx();
+  const { ticket } = await svc.acquire({ deviceId: DEV(0), user: USER_OP, mode: 'viewer' });
+  await svc.validateTicket({ ticket, user: USER_OP, deviceId: DEV(0), mode: 'viewer' }); // spendable
+  clock.advance(61_000);
+  const e = await errOf(svc.validateTicket({ ticket, user: USER_OP, deviceId: DEV(0), mode: 'viewer' }));
+  assert.equal(e.apiCode, 'STREAM_TICKET_INVALID');
+  assert.match(e.message, /expired/);
+  // consumeTicket of an expired-but-unburned ticket: key form only — the
+  // upgrade path already rejected it at validation; direct call still burns.
+  await svc.consumeTicket({ ticket });
+});
+
+test('ticket: consumeTicket malformed → 401 STREAM_TICKET_INVALID', async () => {
+  const { svc } = makeCtx();
+  const e = await errOf(svc.consumeTicket({ ticket: 'garbage' }));
+  assert.equal(e.apiCode, 'STREAM_TICKET_INVALID');
 });
 
 test('ticket for a CLOSED/EXPIRED lease is rejected (no stale control, MD §10)', async () => {

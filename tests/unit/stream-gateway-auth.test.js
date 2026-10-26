@@ -35,9 +35,11 @@ function makeGateway({ user = null, lease = null, device = null, ticketResult = 
     cookieSecure: false,
   };
   let ticketCalls = 0;
+  let lastTicketOpts = null;
   const streamLeaseService = {
-    validateTicket: async () => {
+    validateTicket: async (opts) => {
       ticketCalls += 1;
+      lastTicketOpts = opts;
       if (ticketResult === 'invalid') {
         const e = new Error('stream ticket signature invalid');
         e.apiCode = 'STREAM_TICKET_INVALID';
@@ -61,7 +63,7 @@ function makeGateway({ user = null, lease = null, device = null, ticketResult = 
     log: { debug() {}, info() {}, warn() {}, error() {} },
     resolveUser: async () => user,
   });
-  return { gw, get ticketCalls() { return ticketCalls; } };
+  return { gw, get ticketCalls() { return ticketCalls; }, get lastTicketOpts() { return lastTicketOpts; } };
 }
 
 const REQ = (cookies = '') => ({ headers: { cookie: cookies, origin: 'http://127.0.0.1:16490' }, url: '/api/device-streams/le-123/ws' });
@@ -100,10 +102,15 @@ test('chain: non-owner non-admin → 403 STREAM_LEASE_OWNER_MISMATCH', async () 
 
 test('chain: owner (non-admin) passes the ownership gate', async () => {
   const owner = { id: 'user-1', role: 'viewer' };
-  const { gw } = makeGateway({ user: owner, lease: LEASE, device: DEVICE });
+  const { gw, lastTicketOpts } = makeGateway({ user: owner, lease: LEASE, device: DEVICE });
   const v = await gw.authenticateUpgrade({ leaseId: 'le-123', req: REQ(TCK) });
   assert.equal(v.ok, true);
   assert.equal(v.serial, '127.0.0.1:16500');
+  // NV5b(c): the verdict carries the ticket UNCONSUMED (the upgrade handler
+  // burns it via consumeTicket only after a successful sidecar handshake),
+  // and validation must NOT be called in one-shot consume mode.
+  assert.equal(v.ticket, 'abc.def');
+  assert.notEqual(lastTicketOpts?.consume, true, 'upgrade validation must not burn the ticket (NV5b(c))');
 });
 
 test('chain: CLOSED lease → 409 STREAM_LEASE_CLOSED', async () => {
