@@ -274,6 +274,12 @@ model RedroidTemplate {
   // unlimited (the honest default; limits are opt-in).
   cpuLimit         Float? @map("cpu_limit") // vCPU cap (e.g. 2 → NanoCpus 2000000000)
   memoryLimitBytes BigInt? @map("memory_limit_bytes") // RAM cap in bytes (e.g. 4 GiB)
+  // W1 (2026-10-26, ADR-025): static Android-prop override baseline (JSONB map
+  // prop→value, validated by validateRoOverridesMap). Default {} = today's
+  // behaviour EXACTLY (zero-change). Applied at device create only when the
+  // global switch WA_REDROID_RO_OVERRIDES_ENABLED=true — V3 real-device
+  // verification is still open, so the switch stays OFF by design.
+  roOverrides       Json     @default("{}") @map("ro_overrides")
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 
@@ -347,15 +353,24 @@ model Device {
   // R4 (MD §6.2): per-check breakdown of the LAST verification pass — flat
   // machine-readable status values only (zero secrets; no proxy URL ever).
   netLastChecks     Json?     @map("net_last_checks")
+  // W1 (2026-10-26, ADR-025): identity fingerprint binding. identityId = the
+  // identity this device boots AS (null = unbound — today's behaviour).
+  // roOverridesJson = the EXACT merged prop map injected at create (audit /
+  // recreate-stability evidence). Both only populated when the W1 switch is
+  // ON at create time; SetNull keeps device history when identity is deleted.
+  identityId        String?   @map("identity_id") @db.Uuid
+  roOverridesJson   Json      @default("{}") @map("ro_overrides_json")
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
   template     RedroidTemplate @relation(fields: [templateId], references: [id])
+  identity     Identity?       @relation("DeviceIdentity", fields: [identityId], references: [id], onDelete: SetNull)
   streamLeases StreamLease[]   // MC P1 (Mobile Console MD §8.1/§4.1)
   interventions ManualIntervention[] // MC P4 (Mobile Console MD Phase 4 / §6)
 
   @@index([templateId])
   @@index([containerState])
+  @@index([identityId])
   @@map("devices")
 }
 
@@ -397,10 +412,49 @@ model Identity {
 
   batchMemberships BatchIdentity[]
   runs               TaskRun[]
+  // W1 (ADR-025): 1:1 fingerprint profile + devices currently bound to this identity.
+  fingerprintProfile IdentityFingerprint?
+  devices            Device[]        @relation("DeviceIdentity")
 
   @@index([status])
   @@index([identityType])
   @@map("identities")
+}
+
+// ------------------------------------------------- identity fingerprints (W1)
+// Identity-level device fingerprint profile (ADR-025). Generated DETERMINISTIC
+// from the identityId (packages/shared fingerprint-profile.js) — the row is a
+// materialised snapshot, regeneration is idempotent by construction.
+// profileJson is the single truth; the typed columns exist for the DB-unique
+// guards (fingerprint/serial/displayId = fail-closed collision enforcement
+// across the fleet) and cheap joins. NOT VERIFIED on real devices (V3) — the
+// profile is code-level truth until the ADR-025 getprop matrix passes.
+model IdentityFingerprint {
+  identityId    String   @id @map("identity_id") @db.Uuid
+  profileJson   Json     @map("profile_json")
+  brand         String
+  model         String
+  device        String
+  productName   String   @map("product_name")
+  manufacturer  String
+  androidRelease String  @map("android_release")
+  buildId       String   @map("build_id")
+  displayId     String   @unique @map("display_id")
+  fingerprint   String   @unique
+  serial        String   @unique
+  locale        String
+  timezone      String
+  carrierName   String   @map("carrier_name")
+  carrierMcc    String   @map("carrier_mcc")
+  carrierMnc    String   @map("carrier_mnc")
+  schemaVersion Int      @default(1) @map("schema_version")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  identity Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+
+  @@index([brand, model])
+  @@map("identity_fingerprints")
 }
 
 // ---------------------------------------------------------------- batches (BR-B1, MD §9.2)
