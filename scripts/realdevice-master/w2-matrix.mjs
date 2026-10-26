@@ -447,13 +447,28 @@ async function main() {
     await restartApi({});
   }
 
-  // A3 — dump size bomb (WA_UIA_MAX_BYTES=8192 → 522) + node cap (WA_UIA_MAX_NODES=50 → 422)
+  // A3 — dump size bomb (WA_UIA_MAX_BYTES < actual XML → 522) + node cap
+  // (WA_UIA_MAX_NODES < actual nodes → 422). Self-adaptive caps (relay leg-2
+  // fix, live 2026-10-27 run5): the original fixed constants (8192 B / 50
+  // nodes) sat ABOVE this screen's actual dump (22 nodes, ~7.7KB XML — a
+  // sparse intro UI) so NEITHER cap could fire and the item false-FAILED with
+  // two 200s. Measure the real dump first, then set each cap BELOW the
+  // observed size — the cap mechanism itself is still exercised for real.
   {
-    await restartApi({ WA_UIA_MAX_BYTES: '8192' });
+    const d0 = await dump(DEV1);
+    const nodes0 = (d0.j.nodes ?? []).length;
+    if (!(d0.status === 200 && nodes0 > 1)) throw new Error(`A3 precondition: need a real dump to measure — got http=${d0.status} nodes=${nodes0}`);
+    const serial = `127.0.0.1:${DEVICES[DEV1].adbPort}`;
+    const xmlBytes = Number(adb(serial, 'shell', 'wc', '-c', '/data/local/tmp/wa_ui_dump.xml').split(/\s+/)[0]);
+    if (!(xmlBytes > 128)) throw new Error(`A3 precondition: unexpected on-device XML size ${xmlBytes}`);
+    const byteCap = Math.max(64, Math.floor(xmlBytes / 4)); // < actual size → truncated read → 522
+    const nodeCap = Math.max(1, Math.floor(nodes0 / 2));   // < actual count → node limit → 422
+    await restartApi({ WA_UIA_MAX_BYTES: String(byteCap) });
     const d1 = await dump(DEV1);
-    await restartApi({ WA_UIA_MAX_NODES: '50' });
+    await restartApi({ WA_UIA_MAX_NODES: String(nodeCap) });
     const d2 = await dump(DEV1);
     ev('A3-dump-caps', {
+      measured: { nodes: nodes0, xmlBytes }, caps: { byteCap, nodeCap },
       byteBomb: { http: d1.status, code: d1.j.code ?? d1.j.error?.code, nodes: (d1.j.nodes ?? []).length },
       nodeCap: { http: d2.status, code: d2.j.code ?? d2.j.error?.code, nodes: (d2.j.nodes ?? []).length },
     }, d1.status === 522 && d2.status === 422);
