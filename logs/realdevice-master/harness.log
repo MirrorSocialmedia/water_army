@@ -1,0 +1,77 @@
+[rdev mem] 14:52:52 MemAvailable 45552MB (>= 16384) OK
+[rdev sglang] 14:52:53 30000 health=200 OK
+[rdev stack] 14:52:53 user stack water-army-* 5/5 OK
+70688a31e24e49edfa6800235b83bc9511fd5e79422b6aabe5b96ee44f7560ef
+[rdev infra] 14:52:53 rdev-pg up (127.0.0.1:16494)
+[rdev FATAL] 14:52:53 rdev-redis failed to start
+[rdev mem] 14:53:18 MemAvailable 45467MB (>= 16384) OK
+[rdev sglang] 14:53:19 30000 health=200 OK
+[rdev stack] 14:53:19 user stack water-army-* 5/5 OK
+[rdev net] 14:53:19 network br-rdev-ladder exists (reuse)
+[rdev infra] 14:53:19 rdev-pg running (reuse)
+[rdev infra] 14:53:19 rdev-redis up (127.0.0.1:16495)
+[rdev FATAL] 14:53:51 pg not ready
+[rdev mem] 14:54:09 MemAvailable 45722MB (>= 16384) OK
+[rdev sglang] 14:54:10 30000 health=200 OK
+[rdev stack] 14:54:10 user stack water-army-* 5/5 OK
+[rdev net] 14:54:10 network br-rdev-ladder exists (reuse)
+[rdev infra] 14:54:10 rdev-pg running (reuse)
+[rdev infra] 14:54:10 rdev-redis running (reuse)
+Error: P1001: Can't reach database server at `127.0.0.1:16494`
+
+Please make sure your database server is running at `127.0.0.1:16494`.
+[rdev jar] 14:54:11 fetching scrcpy-server-v5.0.1 (release asset)
+[rdev FATAL] 14:54:13 jar download failed
+[rdev FATAL] 14:54:13 scrcpy jar sha256/size mismatch:  / 
+[rdev mem] 14:55:28 MemAvailable 45130MB (>= 16384) OK
+[rdev sglang] 14:55:29 30000 health=200 OK
+[rdev stack] 14:55:29 user stack water-army-* 5/5 OK
+[rdev net] 14:55:29 network br-rdev-ladder exists (reuse)
+[rdev infra] 14:55:29 rdev-pg running (reuse)
+[rdev infra] 14:55:29 rdev-redis running (reuse)
+Error: P1001: Can't reach database server at `127.0.0.1:16494`
+
+Please make sure your database server is running at `127.0.0.1:16494`.
+[rdev jar] 14:55:30 fetching scrcpy-server-v5.0.1 (release asset)
+[rdev jar] 14:56:04 scrcpy-server-v5.0.1 verified (sha256+size)
+[rdev secrets] 14:56:04 env.sh generated (scratch fixtures)
+[rdev FATAL] 15:00:26 api not ready (last log lines:)
+{"level":30,"time":1793026822571,"pid":435289,"hostname":"kenneth-System-Product-Name","reqId":"req-2f","res":{"statusCode":503},"responseTime":2474.162221000006,"msg":"request completed"}
+{"level":30,"time":1793026823076,"pid":435289,"hostname":"kenneth-System-Product-Name","reqId":"req-2g","req":{"method":"GET","url":"/api/health/ready","host":"127.0.0.1:16490","remoteAddress":"127.0.0.1","remotePort":47220},"msg":"incoming request"}
+Error: write ECONNRESET
+    at afterWriteDispatched (node:internal/stream_base_commons:159:15)
+    at writeGeneric (node:internal/stream_base_commons:150:3)
+    at Socket._writeGeneric (node:net:966:11)
+    at Socket._write (node:net:978:8)
+    at writeOrBuffer (node:internal/streams/writable:572:12)
+    at _write (node:internal/streams/writable:501:10)
+    at Writable.write (node:internal/streams/writable:510:10)
+    at EventEmitter.sendCommand (/home/kenneth/.openclaw/workspace/water_army/node_modules/ioredis/built/Redis.js:447:29)
+    at EventEmitter.client (/home/kenneth/.openclaw/workspace/water_army/node_modules/ioredis/built/utils/Commander.js:90:25)
+    at send (/home/kenneth/.openclaw/workspace/water_army/node_modules/ioredis/built/redis/event_handler.js:65:30) {
+  errno: -104,
+  code: 'ECONNRESET',
+  syscall: 'write'
+}
+{"level":40,"time":1793026825007,"pid":435289,"hostname":"kenneth-System-Product-Name","error":"\nInvalid `prisma.streamLease.findMany()` invocation:\n\n\nServer has closed the connection.","msg":"stream lease expiry sweep failed (will retry next tick)"}
+{"level":40,"time":1793026825576,"pid":435289,"hostname":"kenneth-System-Product-Name","reqId":"req-2g","requestId":"e042c4d5-51cf-428f-9e37-a5d74ef0c104","postgres":"down","redis":"down","docker":"up","msg":"readiness degraded"}
+{"level":30,"time":1793026825577,"pid":435289,"hostname":"kenneth-System-Product-Name","reqId":"req-2g","res":{"statusCode":503},"responseTime":2500.490832999989,"msg":"request completed"}
+[rdev mem] 15:02:45 MemAvailable 46549MB (>= 16384) OK
+[rdev sglang] 15:02:46 30000 health=200 OK
+[rdev stack] 15:02:46 user stack water-army-* 5/5 OK
+[rdev net] 15:02:46 network br-rdev-ladder exists (reuse)
+[rdev infra] 15:02:46 rdev-pg up (127.0.0.1:16494 -> container 5432)
+[rdev infra] 15:02:46 rdev-redis up (127.0.0.1:16495 -> container 6379)
+    └─ migration.sql
+
+All migrations have been successfully applied.
+[rdev jar] 15:02:48 scrcpy-server-v5.0.1 verified (sha256+size)
+[rdev api] 15:02:50 ready 200 (pid 440962)
+[rdev web] 15:02:51 up (pid 441006)
+[rdev sidecar] 15:02:51 16493 listening
+[rdev-seed 2026-10-26T15:02:51.143Z] seeded+verified rdev-admin (admin)
+[rdev-seed 2026-10-26T15:02:51.202Z] seeded+verified rdev-op1 (operator)
+[rdev-seed 2026-10-26T15:02:51.267Z] seeded+verified rdev-view1 (viewer)
+[rdev api] 15:02:51 login ok (rdev-admin)
+[rdev template] 15:02:51 rdev-base created (720x1280/320dpi, gpu host, 4GiB limit)
+[rdev bringup] 15:02:53 DONE

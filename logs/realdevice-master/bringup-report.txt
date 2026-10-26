@@ -1,0 +1,12 @@
+=== rdev bringup 2026-10-26T15:02:51Z ===
+MemAvailable MiB: 46256
+user stack: 5/5
+sglang 30000: 200
+api ready: 200
+web: 200
+echo: 200
+pg migrations: 
+containers:
+rdev-pg
+rdev-redis
+adb: 1 devices
