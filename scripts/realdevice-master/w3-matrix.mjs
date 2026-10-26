@@ -104,9 +104,13 @@ async function waitForView(name, pred, budgetMs, label) {
     const v = await view(name);
     last = v;
     if (v && pred(v)) return { v, waitedMs: Date.now() - t0 };
-    // keep the adb online (diagnostics is the only connect path — see W1 note)
+    // keep the adb online (product gap: no platform path connects a
+    // never-connected serial for no-proxy devices — operator-surface connect,
+    // see W1 finding; then /refresh persists the state)
     if (v && v.containerState === 'running' && v.adbState !== 'online' && Date.now() - lastDiag > 60000) {
       lastDiag = Date.now();
+      shSoft(`${ADB} connect 127.0.0.1:${v.adbPort} 2>&1`, 30000);
+      await req('POST', `/api/devices/redroid/${v.id}/refresh`);
       await req('POST', `/api/devices/redroid/${v.id}/diagnostics`);
     }
     await sleep(3000);

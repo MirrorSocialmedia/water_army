@@ -106,11 +106,16 @@ async function ensureDevices() {
   const t0 = Date.now();
   while (Date.now() - t0 < 1800000) {
     const st = await req('GET', '/api/devices/redroid');
+    // E1-faithful: exit when RUNNING (not adb-online). A fresh no-proxy
+    // device has NO platform path that connects its adb serial (product
+    // gap — see W1 finding), so waiting for adbState=online here would
+    // deadlock 30min and mask E1. E1 below asserts the refresh outcome on
+    // the untouched device; the harness connects AFTER E1 (operator surface).
     const done = [DEV1, DEV2].every((n) => {
       const d = (st.j.devices ?? []).find((x) => x.name === n);
-      return d && d.containerState === 'running' && d.adbState === 'online';
+      return d && d.containerState === 'running';
     });
-    if (done) return;
+    if (done) break;
     const now = Date.now();
     for (const n of [DEV1, DEV2]) {
       const key = `/tmp/rdev-wait-throttle-${n}`;
@@ -143,12 +148,22 @@ async function main() {
   console.log('devices:', JSON.stringify(DEVICES));
 
   // ================= E PHASE =================
-  // E1 — refresh → adb online + get-state=device
+  // E1 — refresh → adb online + get-state=device (on the UNTOUCHED device:
+  // no operator connect has happened yet — this is the honest E1)
   {
     const r = await req('POST', `/api/devices/redroid/${DEVICES[DEV1].id}/refresh`);
     const st = adb(`127.0.0.1:${DEVICES[DEV1].adbPort}`, 'get-state');
     ev('E1-refresh-online', { http: r.status, adbState: r.j.device?.adbState, adbGetState: st },
       r.status === 200 && r.j.device?.adbState === 'online' && st === 'device');
+    // Operator-surface connect (documented gap workaround): the rest of the
+    // matrix needs live adb. This is exactly what an operator would do.
+    for (const n of [DEV1, DEV2]) {
+      const c = adb(`127.0.0.1:${DEVICES[n].adbPort}`, 'connect');
+      console.log(`operator-connect ${n}: ${String(c).trim().slice(0, 80)}`);
+    }
+    await new Promise((res) => setTimeout(res, 2000));
+    await req('POST', `/api/devices/redroid/${DEVICES[DEV1].id}/refresh`);
+    await req('POST', `/api/devices/redroid/${DEVICES[DEV2].id}/refresh`);
   }
 
   // E2 — install

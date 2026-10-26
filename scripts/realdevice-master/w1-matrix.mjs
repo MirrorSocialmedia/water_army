@@ -132,10 +132,14 @@ async function main() {
       if (d.containerState === 'running' && d.adbState !== 'online') {
         if (!lastDiag[c.ref] || Date.now() - lastDiag[c.ref] > 60_000) {
           lastDiag[c.ref] = Date.now();
-          // /diagnostics (not /refresh): only the diagnostics path attempts
-          // adb connect — /refresh never connects a never-connected serial
-          // (no-proxy devices have no provisionTunnel connect; product gap
-          // recorded in the report for W2 E1).
+          // OPERATOR-SURFACE CONNECT (product gap, recorded in report):
+          // no platform path connects a never-connected adb serial for
+          // no-proxy devices (provisionTunnel only runs for proxied devices;
+          // /refresh never connects; /diagnostics never persists). A real
+          // operator would `adb connect` manually — the harness mirrors that
+          // here, then lets /refresh persist the online state.
+          shSoft(`${ADB} connect 127.0.0.1:${c.adbPort} 2>&1`, 30000);
+          await req('POST', `/api/devices/redroid/${c.id}/refresh`);
           await req('POST', `/api/devices/redroid/${c.id}/diagnostics`);
         }
       }
