@@ -398,3 +398,4 @@ export const DOCKER_ERROR_STATUS = Object.freeze({
  */
 export const SENSITIVE_ENV_KEY = /(^|[_-])(password|passwd|pass|pwd|secret|token|api_?key|apikey|auth|authorization|credential|credentials|private_?key|key|url|dsn|uri|connection_?string)([_-]|$)/i;
 
+export * from './fingerprint-profile.js';
