@@ -1191,3 +1191,29 @@ MD §13.2 嘅 per-actor 寫 budget（20/60s）係為**人工誤操作**設嘅；
 **安全代價（記錄於 threat-model T9 殘留 (e)(f)）**：重放窗口由「一次用盡」放寬到「TTL（60s）內未消耗可重放」— 限 owner+lease 綁定、HttpOnly cookie 傳送、並行重試只有一個 consume 贏家；Redis 重啟秒級視窗內剛消耗嘅票可短暫變返 spendable（後果 = 多一條重複流，容量門照常守）。
 
 **驗證**：unit 全語義矩陣（`stream-lease.test.js` — 成功前重用 / 成功後作廢 / TTL 過期 / close 作廢 / 非 owner 403 / 風暴同票重試最終成功 / legacy one-shot / consumed marker store 失聯 fail-closed；`stream-client-reconnect.test.js` — RA 跟從 / 無 RA 落 ladder / RA cap / 並發語義）+ integration（`stream-ticket-idempotent.test.js` — fake sidecar 真實 WS 帧：升級失敗唔燒票、成功先燒、成功後重放 401、並行 duplicate 單一 consume 贏家）。**真機 sidecar 全倒風暴重跑 = 待 RAM 恢復（NOT VERIFIED）** — 宿主 MemAvailable 不足以過 RAM gate 啟動 redroid，本次全部 hermetic（fake adapter）；重跑命令見 progress 檔 NV5b 段。
+
+## 25. W1 identity 級 device fingerprint profile（ADR-025，2026-10-26 — 老細批准開工 2026-10-26；真機 V3 待 RAM）
+
+**背景**：水軍 200 身份而家喺目標平台眼入面指紋全同 — redroid 同一 template 出機，`ro.build.fingerprint` / `ro.product.*` / serial 全部嚟自 image，identity 只反映喺 dataDir / proxy IP 層。同一 model + 同一 build + 同一 serial 嘅 200 部「手機」= 平台側最廉價嘅聚類信號。W1 = identity 級指紋 profile 嘅**生成、存儲、注入、校驗**（代碼段）；**真機實測全部掛起等 RAM（ADR-025 V3 = NOT VERIFIED，見 §待辦）**。
+
+**決策**：
+1. **Profile = 確定性生成，seed = identityId**（`packages/shared/src/fingerprint-profile.js`）。splitmix64 over sha256(`wa-w1|<identityId>`) 驅動 pool 揀選 + 唯一碼段。冪等：同一 identityId 重生成 deep-equal（「3× 重建穩定」喺代碼層歸約到呢個性質）；device recreate 重放同一 map。字段：`androidRelease / brand / manufacturer / model / device / productName / buildId / displayId / fingerprint / serial / locale / timezone / carrierName / carrierMcc / carrierMnc`（+ 可選 `securityPatch`）。**唯一性 by construction**：`fingerprint`（32^10 碼段）、`displayId`（32^5）、`serial`（32^4）嵌入 seed 衍生碼段 — UNIQUE_PROFILE_FIELDS = {fingerprint, serial, displayId}；其餘字段（brand/model/carrier）跨身份重複屬真實行為（兩個用户可以擁有同款手機），碰撞器記錄但唔阻擋。android_id **唔納入 profile**：Android 首 boot 自動生成並持久喺 /data（settings secure），而 /data 本身 per-device 持久 — 已天然 identity 穩定，唔重複發明。
+2. **存儲 = 新表 `identity_fingerprints`（1:1，additive migration 20261026100000）**，唔放 Identity.metadataJson。理由：(a) fingerprint/serial/displayId 需要 **DB unique 守門**（fleet 級碰撞 = fail-closed 硬約束，JSON blob 辦唔到）；(b) metadataJson 係 operator 自由中繼資料＋scrub 展示路徑，混入結構化安全欄位會糊化邊界；(c) typed 欄位先至支援 `(brand, model)` 分佈查詢。`profileJson` 係單一真相，typed 欄位只服務 unique 守門 + join。metadataJson 保持原職，零改動。
+3. **注入路徑 = androidboot Cmd carrier + 開關默認 OFF**。`RedroidTemplate.roOverrides`（JSONB，默認 `{}` = 現行為 byte-identical）承載 template 級靜態基線；device create 帶 `identityId` 且 **WA_REDROID_RO_OVERRIDES_ENABLED=true** 時：ensureProfile（確定性生成 + drift 校驗 + 碰撞預檢）→ merge（template 基線 ← identity profile，profile 贏）→ snapshot 落 `devices.ro_overrides_json` + `devices.identity_id` → `buildRedroidCmd` 追加 `androidboot.wa_<prop>=<value>`（sorted、穩定序）。`wa_` 前綴將我哋嘅 carrier key 同 redroid 原生 `redroid_*` key 隔開（ro.boot.wa_* 唔會撞）。**開關 OFF（默認）= identityId 收得但完全惰性**：唔查 profile、唔寫 row、Cmd byte-identical — V3 未過之前唔准默默改變真機行為。
+4. **fail-closed 鏈**（全部 unit/integration 覆蓋）：非法 prop 值（含空格 / `=` / 引號 / 控制字元 — kernel androidboot parser 比 Android 本身更嚴）→ validator 拒絕；template roOverrides 非法 → 寫入 400 / create 500；identity 唔存在 → 404 **先於一切副作用**（no data dir、no DB row、no RAM-gate lease、no docker create）；profile drift（row ≠ 確定性重生成）→ 500 拒絕亂估；碰撞 → 409（預檢 + DB unique P2002 雙層）；merged map 非法 → 500 且 buildRoCmdArgs 永不吐 partial args。
+5. **carrier 風險誠實記錄**：`androidboot.wa_*` → `ro.boot.wa_*` 係 kernel 標準行為，但 **redroid init 會唔會將 ro.boot.wa_ro_build_fingerprint 落成 ro.build.fingerprint 係未驗證假設** — ro.product.* 系列（partitions 由 vendor 分區 image 自帶）同 ro.serialno 邊個贏、setprop 兜底路徑（post-boot `setprop` / resetprop 邊個有權限燒 ro.*）全部列入 V3 待辦。locale/timezone/carrier 冇 ro.* carrier（settings/telephony 側，後續 phase）。
+
+**V3 真機待辦清單（逐項 getprop 抽樣矩陣 — RAM 恢復後執行）**：
+| # | ro.* prop | 驗證方法 | 通過標準 |
+|---|-----------|----------|----------|
+| V1 | ro.build.fingerprint | create 帶 profile（開關 ON）→ boot → `adb -s <dev> shell getprop ro.build.fingerprint` | 逐字節等於 profile.fingerprint |
+| V2 | ro.product.model / brand / manufacturer / device / name | 同上逐項 getprop（注意 `ro.product.<partition>.*` vs 合成視圖 — `getprop` 與 `adb shell getprop | grep ro.product` 兩款都抽） | 逐項等於 profile（邊個 partition 贏要記錄） |
+| V3 | ro.build.id / ro.build.display.id | getprop 抽樣 | 等於 profile |
+| V4 | ro.serialno（+ ro.boot.serialno 對照） | getprop；`adb devices -l` 都抽 | ro.serialno = profile.serial |
+| V5 | 3× 重建穩定 | 同 identity delete+recreate ×3 → 每輪 getprop 全套 | 三輪逐字節一致 |
+| V6 | 平台側盲測 | 2 個唔同 identity 嘅 device 上目標平台，用平台自帶 device-info 面板/日志抽指紋 | 兩機指紋唔同 |
+| V7 | carrier fallback | 若 ro.boot.wa_* 唔生效 → 試 post-boot setprop/resetprop 邊個可寫；記錄邊個機制入 ADR 修訂 | 有機制 + 3× 穩定 |
+- 抽樣矩陣執行時填入本 ADR（邊項過/邊項唔過 + partition 勝負記錄）；**全部過之前開關必須保持 OFF**。
+- RAM gate：V3 執行需要 ≥1 部 redroid 上機（MemAvailable 而家 ~2 GiB < gate）— 掛起係預期狀態，唔係阻塞 bug。
+
+**驗證（代碼段，已做）**：unit `fingerprint-profile.test.js`（12：冪等 / 200+2000 fleet unique 欄位 0 碰撞 / validator 負矩陣 / 碰撞器 blocking vs informational / carrier 編碼 + 穩定序 + never-partial）；integration `redroid-fingerprint.test.js`（6：開關 OFF 惰性（Cmd byte-identical + row unbound + 無 profile lookup）/ ON 注入落 mock createContainer body（Cmd 唔落 Env）+ row snapshot / 3× recreate 逐字節一致 / 404 fail-closed 零副作用 / template 基線寫入校驗 + merge 勝負 + OFF 惰性 / routes 冪等 ensure + RBAC + fleet 碰撞審計 clean）。**真機層 = NOT VERIFIED（V3 待 RAM）** — 本 ADR 所有「生效」描述只指代碼層。
