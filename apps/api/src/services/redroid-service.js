@@ -47,11 +47,24 @@ import {
   computeRecoveryDecision,
   backoffMs,
   buildNetPayload,
+  // W3 (ADR-027): identity egress binding (state machine + probe + decisions)
+  EGRESS_STATES,
+  EGRESS_ERRORS,
+  T2S_EGRESS_MARKER,
+  assertEgressTransition,
+  IllegalEgressTransition,
+  buildT2sEgressScript,
+  parseEgressOutput,
+  classifyEgressProbe,
+  generateEgressNonce,
+  computeEgressDecision,
+  buildEgressPayload,
+  resolveEgressExpectation,
 } from './redroid-health.js';
 
 // R3 markers are re-exported so the mock adapter (redroid-mock.js) can match
 // the canary/netcheck scripts without a second import surface.
-export { T2S_NETCHECK_MARKER, T2S_CANARY_MARKER } from './redroid-health.js';
+export { T2S_NETCHECK_MARKER, T2S_CANARY_MARKER, T2S_EGRESS_MARKER } from './redroid-health.js';
 
 /** Server-side ADB bind constant — MD §1.2: 127.0.0.1 ONLY. Never client input. */
 export const REDROID_LOOPBACK_BIND = '127.0.0.1';
@@ -880,6 +893,34 @@ export function createRedroidService({
     return c.canaryHost !== '' && c.canaryPort >= 1 && c.canaryPort <= 65535;
   }
 
+  /**
+   * W3 (ADR-027): egress knobs. The probe RIDES the net watchdog tick — same
+   * poll interval, same single-flight sweep — so the detection window is
+   * exactly REDROID_HEALTH_POLL_MS + the probe timeout (documented in the
+   * ADR). Safe clamps keep an operator typo from breaking the probe.
+   */
+  function egressCfg() {
+    const c = healthCfg();
+    return {
+      enabled: Boolean(config?.egressBindingEnabled),
+      echoHost: String(config?.egressEchoHost ?? '').trim(),
+      echoPort: Number(config?.egressEchoPort ?? 0) || 0,
+      probeTimeoutMs: Math.min(120_000, Math.max(1000, config?.egressProbeTimeoutMs ?? 10_000)),
+      staleTtlMs: Math.max(1000, config?.egressStaleMs ?? 90_000),
+      failThreshold: Math.max(1, config?.egressFailThreshold ?? 2),
+      pollMs: c.pollMs,
+    };
+  }
+
+  function egressEchoConfigured() {
+    const c = egressCfg();
+    return c.echoHost !== '' && c.echoPort >= 1 && c.echoPort <= 65535;
+  }
+
+  function normEgressState(row) {
+    return EGRESS_STATES.includes(row?.egressState) ? row.egressState : 'UNCHECKED';
+  }
+
   function netPolicyCfg() {
     const c = healthCfg();
     return { backoffBaseMs: c.backoffBaseMs, backoffMaxMs: c.backoffMaxMs, maxRetries: c.maxRetries, stallMaxRetries: c.stallMaxRetries };
@@ -997,6 +1038,212 @@ export function createRedroidService({
       }
     }
     return updated ?? row;
+  }
+
+  /**
+   * W3 (ADR-027 §3): the ONLY device egress-state write path — the egress
+   * twin of persistNet. State moves only via verified events:
+   *  - transition asserted first (illegal = refused + audited, nothing written)
+   *  - VERIFIED requires fresh match evidence (observedIp === expectedIp) —
+   *    no blind VERIFIED, structurally
+   *  - every transition audited (state codes + IPs only — a proxy URL or
+   *    credential can never reach these columns or this event: the W3 path
+   *    never holds plaintext URLs, by construction)
+   *  - intervention events ride the shared (deduping, non-fatal) writer
+   *  - to === from → "refresh": field update only, no transition event
+   */
+  async function persistEgress(row, to, ev = {}) {
+    if (!row?.id) return row;
+    const from = normEgressState(row);
+    const data = {};
+    if (to !== from) {
+      try {
+        assertEgressTransition(from, to, ev);
+      } catch (err) {
+        if (err instanceof IllegalEgressTransition) {
+          log.warn({ device: row.name, from, to, reason: ev.reason ?? null }, 'redroid egress: ILLEGAL transition refused (state unchanged)');
+          await audit({
+            actorUserId: null, action: 'redroid.device.egress_transition_refused', resourceType: 'redroid_device', resourceId: row.id,
+            requestId: null, ip: null, status: 'failure',
+            details: { name: row.name, from, to, reason: ev.reason ?? null, source: ev.source ?? null, relatedTaskId: null },
+          }).catch(() => {});
+          return null;
+        }
+        throw err;
+      }
+      data.egressState = to;
+      data.egressStateSince = new Date();
+      // A fresh match is the ONLY thing that re-arms the VERIFIED freshness
+      // anchor + clears the failure episode. Configuration-state entries
+      // (NO_PROXY/UNBOUND/UNCHECKED) also reset the counter — the old count
+      // belonged to a different configuration.
+      if (to === 'VERIFIED') { data.egressConsecutiveFailures = 0; data.egressLastMatchAt = new Date(); }
+      if (to === 'NO_PROXY' || to === 'UNBOUND' || to === 'UNCHECKED') data.egressConsecutiveFailures = 0;
+    }
+    if (ev.checkedAt !== undefined) data.egressCheckedAt = ev.checkedAt;
+    if (ev.consecutiveFailures !== undefined) data.egressConsecutiveFailures = ev.consecutiveFailures;
+    if (ev.errorCode !== undefined) data.egressLastErrorCode = ev.errorCode || null;
+    if (ev.observedIp !== undefined) data.egressLastObservedIp = ev.observedIp || null;
+    if (Object.keys(data).length === 0) return row;
+    let updated = null;
+    try {
+      updated = await db.device.update({ where: { id: row.id }, data });
+    } catch (err) {
+      log.warn({ device: row.name, to, error: err?.message }, 'redroid egress: persistEgress failed');
+      return row;
+    }
+    if (to !== from) {
+      log.info(
+        { device: row.name, from, to, reason: ev.reason ?? null, errorCode: ev.errorCode ?? undefined, observedIp: ev.observedIp ?? undefined, consecutiveFailures: ev.consecutiveFailures ?? undefined },
+        'redroid egress: transition',
+      );
+      await audit({
+        actorUserId: null, action: 'redroid.device.egress_transition', resourceType: 'redroid_device', resourceId: row.id,
+        requestId: null, ip: null, status: to === 'VERIFIED' ? 'success' : 'warning',
+        details: {
+          name: row.name, from, to,
+          reason: ev.reason ?? null,
+          errorCode: ev.errorCode ?? null,
+          source: ev.source ?? null,
+          // egress metadata (an IP) — never a credential.
+          observedIp: ev.observedIp ?? null,
+          expectedIp: ev.expectedIp ?? null,
+          consecutiveFailures: updated.egressConsecutiveFailures ?? null,
+          relatedTaskId: null,
+        },
+      }).catch(() => {});
+      // Fleet-level binding freshness (best-effort; never breaks the path).
+      if (to === 'VERIFIED' && ev.identityId) {
+        try {
+          const b = await db.identityEgress.findUnique({ where: { identityId: ev.identityId } });
+          if (b) {
+            const now = new Date();
+            await db.identityEgress.update({
+              where: { identityId: ev.identityId },
+              data: { firstVerifiedAt: b.firstVerifiedAt ?? now, lastVerifiedAt: now },
+            });
+          }
+        } catch { /* non-fatal */ }
+      }
+    }
+    // Intervention escalation (the shared writer dedupes open episodes and is
+    // non-fatal by contract; the catch guards the seam itself). Events are
+    // produced by computeEgressDecision (drift = immediate/critical;
+    // unreachable = on the consecutive-failure threshold crossing).
+    if (ev.event && intervention) {
+      try {
+        await intervention.signalEgress(updated ?? row, {
+          ...ev.event,
+          egressState: to,
+          netState: row.netState ?? null,
+          identityId: ev.identityId ?? row.identityId ?? null,
+        });
+      } catch (e) {
+        log.warn({ device: row.name, to, error: e?.message }, 'intervention signalEgress failed (non-fatal)');
+      }
+    }
+    return updated ?? row;
+  }
+
+  /**
+   * W3 (ADR-027 §4): one egress verification pass — the W3 twin of verifyNow,
+   * on the INDEPENDENT egress axis (a tunnel can be fully alive while the
+   * exit IP is WRONG — the probe is the only evidence):
+   *   resolve expectation (PRESENCE flags only — the W3 path never decrypts)
+   *     NO_PROXY / UNBOUND → persist the explicit configuration state (no probe)
+   *     BOUND              → in-device probe through the tunnel → classify →
+   *                          computeEgressDecision → persistEgress
+   * Fail-closed: any unresolved axis keeps networkReady=false (buildNetPayload
+   * composes the egress gate into the dispatch gate). NEVER throws: every
+   * failure mode is a state + a log line, never an exception escaping into
+   * the watchdog sweep.
+   */
+  async function verifyEgress(row, { source = 'watchdog', containerRunning = true } = {}) {
+    const cfg = egressCfg();
+    if (!cfg.enabled) return { skipped: 'switch-off' };
+    if (!row?.id) return { skipped: 'no-device' };
+    try {
+      const binding = row.identityId ? await db.identityEgress.findUnique({ where: { identityId: row.identityId } }).catch(() => null) : null;
+      const expectation = resolveEgressExpectation({
+        hasDeviceProxy: Boolean(row.proxyUrlEncrypted),
+        hasTemplateProxy: Boolean(row.template?.proxyUrlEncrypted),
+        hasIdentityId: Boolean(row.identityId),
+        binding,
+      });
+      if (expectation.status === 'NO_PROXY') {
+        // Explicit state — never naked by default. Steady-state no-op (zero
+        // writes once stamped).
+        if (normEgressState(row) === 'NO_PROXY') return { state: 'NO_PROXY', skipped: 'already' };
+        const u = await persistEgress(row, 'NO_PROXY', { reason: 'no-proxy-resolved', source, errorCode: EGRESS_ERRORS.NO_PROXY });
+        return { state: u?.egressState ?? 'NO_PROXY', probe: null };
+      }
+      if (expectation.status === 'UNBOUND') {
+        if (normEgressState(row) === 'UNBOUND') return { state: 'UNBOUND', skipped: 'already' };
+        const u = await persistEgress(row, 'UNBOUND', { reason: expectation.reason, source, errorCode: EGRESS_ERRORS.UNBOUND });
+        return { state: u?.egressState ?? 'UNBOUND', probe: null };
+      }
+      if (containerRunning !== true) return { state: normEgressState(row), skipped: 'container-not-running' };
+      if (!egressEchoConfigured()) {
+        // W3 ON but no IP-echo endpoint: the egress is UNVERIFIABLE — the
+        // same fail-closed rule as an unconfigured canary (the device can
+        // never be (stay) VERIFIED). Routed through the decision engine so
+        // the threshold gates the intervention (noise control).
+        const cls = { verdict: 'PROBE_FAIL', observedIp: null, expectedIp: expectation.expectedIp, code: EGRESS_ERRORS.ECHO_NOT_CONFIGURED };
+        const decision = computeEgressDecision({
+          state: normEgressState(row),
+          probe: cls,
+          consecutiveFailures: Number.isInteger(row.egressConsecutiveFailures) ? row.egressConsecutiveFailures : 0,
+          failThreshold: cfg.failThreshold,
+        });
+        const u = await persistEgress(row, decision.target, {
+          reason: 'echo-not-configured', source, checkedAt: new Date(),
+          consecutiveFailures: decision.consecutiveFailures, errorCode: cls.code, observedIp: null,
+          identityId: row.identityId ?? null, event: decision.event,
+        });
+        return { state: u?.egressState ?? decision.target, probe: cls };
+      }
+      const nonce = generateEgressNonce();
+      let parsed = null;
+      try {
+        const r = await execInContainer(
+          row.containerId,
+          buildT2sEgressScript({ host: cfg.echoHost, port: cfg.echoPort, timeoutMs: cfg.probeTimeoutMs, nonce }),
+          { timeoutMs: cfg.probeTimeoutMs + 15_000 },
+        );
+        parsed = parseEgressOutput(r.stdout);
+      } catch {
+        parsed = { result: 'ERROR', reason: 'exec-error' }; // exec seam failure = a failure, never healthy
+      }
+      const cls = classifyEgressProbe(parsed, expectation.expectedIp);
+      const decision = computeEgressDecision({
+        state: normEgressState(row),
+        probe: cls,
+        consecutiveFailures: Number.isInteger(row.egressConsecutiveFailures) ? row.egressConsecutiveFailures : 0,
+        failThreshold: cfg.failThreshold,
+      });
+      const ev = {
+        reason: cls.verdict === 'MATCH' ? 'probe-match' : cls.verdict === 'DRIFT' ? `drift:${cls.observedIp}` : `probe-fail:${cls.code}`,
+        source,
+        checkedAt: new Date(),
+        consecutiveFailures: decision.consecutiveFailures,
+        errorCode: cls.code ?? null,
+        observedIp: cls.observedIp ?? null,
+        expectedIp: cls.verdict === 'DRIFT' ? expectation.expectedIp : null,
+        identityId: row.identityId ?? null,
+        event: decision.event,
+      };
+      // assertEgressTransition requires FRESH match evidence to ENTER
+      // VERIFIED (no blind VERIFIED) — observedIp === expectedIp, this pass.
+      if (cls.verdict === 'MATCH') {
+        ev.match = { observedIp: cls.observedIp, expectedIp: expectation.expectedIp, at: Date.now() };
+        ev.expectedIp = expectation.expectedIp;
+      }
+      const u = await persistEgress(row, decision.target, ev);
+      return { state: u?.egressState ?? decision.target, probe: cls };
+    } catch (err) {
+      log.warn({ device: row?.name, error: err?.message }, 'redroid egress: verify pass failed (state unchanged)');
+      return { state: row ? normEgressState(row) : null, error: String(err?.message ?? err).slice(0, 160) };
+    }
   }
 
   /**
@@ -1331,7 +1578,17 @@ export function createRedroidService({
     }
     // VERIFYING / HEALTHY / DEGRADED / BLOCKED → full re-verification
     const v = await verifyNow(row, { source: 'watchdog' });
-    if (v.healthy) return { healthy: true };
+    // W3 (ADR-027): the egress axis — independent of the net verdict above
+    // (a tunnel can be alive while the exit IP is WRONG). Runs on every tick
+    // (healthy OR failing); isolated — an egress error never breaks the net
+    // path and vice versa.
+    let egressResult = null;
+    try {
+      egressResult = await verifyEgress(v.row ?? row, { source: 'watchdog', containerRunning: v.checks?.container === 'PASS' });
+    } catch (err) {
+      log.warn({ device: row.name, error: err?.message }, 'redroid egress: tick verify failed (isolated)');
+    }
+    if (v.healthy) return { healthy: true, egress: egressResult?.state ?? null };
     if (v.row?.netConsecutiveFailures === 1) {
       // first failure of the episode → its own audit event (transitions are
       // audited separately; this keeps the failure REASON findable even when
@@ -1365,8 +1622,16 @@ export function createRedroidService({
     try {
       const rows = await db.device.findMany({ include: { template: true } });
       for (const row of rows) {
-        if (!row.gostPort) continue;
         try {
+          if (!row.gostPort) {
+            // W3 (ADR-027): proxy-less devices skip the net pass but still
+            // get an EXPLICIT egress stamp (NO_PROXY while the switch is ON
+            // — never naked by default; steady-state no-op once stamped).
+            if (config?.egressBindingEnabled) {
+              await verifyEgress(row, { source: 'watchdog', containerRunning: false });
+            }
+            continue;
+          }
           await healthTickDevice(row);
         } catch (err) {
           log.error({ device: row.name, error: err?.message }, 'redroid net: watchdog tick device error (isolated)');
@@ -1577,7 +1842,18 @@ export function createRedroidService({
       const mid = (await persistNet(row, 'VERIFYING', { reason: 'tunnel-process-up', source: 'provision' })) ?? row;
       log.info({ device: row.name, gostPort: row.gostPort }, 'redroid proxy: tunnel up — VERIFYING (data-plane canary next; only a canary PASS may earn HEALTHY)');
       const v = await verifyNow(mid, { source: 'provision' });
-      return { started: true, verified: v.healthy, networkState: v.row?.netState ?? 'VERIFYING' };
+      // W3 (ADR-027): boot-time egress verification — the tunnel is up and
+      // (canary PASS) the net is HEALTHY; the EXIT IP is checked NOW, so a
+      // mismatched identity never enters the usable pool (fail-closed:
+      // networkReady=false until a fresh VERIFIED; mismatch → DRIFTED +
+      // intervention, zero side effects on the device itself).
+      let egressState = null;
+      try {
+        egressState = (await verifyEgress(v.row ?? mid, { source: 'provision', containerRunning: v.checks?.container === 'PASS' }))?.state ?? null;
+      } catch (err) {
+        log.warn({ device: row.name, error: err?.message }, 'redroid egress: boot verify failed (net path unaffected)');
+      }
+      return { started: true, verified: v.healthy, networkState: v.row?.netState ?? 'VERIFYING', egressState };
     }
     await persistNet(row, 'FAILED', { reason: 'script-run-failed', errorCode: NET_ERRORS.TUNNEL_SETUP_FAILED, errorDetail: `run exit=${r.exitCode} ${clip(r.stdout ?? r.stderr, 160)}`, source: 'provision' });
     throw fail('REDROID_TUNNEL_PROVISION_FAILED', 500, `tunnel setup failed on '${row.name}': exit=${r.exitCode} ${String(r.stdout ?? r.stderr).trim().slice(0, 200)}`);
@@ -1590,6 +1866,11 @@ export function createRedroidService({
       // container not running → the tunnel cannot be up; claim STOPPED so no
       // stale HEALTHY survives a container death discovered here (MD §5.4.1)
       await persistNet(row, 'STOPPED', { reason: 'teardown-container-not-running', source: 'action' });
+      // W3: a stopped device starts egress-UNVERIFIED again (fresh boot =
+      // fresh verification). No-op if already there.
+      if (normEgressState(row) !== 'UNCHECKED') {
+        await persistEgress(row, 'UNCHECKED', { reason: 'device-stopped', source: 'action' }).catch(() => {});
+      }
       return { done: true, reason: 'container-not-running' };
     }
     try {
@@ -1599,7 +1880,13 @@ export function createRedroidService({
       }
       const r = await execInContainer(row.containerId, buildT2sRunScript());
       const ok = r.exitCode === 0;
-      if (ok) await persistNet(row, 'STOPPED', { reason: 'teardown-complete', source: 'action' });
+      if (ok) {
+        await persistNet(row, 'STOPPED', { reason: 'teardown-complete', source: 'action' });
+        // W3: fresh boot = fresh egress verification (see above).
+        if (normEgressState(row) !== 'UNCHECKED') {
+          await persistEgress(row, 'UNCHECKED', { reason: 'device-stopped', source: 'action' }).catch(() => {});
+        }
+      }
       return { done: ok, error: ok ? undefined : String(r.stdout ?? r.stderr).trim().slice(0, 200) };
     } catch (err) {
       return { done: false, error: String(err?.message ?? err).slice(0, 200) };
@@ -1692,6 +1979,28 @@ export function createRedroidService({
       proxyUrlEncrypted = encryptSecret(effectiveProxy.raw, proxyKey());
     }
 
+    // W3 (ADR-027): identity-egress binding gate — BEFORE any side effect
+    // (no data dir, no DB row, no RAM-gate lease on a rejection). Switch OFF
+    // = inert (today's behaviour, byte-identical). Rules:
+    //   - a device MUST have an egress proxy (device override or template) —
+    //     no naked defaults while the switch is ON;
+    //   - a device created FOR an identity requires that identity to exist
+    //     and to have an egress binding (the per-identity pinned egress the
+    //     boot probe will verify against).
+    if (config?.egressBindingEnabled) {
+      if (!effectiveProxy) {
+        throw fail('EGRESS_PROXY_REQUIRED', 409, `identity egress binding is enforced (WA_W3_EGRESS_BINDING_ENABLED): device '${name}' has no egress proxy (no device override, no template proxy) — configure a proxy or disable the switch`);
+      }
+      if (input.identityId !== undefined && input.identityId !== null && input.identityId !== '') {
+        const ident = await db.identity.findUnique({ where: { id: String(input.identityId) } }).catch(() => null);
+        if (!ident) throw fail('IDENTITY_NOT_FOUND', 404, `identity '${input.identityId}' not found`);
+        const egressBinding = await db.identityEgress.findUnique({ where: { identityId: String(input.identityId) } }).catch(() => null);
+        if (!egressBinding) {
+          throw fail('EGRESS_BINDING_REQUIRED', 409, `identity '${input.identityId}' has no egress binding (PUT /api/identities/:id/egress) — per-identity pinned egress is mandatory while WA_W3_EGRESS_BINDING_ENABLED is on`);
+        }
+      }
+    }
+
     // Override allowlist: display geometry only (工單: template 允許嘅字段).
     const o = overrides ?? {};
     const dim = (label, v) => {
@@ -1736,6 +2045,13 @@ export function createRedroidService({
         throw fail('FINGERPRINT_RO_OVERRIDES_INVALID', 500, `merged roOverrides invalid: ${merged.problems.join('; ')}`);
       }
       roOverridesMerged = merged.overrides;
+    }
+    // W3 (ADR-027): the identity binding column is EGRESS ground truth — it
+    // must be stored whenever an identity is requested while the W3 switch
+    // is on, even if W1 ro-injection is off (the W3 gate above validated it).
+    // W1's fingerprint enforcement stays exactly as before.
+    if (config?.egressBindingEnabled && identityIdForDevice === null && input.identityId !== undefined && input.identityId !== null && input.identityId !== '') {
+      identityIdForDevice = String(input.identityId);
     }
 
     // Preflight BEFORE create — explicit warning, never the sole verdict (MD §2.3).
@@ -1829,6 +2145,14 @@ export function createRedroidService({
               // recreate evidence). null/{} while the switch is OFF.
               identityId: identityIdForDevice,
               roOverridesJson: roOverridesMerged ?? {},
+              // W3 (ADR-027): explicit initial egress state (switch ON only —
+              // OFF keeps the inert 'UNCHECKED' default, zero behaviour
+              // change). bound identity (gate proved the binding) → UNCHECKED
+              // until the boot probe lands; proxy without an identity →
+              // UNBOUND (nothing to pin against, never dispatch-ready).
+              egressState: config?.egressBindingEnabled && !identityIdForDevice ? 'UNBOUND' : 'UNCHECKED',
+              egressStateSince: new Date(),
+              egressConsecutiveFailures: 0,
             },
           });
           break;
@@ -2496,6 +2820,18 @@ export function createRedroidService({
       } else {
         try {
           const v = await verifyNow(row, { source: 'diagnostics' });
+          // W3 (ADR-027): diagnostics is authoritative for the egress axis
+          // too — same pass, same evidence standard, isolated from the net
+          // path (a diagnostics call may never throw because of egress).
+          let egressDiag = null;
+          try {
+            const eg = await verifyEgress(v.row ?? row, { source: 'diagnostics', containerRunning: v.checks?.container === 'PASS' });
+            egressDiag = {
+              state: eg?.state ?? null,
+              skipped: eg?.skipped ?? null,
+              probe: eg?.probe ? { verdict: eg.probe.verdict, observedIp: eg.probe.observedIp ?? null, code: eg.probe.code ?? null } : null,
+            };
+          } catch { /* isolated — the net zone is the contract */ }
           network = {
             executed: true,
             status: v.healthy ? 'pass' : 'fail',
@@ -2504,6 +2840,7 @@ export function createRedroidService({
             canary: v.canary ? { result: v.canary.result, reason: v.canary.reason ?? undefined, latencyMs: v.canary.ms ?? undefined } : null,
             lastError: v.failed ? { code: v.failed.code, detail: v.failed.detail } : null,
             binaryState: { state: row.binaryState ?? null, version: row.binaryVersion ?? null },
+            egress: egressDiag,
           };
         } catch (err) {
           network = { executed: true, status: 'error', state: curState, note: clip(err?.message, 200) };
@@ -2607,8 +2944,16 @@ export function createRedroidService({
    * incapable of carrying them; only machine-readable status values).
    */
   function deviceView(row, { withDataDir = false } = {}) {
+    const egressOn = egressCfg().enabled;
     const net = row.gostPort
-      ? buildNetPayload(row, { staleTtlMs: healthCfg().staleTtlMs, canaryConfigured: canaryConfigured() })
+      ? buildNetPayload(row, {
+          staleTtlMs: healthCfg().staleTtlMs,
+          canaryConfigured: canaryConfigured(),
+          // W3 (ADR-027): the egress gate composes into networkReady (one
+          // number, one source for API/worker/UI).
+          egressGate: egressOn,
+          egressStaleTtlMs: egressCfg().staleTtlMs,
+        })
       : null;
     const view = {
       id: row.id,
@@ -2653,6 +2998,11 @@ export function createRedroidService({
       // enforces transport-safe props only).
       identityId: row.identityId ?? null,
       roOverrides: row.roOverridesJson ?? {},
+      // W3 (ADR-027): identity egress binding view — null while the switch
+      // is OFF (views stay byte-identical otherwise). Exposed at the device
+      // TOP LEVEL (not only under proxy.network.egress) so proxy-less devices
+      // show their explicit NO_PROXY state too — never naked by default.
+      egress: egressOn ? buildEgressPayload(row, { staleTtlMs: egressCfg().staleTtlMs }) : null,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     };
@@ -2718,7 +3068,9 @@ export function createRedroidService({
     stopWatchdog();
   }
 
-  /** One watchdog pass (test/ops seam). deviceId omitted → all proxy devices. */
+  /**
+   * One watchdog pass (test/ops seam). deviceId omitted → all proxy devices.
+   */
   async function __tickOnceHealth(idOrName) {
     if (idOrName) {
       const row = await findDevice(idOrName);
@@ -2727,6 +3079,26 @@ export function createRedroidService({
     }
     await tickWatchdog();
     return { swept: true };
+  }
+
+  /**
+   * W3 (ADR-027) test/ops seam: run ONE egress verification pass over a
+   * device (or, with no id, stamp every device — the sweep's proxy-less
+   * branch included). Deterministic (no wall clock): tests flip the mock
+   * exec's emulated exit IP and drive this explicitly. Never throws.
+   */
+  async function __verifyEgress(idOrName, opts = {}) {
+    if (idOrName) {
+      const row = await findDevice(idOrName);
+      if (!row) return { skipped: 'not-found' };
+      return verifyEgress(row, { source: opts.source ?? 'seam', containerRunning: opts.containerRunning ?? true });
+    }
+    const rows = await db.device.findMany({ include: { template: true } });
+    const out = [];
+    for (const row of rows) {
+      out.push(await verifyEgress(row, { source: 'seam', containerRunning: false }));
+    }
+    return { swept: true, results: out };
   }
 
   // The watchdog is the fail-closed heart of R3 — start it with the service.
@@ -2753,6 +3125,7 @@ export function createRedroidService({
     // test/ops seams
     __allocateAdbPort: allocateAdbPort,
     __tickOnceHealth,
+    __verifyEgress,
   };
 }
 

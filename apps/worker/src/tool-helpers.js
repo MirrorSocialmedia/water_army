@@ -191,13 +191,16 @@ export function createToolHandlers({ api, log = console }) {
 
     // R4 (MD §6.3): the worker-side fail-closed signal. The deterministic
     // dispatch gate is `networkReady === true` (HEALTHY + fresh canary +
-    // zero consecutive failures) — the worker must never infer "running"
-    // from containerState/adbState alone (the legacy green-badge bug).
-    // Zero secrets: status vocabulary only, no proxy URL/credential.
+    // zero consecutive failures; W3 ADR-027 composes a FRESH VERIFIED egress
+    // state into the same number while its switch is on) — the worker must
+    // never infer "running" from containerState/adbState alone (the legacy
+    // green-badge bug). Zero secrets: status vocabulary only, no proxy
+    // URL/credential.
     'redroid.get_device_status': async (args) => {
       const r = await api.redroidDeviceStatus(args.device);
       const d = r?.device ?? {};
       const net = d.proxy?.network ?? null;
+      const eg = d.egress ?? null;
       return {
         ok: true,
         result: {
@@ -215,6 +218,18 @@ export function createToolHandlers({ api, log = console }) {
                 lastError: net.lastError ? { code: net.lastError.code, at: net.lastError.at } : null,
                 checks: net.checks ?? null,
                 dispatch: net.networkReady ? 'ALLOWED' : 'BLOCKED',
+              }
+            : null,
+          // W3 (ADR-027): why the dispatch gate is BLOCKED — net vs egress.
+          // Zero secrets: state codes + the observed exit IP (egress
+          // metadata, never a credential). null while the W3 switch is off.
+          egress: eg
+            ? {
+                state: eg.state,
+                stale: eg.stale,
+                ready: eg.ready,
+                lastObservedIp: eg.lastObservedIp ?? null,
+                lastErrorCode: eg.lastErrorCode ?? null,
               }
             : null,
         },

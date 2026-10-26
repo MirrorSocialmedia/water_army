@@ -18,7 +18,7 @@
 import { EventEmitter } from 'node:events';
 import fs from 'node:fs';
 
-import { removeRedroidDataDir, T2S_SETUP_FILE, T2S_NETCHECK_MARKER, T2S_CANARY_MARKER, TUN2SOCKS_CHECK_MARKER, TUN2SOCKS_PIN, GOST_HOST_BIND } from './redroid-service.js';
+import { removeRedroidDataDir, T2S_SETUP_FILE, T2S_NETCHECK_MARKER, T2S_CANARY_MARKER, T2S_EGRESS_MARKER, TUN2SOCKS_CHECK_MARKER, TUN2SOCKS_PIN, GOST_HOST_BIND } from './redroid-service.js';
 
 let mockIdSeq = 9000;
 
@@ -481,11 +481,11 @@ export function createMockPreflight() {
  *    control-plane failure shapes (e.g. process=dead, effective=direct).
  * opts.canary = {pass, reason, ms} — inject data-plane failure shapes.
  */
-export function createMockExec({ fail = false, binaryCheck, netcheck, canary, stageFail = false } = {}) {
+export function createMockExec({ fail = false, binaryCheck, netcheck, canary, egress, stageFail = false } = {}) {
   const calls = [];
   let lastStagedB64 = null;
   // Mutable behavior (tests flip failure shapes mid-scenario):
-  const behavior = { fail, binaryCheck, netcheck, canary, stageFail };
+  const behavior = { fail, binaryCheck, netcheck, canary, egress, stageFail };
   async function exec(containerId, script) {
     calls.push({ containerId, script, at: Date.now() });
     if (behavior.fail) return { exitCode: 1, stdout: 'mock exec: forced failure', stderr: 'TUNNEL_TEARDOWN_FAILED' };
@@ -515,6 +515,23 @@ export function createMockExec({ fail = false, binaryCheck, netcheck, canary, st
         return { exitCode: 0, stdout: `CANARY=PASS nonce=${nonce} ms=${c.ms ?? 42} reqsha=${'ab'.repeat(32)}\n`, stderr: '' };
       }
       return { exitCode: 1, stdout: `CANARY=FAIL nonce=${nonce} reason=${c.reason ?? 'timeout'}\n`, stderr: '' };
+    }
+    // W3 (ADR-027): in-device egress probe (IP-echo over the tunnel).
+    // behavior.egress = { ip: '..' } → OK with that observed exit IP;
+    // behavior.egress = { reason: 'timeout'|'connect-failed'|'no-status'|
+    //   'no-marker'|'bad-ip'|'nonce-mismatch' } → FAIL;
+    // default (no override) = a healthy OK on a TEST-NET-3 documentation IP,
+    // so a W3 test that forgets to pin the expectation fails loudly (DRIFT)
+    // rather than silently passing.
+    if (script.includes(T2S_EGRESS_MARKER)) {
+      const eg = behavior.egress;
+      const m = script.match(/NONCE=([a-f0-9]{8,64})/);
+      const nonce = m?.[1] ?? '0000000000000000';
+      if (eg && eg.reason && !eg.ip) {
+        return { exitCode: 1, stdout: `EGRESS=FAIL nonce=${nonce} reason=${eg.reason}\n`, stderr: '' };
+      }
+      const ip = eg?.ip ?? '203.0.113.10';
+      return { exitCode: 0, stdout: `EGRESS=OK nonce=${nonce} ip=${ip}\n`, stderr: '' };
     }
     // R1: stage (base64 → file). Capture the payload for the run call.
     const m = script.match(/printf '%s' '([A-Za-z0-9+\/=]+)' \| base64 -d/);
@@ -564,6 +581,7 @@ export function createMockExec({ fail = false, binaryCheck, netcheck, canary, st
       behavior.binaryCheck = b.binaryCheck;
       behavior.netcheck = b.netcheck;
       behavior.canary = b.canary;
+      behavior.egress = b.egress;
       behavior.stageFail = Boolean(b.stageFail);
     },
   };

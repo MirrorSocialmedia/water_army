@@ -16,6 +16,7 @@
 | ADR-024 | Mobile Console stream ticket 冪等化 | 已實裝 | §24 |
 | ADR-025 | W1 identity 級 device fingerprint profile | 已實裝（代碼段）、真機 V3 待 RAM | §25 |
 | ADR-026 | W2 App 層基礎（adb-whitelist 擴容 + ui-tree + app-service + device-apps routes） | 已實裝（代碼 + unit + mock integration 全綠）、真機矩陣待總測試單 | §26 |
+| ADR-027 | W3 身份↔出口 IP 強綁定（identity egress binding + boot 核對 + drift watchdog + credential 零洩漏） | 已實裝（代碼 + unit + mock integration 全綠；canary 零洩漏實錚）、live egress **NOT VERIFIED**（真機矩陣成單） | §27 |
 
 ---
 
@@ -1302,3 +1303,63 @@ MD §13.2 嘅 per-actor 寫 budget（20/60s）係為**人工誤操作**設嘅；
 3. A 矩陣任何一項 ❌ = halt 全矩陣 + 回報 CEO（安全面回退，唔係 flake）；E 矩陣 ❌ 但 A 全 ✅ = 功能 bug 單立。
 4. **E + A 全過之前，`WA_APP_OPS_ENABLED` 生產必須保持 OFF**；真機跑用 dedicated host + 開關 ON。
 5. 跑完：本 ADR §待辦 打勾 + 結果回填；`WA_APP_OPS_ENABLED` 保持 OFF 直到老細拍板常態開。
+
+## 27. W3 身份↔出口 IP 強綁定（ADR-027，2026-10-26 — 來源 = CEO W3 工單；老細 2026-10-26 批准 W1–W3 序列）
+
+**背景**：W1 綁定咗 identity ↔ ro fingerprint；Stage B 綁定咗 per-device proxy（`proxyUrlEncrypted` AES-256-GCM + gost + tun2socks 全鏈）。但**出口 IP 從冇核對、冇 watchdog** — proxy 靜默死 / 換咗 IP / 路由繞過 tunnel，身份就無聲「行屍」：app 層一切看似正常（tunnel alive、canary pass），實際上流量行咗另一條 IP 出街 → **同一身份兩個出口 IP = 最高風險偵測場景**。W3 = 綁定執行 + 偵測：每身份一枚**固定出口 IP**（pinned egress），boot 核對 + 運行期 drift watchdog，唔匹配 = **fail-closed**（唔入可用池 + `blocked_pending_review` 干預 + 審計）。
+
+**狀態紀律（NV4）**：本段 = 代碼 + unit + mock integration。**live egress = NOT VERIFIED** — hermetic mock 只證明邏輯正確，唔代表生產出口真的咁行。真機矩陣成單喺 `docs/w3-realdevice-todo.md`（真機 + 真實外網先至話得「實證」）。
+
+**決策**：
+
+1. **綁定模型 = identity 級**（唔係 device 級）：新表 `identity_egress_bindings`（additive-only migration `20261026180000_w3_identity_egress`）= `{ identityId (unique), proxyUrlEncrypted (AES-256-GCM，同 template 同一 codec), proxyUrlHash (sha256 one-way，rotation 偵測 + 相等判斷而唔使解密), expectedEgressIp (DB-unique，fleet-wide) }`。**`expectedEgressIp` fleet-wide unique 係 correlation killer**：每身份一個獨立出口 IP，兩個身份唔會喺同一 IP 出街（真機矩陣 D5 實證多身份獨立性）。device 級 snapshot/override 唔重複存 — device 嘅 egress expectation 係由 `identityId → binding` 解出（presence-only：`hasDeviceProxy / hasTemplateProxy / hasIdentityId / binding?` — **W3 路徑結構上永唔解密 proxy URL**）。
+   - **device 無 proxy = 明確狀態，唔准默認裸奔**：`NO_PROXY`（有 device 無 proxy）/ `UNBOUND`（有 proxy 但無 binding 可綁）兩者都係**恆 fail-closed**（`networkReady=false`），唔會入可用池 — 「裸奔」喺 W3 ON 下唔存在，只有「被記錄嘅無 proxy」。
+   - **create-time gate**（W3 ON）：template 無 proxy → 409 `EGRESS_PROXY_REQUIRED`；`identityId` 提供但 identity 唔存在 → 404；identity 無 binding → 409 `EGRESS_BINDING_REQUIRED`。全部**零副作用**（refuse 喺任何 container/proxy 建立之前）。
+   - **binding 變更/刪除 = 舊證據失效**：`expectedEgressIp` 或 `proxyUrlHash` 一變，所有 bound devices 立即 reset → `UNCHECKED`（fail-closed re-verify）；删除 binding → 同 reset（之後 tick 會蓋 `UNBOUND`）。
+
+2. **出口核對 = 機內 probe，唔係 host 端假設**：host 端**睇唔到**機內 tunnel 嘅真實出口（gost 上游 proxy 喺 host 嘅另一條 container 入面，host 直接 curl 得到嘅 IP 唔代表機內視角）。所以 probe 喺**機內**執行：`buildT2sEgressScript`（marker `wa-egress-v1`）→ `nc -w <to>` 經 tunnel 打去 admin 嘅 **IP-echo endpoint**（`WA_W3_EGRESS_ECHO_HOST:PORT`，回覆 `HTTP/1.1 200` + `client_ip=<x>` + **nonce 回顯**）→ 機內解析 → 回傳 `EGRESS=OK nonce=... ip=...` / `EGRESS=FAIL nonce=... reason=...`（timeout / connect-failed / no-status / no-marker / bad-ip / nonce-mismatch 六因）。
+   - **nonce = 防重放/防假證據**：每次 probe 新 nonce（`crypto.randomBytes`），echo 必須回顯 — 攔截式 fake response 唔帶 nonce = `nonce-mismatch` = fail-closed。
+   - **probe 腳本 injection-safe**：host/port/nonce/tmpDir 全部 server 端 strict validate 先入腳本（`EGRESS_HOST_RE` 字面 host、port 1..65535、nonce hex、tmpDir absolute safe-path RE）；腳本自身唔接任何 user string。
+   - **probe 行經 tunnel = 行經 proxy**：`ip rule add priority 5000 from all lookup 100`（table 100 catch-all）確保 probe 嘅 TCP 一樣出 tun0 → t2s → gost → 上游 proxy — probe 探到嘅出口 = 身份真實出口（**DNS 場景見 §27.3**）。
+   - **W3 ON 但 echo 未配置 = 永唔 VERIFIED**：`EGRESS_ECHO_NOT_CONFIGURED` → `UNREACHABLE`（fail-closed）— 唔存在「開咗 W3 但冇人核對出口」嘅狀態。
+
+3. **egress 狀態機（device 級，獨立於 net 軸）**：`UNCHECKED → VERIFIED / DRIFTED / UNREACHABLE / NO_PROXY / UNBOUND`。遷移表硬編碼（`assertEgressTransition`）：**VERIFIED 只可經 fresh MATCH evidence 進入**（任何路徑都唔可以「盲 VERIFIED」）；stop/teardown → `UNCHECKED`（fresh boot = fresh verify，唔准跨 stop 持有舊證據）。
+   - **VERIFIED**：最近一次 probe 出口 = expected（`lastMatchAt` 記時）。
+   - **DRIFTED**：probe 成功但出口 ≠ expected — **立即 fail-closed + critical 干預**（錯 IP = 最壞情況，唔等 threshold）。
+   - **UNREACHABLE**：probe 失敗（proxy 死 / tunnel 壞 / echo 死）— **立即 fail-closed**（gate 第一次失敗就關），但**干預有 threshold 閘**（`WA_W3_EGRESS_FAIL_THRESHOLD`，默認 2 次連續失敗）— 降噪：一過性抖動唔 spam `blocked_pending_review`。
+   - **任務凍結**：`networkReady`（既有 dispatch gate，worker `redroid.get_device_status` 唯一判讀口）= net 軸 AND egress 軸 — W3 ON 時**只有 fresh VERIFIED 放過**。已排程任務喺 `networkReady=false` 時唔可 dispatch（既有 R3 契約，W3 只加一條 AND 條件，零新 dispatch 面）。
+
+4. **偵測窗口（明確，秒級）**：
+   | 事件 | 偵測窗口（默認配置） | 依據 |
+   |------|----------------------|------|
+   | boot 出口唔匹配 | **provision 完成即刻**（tunnel up → verifyEgress 先至放行；device 一直唔 ready 到核對完成） | `provisionTunnel` 尾段 |
+   | 運行期 drift（出口換 IP） | **≤ 1 × watchdog tick**（`REDROID_HEALTH_POLL_MS` 默認 30s） | egress verify 搭 R3 watchdog 同一 tick |
+   | 運行期 unreachable（proxy 死） | gate：**≤ 1 tick**（第一次 probe fail 就關）；干預事件：**≤ threshold × tick**（默認 2 × 30s = 60s） | `computeEgressDecision` |
+   | stale（watchdog 停擺 / probe 全 hang） | **`WA_W3_EGRESS_STALE_MS` 默認 90s** 無 fresh match = stale → gate 關 | `egressStale`（per-payload 計算，唔依賴新 tick） |
+
+   即：**任何「身份用錯 IP 出街」嘅情況，最遲 30s 內被凍結出可用池；最遲 60s 內有人工干預事件；watchdog 本身死咗 90s 內 stale gate 兜底。**
+
+5. **proxy credential 保護（W3 核心不變量，canary 實錚）**：
+   - **結構性零解密**：W3 全部路徑（expectation 解析 / probe / 審計 / 干預 / API view）只用 **presence flags + hash + expected IP** — proxy URL 解密**只存在**原有 Stage B 路徑（gost 配置寫入時），W3 唔新增任何解密點。
+   - **API view 零 credential**：binding view = `expectedEgressIp + proxyHashShort(16) + 時間戳 + boundDevices`；URL 永唔返回。
+   - **審計/干預零 credential**：details/evidence 只有 IP + 狀態碼 + hash（`scrubObject` 過一道）。
+   - **probe 腳本零 credential**：腳本地址 echo endpoint（admin 配置），**從來唔見 proxy host**（機內 t2s → 本地 gost loopback 語義，credential 喺 host 端 gost 配置）。
+   - **canary 測試（核心）**：proxy = `socks5://wa-canary-user:wa-canary-s3cr3t-w3@w3proxy.example:7801`（假 credential）跑完整 lifecycle（boot match → drift → unreachable → recovery → binding change → stop），斷言 **全部 mock exec scripts + 全部 API response + 全部 audit row + 全部 intervention row/evidence/history + device DB row** 零出现 `wa-canary-user` / `wa-canary-s3cr3t-w3` / `socks5://` / `w3proxy.example`；DB 存嘅係密文（`proxyUrlEncrypted` 唔含 canary 字面）+ sha256 hash。
+
+6. **Routes + RBAC + 開關**（`routes/identity-egress.js`）：`GET /api/identities/egress`（list）+ `GET /api/identities/:id/egress` = viewer+；`PUT`/`DELETE` = admin（binding 決定身份可用邊個出口 IP — 同 template/fingerprint 同一權限級）。開關 **`WA_W3_EGRESS_BINDING_ENABLED` 默認 OFF**（W1 紀律）：OFF 時全部 route 503 `EGRESS_BINDING_DISABLED` + device 行為 **byte-inert**（egress 面 `null`、`networkReady` 純 net 軸、create gate 唔存在 — integration test #1 實錚零回歸）。
+
+**DNS 洩露場景分析（§27.3 工單要求 — 結論成文）**：
+
+現行容器網絡：機內 `tun0`（10.8.0.1/peer 10.8.0.2）+ `ip rule add priority 5000 from all lookup 100`（table 100 = 唯一 default via tun0，外加 gost gateway 嘅 eth0 例外路由防 hairpin）。**`from all` + priority 5000 = catch-all**：機內任何 process 嘅任何 outbound IP packet（TCP/UDP 包 UDP/53 DNS）喺冇更高優先級 rule 命中時都走 table 100 → tun0 → t2s → socks5(gost) → 上游 proxy。即：
+
+- **DNS 行 proxy = 現行架構事實**：Android netd 用嘅 resolver IP（/etc/resolv.conf）只決定 DNS query 嘅**目標**，query packet 本身經 tunnel 出街 — 上游 DNS server 見到嘅源 IP = proxy 出口 IP = pinned egress IP。**DNS 無獨立出口**（無 UDP/53 bypass rule、無 local resolver 喺 tunnel 外）。
+- **DNS 洩露條件 = tunnel 死**：t2s 死 / table 100 flush 後，catch-all 消失 → 流量（包 DNS）fall back 主表 → 直接由 host 網絡出街（IP 洩露 + DNS 洩露同刻）。**呢個場景已有 R3 watchdog 兜底**（netcheck 失效 → net 軸 FAILED → `networkReady=false` → 凍結）— W3 唔重複建，但 W3 嘅 egress probe 喺「tunnel alive 但出口錯」嘅縫隙加咗第二層（R3 兜 tunnel 死，W3 兜 tunnel 活出口錯）。
+- **點樣探測（真機）**：(a) 機內 `nslookup/dig` 一個 canary domain，上游 DNS logger（或 DoH echo）核對 query 源 IP == pinned egress IP；(b) 用 DNS-over-HTTPS 打一個回顯源 IP 嘅 endpoint（`https://<echo>/resolve?name=...`），比較回顯源 IP == pinned；(c) 負向：kill 上游 proxy → 斷言 R3 netcheck 喺 ≤1 tick 內 FAILED（DNS 洩露窗口 = R3 偵測窗口，W3 egress probe 同 tick 亦 UNREACHABLE）。三項全部入真機矩陣 D 段。
+
+**驗證（代碼段，已完成 — 2026-10-26）**：
+- unit `egress-binding.test.js`（29）：IP strict validation（leading zero / 256+ / 非 numeric 全 reject）/ 狀態機遷移表（盲 VERIFIED 全拒、stop reset、transition evidence 契約）/ probe 腳本生成 + injection 矩陣 + **真 `sh` 執行**（stub `nc`，OK 全分支 + FAIL 六因各一）/ parser + classifier / decision engine（drift 即時、threshold 精確、counter reset）/ freshness（stale TTL 三態）/ payload key pin / expectation 解析（presence-only 四態）/ mask。
+- unit `egress-worker-projection.test.js`（4）：worker `redroid.get_device_status` 投影 — VERIFIED ALLOWED / DRIFTED BLOCKED（net=HEALTHY 證據：gate 被 egress 關）/ switch off null byte-inert / NO_PROXY·UNBOUND·UNREACHABLE·UNCHECKED 全 BLOCKED。
+- integration `redroid-egress-binding.test.js`（13，真 service 全鏈，mock exec 模擬 probe）：#1 switch OFF 503 + byte-inert / #2 CRUD+RBAC+validation（400/404/409）+ zero-credential view / #3 boot MATCH → VERIFIED + dispatch ALLOWED + binding verified-at / #4 boot DRIFT → fail-closed + intervention blocked_pending_review + **零副作用**（container running、net HEALTHY 唔動）/ #5 drift → recovery VERIFIED（干預唔自動解 — human-owned）/ #6 unreachable threshold 閘 + recovery / #7 NO_PROXY 明確狀態 + create gate 拒裸奔 / #8 UNBOUND（無 identity / binding 中途刪）/ #9 binding 變更 → reset → 新 IP re-verify / #10 stop → UNCHECKED / #11 echo 未配置永唔 VERIFIED / #12 **CANARY 零洩漏全系統實錚** / #13 create gate 409/404。
+- **Full suite：1399 pass / 0 fail / 6 skip**（基線 1353 + 新增 46；skip = RAM-G1 real-redis ×5 + P4 scheduler ×1，環境依賴、與 W3 無關）。
+
+**live egress = NOT VERIFIED（NV4）**：以上全部係 hermetic — mock exec 模擬 probe 回應，echo endpoint 唔存在。以下声明**未**經真實外網實證：probe 腳本喺真機 toybox 環境可行（`timeout`/`mkfifo`/`nc` 可用性 + FIFO half-close 行為）、真實 proxy 出口 IP 可被 echo 回顯、DNS 實際行 tunnel（§27.3 推導未實測）、多身份出口真獨立。**真機矩陣（成單）= `docs/w3-realdevice-todo.md`** — 跑完之前 `WA_W3_EGRESS_BINDING_ENABLED` 生產保持 OFF。

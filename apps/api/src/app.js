@@ -34,6 +34,7 @@ import { createBatchMetricsService } from './services/batch-metrics-service.js';
 import { runRedroidPreflight } from './services/preflight.js';
 import { createRedroidService } from './services/redroid-service.js';
 import { createFingerprintService } from './services/fingerprint-service.js';
+import { createIdentityEgressService } from './services/identity-egress-service.js';
 import { createAppService } from './services/app-service.js';
 import { buildRamGateService } from './services/ram-gate-service.js';
 import { createAdbWhitelist } from './services/adb-whitelist.js';
@@ -45,6 +46,7 @@ import { templateRoutes } from './routes/templates.js';
 import { redroidTemplateRoutes } from './routes/redroid-templates.js';
 import { redroidDeviceRoutes } from './routes/devices.js';
 import { identityFingerprintRoutes } from './routes/identity-fingerprints.js';
+import { identityEgressRoutes } from './routes/identity-egress.js';
 import { deviceAppRoutes } from './routes/device-apps.js';
 import { taskRoutes } from './routes/tasks.js';
 import { batchRoutes } from './routes/batches.js';
@@ -278,6 +280,29 @@ export async function buildApp(opts = {}) {
   // WA_REDROID_RO_OVERRIDES_ENABLED is off (createDevice never consults it).
   const fingerprintService = createFingerprintService({ db, log: app.log });
 
+  // W3 (ADR-027): identity egress binding service. Conditional wiring (same
+  // contract as intervention/stream): a db WITHOUT the identity_egress_bindings
+  // table (partial test fakes / pre-migration schemas) keeps buildApp alive —
+  // the stub fails closed 503. The route layer ALSO gates on the switch (503
+  // EGRESS_BINDING_DISABLED), so with W3 off the surface is doubly inert.
+  const hasEgressSurface = Boolean(
+    db?.identityEgress && typeof db.identityEgress.findUnique === 'function',
+  );
+  const identityEgressService = hasEgressSurface
+    ? createIdentityEgressService({ db, config, log: app.log, audit })
+    : (() => {
+      const stubUnavailable = async () => {
+        const e = new Error('identity egress binding surface unavailable (pre-migration schema)');
+        e.statusCode = 503;
+        e.apiCode = 'EGRESS_SURFACE_UNAVAILABLE';
+        throw e;
+      };
+      return { upsertBinding: stubUnavailable, getBinding: stubUnavailable, listBindings: stubUnavailable, deleteBinding: stubUnavailable };
+    })();
+  if (hasEgressSurface) {
+    app.log.info('identity egress service ON — W3 (ADR-027) pinned-egress bindings (inert until WA_W3_EGRESS_BINDING_ENABLED)');
+  }
+
   // W2 (ADR-026): app lifecycle + UI-tree service. Routes fail closed
   // (503 APP_OPS_DISABLED) while WA_APP_OPS_ENABLED is off. The adb engine
   // is its own whitelist instance (mock mode: same canned executor).
@@ -422,6 +447,7 @@ export async function buildApp(opts = {}) {
   app.decorate('batchMetrics', batchMetrics);
   app.decorate('redroidService', redroidService);
   app.decorate('fingerprintService', fingerprintService);
+  app.decorate('identityEgressService', identityEgressService);
   app.decorate('appService', appService);
   app.decorate('ramGateService', ramGateService);
   app.decorate('streamLeaseService', streamLeaseService);
@@ -560,6 +586,7 @@ export async function buildApp(opts = {}) {
   redroidTemplateRoutes(app);
   redroidDeviceRoutes(app);
   identityFingerprintRoutes(app);
+  identityEgressRoutes(app);
   deviceAppRoutes(app);
   taskRoutes(app, { taskQueue });
   batchRoutes(app);

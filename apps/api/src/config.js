@@ -143,6 +143,14 @@ export function loadConfig(env = process.env, opts = {}) {
   // default. Until the real-device matrix passes, routes fail closed with
   // 503 APP_OPS_DISABLED; flipping on is an explicit operator opt-in.
   const waAppOpsEnabled = ['1', 'true', 'yes', 'on'].includes(String(e.WA_APP_OPS_ENABLED ?? 'false').toLowerCase());
+
+  // W3 (ADR-027): identity-level PINNED EGRESS (binding enforcement + drift
+  // watchdog) — OFF by default. Until the ADR-027 real-device matrix passes,
+  // flipping this ON is an explicit operator opt-in: device create then
+  // fail-closes on missing bindings/proxies, the egress state machine +
+  // probe go live, and the dispatch gate additionally requires a fresh
+  // VERIFIED egress. OFF = byte-identical pre-W3 behaviour (routes 503).
+  const egressBindingEnabled = ['1', 'true', 'yes', 'on'].includes(String(e.WA_W3_EGRESS_BINDING_ENABLED ?? 'false').toLowerCase());
   // Managed APK directory: the ONLY host location install accepts files from.
   const waApkDir = e.WA_APK_DIR ?? '/var/lib/water-army/apk';
   const waApkMaxBytes = optInt(e, 'WA_APK_MAX_BYTES', 524_288_000); // 512 MiB
@@ -200,6 +208,7 @@ export function loadConfig(env = process.env, opts = {}) {
     redroidAdapter,
     redroidRoOverridesEnabled,
     waAppOpsEnabled,
+    egressBindingEnabled,
     waApkDir,
     waApkMaxBytes,
     waUiaMaxBytes,
@@ -247,6 +256,24 @@ export function loadConfig(env = process.env, opts = {}) {
     redroidCanaryPort: optInt(e, 'REDROID_CANARY_PORT', 0),
     redroidCanaryTimeoutMs: optInt(e, 'REDROID_CANARY_TIMEOUT_MS', 10_000),
     redroidCanaryFailThreshold: optInt(e, 'REDROID_CANARY_FAIL_THRESHOLD', 2),
+    // W3 (ADR-027): identity egress probe — an admin IP-echo endpoint that
+    // the in-device probe asks "what IP did you see?" THROUGH the tunnel.
+    // UNCONFIGURED (empty host) + switch ON = the egress is unverifiable = a
+    // device can never be (stay) VERIFIED (fail-closed, same rule as the
+    // canary). Detection window = REDROID_HEALTH_POLL_MS + this timeout.
+    egressEchoHost: e.WA_W3_EGRESS_ECHO_HOST ?? '',
+    egressEchoPort: optInt(e, 'WA_W3_EGRESS_ECHO_PORT', 0),
+    egressProbeTimeoutMs: optInt(e, 'WA_W3_EGRESS_PROBE_TIMEOUT_MS', 10_000),
+    // A VERIFIED egress older than this = stale = not dispatch-ready (a dead
+    // watchdog must never let a stale VERIFIED stand). Must be ≥ the poll
+    // interval or a healthy device flaps UNREACHABLE-ready every other tick.
+    egressStaleMs: optInt(e, 'WA_W3_EGRESS_STALE_MS', 90_000),
+    // Consecutive probe failures before the UNREACHABLE episode escalates to
+    // a human intervention (a single flake must not page; N ticks ≈ N ×
+    // poll-interval of sustained failure first). Drift, by contrast, is
+    // always immediate (severity critical) — a wrong exit IP is the worst
+    // case and gets no grace.
+    egressFailThreshold: optInt(e, 'WA_W3_EGRESS_FAIL_THRESHOLD', 2),
     // Recovery policy: backoff + max retries (MD §5.4.4/§5.5).
     redroidRecoveryBackoffBaseMs: optInt(e, 'REDROID_RECOVERY_BACKOFF_BASE_MS', 15_000),
     redroidRecoveryBackoffMaxMs: optInt(e, 'REDROID_RECOVERY_BACKOFF_MAX_MS', 600_000),

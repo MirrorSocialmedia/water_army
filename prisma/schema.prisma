@@ -360,6 +360,19 @@ model Device {
   // ON at create time; SetNull keeps device history when identity is deleted.
   identityId        String?   @map("identity_id") @db.Uuid
   roOverridesJson   Json      @default("{}") @map("ro_overrides_json")
+  // W3 (2026-10-26, ADR-027): identity-level PINNED EGRESS state machine.
+  // Written ONLY via the audited persistEgress() transition path (the egress
+  // twin of persistNet). Inert while WA_W3_EGRESS_BINDING_ENABLED is OFF
+  // (default): egress_state stays 'UNCHECKED' and the dispatch gate ignores
+  // it. egress_last_observed_ip = the OBSERVED exit IP (egress metadata, not
+  // a credential — a proxy URL never touches these columns).
+  egressState           String    @default("UNCHECKED") @map("egress_state") // UNCHECKED|VERIFIED|DRIFTED|UNREACHABLE|NO_PROXY|UNBOUND
+  egressStateSince      DateTime? @map("egress_state_since")
+  egressCheckedAt       DateTime? @map("egress_checked_at")
+  egressLastMatchAt     DateTime? @map("egress_last_match_at")
+  egressConsecutiveFailures Int   @default(0) @map("egress_consecutive_failures")
+  egressLastErrorCode   String?   @map("egress_last_error_code")
+  egressLastObservedIp  String?   @map("egress_last_observed_ip")
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
@@ -415,6 +428,8 @@ model Identity {
   // W1 (ADR-025): 1:1 fingerprint profile + devices currently bound to this identity.
   fingerprintProfile IdentityFingerprint?
   devices            Device[]        @relation("DeviceIdentity")
+  // W3 (ADR-027): 1:1 pinned egress binding (proxy + expected egress IP).
+  egressBinding IdentityEgress?
 
   @@index([status])
   @@index([identityType])
@@ -455,6 +470,35 @@ model IdentityFingerprint {
 
   @@index([brand, model])
   @@map("identity_fingerprints")
+}
+
+// ------------------------------------------------- identity egress (W3)
+// Identity-level PINNED EGRESS (ADR-027): the one egress expectation per
+// identity. proxyUrlEncrypted = AES-256-GCM ciphertext (same codec as the
+// Stage B redroid proxy URLs — decryptable with APP_ENCRYPTION_KEY; the W3
+// runtime path NEVER decrypts: presence is `!= null`, and the in-device
+// probe only ever learns the observed exit IP). expectedEgressIp is the
+// single exit IP this identity is allowed to exit from — DB-unique across
+// the fleet (two identities sharing an exit IP = correlation, the exact
+// failure W3 exists to catch). proxyUrlHash = sha256(plaintext URL),
+// one-way: change detection for the "binding changed → re-verify all bound
+// devices" reset; preimage resistant, safe to expose in API views.
+// firstVerifiedAt/lastVerifiedAt = fleet-level verification freshness for
+// this binding (updated by the verify path on a fresh match).
+model IdentityEgress {
+  identityId       String   @id @map("identity_id") @db.Uuid
+  proxyUrlEncrypted String  @map("proxy_url_encrypted")
+  proxyUrlHash     String   @map("proxy_url_hash")
+  expectedEgressIp String   @unique @map("expected_egress_ip")
+  schemaVersion    Int      @default(1) @map("schema_version")
+  firstVerifiedAt  DateTime? @map("first_verified_at")
+  lastVerifiedAt   DateTime? @map("last_verified_at")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  identity Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+
+  @@map("identity_egress_bindings")
 }
 
 // ---------------------------------------------------------------- batches (BR-B1, MD §9.2)

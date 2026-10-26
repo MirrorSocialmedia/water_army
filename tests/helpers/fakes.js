@@ -71,6 +71,7 @@ export function makeFakeDb({ users = [] } = {}) {
   const deviceRows = new Map(); // devices, by id
   const identityRows = new Map(); // identities, by id (W1 ADR-025)
   const fingerprintRows = new Map(); // identity_fingerprints, by identityId (W1 ADR-025)
+  const identityEgressRows = new Map(); // identity_egress_bindings, by identityId (W3 ADR-027)
   const interventionRows = new Map(); // manual_interventions, by id (MC P4)
   const historyRows = new Map(); // manual_intervention_history, by id (MC P4)
   let historySeq = 0; // monotonic — (createdAt, id) ordering must be deterministic in tests
@@ -709,6 +710,14 @@ export function makeFakeDb({ users = [] } = {}) {
         return rows;
       },
       count: async ({ where = {} } = {}) => matchDeviceWhere(where).length,
+      // W3 (ADR-027): bulk reset of egress state (binding change → bound
+      // devices back to UNCHECKED). Mirrors Prisma updateMany({where,data}).count.
+      updateMany: async ({ where = {}, data }) => {
+        const rows = matchDeviceWhere(where);
+        const clean = Object.fromEntries(Object.entries(data ?? {}).filter(([, v]) => v !== undefined));
+        for (const row of rows) Object.assign(row, clean, { updatedAt: now() });
+        return { count: rows.length };
+      },
       create: async ({ data }) => {
         if (data.id !== undefined && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(data.id))) {
           throw Object.assign(new Error(`invalid input syntax for type uuid: "${data.id}"`), { code: 'P2007' });
@@ -767,6 +776,15 @@ export function makeFakeDb({ users = [] } = {}) {
           // W1 (ADR-025): identity binding + injected ro snapshot
           identityId: data.identityId ?? null,
           roOverridesJson: data.roOverridesJson ?? {},
+          // W3 (ADR-027): identity egress state machine (inert defaults —
+          // UNCHECKED + zero counter; the W3 switch keeps it untouched)
+          egressState: data.egressState ?? 'UNCHECKED',
+          egressStateSince: data.egressStateSince ?? null,
+          egressCheckedAt: data.egressCheckedAt ?? null,
+          egressLastMatchAt: data.egressLastMatchAt ?? null,
+          egressConsecutiveFailures: data.egressConsecutiveFailures ?? 0,
+          egressLastErrorCode: data.egressLastErrorCode ?? null,
+          egressLastObservedIp: data.egressLastObservedIp ?? null,
           createdAt: ts,
           updatedAt: ts,
         };
@@ -789,6 +807,61 @@ export function makeFakeDb({ users = [] } = {}) {
       delete: async ({ where }) => {
         if (!deviceRows.has(where.id)) throw Object.assign(new Error('device not found'), { code: 'P2025' });
         deviceRows.delete(where.id);
+        return {};
+      },
+    },
+    // ---- W3 (ADR-027): identity egress bindings -------------------------
+    // Minimal Prisma-shaped in-memory model. Mirrors the DB guards:
+    //   - identityId PK (P2002 on duplicate upsert-create)
+    //   - expectedEgressIp unique (P2002 — the correlation killer guard)
+    // proxyUrlEncrypted is opaque ciphertext to the fake (the W3 runtime
+    // never decrypts it; tests seed via the route, which encrypts for real).
+    identityEgress: {
+      findUnique: async ({ where }) => {
+        const row = identityEgressRows.get(where.identityId);
+        return row ? { ...row } : null;
+      },
+      findFirst: async ({ where = {} } = {}) => {
+        const row = [...identityEgressRows.values()].find((r) => Object.entries(where).every(([k, v]) => r[k] === v));
+        return row ? { ...row } : null;
+      },
+      findMany: async () => [...identityEgressRows.values()].map((r) => ({ ...r })),
+      create: async ({ data }) => {
+        if (identityEgressRows.has(data.identityId)) {
+          throw Object.assign(new Error('Unique constraint failed on the fields: (identityId)'), { code: 'P2002' });
+        }
+        if ([...identityEgressRows.values()].some((r) => r.expectedEgressIp === data.expectedEgressIp)) {
+          throw Object.assign(new Error('Unique constraint failed on the fields: (expectedEgressIp)'), { code: 'P2002' });
+        }
+        const ts = new Date();
+        const row = {
+          identityId: data.identityId,
+          proxyUrlEncrypted: data.proxyUrlEncrypted,
+          proxyUrlHash: data.proxyUrlHash,
+          expectedEgressIp: data.expectedEgressIp,
+          schemaVersion: data.schemaVersion ?? 1,
+          firstVerifiedAt: data.firstVerifiedAt ?? null,
+          lastVerifiedAt: data.lastVerifiedAt ?? null,
+          createdAt: data.createdAt ?? ts,
+          updatedAt: ts,
+        };
+        identityEgressRows.set(row.identityId, row);
+        return { ...row };
+      },
+      update: async ({ where, data }) => {
+        const row = identityEgressRows.get(where.identityId);
+        if (!row) throw Object.assign(new Error('identity egress binding not found'), { code: 'P2025' });
+        if (data.expectedEgressIp !== undefined && data.expectedEgressIp !== row.expectedEgressIp &&
+            [...identityEgressRows.values()].some((r) => r.identityId !== row.identityId && r.expectedEgressIp === data.expectedEgressIp)) {
+          throw Object.assign(new Error('Unique constraint failed on the fields: (expectedEgressIp)'), { code: 'P2002' });
+        }
+        const clean = Object.fromEntries(Object.entries(data).filter(([, v]) => v !== undefined));
+        Object.assign(row, clean, { updatedAt: new Date() });
+        return { ...row };
+      },
+      delete: async ({ where }) => {
+        if (!identityEgressRows.has(where.identityId)) throw Object.assign(new Error('identity egress binding not found'), { code: 'P2025' });
+        identityEgressRows.delete(where.identityId);
         return {};
       },
     },
@@ -1004,6 +1077,7 @@ export function makeFakeDb({ users = [] } = {}) {
       runRows, eventRows, approvalRows, providerRows,
       scheduleRows, definitionRows, templateRows, deviceRows,
       interventionRows, historyRows,
+      identityRows, fingerprintRows, identityEgressRows,
     },
   };
   return db;

@@ -307,6 +307,52 @@ export function createInterventionService({ db, log, audit = null, now } = {}) {
     });
   }
 
+  /**
+   * W3 (ADR-027): identity egress detection — drift (immediate, critical) or
+   * unreachable (high, on the consecutive-failure threshold). The identity is
+   * exiting from an IP it must not use, or its exit IP is unknown. Both are
+   * identity network-protection losses, so the event is 'blocked_pending_review'
+   * FORCED: the automation stays frozen until a human reviews. The net axis
+   * above uses PAUSED for BLOCKED because a watchdog recovery may legitimately
+   * clear it; an egress verdict CANNOT be auto-cleared into safety (only a
+   * fresh VERIFIED match restores dispatch, and that never auto-resolves this
+   * event).
+   *
+   * ZERO SECRETS: evidence is IP addresses + state codes only — the W3 path
+   * never holds a proxy URL, and scrubObject is the belt to that structural
+   * suspenders.
+   */
+  async function signalEgress(device, ev = {}) {
+    if (!device?.id) return null;
+    const drift = ev.kind === 'drift';
+    // computeEgressDecision events carry `code`; the summary/evidence keep
+    // the `errorCode` naming (IPs + state codes only — secret-free by construction).
+    const code = ev.errorCode ?? ev.code ?? null;
+    return signalWriter.recordSignal({
+      deviceId: device.id,
+      deviceNameSnapshot: device.name,
+      source: INTERVENTION_SOURCE.NETWORK_STATE,
+      category: INTERVENTION_CATEGORY.NETWORK_BLOCKED,
+      severity: ev.severity === 'critical' ? INTERVENTION_SEVERITY.CRITICAL : INTERVENTION_SEVERITY.HIGH,
+      title: drift
+        ? `Device '${device.name}' egress IP DRIFT — identity exiting from the wrong IP`
+        : `Device '${device.name}' egress probe failing — exit IP unknown (identity at risk)`,
+      summary: drift
+        ? `egress drift: observed ${ev.observedIp ?? '?'} != expected ${ev.expectedIp ?? '?'} (egress state ${ev.egressState ?? '?'})`
+        : `egress probe failing (consecutive=${ev.consecutiveFailures ?? '?'}, last=${code ?? '?'}, state ${ev.egressState ?? '?'})`,
+      evidence: scrubObject({
+        kind: ev.kind ?? null,
+        observedIp: ev.observedIp ?? null,
+        expectedIp: ev.expectedIp ?? null,
+        errorCode: code,
+        egressState: ev.egressState ?? null,
+        netState: ev.netState ?? null,
+        identityId: ev.identityId ?? null,
+      }),
+      automationDisposition: AUTOMATION_DISPOSITION.BLOCKED_PENDING_REVIEW,
+    });
+  }
+
   /** ADB device-side offline (a real adbd answer, not an engine failure). */
   async function signalAdbOffline(device, { adbError = null, adbNote = null } = {}) {
     if (!device?.id) return null;
@@ -322,7 +368,6 @@ export function createInterventionService({ db, log, audit = null, now } = {}) {
       automationDisposition: AUTOMATION_DISPOSITION.PAUSED,
     });
   }
-
   /** Android boot timeout (provision / watchdog TUNNEL_START_TIMEOUT). */
   async function signalBootTimeout(device, { reason = null, errorCode = null } = {}) {
     if (!device?.id) return null;
@@ -418,6 +463,7 @@ export function createInterventionService({ db, log, audit = null, now } = {}) {
     // signal entry points
     recordSignal,
     signalNetwork,
+    signalEgress,
     signalAdbOffline,
     signalBootTimeout,
     signalContainerOffline,
@@ -456,6 +502,7 @@ export function createUnavailableIntervention() {
   return {
     recordSignal: async () => null,
     signalNetwork: async () => null,
+    signalEgress: async () => null,
     signalAdbOffline: async () => null,
     signalBootTimeout: async () => null,
     signalContainerOffline: async () => null,
