@@ -229,7 +229,7 @@ async function main() {
     sh('docker stop rdev-egress-a', 30000);
     say('D3: egress-a STOPPED — watching');
     let firstBad = null, interventionAt = null, netBefore = null;
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 45; i++) { // 135s window (tick 30s + probe 10s ×2 + margin)
       const v = await view('redroid-rdev-c1');
       const e = egressOf(v);
       netBefore = netBefore ?? netOf(v).state;
@@ -268,7 +268,7 @@ async function main() {
     restartEgressA(`${EGRESS_C}:9999`, U, P);
     const t0 = Date.now();
     let drifted = null, critInt = null, sideEffects = null;
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 45; i++) { // 135s window (tick 30s + probe 10s + reconnect margin)
       const v = await view('redroid-rdev-c1');
       const e = egressOf(v);
       if (!drifted && e.state === 'DRIFTED') {
