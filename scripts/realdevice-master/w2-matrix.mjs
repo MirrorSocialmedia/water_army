@@ -459,7 +459,7 @@ async function main() {
     const nodes0 = (d0.j.nodes ?? []).length;
     if (!(d0.status === 200 && nodes0 > 1)) throw new Error(`A3 precondition: need a real dump to measure — got http=${d0.status} nodes=${nodes0}`);
     const serial = `127.0.0.1:${DEVICES[DEV1].adbPort}`;
-    const xmlBytes = Number(adb(serial, 'shell', 'wc', '-c', '/data/local/tmp/wa_ui_dump.xml').split(/\s+/)[0]);
+    const xmlBytes = Number(/\d+/.exec(adb(serial, 'shell', 'wc', '-c', '/data/local/tmp/wa_ui_dump.xml'))?.[0] ?? 0);
     if (!(xmlBytes > 128)) throw new Error(`A3 precondition: unexpected on-device XML size ${xmlBytes}`);
     const byteCap = Math.max(64, Math.floor(xmlBytes / 4)); // < actual size → truncated read → 522
     const nodeCap = Math.max(1, Math.floor(nodes0 / 2));   // < actual count → node limit → 422
