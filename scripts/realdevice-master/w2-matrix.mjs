@@ -72,10 +72,12 @@ function ev(item, data, pass, { expected = false } = {}) {
   console.log(`[${pass ? 'PASS' : expected ? 'EXPECTED-FAIL' : 'FAIL'}] ${item}: ${JSON.stringify(data).slice(0, 220)}`);
   if (!pass && !expected) {
     haltCount++;
-    if (PHASE === 'A') {
-      // Discipline (task + script header): any A ❌ = halt the matrix NOW
-      // (original end-of-run exit(3) let later A items cascade on a broken
-      // state — relay leg-2 fix 2026-10-27).
+    // Discipline (task + script header): any ADRVERSARIAL (A*) item ❌ = halt
+    // the matrix NOW. Item-prefix (not PHASE) is authoritative because E11
+    // (uninstall) executes DURING the A phase window but is a functional E
+    // item — it records a failure but does not halt (relay leg-2 refinement).
+    // Original end-of-run exit(3) let later A items cascade on a broken state.
+    if (item.startsWith('A')) {
       writeSummary(`HALTED on ${item} (A-item failure — report to CEO)`);
       console.log(`A-ITEM FAIL (${item}) — halting matrix per discipline. Reporting to CEO.`);
       process.exit(3);

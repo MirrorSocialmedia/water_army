@@ -6600,3 +6600,5 @@ fatal: config error: WA_W3_EGRESS_ECHO_PORT must be a positive integer (got 0)
 {"level":30,"time":1793043532389,"pid":53007,"hostname":"kenneth-System-Product-Name","reqId":"req-8p","res":{"statusCode":404},"responseTime":0.20541599998250604,"msg":"request completed"}
 {"level":30,"time":1793043927557,"pid":53007,"hostname":"kenneth-System-Product-Name","reqId":"req-8q","req":{"method":"GET","url":"/api/health/ready","host":"127.0.0.1:16490","remoteAddress":"127.0.0.1","remotePort":57238},"msg":"incoming request"}
 {"level":30,"time":1793043927560,"pid":53007,"hostname":"kenneth-System-Product-Name","reqId":"req-8q","res":{"statusCode":200},"responseTime":2.687065999954939,"msg":"request completed"}
+{"level":30,"time":1793044179741,"pid":53007,"hostname":"kenneth-System-Product-Name","reqId":"req-8r","req":{"method":"GET","url":"/api/health/ready","host":"127.0.0.1:16490","remoteAddress":"127.0.0.1","remotePort":53356},"msg":"incoming request"}
+{"level":30,"time":1793044179743,"pid":53007,"hostname":"kenneth-System-Product-Name","reqId":"req-8r","res":{"statusCode":200},"responseTime":1.0573899997398257,"msg":"request completed"}

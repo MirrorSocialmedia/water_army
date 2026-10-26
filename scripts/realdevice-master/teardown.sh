@@ -15,6 +15,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SCRIPT_DIR/common.sh"
 EVID="${RD_EVID}/final"
 mkdir -p "$EVID"
+: > "$EVID/teardown-volumes.txt"
 API=http://127.0.0.1:16490
 
 # --- 0. admin cookie ---------------------------------------------------------
@@ -52,8 +53,12 @@ done
 node "$SCRIPT_DIR/seed-users.mjs" --teardown >> "$EVID/teardown.log" 2>&1 || true
 
 # --- 5. infra containers + network ---------------------------------------------
+# (anonymous volumes of pg/redis are captured and wiped too — `docker rm -f`
+# leaves them behind with the scratch DB data = residue, 2026-10-27 leg-2 audit)
 for c in rdev-egress-a rdev-egress-b rdev-egress-c rdev-egress-d rdev-dnslog "$RD_PGC" "$RD_RDC"; do
+  vols=$(docker inspect "$c" --format '{{range .Mounts}}{{if eq .Type "volume"}}{{.Name}} {{end}}{{end}}' 2>/dev/null || true)
   docker rm -f "$c" >/dev/null 2>&1 && log teardown "container $c removed" || log teardown "container $c already gone"
+  for v in $vols; do docker volume rm "$v" >/dev/null 2>&1 && { log teardown "anonymous volume $v removed"; echo "$v" >> "$EVID/teardown-volumes.txt"; }; done
 done
 docker network rm "$RD_NET" >/dev/null 2>&1 && log teardown "network $RD_NET removed" || log teardown "network $RD_NET already gone"
 
@@ -61,6 +66,23 @@ docker network rm "$RD_NET" >/dev/null 2>&1 && log teardown "network $RD_NET rem
 for pf in api.pid web.pid sidecar.pid echo.pid; do
   stop_by_pidfile "$RD_STATE/$pf" && log teardown "$pf stopped"
 done
+
+# --- 6b. sidecar belt-and-suspenders -------------------------------------------
+# The sidecar is a child of the API process (no pidfile): API graceful SIGTERM
+# kills it via the stream-sidecar plugin close (3s grace). But if stop_by_pidfile
+# had to SIGKILL the API (>6s), the sidecar orphans with 16493 still open.
+SPID=$(ss -tlnp 2>/dev/null | grep ':16493 ' | grep -oP 'pid=\K[0-9]+' | head -1)
+if [ -n "$SPID" ]; then
+  cg=$(cat "/proc/$SPID/cgroup" 2>/dev/null | head -1 || true)
+  case "$cg" in *docker*) log FATAL "refusing to kill sidecar $SPID — cgroup docker-scoped: $cg";;
+  *) kill "$SPID" 2>/dev/null || true
+     for i in $(seq 1 30); do kill -0 "$SPID" 2>/dev/null || break; sleep 0.2; done
+     kill -9 "$SPID" 2>/dev/null || true
+     log teardown "sidecar $SPID stopped (survived api stop)";;
+  esac
+else
+  log teardown "sidecar already gone (died with api)"
+fi
 
 # --- 7. adb sessions -------------------------------------------------------------
 "$RD_ADB" disconnect 2>/dev/null | grep -c 165 | xargs -I{} log teardown "adb 165xx disconnects: {}"
@@ -82,10 +104,16 @@ rm -f "$CK"
   echo "-- rdev containers count: $(docker ps -a --filter name=rdev -q | wc -l)"
   echo "-- network br-rdev-ladder (expect absent):"
   docker network ls --filter name=br-rdev-ladder --format '{{.Name}}'
-  echo "-- ports 16490-16495 (expect no LISTEN):"
-  for p in 16490 16491 16492 16493 16494 16495; do ss -tln 2>/dev/null | awk -v p=":$p" '$4 ~ p {print "LISTEN " p}'; done
+  echo "-- ports 16490-16495 + 16460-16469 sidecar fwd (expect no LISTEN):"
+  for p in 16490 16491 16492 16493 16494 16495 16460 16461 16462 16463 16464 16465 16466 16467 16468 16469; do ss -tln 2>/dev/null | awk -v p=":$p" '$4 ~ p {print "LISTEN " p}'; done
   echo "-- data root (expect absent):"
   ls -ld "$RD_DATA_ROOT" 2>&1 | head -1
+  echo "-- rdev scratch anonymous volumes (expect all removed):"
+  if [ -s "$EVID/teardown-volumes.txt" ]; then
+    while read -r v; do [ -z "$v" ] && continue; docker volume inspect "$v" >/dev/null 2>&1 && echo "STILL EXISTS $v" || echo "removed $v"; done < "$EVID/teardown-volumes.txt"
+  else
+    echo "(none captured)"
+  fi
   echo "-- apk-rdev (expect absent):"
   ls -ld /var/lib/water-army/apk-rdev 2>&1 | head -1
   echo "-- RD_STATE (expect absent):"
