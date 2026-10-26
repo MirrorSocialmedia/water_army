@@ -4,13 +4,27 @@
  * { code, message, requestId } (施工 MD §8).
  */
 export class ApiError extends Error {
-  constructor({ status, code, message, requestId }) {
+  constructor({ status, code, message, requestId, retryAfterMs = null }) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.code = code;
     this.requestId = requestId;
+    // NV5b(c): Retry-After (seconds) from 429 responses — the client must
+    // honour it (wait out the window instead of dying on the backoff ladder).
+    this.retryAfterMs = retryAfterMs;
   }
+}
+
+/** Parse a Retry-After header (delay-seconds form; HTTP-date tolerated via Date parse). */
+function parseRetryAfterMs(res) {
+  const raw = res.headers?.get?.('retry-after');
+  if (!raw) return null;
+  const secs = Number(raw);
+  if (Number.isFinite(secs) && secs >= 0) return Math.round(secs * 1000);
+  const dateMs = Date.parse(raw);
+  if (!Number.isNaN(dateMs)) return Math.max(0, dateMs - Date.now());
+  return null;
 }
 
 async function request(path, { method = 'GET', body } = {}) {
@@ -51,6 +65,7 @@ async function request(path, { method = 'GET', body } = {}) {
       code: errBody?.code ?? 'UNKNOWN',
       message: errBody?.message ?? res.statusText,
       requestId: errBody?.requestId ?? null,
+      retryAfterMs: parseRetryAfterMs(res),
     });
   }
   return payload;

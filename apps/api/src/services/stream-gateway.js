@@ -3,11 +3,17 @@
  * (ADR-019 §19.12; MD §8.1 「服務端必須重新驗證…前端發來的 deviceId/leaseId 一律
  * 不trusted」).
  *
- * The browser WebSocket API cannot set custom headers, so the one-shot ticket
+ * The browser WebSocket API cannot set custom headers, so the ticket
  * travels in a dedicated short-lived HttpOnly cookie (`stream_ticket`,
  * Path=/api/device-streams, Max-Age=60s) set by acquire/reconnect responses.
  * It is therefore never in a URL, never in an access log line, and never
- * guessable (HMAC, 60s TTL, single-use — all enforced in P1 validateTicket).
+ * guessable (HMAC, 60s TTL — enforced in P1 validateTicket).
+ *
+ * Ticket consumption (NV5b(c), 老細 2026-10-26 拍板): validation never burns
+ * the ticket; the upgrade path consumes it ONLY after the sidecar handshake
+ * succeeds (streamLeaseService.consumeTicket). A sidecar that is down or
+ * restarting therefore leaves the ticket spendable — the browser retries
+ * inside the TTL instead of hitting STREAM_TICKET_REPLAYED 401 storms.
  *
  * Auth chain (server-side, every upgrade):
  *   1. session cookie → user (401)
@@ -16,8 +22,8 @@
  *   4. lease ACTIVE and not expired (409 STREAM_LEASE_EXPIRED / _CLOSED)
  *   5. device exists (404) and containerState=running (409 STREAM_DEVICE_NOT_RUNNING)
  *   6. device ADB endpoint in the configured loopback allowlist (403)
- *   7. ticket: HMAC + exp + binding(user/device/mode) + single-use consume
- *      (401 STREAM_TICKET_INVALID / _REPLAYED)
+ *   7. ticket: HMAC + exp + binding(user/device/mode) + not-yet-consumed
+ *      (401 STREAM_TICKET_INVALID / _REPLAYED); consumed post-handshake (NV5b(c))
  * All-failures are logged with the error envelope + requestId (MD §15.2).
  */
 import http from 'node:http';
@@ -107,12 +113,14 @@ export function createStreamGateway({ db, config, streamLeaseService, log, resol
         user,
         deviceId: device.id,
         mode: lease.mode,
-        consume: true,
       });
       if (live.id !== lease.id || live.status !== 'ACTIVE') {
         throw fail('STREAM_TICKET_INVALID', 'stream ticket does not match an active lease', 401);
       }
-      return { ok: true, lease, device, user, serial };
+      // NV5b(c): the ticket is returned UNconsumed — the caller (app.js
+      // upgrade handler) burns it via consumeTicket() only after the sidecar
+      // handshake succeeds. A failed upgrade keeps the ticket spendable.
+      return { ok: true, lease, device, user, serial, ticket };
     } catch (e) {
       if (e?.apiCode) throw e;
       throw fail('STREAM_TICKET_INVALID', 'stream ticket validation failed', 401);

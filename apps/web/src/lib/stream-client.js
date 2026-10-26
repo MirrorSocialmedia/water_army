@@ -60,6 +60,14 @@ export const STATE_TEXT = {
 const PNGF_MAGIC = 0x504e4746;
 const PNGF_HEADER = 16;
 const RECONNECT_BACKOFFS_MS = [1000, 2000, 4000, 8000];
+// NV5b(c) (老細 2026-10-26): a 429 with Retry-After means "the window will
+// reset" — obey the header (plus small jitter) instead of burning the backoff
+// ladder; the storm's RA (~48s) outlives the old 4-step ladder (~15s), which
+// gave up exactly when the sidecar was recovering. rateLimitWaits caps the
+// loop so a pathological limiter can never retry forever.
+const RATE_LIMIT_JITTER_MS = 500;
+const RATE_LIMIT_MAX_WAIT_MS = 90_000;
+const RATE_LIMIT_MAX_WAITS = 5;
 
 /**
  * @param {object} c
@@ -84,6 +92,7 @@ export class StreamClient {
     this.closedByUser = false;
     this.reconnectAttempt = 0;
     this.reconnectTimer = null;
+    this.rateLimitWaits = 0; // NV5b(c): consecutive 429/Retry-After waits (reset on success)
     this.inputBlocked = false; // focus/visibility safety (MD §3.2)
     this.stats = { frames: 0, dropped: 0, lastFrameAt: null, source: null, codec: null, width: null, height: null, degraded: false, degradeReason: null, inputSent: 0, inputRejected: 0 };
     this._visHandler = () => {
@@ -316,7 +325,7 @@ export class StreamClient {
     }
   }
 
-  // ---- reconnect (MD §2.1.8) ---------------------------------------------------
+  // ---- reconnect (MD §2.1.8; NV5b(c) Retry-After-aware) ------------------------
   _tryReconnect() {
     if (this.closedByUser) return;
     if (!this.lease) return this._setState('ERROR', { error: new Error('no lease to reconnect') });
@@ -325,6 +334,10 @@ export class StreamClient {
       return this._setState('ERROR', { error: new Error('reconnect attempts exhausted (lease may have expired — re-acquire)') });
     }
     this._setState('RECONNECTING', { attempt: attempt + 1 });
+    this._scheduleReconnect(RECONNECT_BACKOFFS_MS[attempt]);
+  }
+
+  _scheduleReconnect(delayMs) {
     this.reconnectTimer = setTimeout(async () => {
       this.reconnectTimer = null;
       if (this.closedByUser) return;
@@ -333,6 +346,7 @@ export class StreamClient {
         this.lease = out.lease; // refreshed summary (version bumped)
         this.wsPath = out.streamWsPath ?? this.wsPath;
         this.reconnectAttempt = 0;
+        this.rateLimitWaits = 0;
         this._setState('CONNECTING');
         this._openWs();
       } catch (e) {
@@ -341,11 +355,21 @@ export class StreamClient {
             return this._setState('CLOSED', { error: e, note: 'lease ended — re-open the console to stream again' });
           }
           if (e.code === 'UNAUTHORIZED') return this._setState('SESSION_EXPIRED', { error: e });
+          // NV5b(c): 429 with Retry-After — wait out the window (等多過等死).
+          // Does NOT consume a backoff-ladder step; capped by RATE_LIMIT_MAX_WAITS.
+          if (e.status === 429 && Number.isFinite(e.retryAfterMs) && e.retryAfterMs > 0) {
+            this.rateLimitWaits += 1;
+            if (this.rateLimitWaits > RATE_LIMIT_MAX_WAITS) {
+              return this._setState('ERROR', { error: e, note: 'rate limited for too long — re-open the console to stream again' });
+            }
+            this._setState('RECONNECTING', { attempt: this.reconnectAttempt + 1, rateLimited: true, waitMs: Math.min(e.retryAfterMs + RATE_LIMIT_JITTER_MS, RATE_LIMIT_MAX_WAIT_MS) });
+            return this._scheduleReconnect(Math.min(e.retryAfterMs + RATE_LIMIT_JITTER_MS, RATE_LIMIT_MAX_WAIT_MS));
+          }
         }
         this.reconnectAttempt += 1;
         this._tryReconnect();
       }
-    }, RECONNECT_BACKOFFS_MS[attempt]);
+    }, delayMs);
   }
 
   // ---- input (MD §3.3) -----------------------------------------------------------

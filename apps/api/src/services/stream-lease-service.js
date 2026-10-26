@@ -21,10 +21,17 @@
  *   `now` is injectable (deterministic hermetic tests).
  *
  * Stream ticket (MD §11.8): HMAC-SHA256, 60s TTL, binds sub(userId)+
- * dev(deviceId)+lease(leaseId)+mode, single-use via Redis SET NX (short-term
- * coordination only — PG is the source of truth). Replay → STREAM_TICKED_
- * REPLAYED (401). No secret configured → 503 STREAM_TICKET_UNAVAILABLE
- * (fail closed; never fall back to a guessable secret).
+ * dev(deviceId)+lease(leaseId)+mode. NV5b(c) (老細 2026-10-26 拍板): tickets
+ * are IDEMPOTENT-UNTIL-SUCCESS — validation never burns the ticket; only a
+ * successful WS handshake consumes it via consumeTicket() (Redis SET NX,
+ * short-term coordination only — PG is the source of truth). A ticket that
+ * already succeeded replays as STREAM_TICKET_REPLAYED (401); a failed
+ * upgrade (sidecar down / restart storm) leaves the ticket spendable so the
+ * browser can retry inside the TTL without burning its limiter budget on
+ * fresh /reconnect calls. TTL, owner/lease binding and close/lease
+ * invalidation are unchanged. No secret configured → 503
+ * STREAM_TICKET_UNAVAILABLE (fail closed; never fall back to a guessable
+ * secret).
  *
  * Reconciliation (MD §10):
  *  - reconcileStartup(): the issuing API process died → every PENDING/ACTIVE
@@ -47,7 +54,7 @@ const TERMINAL_STATUSES = ['CLOSED', 'EXPIRED', 'INTERRUPTED'];
 /**
  * @param {object} deps
  * @param {object} deps.db Prisma client (device + streamLease + resourceLease delegates)
- * @param {object} deps.redis ioredis (or null — ticket single-use degrades to fail-closed)
+ * @param {object} deps.redis ioredis (or null — ticket replay store degrades to fail-closed)
  * @param {object} deps.config app config (maxConcurrentDeviceStreamsRaw, streamTicketSecret, streamLeaseTtlMs, streamReconcileIntervalMs)
  * @param {object} deps.log pino child logger
  * @param {(e:object) => Promise<void>} [deps.audit] audit fn (failures logged, never throw)
@@ -128,9 +135,25 @@ export function createStreamLeaseService({ db, redis = null, config = {}, log, a
     return `${b64}.${signPayload(b64)}`;
   }
 
+  function assertTicketStore() {
+    if (!redis || typeof redis.set !== 'function' || typeof redis.get !== 'function') {
+      throw err('STREAM_TICKET_UNAVAILABLE', 'stream ticket replay store unavailable', 503);
+    }
+  }
+
+  function ticketKey(ticket) {
+    return `mc:stream:ticket:${crypto.createHash('sha256').update(ticket).digest('hex')}`;
+  }
+
   /**
-   * Validate + (optionally) consume a ticket. The WS upgrade path (P2) calls
-   * this with consume=true; a replay of the SAME ticket fails closed.
+   * Validate a ticket WITHOUT burning it (NV5b(c): idempotent until success).
+   * Always rejects a ticket that has already been consumed (replay → 401
+   * STREAM_TICKET_REPLAYED). The WS upgrade path validates here, opens the
+   * sidecar tunnel, and only then calls consumeTicket() — a failed handshake
+   * leaves the ticket spendable for a retry inside the TTL.
+   *
+   * `consume:true` is kept for callers that need validate-and-burn in one
+   * shot (legacy single-use semantics); the upgrade path must NOT use it.
    *
    * @returns {Promise<object>} the ACTIVE lease row (server-time checked)
    */
@@ -160,17 +183,38 @@ export function createStreamLeaseService({ db, redis = null, config = {}, log, a
     if (!lease || lease.status !== 'ACTIVE' || lease.id !== payload.lease || lease.deviceId !== deviceId || lease.userId !== user.id) {
       throw err('STREAM_TICKET_INVALID', 'stream ticket lease not active', 401);
     }
+    assertTicketStore(); // replay bookkeeping is mandatory (NV5b(c) — fail closed without it)
+    const key = ticketKey(ticket);
+    if (await redis.get(key)) {
+      throw err('STREAM_TICKET_REPLAYED', 'stream ticket already consumed (successful handshake, MD §11.8 NV5b(c))', 401);
+    }
     if (consume) {
-      if (!redis || typeof redis.set !== 'function') {
-        throw err('STREAM_TICKET_UNAVAILABLE', 'stream ticket single-use store unavailable', 503);
-      }
-      const key = `mc:stream:ticket:${crypto.createHash('sha256').update(ticket).digest('hex')}`;
       const res = await redis.set(key, '1', 'EX', Math.ceil(TICKET_TTL_MS / 1000), 'NX');
       if (res !== 'OK') {
-        throw err('STREAM_TICKET_REPLAYED', 'stream ticket already used (single-use, MD §11.8)', 401);
+        throw err('STREAM_TICKET_REPLAYED', 'stream ticket already consumed (successful handshake, MD §11.8 NV5b(c))', 401);
       }
     }
     return lease;
+  }
+
+  /**
+   * Mark a ticket CONSUMED — called ONLY after the WS upgrade completed a
+   * successful sidecar handshake (NV5b(c): 「成功 handshake 先消耗」). A
+   * concurrent duplicate that raced past validation loses here: SET NX fails
+   * → 401 STREAM_TICKET_REPLAYED and the loser tears its tunnel down.
+   * Key TTL outlives the ticket TTL, so the consumed marker can never expire
+   * while the ticket itself is still valid.
+   */
+  async function consumeTicket({ ticket }) {
+    assertTicketing();
+    if (typeof ticket !== 'string' || !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(ticket)) {
+      throw err('STREAM_TICKET_INVALID', 'malformed stream ticket', 401);
+    }
+    assertTicketStore();
+    const res = await redis.set(ticketKey(ticket), '1', 'EX', Math.ceil(TICKET_TTL_MS / 1000) + 30, 'NX');
+    if (res !== 'OK') {
+      throw err('STREAM_TICKET_REPLAYED', 'stream ticket already consumed (successful handshake, MD §11.8 NV5b(c))', 401);
+    }
   }
 
   // --- helpers ----------------------------------------------------------------
@@ -346,7 +390,7 @@ export function createStreamLeaseService({ db, redis = null, config = {}, log, a
     });
     return {
       lease: summarize(row),
-      ticket, // single-use, 60s TTL — passed to the WS layer, never logged (MD §11.8)
+      ticket, // idempotent until success, 60s TTL (NV5b(c)) — passed to the WS layer, never logged (MD §11.8)
       streamWsPath: `/api/device-streams/${row.id}/ws`,
       usage: await usage(),
     };
@@ -424,12 +468,14 @@ export function createStreamLeaseService({ db, redis = null, config = {}, log, a
     return { lease: summarize(fresh), usage: await usage(), idempotent: up.count === 0 };
   }
 
-  // --- reconnect (MD §2.1.8 斷線重連 re-auth; ADR-019 §19.12) -------------------
+  // --- reconnect (MD §2.1.8 斷線重連 re-auth; ADR-019 §19.12; NV5b(c)) ----------
   /**
-   * Re-issue a one-shot ticket for an ACTIVE lease the caller owns (or admin).
+   * Re-issue a ticket for an ACTIVE lease the caller owns (or admin).
    * This is the ONLY way a dropped browser WS reconnects: a fresh ticket +
    * full server-side re-verification at the new WS upgrade (MD §2.1.8 — an
    * expired/revoked lease never regains control by reconnecting alone).
+   * NV5b(c): the ticket is spendable until a handshake succeeds — a sidecar
+   * restart storm no longer burns tickets at validation time.
    */
   async function reconnect({ leaseId, user, requestId = null, ip = null }) {
     const row = await findLeaseOr404(leaseId);
@@ -457,7 +503,7 @@ export function createStreamLeaseService({ db, redis = null, config = {}, log, a
     });
     return {
       lease: summarize(row),
-      ticket, // single-use, 60s TTL
+      ticket, // idempotent until success, 60s TTL (NV5b(c))
       streamWsPath: `/api/device-streams/${row.id}/ws`,
     };
   }
@@ -571,6 +617,7 @@ export function createStreamLeaseService({ db, redis = null, config = {}, log, a
     close,
     reconnect,
     validateTicket,
+    consumeTicket,
     reconcileStartup,
     reconcileExpired,
     startReconciler,

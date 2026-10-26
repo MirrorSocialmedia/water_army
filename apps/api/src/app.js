@@ -75,6 +75,7 @@ function createUnavailableStreamLease() {
     heartbeat: unavailable,
     close: unavailable,
     validateTicket: unavailable,
+    consumeTicket: unavailable,
     reconcileStartup: async () => 0,
     reconcileExpired: async () => 0,
     startReconciler() {},
@@ -611,6 +612,17 @@ export async function buildApp(opts = {}) {
         });
       } catch (e) {
         return reject(e.statusCode ?? 500, e.apiCode ?? API_ERROR.INTERNAL, e.message ?? 'stream handshake failed');
+      }
+      // NV5b(c) 「成功 handshake 先消耗」: the ticket is burned ONLY now that
+      // the sidecar tunnel is live. A failed handshake above leaves the
+      // ticket spendable (retry inside the TTL without a fresh /reconnect).
+      // A concurrent duplicate that raced past validation loses here and
+      // tears its fresh sidecar socket down (fail closed).
+      try {
+        await streamLeaseService.consumeTicket({ ticket: verdict.ticket });
+      } catch (e) {
+        try { sidecar.sock.destroy(); } catch { /* ignore */ }
+        return reject(e.statusCode ?? 500, e.apiCode ?? API_ERROR.INTERNAL, e.message ?? 'stream ticket consumption failed');
       }
       // 101 to the browser (manual upgrade — we own the response).
       const accept = crypto.createHash('sha1').update(String(req.headers['sec-websocket-key'] ?? '') + WS_GUID).digest('base64');

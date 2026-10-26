@@ -104,9 +104,10 @@ export function deviceStreamRoutes(app) {
     },
   );
 
-  // P2 (MD §2.1.8): reconnect re-auth — a fresh one-shot ticket for an ACTIVE
-  // lease (owner/admin). The old ticket is already consumed; reconnecting
-  // with the same one = 401 STREAM_TICKET_REPLAYED at the WS upgrade.
+  // P2 (MD §2.1.8): reconnect re-auth — a fresh ticket for an ACTIVE lease
+  // (owner/admin). NV5b(c): tickets are idempotent until a successful
+  // handshake — a ticket that already completed a handshake replays as
+  // 401 STREAM_TICKET_REPLAYED at the next WS upgrade validation.
   app.post(
     '/api/device-streams/:leaseId/reconnect',
     { preHandler: [app.requireRole('viewer'), streamRatePreHandler], schema: { params: { type: 'object', additionalProperties: false, required: ['leaseId'], properties: { leaseId: LEASE_ID } } } },
