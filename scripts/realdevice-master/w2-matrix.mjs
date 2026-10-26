@@ -65,12 +65,22 @@ async function req(method, path, body, { retries = 3 } = {}) {
   }
 }
 
-function ev(item, data, pass) {
-  const rec = { item, pass, at: new Date().toISOString(), ...data };
+function ev(item, data, pass, { expected = false } = {}) {
+  const rec = { item, pass, ...(expected ? { expected: true } : {}), at: new Date().toISOString(), ...data };
   results.push(rec);
   fs.writeFileSync(`${EVID}/${item}.json`, JSON.stringify(rec, null, 2));
-  console.log(`[${pass ? 'PASS' : 'FAIL'}] ${item}: ${JSON.stringify(data).slice(0, 220)}`);
-  if (!pass) haltCount++;
+  console.log(`[${pass ? 'PASS' : expected ? 'EXPECTED-FAIL' : 'FAIL'}] ${item}: ${JSON.stringify(data).slice(0, 220)}`);
+  if (!pass && !expected) {
+    haltCount++;
+    if (PHASE === 'A') {
+      // Discipline (task + script header): any A ❌ = halt the matrix NOW
+      // (original end-of-run exit(3) let later A items cascade on a broken
+      // state — relay leg-2 fix 2026-10-27).
+      writeSummary(`HALTED on ${item} (A-item failure — report to CEO)`);
+      console.log(`A-ITEM FAIL (${item}) — halting matrix per discipline. Reporting to CEO.`);
+      process.exit(3);
+    }
+  }
   return rec;
 }
 
@@ -80,6 +90,52 @@ function adbSerial(id) {
 }
 
 let DEVICES = {}; // name → {id, adbPort}
+let PHASE = 'E'; // A-phase items HALT the matrix on failure (task discipline: A 任一 ❌ = halt + 回報)
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function writeSummary(note) {
+  const summary = {
+    at: new Date().toISOString(),
+    total: results.length,
+    pass: results.filter((r) => r.pass).length,
+    fail: results.filter((r) => !r.pass && !r.expected).length,
+    expectedFail: results.filter((r) => !r.pass && r.expected).length,
+    haltCount,
+    phase: PHASE,
+    ...(note ? { note } : {}),
+    items: results.map((r) => ({ item: r.item, pass: r.pass, expected: !!r.expected })),
+  };
+  fs.writeFileSync(`${EVID}/summary.json`, JSON.stringify(summary, null, 2));
+  console.log('\n===== W2 SUMMARY =====');
+  console.log(JSON.stringify(summary, null, 2));
+  return summary;
+}
+
+/**
+ * Host-side boot gate — raw TCP-connect probe to the device's adb port.
+ * Deliberately does NOT use the adb server (no `adb connect`): the platform
+ * refresh trusts the SHARED adb server's connection state (get-state 'device'
+ * → adbState online, redroid-service.js refreshDevice parseState), so any
+ * adb-server connect before E1 would mask the no-proxy adb-online gap that E1
+ * exists to expose (W1 finding #2). adbd listening on its TCP port = Android
+ * boot has reached adbd → E1 failure then means the gap, not boot timing.
+ */
+async function bootGate(name) {
+  const net = await import('node:net');
+  const port = DEVICES[name].adbPort;
+  const t0 = Date.now();
+  for (;;) {
+    const up = await new Promise((resolve) => {
+      const s = net.default.connect({ host: '127.0.0.1', port, timeout: 1500 });
+      s.once('connect', () => { s.destroy(); resolve(true); });
+      s.once('timeout', () => { s.destroy(); resolve(false); });
+      s.once('error', () => { s.destroy(); resolve(false); });
+    });
+    if (up) { console.log(`boot-gate ${name}: adbd port ${port} accepting in ${Math.round((Date.now() - t0) / 1000)}s`); return true; }
+    if (Date.now() - t0 > 1500000) throw new Error(`boot-gate: ${name} adbd port ${port} not listening in 25min`);
+    await sleep(5000);
+  }
+}
 
 async function resolveDevices() {
   const r = await req('GET', '/api/devices/redroid');
@@ -165,6 +221,14 @@ async function main() {
   if (login.status !== 200) throw new Error(`login failed ${login.status}`);
   await ensureDevices();
   console.log('devices:', JSON.stringify(DEVICES));
+  // Deterministic honest-E1 precondition: wipe the shared adb server's device
+  // table (no stale serials from n1-n5/c-fleet port reuse can leak into E1's
+  // get-state), THEN prove both devices' adbd is up WITHOUT the adb server.
+  execSync(`${ADB} kill-server || true`, { timeout: 30000 });
+  const bootGateAt = {};
+  for (const n of [DEV1, DEV2]) bootGateAt[n] = await bootGate(n);
+  await sleep(60000); // settle: adbd listening → get-state 'device' stable
+  console.log(`boot-gates done: ${JSON.stringify(bootGateAt)} (+60s settle)`);
 
   // ================= E PHASE =================
   // E1 — refresh → adb online + get-state=device (on the UNTOUCHED device:
@@ -172,8 +236,12 @@ async function main() {
   {
     const r = await req('POST', `/api/devices/redroid/${DEVICES[DEV1].id}/refresh`);
     const st = adb(`127.0.0.1:${DEVICES[DEV1].adbPort}`, 'get-state');
-    ev('E1-refresh-online', { http: r.status, adbState: r.j.device?.adbState, adbGetState: st },
-      r.status === 200 && r.j.device?.adbState === 'online' && st === 'device');
+    ev('E1-refresh-online', {
+      http: r.status, adbState: r.j.device?.adbState, adbGetState: st,
+      containerState: r.j.device?.containerState,
+      bootGateAdbdListening: bootGateAt[DEV1],
+      note: 'EXPECTED-FAIL by design (W1 finding #2): no-proxy device has NO platform connect path — container running + adbd up (bootGate) but platform refresh never connects, so adbState never reaches online. Honest E1 = expose this gap (report item).',
+    }, r.status === 200 && r.j.device?.adbState === 'online' && st === 'device', { expected: true });
     // Operator-surface connect (documented gap workaround): the rest of the
     // matrix needs live adb. This is exactly what an operator would do.
     for (const n of [DEV1, DEV2]) {
@@ -275,6 +343,7 @@ async function main() {
   }
 
   // ---- A PHASE (E11 deferred to after A7/A8 — app must stay installed) ----
+  PHASE = 'A'; // from here on, any FAIL halts the matrix (exit 3)
 
   // A1 — package-name injection battery (7 names × GET + DELETE)
   {
@@ -486,20 +555,11 @@ async function main() {
   }
 
   // ---- summary ----
-  const summary = {
-    at: new Date().toISOString(),
-    total: results.length,
-    pass: results.filter((r) => r.pass).length,
-    fail: results.filter((r) => !r.pass).length,
-    items: results.map((r) => ({ item: r.item, pass: r.pass })),
-  };
-  fs.writeFileSync(`${EVID}/summary.json`, JSON.stringify(summary, null, 2));
-  console.log('\n===== W2 SUMMARY =====');
-  console.log(JSON.stringify(summary, null, 2));
-  if (summary.fail > 0) {
-    console.log('FAILURES PRESENT — halting matrix (any A ❌ = halt + report).');
-    process.exit(3);
-  }
+  // A-item failures already exited 3 inside ev() (halt discipline).
+  // Remaining = E-phase findings (incl. E1's designed gap exposure) → report, not halt.
+  writeSummary();
+  console.log('Matrix complete (no A-item failure). E-phase findings are report items.');
+  process.exit(0);
 }
 
 /** restart scratch API with extra env overrides (empty = defaults from bringup) */
