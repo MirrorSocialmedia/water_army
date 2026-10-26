@@ -164,7 +164,10 @@ async function resolveDevices({ required = true } = {}) {
 }
 
 function pmList(dev) {
-  return adb(`127.0.0.1:${DEVICES[dev].adbPort}`, 'shell', 'pm', 'list', 'packages').split('\n').filter(Boolean).sort();
+  // (relay leg-2 fix: raw `pm list packages` lines carry a `package:` prefix —
+  // E2's added.includes(PKG) false-failed on a REAL successful install, live 2026-10-27)
+  return adb(`127.0.0.1:${DEVICES[dev].adbPort}`, 'shell', 'pm', 'list', 'packages')
+    .split('\n').map((l) => l.replace(/^package:/, '').trim()).filter(Boolean).sort();
 }
 
 async function dump(dev) {
@@ -287,8 +290,17 @@ async function main() {
 
   // E3 — get single app (real version vs F-Droid metadata)
   {
-    const r = await req('GET', `/api/devices/redroid/${DEVICES[DEV1].id}/apps/${PKG}`);
-    ev('E3-app-get', { http: r.status, body: r.j },
+    // Transient adb-engine 502 (ADB_UNAVAILABLE) observed live on run3 right
+    // after a heavy push — retry a few times before judging.
+    let r = await req('GET', `/api/devices/redroid/${DEVICES[DEV1].id}/apps/${PKG}`);
+    let retries = 0;
+    while (r.status === 502 && retries < 3) {
+      console.log(`E3: 502 transient — retry ${retries + 1}/3`);
+      retries++;
+      await sleep(2000);
+      r = await req('GET', `/api/devices/redroid/${DEVICES[DEV1].id}/apps/${PKG}`);
+    }
+    ev('E3-app-get', { http: r.status, body: r.j, transientRetries: retries },
       r.status === 200 && r.j.installed === true && r.j.versionName === EXPECTED_VERSION);
   }
 
@@ -307,17 +319,32 @@ async function main() {
   // E5 — tap app icon in launcher (adaptive: contentDesc/text match on app label)
   let appIconSelector = null;
   {
-    const d = await dump(DEV1);
-    const nodes = d.j.nodes ?? [];
-    // launcher icons usually expose content-desc = app label
-    const node =
+    const findIcon = (nodes) =>
       pick(nodes, (n) => /markor/i.test(n.contentDesc ?? '')) ??
       pick(nodes, (n) => /markor/i.test(n.text ?? ''));
-    if (!node) throw new Error('E5: app icon not found in launcher dump — dump saved for inspection');
-    appIconSelector = node.contentDesc ? { contentDesc: node.contentDesc } : { text: node.text };
-    const t = await tap(DEV1, appIconSelector);
-    ev('E5-tap-icon', { selector: appIconSelector, http: t.status, tap: t.j, target: { x: t.j.x, y: t.j.y } },
-      t.status === 200);
+    let d = await dump(DEV1);
+    let node = findIcon(d.j.nodes ?? []);
+    let drawerSwipes = 0;
+    // Fresh install: launcher3 may keep the new icon in the app drawer only
+    // (not the home grid) — open the drawer (swipe up, ADR-style device-side
+    // trigger) and re-dump, up to 6 attempts. Recorded in evidence.
+    while (!node && drawerSwipes < 6) {
+      drawerSwipes++;
+      adb(`127.0.0.1:${DEVICES[DEV1].adbPort}`, 'shell', 'input', 'swipe', '360', '1150', '360', '400');
+      await sleep(2000);
+      d = await dump(DEV1);
+      node = findIcon(d.j.nodes ?? []);
+    }
+    if (!node) {
+      ev('E5-tap-icon',
+        { http: null, drawerSwipes, error: 'app icon not found in launcher dumps (home grid + drawer)' },
+        false);
+    } else {
+      appIconSelector = node.contentDesc ? { contentDesc: node.contentDesc } : { text: node.text };
+      const t = await tap(DEV1, appIconSelector);
+      ev('E5-tap-icon', { selector: appIconSelector, http: t.status, tap: t.j, target: { x: t.j.x, y: t.j.y }, drawerSwipes },
+        t.status === 200);
+    }
   }
 
   // E6 — foreground switches to target app
