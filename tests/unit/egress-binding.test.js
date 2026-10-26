@@ -155,6 +155,23 @@ test('egress script: carries marker, nonce, host, port, timeout', () => {
   assert.ok(s.includes('GET /ip?nonce=$NONCE'));
 });
 
+test('egress script: FIFO write-end stays open until nc exits (R8 live regression, 2026-10-26)', () => {
+  // Live A/B on a redroid guest through the real gost relay: the shipped
+  // ordering (close FIFO before `wait`) made toybox nc half-close (FIN) the
+  // instant the request was written; the FIN tore the gost relay down before
+  // the echo response could return, so the probe read an EMPTY OUT 3/3
+  // (EGRESS_PROBE_FAILED) while the canary script — which holds the FIFO
+  // open across `wait` — passed on the same tunnel. If the close ever moves
+  // back before `wait`, the egress probe fails 100% on live tunnels.
+  const s = buildT2sEgressScript({ host: 'echo.internal', port: 8443, timeoutMs: 5000, nonce: 'abcdef0123456789' });
+  const lines = s.split('\n');
+  const iWait = lines.findIndex((l) => l === 'wait $NCP');
+  const iClose = lines.findIndex((l) => l === 'exec 3>&-');
+  assert.ok(iWait >= 0, 'wait line present');
+  assert.ok(iClose >= 0, 'FIFO close line present');
+  assert.ok(iClose > iWait, 'FIFO close must come AFTER nc exits (R8: early close = FIN = relay torn down = empty OUT)');
+});
+
 test('egress script: rejects host/nonce/timeout that could inject', () => {
   assert.throws(() => buildT2sEgressScript({ host: 'a b', port: 1, timeoutMs: 1000, nonce: 'aaaaaaaa' }), /host/);
   assert.throws(() => buildT2sEgressScript({ host: 'a;rm -rf x', port: 1, timeoutMs: 1000, nonce: 'aaaaaaaa' }), /host/);
@@ -348,7 +365,12 @@ function runEgressScript({ script, behavior = 'ok', ip = '203.0.113.10' } = {}) 
   const fakeNc = [
     '#!/bin/sh',
     '# stub nc: -w <to> <host> <port>; reads the request from stdin',
-    'REQ=$(cat 2>/dev/null || true)',
+    '# toybox-nc semantics: read what is available, do NOT wait for stdin EOF',
+    '# (the R8 fix keeps the FIFO write-end open until nc exits; a cat-to-EOF',
+    '# stub would block until the script timeout -> every branch reason=timeout).',
+    '# head -n 1 returns the first line without EOF (dash read has no -t).',
+    '# The first line is all this stub needs: it carries the nonce.',
+    'REQ=$(head -n 1 2>/dev/null || true)',
     `BEH=$(cat "${path.join(fx, 'behavior')}")`,
     `IP=$(cat "${path.join(fx, 'ip')}")`,
     'case "$BEH" in',

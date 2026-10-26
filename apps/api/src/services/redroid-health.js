@@ -817,9 +817,16 @@ export function buildT2sEgressScript({ host, port, timeoutMs, nonce, tmpDir = '/
     'NCP=$!',
     'exec 3>"$IN"',
     'printf "GET /ip?nonce=$NONCE HTTP/1.1\\r\\nHost: probe\\r\\nConnection: close\\r\\n\\r\\n" >&3',
-    'exec 3>&-',
+    // Keep nc's stdin OPEN (no EOF) until nc exits — the R8 fix (see the
+    // canary script above): toybox nc half-closes the instant stdin hits
+    // EOF, the FIN tears the gost relay down before the echo response can
+    // return, and the probe reads an empty OUT (live A/B on redroid
+    // 2026-10-26, real-device campaign: FIFO-closed 3/3 empty vs
+    // FIFO-held 3/3 full 200 + client_ip). Closing before `wait` made the
+    // egress probe fail 100% on a live tunnel while the canary passed.
     'wait $NCP',
     'RC=$?',
+    'exec 3>&-',
     'OUT=$(cat "$OUTF" 2>/dev/null)',
     'rm -f "$IN" "$OUTF"',
     'if [ "$RC" -ge 124 ]; then echo "EGRESS=FAIL nonce=$NONCE reason=timeout"; exit 1; fi',

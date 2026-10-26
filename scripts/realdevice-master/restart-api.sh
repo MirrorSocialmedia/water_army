@@ -51,8 +51,17 @@ done
   export WA_APP_OPS_ENABLED=true
   export WA_APK_DIR=/var/lib/water-army/apk-rdev
   export WA_W3_EGRESS_BINDING_ENABLED=true
-  # W3 echo = ladder gateway IP (reachable FROM the egress containers)
-  export WA_W3_EGRESS_ECHO_HOST=172.38.222.1 WA_W3_EGRESS_ECHO_PORT=16491
+  # W3 echo = host LAN anchor (192.168.31.144). NOT the ladder gateway:
+  # on-link destinations are unroutable through the guest tunnel (Linux
+  # local-table wins) — the guest would hit the echo directly from its own
+  # ladder IP (observed DRIFTED observed=172.38.222.2, 2026-10-26).
+  export WA_W3_EGRESS_ECHO_HOST=192.168.31.144 WA_W3_EGRESS_ECHO_PORT=16491
+  # R3 net-axis data-plane canary (buildT2sCanaryScript sha-echo protocol,
+  # served by the same echo server's POST /canary). Fail-closed by design:
+  # without a canary target a proxied device can NEVER be net-HEALTHY
+  # (redroid-service.js ~1312: SKIPPED -> soft CANARY_NOT_CONFIGURED) —
+  # observed on c1 2026-10-26: 13 failures -> RECOVERY_EXHAUSTED -> FAILED.
+  export REDROID_CANARY_HOST=192.168.31.144 REDROID_CANARY_PORT=16491 REDROID_CANARY_TIMEOUT_MS=10000
   # last-wins override (D8: blank echo; D9: stale/poll tuning)
   if [ -n "$OVERRIDE_FILE" ]; then
     set -a

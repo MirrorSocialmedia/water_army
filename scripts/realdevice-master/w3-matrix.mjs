@@ -33,15 +33,15 @@ const EGRESS_B = '172.38.222.51';
 const EGRESS_C = '172.38.222.53'; // drift relay (dialer.mjs, port 9999)
 const EGRESS_D = '172.38.222.54'; // D7 rotation target (fresh egress)
 const DNSLOG = '172.38.222.52';
-const ECHO = '172.38.222.1:16491';
+const ECHO = '192.168.31.144:16491'; // host LAN anchor (NOT on-link to guests — on-link destinations bypass the tunnel via the local routing table; 2026-10-26 D1 drift discovery)
 const NODE_IMG = 'node:22-alpine';
+const TEMPLATE = 'rdev-w3';
 const TPL_BODY = { // rdev-w3 template (mirrors rdev-base + proxy)
   name: TEMPLATE, image: 'water-army/redroid:14.0.0-240527-matrixa-r3', androidVersion: '14',
   width: 720, height: 1280, dpi: 320, fps: 30, gpuMode: 'host',
   privileged: true, privilegedReason: 'rdev scratch: redroid kernel/boot requires privileged (MC ticket precedent)',
   memoryLimitBytes: 4294967296,
 };
-const TEMPLATE = 'rdev-w3';
 const IDENT = (s) => `c9f1c001-0000-4000-8000-0000000000${s}`;
 const C1 = IDENT('c1');
 const C2 = IDENT('c2');
@@ -113,6 +113,15 @@ async function waitForView(name, pred, budgetMs, label) {
       await req('POST', `/api/devices/redroid/${v.id}/refresh`);
       await req('POST', `/api/devices/redroid/${v.id}/diagnostics`);
     }
+    // operator-surface net recovery (finding #4): FAILED net axis skips the
+    // whole watchdog tick (failed-manual-only) — egress re-verification is
+    // frozen until the manual exit door (MD §5.4.6). Triggered here when the
+    // net axis sits FAILED (e.g. RECOVERY_EXHAUSTED from a bad-anchor era).
+    if (v && v.containerState === 'running' && netOf(v)?.state === 'FAILED' && Date.now() - lastDiag > 60000) {
+      lastDiag = Date.now();
+      const rr = await req('POST', `/api/devices/redroid/${v.id}/proxy/retry`);
+      say(`operator proxy/retry ${name}: ${rr.status} ${JSON.stringify(rr.j).slice(0, 150)}`);
+    }
     await sleep(3000);
   }
   throw new Error(`waitForView ${label}: budget ${budgetMs}ms exhausted. last=${JSON.stringify(last?.proxy ?? last?.containerState)}`);
@@ -157,11 +166,11 @@ async function main() {
   say('SETUP: restart API with W3 ON (echo = ladder gateway)');
   restartApi();
   // W3-ON probe: binding PUT must NOT answer the disabled-switch code
-  psql(`INSERT INTO identities (id, name, created_at, updated_at) VALUES
-    ('${C1}','rdev-w3-c1', now(), now()),
-    ('${C2}','rdev-w3-c2', now(), now()),
-    ('${C3}','rdev-w3-c3', now(), now())
-  ON CONFLICT (id) DO NOTHING;`);
+  psql(`INSERT INTO identities (id, external_ref, display_name, identity_type, status, data_path, metadata_json, created_at, updated_at) VALUES
+    ('${C1}','rdev-w3-c1','rdev-w3-c1','qa_device','READY','/var/lib/water-army/identities/rdev-w3-c1','{}'::jsonb, now(), now()),
+    ('${C2}','rdev-w3-c2','rdev-w3-c2','qa_device','READY','/var/lib/water-army/identities/rdev-w3-c2','{}'::jsonb, now(), now()),
+    ('${C3}','rdev-w3-c3','rdev-w3-c3','qa_device','READY','/var/lib/water-army/identities/rdev-w3-c3','{}'::jsonb, now(), now())
+  ON CONFLICT (id) DO UPDATE SET status = 'READY';`);
   // template rdev-w3 = rdev-base shape + proxy .50
   const tlist = await req('GET', '/api/redroid/templates');
   if (!(tlist.j.templates ?? tlist.j.items ?? []).some?.((t) => t.name === TEMPLATE)) {
@@ -183,13 +192,24 @@ async function main() {
 
   // ================= D1: first VERIFIED end-to-end =================
   {
-    ramOk();
-    const cr = await req('POST', '/api/devices/redroid', {
-      name: 'redroid-rdev-c1', templateName: TEMPLATE, identityId: C1,
-      idempotencyKey: `rdev-w3-c1-${Date.now().toString(36)}`,
-    });
-    if (cr.status !== 200 && cr.status !== 201) throw new Error(`c1 create -> ${cr.status} ${JSON.stringify(cr.j).slice(0, 300)}`);
-    say('D1: c1 created — waiting for boot + tunnel + first VERIFIED (budget 30min cold)');
+    // adoption-tolerant: an existing c1 (e.g. from a crashed prior run) is
+    // reused — the watchdog re-probes against the current echo anchor and the
+    // state machine re-evaluates within one tick.
+    let adopt = false;
+    const l0 = await req('GET', '/api/devices/redroid');
+    const c0 = (l0.j.devices ?? []).find((d) => d.name === 'redroid-rdev-c1');
+    if (c0) {
+      adopt = true;
+      say('D1: c1 already exists (adopted) — waiting for re-VERIFIED against current echo anchor');
+    } else {
+      ramOk();
+      const cr = await req('POST', '/api/devices/redroid', {
+        name: 'redroid-rdev-c1', templateName: TEMPLATE, identityId: C1,
+        idempotencyKey: `rdev-w3-c1-${Date.now().toString(36)}`,
+      });
+      if (cr.status !== 200 && cr.status !== 201) throw new Error(`c1 create -> ${cr.status} ${JSON.stringify(cr.j).slice(0, 300)}`);
+      say('D1: c1 created — waiting for boot + tunnel + first VERIFIED (budget 30min cold)');
+    }
     const { v, waitedMs } = await waitForView('redroid-rdev-c1',
       (x) => x.adbState === 'online' && egressOf(x)?.state === 'VERIFIED', 30 * 60 * 1000, 'D1 c1 VERIFIED');
     const e = egressOf(v);
@@ -201,6 +221,7 @@ async function main() {
     }
     summary.items.D1 = {
       pass: e.state === 'VERIFIED' && e.lastObservedIp === EGRESS_A && !e.stale && e.ready === true,
+      adopted: adopt,
       device: { adbPort: v.adbPort, adbState: v.adbState, containerIp: containerIp('redroid-rdev-c1') },
       egress: e, waitedMs, guestTools: tools,
     };
