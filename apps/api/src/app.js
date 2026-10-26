@@ -33,6 +33,7 @@ import { createDockerService } from './services/docker-service.js';
 import { createBatchMetricsService } from './services/batch-metrics-service.js';
 import { runRedroidPreflight } from './services/preflight.js';
 import { createRedroidService } from './services/redroid-service.js';
+import { createFingerprintService } from './services/fingerprint-service.js';
 import { buildRamGateService } from './services/ram-gate-service.js';
 import { createAdbWhitelist } from './services/adb-whitelist.js';
 import { createMockRedroidEnvironment } from './services/redroid-mock.js';
@@ -42,6 +43,7 @@ import { containerRoutes } from './routes/containers.js';
 import { templateRoutes } from './routes/templates.js';
 import { redroidTemplateRoutes } from './routes/redroid-templates.js';
 import { redroidDeviceRoutes } from './routes/devices.js';
+import { identityFingerprintRoutes } from './routes/identity-fingerprints.js';
 import { taskRoutes } from './routes/tasks.js';
 import { batchRoutes } from './routes/batches.js';
 import { scheduleRoutes } from './routes/schedules.js';
@@ -270,6 +272,10 @@ export async function buildApp(opts = {}) {
     app.log.info('intervention service ON — Mobile Console human-intervention events (MD Phase 4)');
   }
 
+  // W1 (ADR-025): identity fingerprint service. Inert while
+  // WA_REDROID_RO_OVERRIDES_ENABLED is off (createDevice never consults it).
+  const fingerprintService = createFingerprintService({ db, log: app.log });
+
   const redroidService = createRedroidService({
     db,
     docker: redroidDocker,
@@ -277,6 +283,7 @@ export async function buildApp(opts = {}) {
     config,
     log: app.log,
     audit,
+    fingerprint: fingerprintService,
     // RAM-G1: host-RAM admission gate (null = pre-G1 behaviour).
     ramGate: ramGateService.gate,
     // MC P4: intervention signal hooks (persistNet BLOCKED/FAILED, adb
@@ -395,6 +402,7 @@ export async function buildApp(opts = {}) {
   app.decorate('batchLifecycle', batchLifecycle);
   app.decorate('batchMetrics', batchMetrics);
   app.decorate('redroidService', redroidService);
+  app.decorate('fingerprintService', fingerprintService);
   app.decorate('ramGateService', ramGateService);
   app.decorate('streamLeaseService', streamLeaseService);
   app.decorate('interventionService', interventionService);
@@ -531,6 +539,7 @@ export async function buildApp(opts = {}) {
   templateRoutes(app);
   redroidTemplateRoutes(app);
   redroidDeviceRoutes(app);
+  identityFingerprintRoutes(app);
   taskRoutes(app, { taskQueue });
   batchRoutes(app);
   scheduleRoutes(app);

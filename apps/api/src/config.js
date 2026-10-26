@@ -133,6 +133,12 @@ export function loadConfig(env = process.env, opts = {}) {
     redroidAdapter = 'real'; // the mock must never run a production host
   }
 
+  // W1 (ADR-025): identity fingerprint ro.* injection — OFF by default. Until
+  // the V3 real-device matrix passes, flipping this ON is an explicit operator
+  // opt-in (WA_REDROID_RO_OVERRIDES_ENABLED=true) — devices booted with it are
+  // experimental by definition.
+  const redroidRoOverridesEnabled = ['1', 'true', 'yes', 'on'].includes(String(e.WA_REDROID_RO_OVERRIDES_ENABLED ?? 'false').toLowerCase());
+
   const databaseUrl = e.DATABASE_URL ?? '';
   if (!databaseUrl.startsWith('postgresql://')) {
     throw new Error('config error: DATABASE_URL must be a postgresql:// connection string');
@@ -182,6 +188,7 @@ export function loadConfig(env = process.env, opts = {}) {
     scheduleMaxIntervalMs,
     // P5 redroid (工單: 127.0.0.1-only ADB, pinned images, 診斷白名單).
     redroidAdapter,
+    redroidRoOverridesEnabled,
     redroidDataRoot: e.REDROID_DATA_ROOT ?? '/var/lib/water-army/redroid',
     redroidAdbRangeStart,
     redroidAdbRangeEnd,

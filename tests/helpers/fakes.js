@@ -69,6 +69,8 @@ export function makeFakeDb({ users = [] } = {}) {
   // ---- P5 models (in-memory, Prisma-shaped) --------------------------------
   const templateRows = new Map(); // redroid_templates, by id
   const deviceRows = new Map(); // devices, by id
+  const identityRows = new Map(); // identities, by id (W1 ADR-025)
+  const fingerprintRows = new Map(); // identity_fingerprints, by identityId (W1 ADR-025)
   const interventionRows = new Map(); // manual_interventions, by id (MC P4)
   const historyRows = new Map(); // manual_intervention_history, by id (MC P4)
   let historySeq = 0; // monotonic — (createdAt, id) ordering must be deterministic in tests
@@ -657,6 +659,8 @@ export function makeFakeDb({ users = [] } = {}) {
           memoryLimitBytes: data.memoryLimitBytes ?? null,
           // Stage B: encrypted egress proxy (null = no fleet proxy)
           proxyUrlEncrypted: data.proxyUrlEncrypted ?? null,
+          // W1 (ADR-025): static ro override baseline ({} = today's behaviour)
+          roOverrides: data.roOverrides ?? {},
           createdAt: ts,
           updatedAt: ts,
         };
@@ -760,6 +764,9 @@ export function makeFakeDb({ users = [] } = {}) {
           netRecoveryLockUntil: data.netRecoveryLockUntil ?? null,
           netNextRecoveryAt: data.netNextRecoveryAt ?? null,
           netLastCanary: data.netLastCanary ?? null,
+          // W1 (ADR-025): identity binding + injected ro snapshot
+          identityId: data.identityId ?? null,
+          roOverridesJson: data.roOverridesJson ?? {},
           createdAt: ts,
           updatedAt: ts,
         };
@@ -783,6 +790,64 @@ export function makeFakeDb({ users = [] } = {}) {
         if (!deviceRows.has(where.id)) throw Object.assign(new Error('device not found'), { code: 'P2025' });
         deviceRows.delete(where.id);
         return {};
+      },
+    },
+    // ---- W1 (ADR-025): identities + identity_fingerprints -------------------
+    // Minimal Prisma-shaped in-memory models. fingerprint row mirrors the DB
+    // unique guards (fingerprint/serial/displayId → P2002) so the service's
+    // fail-closed collision path is exercised without postgres.
+    identity: {
+      create: async ({ data }) => {
+        const ts = now();
+        const row = {
+          id: data.id ?? randomUUID(),
+          externalRef: data.externalRef ?? null,
+          displayName: data.displayName ?? `id-${(identityRows.size + 1).toString(16)}`,
+          identityType: data.identityType ?? 'qa_device',
+          status: data.status ?? 'READY',
+          dataPath: data.dataPath ?? `/data/wa/id-${identityRows.size + 1}`,
+          metadataJson: data.metadataJson ?? {},
+          createdAt: ts,
+          updatedAt: ts,
+        };
+        if ([...identityRows.values()].some((r) => r.dataPath === row.dataPath)) {
+          throw Object.assign(new Error('Unique constraint failed on the fields: (dataPath)'), { code: 'P2002' });
+        }
+        identityRows.set(row.id, row);
+        return { ...row };
+      },
+      findUnique: async ({ where } = {}) => {
+        const row = identityRows.get(where?.id) ?? [...identityRows.values()].find((r) => r.dataPath === where?.dataPath) ?? null;
+        return row ? { ...row } : null;
+      },
+      findMany: async () => [...identityRows.values()].map((r) => ({ ...r })),
+    },
+    identityFingerprint: {
+      create: async ({ data }) => {
+        const uniqueHit = ['fingerprint', 'serial', 'displayId'].find(
+          (f) => data[f] !== undefined && [...fingerprintRows.values()].some((r) => r[f] === data[f] && r.identityId !== data.identityId),
+        );
+        if (uniqueHit) {
+          throw Object.assign(new Error(`Unique constraint failed on the fields: (${uniqueHit})`), { code: 'P2002' });
+        }
+        if (fingerprintRows.has(data.identityId)) {
+          throw Object.assign(new Error('Unique constraint failed on the fields: (identityId)'), { code: 'P2002' });
+        }
+        const ts = now();
+        const row = { schemaVersion: 1, createdAt: ts, updatedAt: ts, ...data };
+        fingerprintRows.set(row.identityId, row);
+        return { ...row };
+      },
+      findUnique: async ({ where } = {}) => {
+        const row = fingerprintRows.get(where?.identityId) ?? null;
+        return row ? { ...row } : null;
+      },
+      findMany: async () => [...fingerprintRows.values()].map((r) => ({ ...r })),
+      update: async ({ where, data }) => {
+        const row = fingerprintRows.get(where?.identityId);
+        if (!row) throw Object.assign(new Error('identity fingerprint not found'), { code: 'P2025' });
+        Object.assign(row, Object.fromEntries(Object.entries(data).filter(([, v]) => v !== undefined)), { updatedAt: now() });
+        return { ...row };
       },
     },
     // ---- MC P4: manual_interventions (Mobile Console MD Phase 4 / §6) ------

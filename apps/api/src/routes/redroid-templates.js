@@ -34,6 +34,14 @@ const TEMPLATE_BODY = {
     // Stage B: optional fleet egress proxy. socks5://[user:pass@]host:port only.
     // Encrypted at rest by the service; the response never echoes the URL.
     proxyUrl: { type: ['string', 'null'], maxLength: 512 },
+    // W1 (ADR-025): static ro.* override baseline (prop→value map). Values are
+    // transport-safe strings; shape enforced server-side (validateRoOverridesMap).
+    roOverrides: {
+      type: ['object', 'null'],
+      propertyNames: { pattern: '^(ro|persist)\.[a-z0-9_.]{1,80}$' },
+      additionalProperties: { type: 'string', minLength: 1, maxLength: 128 },
+      maxProperties: 32,
+    },
   },
 };
 

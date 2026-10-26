@@ -23,7 +23,7 @@ import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 
-import { DOCKER_ERROR, encryptSecret, decryptSecret, resolveProviderKey } from '@water-army/shared';
+import { DOCKER_ERROR, encryptSecret, decryptSecret, resolveProviderKey, buildRoCmdArgs, profileToRoOverrides, mergeRoOverrides, validateRoOverridesMap } from '@water-army/shared';
 
 import { DockerServiceError, classifyDockerError } from './docker-service.js';
 import { GOST_HOST_BIND, deviceNetwork, withDeviceNetwork, ensureDeviceNetwork } from './device-network.js';
@@ -507,6 +507,15 @@ export function validateRedroidTemplate(t) {
 
   if (problems.length) throw fail('VALIDATION_ERROR', 400, problems.join('; '));
 
+  // W1 (ADR-025): static ro.* override baseline. Default {} = today's exact
+  // behaviour; validated fail-closed (prop-shaped keys, transport-safe values).
+  let roOverrides = {};
+  if (t?.roOverrides !== undefined && t.roOverrides !== null) {
+    const rp = validateRoOverridesMap(t.roOverrides);
+    if (rp.length) throw fail('VALIDATION_ERROR', 400, rp.join('; '));
+    roOverrides = t.roOverrides;
+  }
+
   return {
     name,
     image: String(t.image).trim(),
@@ -521,6 +530,7 @@ export function validateRedroidTemplate(t) {
     isEnabled: t?.isEnabled === undefined ? true : Boolean(t.isEnabled),
     cpuLimit,
     memoryLimitBytes,
+    roOverrides,
     proxyUrl, // plaintext ONLY here — the service encrypts before any DB/API touch
   };
 }
@@ -530,14 +540,22 @@ export function validateRedroidTemplate(t) {
  * (MD §2.1 — androidboot.* as container start args, redroid-doc official
  * method). Returns a pure string array; nothing here touches a shell.
  */
-export function buildRedroidCmd({ width, height, dpi, fps, gpuMode }) {
-  return [
+export function buildRedroidCmd({ width, height, dpi, fps, gpuMode, roOverrides }) {
+  const base = [
     `androidboot.redroid_width=${width}`,
     `androidboot.redroid_height=${height}`,
     `androidboot.redroid_dpi=${dpi}`,
     `androidboot.redroid_fps=${fps}`,
     `androidboot.redroid_gpu_mode=${gpuMode}`,
   ];
+  // W1 (ADR-025): identity/template ro.* overrides ride the SAME androidboot
+  // Cmd carrier (sorted, deterministic). Empty/undefined map = byte-identical
+  // to today's args — the zero-change guarantee when the switch is OFF.
+  // Fail-closed inside buildRoCmdArgs (invalid map → throw, never partial).
+  if (roOverrides && Object.keys(roOverrides).length) {
+    base.push(...buildRoCmdArgs(roOverrides));
+  }
+  return base;
 }
 
 // ---------------------------------------------------------------------------
@@ -584,10 +602,15 @@ export function createRedroidService({
   // MC P4: intervention service (MD Phase 4) — the wired production signal
   // hooks below fire into it. Unavailable stub / null = hooks inert.
   intervention: injectedIntervention,
+  // W1 (ADR-025): fingerprint service (createFingerprintService). Null while
+  // the W1 switch is OFF — createDevice never touches identity profiles then
+  // (zero behaviour change). When ON it is REQUIRED if identityId is supplied.
+  fingerprint: injectedFingerprint,
 } = {}) {
   const removeDataDir = injectedRemoveDataDir ?? removeRedroidDataDir;
   const ramGate = injectedRamGate ?? null;
   const intervention = injectedIntervention ?? null;
+  const fingerprintService = injectedFingerprint ?? null;
 
   /** RAM-G1 denial → stable 409 with the machine reason in the message. */
   const ramGateDenied = (adm, what) =>
@@ -736,6 +759,8 @@ export function createRedroidService({
       // R5: null patch = clear the limit; undefined = keep current.
       cpuLimit: patch.cpuLimit !== undefined ? patch.cpuLimit : current.cpuLimit,
       memoryLimitBytes: patch.memoryLimitBytes !== undefined ? patch.memoryLimitBytes : current.memoryLimitBytes,
+      // W1 (ADR-025): {} patch = clear to baseline-off; undefined = keep.
+      roOverrides: patch.roOverrides !== undefined ? patch.roOverrides : (current.roOverrides ?? {}),
     });
     let row;
     try {
@@ -1682,6 +1707,37 @@ export function createRedroidService({
     const width = o.width ?? template.width;
     const height = o.height ?? template.height;
 
+    // W1 (ADR-025): identity fingerprint injection — switch-controlled, OFF by
+    // default (V3 real-device verification is open). Switch OFF → identityId
+    // is accepted at the schema edge but changes NOTHING (Cmd byte-identical,
+    // no profile lookup). Switch ON → fail-closed chain:
+    //   template roOverrides invalid → 500; identityId without fingerprint
+    //   service → 500; profile missing/invalid/drift/collision → service
+    //   throws; merged map invalid → 500. Resolution runs BEFORE any side
+    //   effect (no data dir, no DB row, no RAM-gate lease on a rejection).
+    let roOverridesMerged = null;
+    let identityIdForDevice = null;
+    if (config?.redroidRoOverridesEnabled) {
+      const baseProblems = validateRoOverridesMap(template.roOverrides ?? {});
+      if (baseProblems.length) {
+        throw fail('REDROID_TEMPLATE_INVALID', 500, `template '${template.name}' roOverrides invalid: ${baseProblems.join('; ')}`);
+      }
+      const layers = [template.roOverrides ?? {}];
+      if (input.identityId !== undefined && input.identityId !== null && input.identityId !== '') {
+        if (!fingerprintService) {
+          throw fail('FINGERPRINT_SERVICE_UNAVAILABLE', 500, 'identityId supplied but the fingerprint service is unavailable — cannot inject a verified profile');
+        }
+        const profile = await fingerprintService.resolveForDeviceCreate(input.identityId);
+        layers.push(profileToRoOverrides(profile));
+        identityIdForDevice = input.identityId;
+      }
+      const merged = mergeRoOverrides(layers);
+      if (merged.problems.length) {
+        throw fail('FINGERPRINT_RO_OVERRIDES_INVALID', 500, `merged roOverrides invalid: ${merged.problems.join('; ')}`);
+      }
+      roOverridesMerged = merged.overrides;
+    }
+
     // Preflight BEFORE create — explicit warning, never the sole verdict (MD §2.3).
     let preflightResult = null;
     if (preflight) {
@@ -1769,6 +1825,10 @@ export function createRedroidService({
               netConsecutiveFailures: 0,
               netRecoveries: 0,
               netManualIntervention: false,
+              // W1 (ADR-025): identity binding + exact injected map (audit /
+              // recreate evidence). null/{} while the switch is OFF.
+              identityId: identityIdForDevice,
+              roOverridesJson: roOverridesMerged ?? {},
             },
           });
           break;
@@ -1828,7 +1888,7 @@ export function createRedroidService({
         ExposedPorts: { [`${REDROID_ADB_CONTAINER_PORT}/tcp`]: {} },
         // MD §2.1: androidboot.* as START ARGS. Env is deliberately empty —
         // redroid reads these from the kernel cmdline, not from Env.
-        Cmd: buildRedroidCmd({ width, height, dpi, fps, gpuMode: template.gpuMode }),
+        Cmd: buildRedroidCmd({ width, height, dpi, fps, gpuMode: template.gpuMode, roOverrides: roOverridesMerged ?? undefined }),
         Env: [],
         Labels: {
           'app.managed': 'true',
@@ -2588,6 +2648,11 @@ export function createRedroidService({
           }
         : { configured: false, gostPort: null, state: row.proxyState ?? 'off', hasUrl: false, binaryState: row.binaryState ?? null, binaryVersion: row.binaryVersion ?? null, network: net },
       lastDiagnosedAt: row.lastDiagnosedAt,
+      // W1 (ADR-025): identity binding + injected ro snapshot (null/{} while
+      // the switch is off). The map is zero-secret by construction (validator
+      // enforces transport-safe props only).
+      identityId: row.identityId ?? null,
+      roOverrides: row.roOverridesJson ?? {},
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     };
@@ -2723,6 +2788,8 @@ function publicTemplate(t) {
     // R5: limits as JSON-safe numbers (BigInt → number; ≤ 256 GiB « 2^53).
     cpuLimit: t.cpuLimit ?? null,
     memoryLimitBytes: t.memoryLimitBytes === null || t.memoryLimitBytes === undefined ? null : Number(t.memoryLimitBytes),
+    // W1 (ADR-025): static ro override baseline ({} = off / today's behaviour)
+    roOverrides: t.roOverrides ?? {},
     // Stage B: proxy binding presence only (never the URL itself)
     proxy: t.proxyUrlEncrypted ? { configured: true, hasUrl: true } : { configured: false, hasUrl: false },
     createdAt: t.createdAt,
