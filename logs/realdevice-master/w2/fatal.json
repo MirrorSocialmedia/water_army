@@ -1,0 +1,5 @@
+{
+  "at": "2026-10-26T20:11:03.337Z",
+  "error": "E5: app icon not found in launcher dump — dump saved for inspection",
+  "stack": "Error: E5: app icon not found in launcher dump — dump saved for inspection\n    at main (file:///home/kenneth/.openclaw/workspace/water_army/scripts/realdevice-master/w2-matrix.mjs:316:22)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)"
+}

@@ -1,0 +1,48 @@
+{
+  "item": "A1-pkg-injection",
+  "pass": true,
+  "at": "2026-10-26T21:02:20.457Z",
+  "out": [
+    {
+      "n": "\"com.example;id\"",
+      "get": 400,
+      "del": 400
+    },
+    {
+      "n": "\"com.a$(reboot)\"",
+      "get": 400,
+      "del": 400
+    },
+    {
+      "n": "\"com.a`id`\"",
+      "get": 400,
+      "del": 400
+    },
+    {
+      "n": "\"com.a|nc\"",
+      "get": 400,
+      "del": 400
+    },
+    {
+      "n": "\"com.a>x\"",
+      "get": 400,
+      "del": 400
+    },
+    {
+      "n": "\"com.a app\"",
+      "get": 400,
+      "del": 400
+    },
+    {
+      "n": "\"com.a\\ninjection\"",
+      "get": 400,
+      "del": 400
+    },
+    {
+      "n": "\"com.a\\u0000nul\"",
+      "get": 400,
+      "del": 400
+    }
+  ],
+  "pmDiffUnchanged": true
+}

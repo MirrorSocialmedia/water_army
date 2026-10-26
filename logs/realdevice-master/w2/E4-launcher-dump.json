@@ -1,0 +1,35 @@
+{
+  "item": "E4-launcher-dump",
+  "pass": true,
+  "at": "2026-10-26T21:01:59.421Z",
+  "http": 200,
+  "fg": {
+    "device": "redroid-rdev-w1",
+    "foreground": {
+      "package": "com.android.launcher3",
+      "activity": "com.android.launcher3.uioverrides.QuickstepLauncher"
+    },
+    "loginState": "unknown (activity-level detection only)",
+    "evidence": "\nWINDOW MANAGER LAST ANR (dumpsys window lastanr)\n  <no ANR has occurred since boot>\n\nWINDOW MANAGER POLICY STATE (dumpsys window policy)\n    mSafeMode=false mSystemReady=true mSystemBooted=true\n    mCameraLensCoverState=CAMERA_LENS_COVER_ABSENT\n    mWakeGestureEnabledSetting=true\n    mUiMode=UI_MODE_TYPE_NORMALmEnableCarDockHomeCapture=false\n    mLidKeyboardAccessibility=0 mLidNavigationAccessibility=0 getLidBehavior=LID_BEHAVIOR_NONE\n    mLongPressOnBackBehavior=LONG_PRESS_BACK_NOTHING\n    mLo",
+    "truncated": false
+  },
+  "nodeCount": 25,
+  "stats": {
+    "parsed": 25,
+    "skippedMalformed": 0
+  },
+  "sampleNode": {
+    "resourceId": null,
+    "text": null,
+    "contentDesc": null,
+    "className": "android.widget.FrameLayout",
+    "clickable": false,
+    "bounds": {
+      "x1": 0,
+      "y1": 0,
+      "x2": 720,
+      "y2": 1280
+    }
+  },
+  "launcherVisible": true
+}

@@ -1,0 +1,20 @@
+{
+  "item": "E11-uninstall",
+  "pass": true,
+  "at": "2026-10-26T21:03:38.030Z",
+  "http": 200,
+  "body": {
+    "device": "redroid-rdev-w1",
+    "package": "net.gsantner.markor",
+    "uninstalled": true
+  },
+  "removed": true,
+  "getAfter": {
+    "device": "redroid-rdev-w1",
+    "package": "net.gsantner.markor",
+    "installed": false,
+    "versionCode": null,
+    "versionName": null,
+    "loginState": "unknown (activity-level detection only — ADR-026 §3)"
+  }
+}

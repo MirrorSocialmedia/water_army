@@ -1,0 +1,35 @@
+{
+  "item": "E5-tap-icon",
+  "pass": true,
+  "at": "2026-10-26T21:02:07.586Z",
+  "selector": {
+    "contentDesc": "Markor"
+  },
+  "http": 200,
+  "tap": {
+    "device": "redroid-rdev-w1",
+    "tapped": {
+      "x": 630,
+      "y": 534
+    },
+    "element": {
+      "resourceId": "com.android.launcher3:id/icon",
+      "text": "Markor",
+      "contentDesc": "Markor",
+      "className": "android.widget.TextView",
+      "clickable": true,
+      "bounds": {
+        "x1": 540,
+        "y1": 414,
+        "x2": 720,
+        "y2": 654
+      }
+    },
+    "selector": {
+      "contentDesc": "Markor"
+    },
+    "durationMs": 1906
+  },
+  "target": {},
+  "drawerSwipes": 1
+}

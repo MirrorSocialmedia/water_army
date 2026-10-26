@@ -1,0 +1,16 @@
+{
+  "item": "E2-install",
+  "pass": true,
+  "at": "2026-10-26T21:01:57.469Z",
+  "http": 200,
+  "body": {
+    "device": "redroid-rdev-w1",
+    "fileName": "net.gsantner.markor-163.apk",
+    "bytes": 12054040,
+    "installed": true,
+    "devicePath": "/data/local/tmp/wa_net.gsantner.markor-163.apk"
+  },
+  "addedPkgs": [
+    "net.gsantner.markor"
+  ]
+}

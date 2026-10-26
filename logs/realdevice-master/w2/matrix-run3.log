@@ -1,0 +1,13 @@
+devices: {"redroid-rdev-w1":{"id":"12bbcf39-89b5-4d14-837d-f01394a31af5","adbPort":16505},"redroid-rdev-w2":{"id":"a30117ee-14cd-4a12-978b-be48640d5ab8","adbPort":16506}}
+boot-gate redroid-rdev-w1: adbd port 16505 accepting in 0s
+boot-gate redroid-rdev-w2: adbd port 16506 accepting in 0s
+boot-gates done: {"redroid-rdev-w1":true,"redroid-rdev-w2":true} (+60s settle)
+[EXPECTED-FAIL] E1-refresh-online: {"http":200,"adbState":"offline","adbGetState":"","containerState":"running","bootGateAdbdListening":true,"note":"EXPECTED-FAIL by design (W1 finding #2): no-proxy device has NO platform connect path — container running 
+operator-connect redroid-rdev-w1: connected to 127.0.0.1:16505
+operator-connect redroid-rdev-w2: connected to 127.0.0.1:16506
+[FAIL] E2-install: {"http":200,"body":{"device":"redroid-rdev-w1","fileName":"net.gsantner.markor-163.apk","bytes":12054040,"installed":true,"devicePath":"/data/local/tmp/wa_net.gsantner.markor-163.apk"},"addedPkgs":["package:net.gsantner.
+[FAIL] E3-app-get: {"http":502,"body":{"error":{"code":"ADB_UNAVAILABLE","message":"adb package-info could not run on this host","requestId":"e9dda2be-b36e-4571-bb0d-2f7438d76647"}}}
+[PASS] E4-launcher-dump: {"http":200,"fg":{"device":"redroid-rdev-w1","foreground":{"package":"com.android.launcher3","activity":"com.android.launcher3.uioverrides.QuickstepLauncher"},"loginState":"unknown (activity-level detection only)","evide
+FATAL Error: E5: app icon not found in launcher dump — dump saved for inspection
+    at main (file:///home/kenneth/.openclaw/workspace/water_army/scripts/realdevice-master/w2-matrix.mjs:316:22)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)

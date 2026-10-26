@@ -1,0 +1,13 @@
+devices: {"redroid-rdev-w1":{"id":"12bbcf39-89b5-4d14-837d-f01394a31af5","adbPort":16505},"redroid-rdev-w2":{"id":"a30117ee-14cd-4a12-978b-be48640d5ab8","adbPort":16506}}
+boot-gate redroid-rdev-w1: adbd port 16505 accepting in 0s
+boot-gate redroid-rdev-w2: adbd port 16506 accepting in 0s
+boot-gates done: {"redroid-rdev-w1":true,"redroid-rdev-w2":true} (+60s settle)
+[EXPECTED-FAIL] E1-refresh-online: {"http":200,"adbState":"offline","adbGetState":"","containerState":"running","bootGateAdbdListening":true,"note":"EXPECTED-FAIL by design (W1 finding #2): no-proxy device has NO platform connect path — container running 
+operator-connect redroid-rdev-w1: 
+operator-connect redroid-rdev-w2: 
+[FAIL] E2-install: {"http":502,"body":{"error":{"code":"APK_PUSH_FAILED","message":"adb push failed: adb: error: failed to get feature set: device '127.0.0.1:16505' not found\n","requestId":"dbdb623a-293a-4b0f-a612-6849409b312e"}},"addedPk
+[FAIL] E3-app-get: {"http":200,"body":{"device":"redroid-rdev-w1","package":"net.gsantner.markor","installed":false,"versionCode":null,"versionName":null,"loginState":"unknown (activity-level detection only — ADR-026 §3)"}}
+[FAIL] E4-launcher-dump: {"http":502,"fg":{"device":"redroid-rdev-w1","foreground":{"package":null,"activity":null},"loginState":"unknown (activity-level detection only)","evidence":"","truncated":false},"nodeCount":0,"sampleNode":null,"launcher
+FATAL Error: E5: app icon not found in launcher dump — dump saved for inspection
+    at main (file:///home/kenneth/.openclaw/workspace/water_army/scripts/realdevice-master/w2-matrix.mjs:301:22)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)

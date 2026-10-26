@@ -1,0 +1,14 @@
+{
+  "item": "A10-idle-state",
+  "pass": true,
+  "at": "2026-10-26T21:03:37.937Z",
+  "first": {
+    "http": 200,
+    "nodes": 25
+  },
+  "second": {
+    "http": 200,
+    "nodes": 25
+  },
+  "note": "static UI expected 200×2; animated UI may 502 UIA_IDLE_STATE — record actual"
+}

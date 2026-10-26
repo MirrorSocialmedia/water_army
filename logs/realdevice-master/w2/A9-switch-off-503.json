@@ -1,0 +1,50 @@
+{
+  "item": "A9-switch-off-503",
+  "pass": true,
+  "at": "2026-10-26T21:03:42.075Z",
+  "out": [
+    {
+      "m": "GET",
+      "p": "/api/devices/redroid/:id/apps",
+      "http": 503,
+      "code": "APP_OPS_DISABLED"
+    },
+    {
+      "m": "GET",
+      "p": "/api/devices/redroid/:id/apps/net.gsantner.markor",
+      "http": 503,
+      "code": "APP_OPS_DISABLED"
+    },
+    {
+      "m": "GET",
+      "p": "/api/devices/redroid/:id/foreground",
+      "http": 503,
+      "code": "APP_OPS_DISABLED"
+    },
+    {
+      "m": "POST",
+      "p": "/api/devices/redroid/:id/apps/install",
+      "http": 503,
+      "code": "APP_OPS_DISABLED"
+    },
+    {
+      "m": "DELETE",
+      "p": "/api/devices/redroid/:id/apps/net.gsantner.markor",
+      "http": 503,
+      "code": "APP_OPS_DISABLED"
+    },
+    {
+      "m": "POST",
+      "p": "/api/devices/redroid/:id/ui/dump",
+      "http": 503,
+      "code": "APP_OPS_DISABLED"
+    },
+    {
+      "m": "POST",
+      "p": "/api/devices/redroid/:id/ui/tap",
+      "http": 503,
+      "code": "APP_OPS_DISABLED"
+    }
+  ],
+  "pmUnchanged": true
+}

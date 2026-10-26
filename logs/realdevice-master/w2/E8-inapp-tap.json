@@ -1,0 +1,33 @@
+{
+  "item": "E8-inapp-tap",
+  "pass": true,
+  "at": "2026-10-26T21:02:15.931Z",
+  "selector": {
+    "text": "Main View"
+  },
+  "http": 200,
+  "tap": {
+    "device": "redroid-rdev-w1",
+    "tapped": {
+      "x": 360,
+      "y": 143
+    },
+    "element": {
+      "resourceId": "net.gsantner.markor:id/title",
+      "text": "Main View",
+      "contentDesc": null,
+      "className": "android.widget.TextView",
+      "clickable": true,
+      "bounds": {
+        "x1": 0,
+        "y1": 48,
+        "x2": 720,
+        "y2": 239
+      }
+    },
+    "selector": {
+      "text": "Main View"
+    },
+    "durationMs": 1905
+  }
+}

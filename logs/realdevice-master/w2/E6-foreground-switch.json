@@ -1,0 +1,17 @@
+{
+  "item": "E6-foreground-switch",
+  "pass": true,
+  "at": "2026-10-26T21:02:10.168Z",
+  "http": 200,
+  "body": {
+    "device": "redroid-rdev-w1",
+    "foreground": {
+      "package": "net.gsantner.markor",
+      "activity": "net.gsantner.markor.activity.IntroActivity"
+    },
+    "loginState": "unknown (activity-level detection only)",
+    "evidence": "\nWINDOW MANAGER LAST ANR (dumpsys window lastanr)\n  <no ANR has occurred since boot>\n\nWINDOW MANAGER POLICY STATE (dumpsys window policy)\n    mSafeMode=false mSystemReady=true mSystemBooted=true\n    mCameraLensCoverState=CAMERA_LENS_COVER_ABSENT\n    mWakeGestureEnabledSetting=true\n    mUiMode=UI_MODE_TYPE_NORMALmEnableCarDockHomeCapture=false\n    mLidKeyboardAccessibility=0 mLidNavigationAccessibility=0 getLidBehavior=LID_BEHAVIOR_NONE\n    mLongPressOnBackBehavior=LONG_PRESS_BACK_NOTHING\n    mLo",
+    "truncated": false
+  },
+  "expectedPkg": "net.gsantner.markor"
+}

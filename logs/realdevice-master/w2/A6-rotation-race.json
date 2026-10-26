@@ -1,0 +1,12 @@
+{
+  "item": "A6-rotation-race",
+  "pass": false,
+  "expected": true,
+  "at": "2026-10-26T21:02:58.759Z",
+  "rotationSupported": false,
+  "probe": {
+    "before": "Physical size: 720x1280",
+    "afterOverride": "Physical size: 720x1280"
+  },
+  "note": "redroid fixed-geometry display: runtime rotation unsupported (wm size override + keyevent 24 both no-op) — race NOT EXERCISABLE on real device; expected env limitation (pattern E1); rotation logic unit-tested"
+}

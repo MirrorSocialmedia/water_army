@@ -1,0 +1,32 @@
+{
+  "item": "A7-corrupt-apk",
+  "pass": true,
+  "at": "2026-10-26T21:02:58.843Z",
+  "out": [
+    {
+      "fn": "rdev-corrupt-text.apk",
+      "http": 422,
+      "code": "APK_CORRUPT",
+      "deviceVerdict": null
+    },
+    {
+      "fn": "rdev-corrupt-empty.apk",
+      "http": 422,
+      "code": "APK_CORRUPT",
+      "deviceVerdict": null
+    },
+    {
+      "fn": "rdev-corrupt-trunc.apk",
+      "http": 502,
+      "code": "APK_INSTALL_FAILED",
+      "deviceVerdict": null
+    },
+    {
+      "fn": "rdev-corrupt-zipmagic.apk",
+      "http": 502,
+      "code": "APK_INSTALL_FAILED",
+      "deviceVerdict": null
+    }
+  ],
+  "pmUnchanged": true
+}

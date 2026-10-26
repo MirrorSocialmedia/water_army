@@ -1,0 +1,22 @@
+{
+  "item": "E10-clean-device",
+  "pass": true,
+  "at": "2026-10-26T21:02:20.420Z",
+  "tapHttp": 404,
+  "tapBody": {
+    "error": {
+      "code": "UIA_ELEMENT_NOT_FOUND",
+      "message": "no UI element matches the selector (element absent, off-screen, or the screen changed)",
+      "requestId": "b35b14ff-26fc-46bb-86af-21c64ef91bae"
+    }
+  },
+  "getHttp": 200,
+  "getBody": {
+    "device": "redroid-rdev-w2",
+    "package": "net.gsantner.markor",
+    "installed": false,
+    "versionCode": null,
+    "versionName": null,
+    "loginState": "unknown (activity-level detection only — ADR-026 §3)"
+  }
+}

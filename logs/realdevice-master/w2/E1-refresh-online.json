@@ -1,0 +1,12 @@
+{
+  "item": "E1-refresh-online",
+  "pass": false,
+  "expected": true,
+  "at": "2026-10-26T21:01:55.124Z",
+  "http": 200,
+  "adbState": "offline",
+  "adbGetState": "",
+  "containerState": "running",
+  "bootGateAdbdListening": true,
+  "note": "EXPECTED-FAIL by design (W1 finding #2): no-proxy device has NO platform connect path — container running + adbd up (bootGate) but platform refresh never connects, so adbState never reaches online. Honest E1 = expose this gap (report item)."
+}

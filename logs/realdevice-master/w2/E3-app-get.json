@@ -1,0 +1,15 @@
+{
+  "item": "E3-app-get",
+  "pass": true,
+  "at": "2026-10-26T21:01:57.488Z",
+  "http": 200,
+  "body": {
+    "device": "redroid-rdev-w1",
+    "package": "net.gsantner.markor",
+    "installed": true,
+    "versionCode": "163",
+    "versionName": "2.16.1",
+    "loginState": "unknown (activity-level detection only — ADR-026 §3)"
+  },
+  "transientRetries": 0
+}

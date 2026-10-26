@@ -1,0 +1,37 @@
+{
+  "item": "A2-filename-injection",
+  "pass": true,
+  "at": "2026-10-26T21:02:20.465Z",
+  "out": [
+    {
+      "fn": "\"../etc/passwd.apk\"",
+      "http": 400,
+      "code": "VALIDATION_ERROR"
+    },
+    {
+      "fn": "\"../../etc/shadow.apk\"",
+      "http": 400,
+      "code": "VALIDATION_ERROR"
+    },
+    {
+      "fn": "\"a b.apk\"",
+      "http": 400,
+      "code": "VALIDATION_ERROR"
+    },
+    {
+      "fn": "\"-rf.apk\"",
+      "http": 400,
+      "code": "VALIDATION_ERROR"
+    },
+    {
+      "fn": "\"com.evil\\u0000.ap.apk\"",
+      "http": 400,
+      "code": "VALIDATION_ERROR"
+    }
+  ],
+  "symlink": {
+    "http": 400,
+    "code": "APK_FILE_INVALID"
+  },
+  "hostIntact": true
+}

@@ -1,0 +1,23 @@
+{
+  "item": "A3-dump-caps",
+  "pass": true,
+  "at": "2026-10-26T21:02:42.262Z",
+  "measured": {
+    "nodes": 22,
+    "xmlBytes": 7822
+  },
+  "caps": {
+    "byteCap": 1955,
+    "nodeCap": 11
+  },
+  "byteBomb": {
+    "http": 522,
+    "code": "UIA_DUMP_TOO_LARGE",
+    "nodes": 0
+  },
+  "nodeCap": {
+    "http": 422,
+    "code": "UIA_DUMP_NODE_LIMIT",
+    "nodes": 0
+  }
+}

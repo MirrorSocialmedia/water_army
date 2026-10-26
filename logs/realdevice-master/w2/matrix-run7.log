@@ -1,0 +1,146 @@
+devices: {"redroid-rdev-w1":{"id":"12bbcf39-89b5-4d14-837d-f01394a31af5","adbPort":16505},"redroid-rdev-w2":{"id":"a30117ee-14cd-4a12-978b-be48640d5ab8","adbPort":16506}}
+boot-gate redroid-rdev-w1: adbd port 16505 accepting in 0s
+boot-gate redroid-rdev-w2: adbd port 16506 accepting in 0s
+boot-gates done: {"redroid-rdev-w1":true,"redroid-rdev-w2":true} (+60s settle)
+[EXPECTED-FAIL] E1-refresh-online: {"http":200,"adbState":"offline","adbGetState":"","containerState":"running","bootGateAdbdListening":true,"note":"EXPECTED-FAIL by design (W1 finding #2): no-proxy device has NO platform connect path — container running 
+operator-connect redroid-rdev-w1: connected to 127.0.0.1:16505
+operator-connect redroid-rdev-w2: connected to 127.0.0.1:16506
+[PASS] E2-install: {"http":200,"body":{"device":"redroid-rdev-w1","fileName":"net.gsantner.markor-163.apk","bytes":12054040,"installed":true,"devicePath":"/data/local/tmp/wa_net.gsantner.markor-163.apk"},"addedPkgs":["net.gsantner.markor"]
+[PASS] E3-app-get: {"http":200,"body":{"device":"redroid-rdev-w1","package":"net.gsantner.markor","installed":true,"versionCode":"163","versionName":"2.16.1","loginState":"unknown (activity-level detection only — ADR-026 §3)"},"transientRe
+[PASS] E4-launcher-dump: {"http":200,"fg":{"device":"redroid-rdev-w1","foreground":{"package":"com.android.launcher3","activity":"com.android.launcher3.uioverrides.QuickstepLauncher"},"loginState":"unknown (activity-level detection only)","evide
+[PASS] E5-tap-icon: {"selector":{"contentDesc":"Markor"},"http":200,"tap":{"device":"redroid-rdev-w1","tapped":{"x":630,"y":534},"element":{"resourceId":"com.android.launcher3:id/icon","text":"Markor","contentDesc":"Markor","className":"and
+[PASS] E6-foreground-switch: {"http":200,"body":{"device":"redroid-rdev-w1","foreground":{"package":"net.gsantner.markor","activity":"net.gsantner.markor.activity.IntroActivity"},"loginState":"unknown (activity-level detection only)","evidence":"\nW
+[PASS] E7-inapp-dump: {"http":200,"nodeCount":22,"stats":{"parsed":22,"skippedMalformed":0},"sample":[{"resourceId":null,"text":null,"contentDesc":null,"className":"android.widget.FrameLayout","clickable":false,"bounds":{"x1":0,"y1":0,"x2":72
+[PASS] E8-inapp-tap: {"selector":{"text":"Main View"},"http":200,"tap":{"device":"redroid-rdev-w1","tapped":{"x":360,"y":143},"element":{"resourceId":"net.gsantner.markor:id/title","text":"Main View","contentDesc":null,"className":"android.w
+[PASS] E9-activity-change: {"http":200,"body":{"device":"redroid-rdev-w1","foreground":{"package":"net.gsantner.markor","activity":"net.gsantner.markor.activity.IntroActivity"},"loginState":"unknown (activity-level detection only)","evidence":"\nW
+[PASS] E10-clean-device: {"tapHttp":404,"tapBody":{"error":{"code":"UIA_ELEMENT_NOT_FOUND","message":"no UI element matches the selector (element absent, off-screen, or the screen changed)","requestId":"b35b14ff-26fc-46bb-86af-21c64ef91bae"}},"g
+[PASS] A1-pkg-injection: {"out":[{"n":"\"com.example;id\"","get":400,"del":400},{"n":"\"com.a$(reboot)\"","get":400,"del":400},{"n":"\"com.a`id`\"","get":400,"del":400},{"n":"\"com.a|nc\"","get":400,"del":400},{"n":"\"com.a>x\"","get":400,"del":
+[PASS] A2-filename-injection: {"out":[{"fn":"\"../etc/passwd.apk\"","http":400,"code":"VALIDATION_ERROR"},{"fn":"\"../../etc/shadow.apk\"","http":400,"code":"VALIDATION_ERROR"},{"fn":"\"a b.apk\"","http":400,"code":"VALIDATION_ERROR"},{"fn":"\"-rf.ap
+[PASS] A4-apk-size-cap: {"http":413,"code":"APK_TOO_LARGE","pmUnchanged":true}
+[PASS] A3-dump-caps: {"measured":{"nodes":22,"xmlBytes":7822},"caps":{"byteCap":1955,"nodeCap":11},"byteBomb":{"http":522,"code":"UIA_DUMP_TOO_LARGE","nodes":0},"nodeCap":{"http":422,"code":"UIA_DUMP_NODE_LIMIT","nodes":0}}
+[PASS] A5-offscreen-tap: {"staleIcon":"Android Keyboard (AOSP)","staleCenter":{"x":90,"y":294},"stillPresentAfterNavigate":false,"offscreenNodeInFreshDump":null,"offscreenTap":null,"staleTap":{"http":404,"code":"UIA_ELEMENT_NOT_FOUND"},"blindTap
+[EXPECTED-FAIL] A6-rotation-race: {"rotationSupported":false,"probe":{"before":"Physical size: 720x1280","afterOverride":"Physical size: 720x1280"},"note":"redroid fixed-geometry display: runtime rotation unsupported (wm size override + keyevent 24 both 
+[PASS] A7-corrupt-apk: {"out":[{"fn":"rdev-corrupt-text.apk","http":422,"code":"APK_CORRUPT","deviceVerdict":null},{"fn":"rdev-corrupt-empty.apk","http":422,"code":"APK_CORRUPT","deviceVerdict":null},{"fn":"rdev-corrupt-trunc.apk","http":502,"
+[PASS] A8-offline-409: {"refreshAfterStop":"exited","duringDown":[409,409,409,409,409,409],"refreshAfterStart":"running","recovered":200}
+[PASS] A10-idle-state: {"first":{"http":200,"nodes":25},"second":{"http":200,"nodes":25},"note":"static UI expected 200×2; animated UI may 502 UIA_IDLE_STATE — record actual"}
+[PASS] E11-uninstall: {"http":200,"body":{"device":"redroid-rdev-w1","package":"net.gsantner.markor","uninstalled":true},"removed":true,"getAfter":{"device":"redroid-rdev-w1","package":"net.gsantner.markor","installed":false,"versionCode":nul
+[PASS] A9-switch-off-503: {"out":[{"m":"GET","p":"/api/devices/redroid/:id/apps","http":503,"code":"APP_OPS_DISABLED"},{"m":"GET","p":"/api/devices/redroid/:id/apps/net.gsantner.markor","http":503,"code":"APP_OPS_DISABLED"},{"m":"GET","p":"/api/d
+
+===== W2 SUMMARY =====
+{
+  "at": "2026-10-26T21:03:46.087Z",
+  "total": 21,
+  "pass": 19,
+  "fail": 0,
+  "expectedFail": 2,
+  "haltCount": 0,
+  "phase": "A",
+  "items": [
+    {
+      "item": "E1-refresh-online",
+      "pass": false,
+      "expected": true
+    },
+    {
+      "item": "E2-install",
+      "pass": true,
+      "expected": false
+    },
+    {
+      "item": "E3-app-get",
+      "pass": true,
+      "expected": false
+    },
+    {
+      "item": "E4-launcher-dump",
+      "pass": true,
+      "expected": false
+    },
+    {
+      "item": "E5-tap-icon",
+      "pass": true,
+      "expected": false
+    },
+    {
+      "item": "E6-foreground-switch",
+      "pass": true,
+      "expected": false
+    },
+    {
+      "item": "E7-inapp-dump",
+      "pass": true,
+      "expected": false
+    },
+    {
+      "item": "E8-inapp-tap",
+      "pass": true,
+      "expected": false
+    },
+    {
+      "item": "E9-activity-change",
+      "pass": true,
+      "expected": false
+    },
+    {
+      "item": "E10-clean-device",
+      "pass": true,
+      "expected": false
+    },
+    {
+      "item": "A1-pkg-injection",
+      "pass": true,
+      "expected": false
+    },
+    {
+      "item": "A2-filename-injection",
+      "pass": true,
+      "expected": false
+    },
+    {
+      "item": "A4-apk-size-cap",
+      "pass": true,
+      "expected": false
+    },
+    {
+      "item": "A3-dump-caps",
+      "pass": true,
+      "expected": false
+    },
+    {
+      "item": "A5-offscreen-tap",
+      "pass": true,
+      "expected": false
+    },
+    {
+      "item": "A6-rotation-race",
+      "pass": false,
+      "expected": true
+    },
+    {
+      "item": "A7-corrupt-apk",
+      "pass": true,
+      "expected": false
+    },
+    {
+      "item": "A8-offline-409",
+      "pass": true,
+      "expected": false
+    },
+    {
+      "item": "A10-idle-state",
+      "pass": true,
+      "expected": false
+    },
+    {
+      "item": "E11-uninstall",
+      "pass": true,
+      "expected": false
+    },
+    {
+      "item": "A9-switch-off-503",
+      "pass": true,
+      "expected": false
+    }
+  ]
+}
+Matrix complete (no A-item failure). E-phase findings are report items.

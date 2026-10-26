@@ -1,0 +1,18 @@
+{
+  "item": "A5-offscreen-tap",
+  "pass": true,
+  "at": "2026-10-26T21:02:57.213Z",
+  "staleIcon": "Android Keyboard (AOSP)",
+  "staleCenter": {
+    "x": 90,
+    "y": 294
+  },
+  "stillPresentAfterNavigate": false,
+  "offscreenNodeInFreshDump": null,
+  "offscreenTap": null,
+  "staleTap": {
+    "http": 404,
+    "code": "UIA_ELEMENT_NOT_FOUND"
+  },
+  "blindTapAtStaleCoords": false
+}

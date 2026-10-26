@@ -1,0 +1,16 @@
+{
+  "item": "A8-offline-409",
+  "pass": true,
+  "at": "2026-10-26T21:03:32.080Z",
+  "refreshAfterStop": "exited",
+  "duringDown": [
+    409,
+    409,
+    409,
+    409,
+    409,
+    409
+  ],
+  "refreshAfterStart": "running",
+  "recovered": 200
+}

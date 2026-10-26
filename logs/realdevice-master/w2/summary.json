@@ -1,0 +1,116 @@
+{
+  "at": "2026-10-26T21:03:46.087Z",
+  "total": 21,
+  "pass": 19,
+  "fail": 0,
+  "expectedFail": 2,
+  "haltCount": 0,
+  "phase": "A",
+  "items": [
+    {
+      "item": "E1-refresh-online",
+      "pass": false,
+      "expected": true
+    },
+    {
+      "item": "E2-install",
+      "pass": true,
+      "expected": false
+    },
+    {
+      "item": "E3-app-get",
+      "pass": true,
+      "expected": false
+    },
+    {
+      "item": "E4-launcher-dump",
+      "pass": true,
+      "expected": false
+    },
+    {
+      "item": "E5-tap-icon",
+      "pass": true,
+      "expected": false
+    },
+    {
+      "item": "E6-foreground-switch",
+      "pass": true,
+      "expected": false
+    },
+    {
+      "item": "E7-inapp-dump",
+      "pass": true,
+      "expected": false
+    },
+    {
+      "item": "E8-inapp-tap",
+      "pass": true,
+      "expected": false
+    },
+    {
+      "item": "E9-activity-change",
+      "pass": true,
+      "expected": false
+    },
+    {
+      "item": "E10-clean-device",
+      "pass": true,
+      "expected": false
+    },
+    {
+      "item": "A1-pkg-injection",
+      "pass": true,
+      "expected": false
+    },
+    {
+      "item": "A2-filename-injection",
+      "pass": true,
+      "expected": false
+    },
+    {
+      "item": "A4-apk-size-cap",
+      "pass": true,
+      "expected": false
+    },
+    {
+      "item": "A3-dump-caps",
+      "pass": true,
+      "expected": false
+    },
+    {
+      "item": "A5-offscreen-tap",
+      "pass": true,
+      "expected": false
+    },
+    {
+      "item": "A6-rotation-race",
+      "pass": false,
+      "expected": true
+    },
+    {
+      "item": "A7-corrupt-apk",
+      "pass": true,
+      "expected": false
+    },
+    {
+      "item": "A8-offline-409",
+      "pass": true,
+      "expected": false
+    },
+    {
+      "item": "A10-idle-state",
+      "pass": true,
+      "expected": false
+    },
+    {
+      "item": "E11-uninstall",
+      "pass": true,
+      "expected": false
+    },
+    {
+      "item": "A9-switch-off-503",
+      "pass": true,
+      "expected": false
+    }
+  ]
+}

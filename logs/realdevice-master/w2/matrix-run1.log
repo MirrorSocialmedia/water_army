@@ -1,0 +1,6 @@
+created redroid-rdev-w1 (201)
+created redroid-rdev-w2 (201)
+FATAL Error: devices did not come online within 30min
+    at ensureDevices (file:///home/kenneth/.openclaw/workspace/water_army/scripts/realdevice-master/w2-matrix.mjs:209:9)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async main (file:///home/kenneth/.openclaw/workspace/water_army/scripts/realdevice-master/w2-matrix.mjs:224:3)
