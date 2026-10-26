@@ -116,3 +116,26 @@ test('focus parse: mCurrentFocus preferred; mFocusedApp fallback; none = null pa
   // honesty: never a login verdict
   assert.match(a.loginState, /activity-level/);
 });
+
+test('packageInfo: installed keyed on "Unable to find" ABSENCE — stable under truncation; version fields best-effort + honestly flagged (live 2026-10-27 W2 E3: 324KB dump, versionName at byte ~319K > 256KB cap silently false-negatived a real install)', async (t) => {
+  const s = setup(); t.after(s.cleanup);
+  const bigPad = 'x'.repeat(300 * 1024); // resolver-table bulk before the per-package tail
+  const fullDump = `${bigPad}\nPackages:\n  Package [com.demo.app] (abc123):\n    versionCode=163 minSdk=18 targetSdk=35\n    versionName=2.16.1\n`;
+  const tailDropped = fullDump.slice(0, 200 * 1024); // header + version lines cut away
+  s.adbStub.run = async () => ({ exitCode: 0, stdout: fullDump, stderr: '', truncated: false, timedOut: false });
+  const full = await s.svc.packageInfo('redroid-x', 'com.demo.app');
+  assert.equal(full.installed, true);
+  assert.equal(full.versionCode, '163');
+  assert.equal(full.versionName, '2.16.1');
+
+  s.adbStub.run = async () => ({ exitCode: 0, stdout: tailDropped, stderr: '', truncated: true, timedOut: false });
+  const trunc = await s.svc.packageInfo('redroid-x', 'com.demo.app');
+  assert.equal(trunc.installed, true, 'a cap truncation must NOT flip a real install to absent');
+  assert.equal(trunc.versionCode, null, 'version fields are best-effort under truncation');
+  assert.equal(trunc.versionName, null);
+  assert.equal(trunc.truncated, true, 'truncation is surfaced honestly on the payload');
+
+  s.adbStub.run = async () => ({ exitCode: 0, stdout: 'Unable to find package: com.demo.app\n', stderr: '', truncated: false, timedOut: false });
+  const absent = await s.svc.packageInfo('redroid-x', 'com.demo.app');
+  assert.equal(absent.installed, false);
+});

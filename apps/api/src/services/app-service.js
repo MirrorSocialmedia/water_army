@@ -104,26 +104,44 @@ export function createAppService({ db, adb, config = {}, audit = async () => {},
     return { device: row.name, count: unique.length, truncated: res.truncated, packages: unique };
   }
 
+  // `dumpsys package <installed>` is LARGE — global resolver tables dominate
+  // the output and the per-package tail (header + versionCode/versionName)
+  // is the LAST ~15 lines (live 2026-10-27 W2 E3: versionName at byte ~319K
+  // of a 324K dump). The engine's 256KB default cap truncates that tail, so
+  // this op gets a dedicated 1MiB read cap (well under the 4MiB hard
+  // kill-buffer). A 256KB report cap is fine for getprop/dumpsys/logcat.
+  const PACKAGE_INFO_READ_BYTES = 1_048_576;
+
   /** Version/existence via `dumpsys package <pkg>` (the device is the truth). */
   async function packageInfo(idOrName, packageName, { actor } = {}) {
     const { row, target } = await requireRunning(idOrName);
     if (!PACKAGE_RE.test(String(packageName))) {
       throw fail('VALIDATION_ERROR', 400, `package '${clip(packageName, 80)}' is not a valid package name`);
     }
-    const res = await adb.run({ op: adb.ops.PACKAGE_INFO, target, packageName });
+    const res = await adb.run({ op: adb.ops.PACKAGE_INFO, target, packageName, maxOutputBytes: PACKAGE_INFO_READ_BYTES });
     if (res.timedOut || res.exitCode === null) throw fail('ADB_UNAVAILABLE', 502, 'adb package-info could not run on this host');
     const out = `${res.stdout}\n${res.stderr}`;
-    const installed = /versionName=/.test(out);
+    // Installed and absent BOTH exit 0 — the discriminator is the message.
+    // `dumpsys package <absent>` emits exactly "Unable to find package: <pkg>"
+    // (tiny output, never truncated), so keying `installed` on the ABSENCE of
+    // that line is stable under any truncation. Keying it on versionName= (a
+    // TAIL line, live byte ~319K) silently false-negatived real installs the
+    // moment a cap truncation dropped the tail (live 2026-10-27 W2 E3).
+    // versionCode/versionName stay best-effort: null when truncated away,
+    // with `truncated` flagged honestly on the payload.
+    const absentRe = new RegExp(`Unable to find package: ${packageName.replace(/\./g, '\\.')}$`, 'm');
+    const installed = !absentRe.test(out);
     const info = {
       device: row.name,
       package: packageName,
       installed,
       versionCode: installed ? /versionCode=([A-Za-z0-9.]+)/.exec(out)?.[1] ?? null : null,
       versionName: installed ? /versionName=(\S+)/.exec(out)?.[1] ?? null : null,
+      truncated: res.truncated || undefined,
       // Honest scope: pm/dumpsys CANNOT see an app's internal login state.
       loginState: 'unknown (activity-level detection only — ADR-026 §3)',
     };
-    await aud(actor, 'app.device.package_info', row, 'success', { name: row.name, package: packageName, installed });
+    await aud(actor, 'app.device.package_info', row, 'success', { name: row.name, package: packageName, installed, truncated: res.truncated || undefined });
     return info;
   }
 
