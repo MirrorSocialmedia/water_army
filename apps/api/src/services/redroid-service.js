@@ -771,7 +771,17 @@ export function createRedroidService({
       isEnabled: patch.isEnabled !== undefined ? patch.isEnabled : current.isEnabled,
       // R5: null patch = clear the limit; undefined = keep current.
       cpuLimit: patch.cpuLimit !== undefined ? patch.cpuLimit : current.cpuLimit,
-      memoryLimitBytes: patch.memoryLimitBytes !== undefined ? patch.memoryLimitBytes : current.memoryLimitBytes,
+      // memoryLimitBytes is BigInt in the DB (256 GiB cap exceeds Int range):
+      // Prisma returns BigInt on read and validateRedroidTemplate's
+      // Number.isInteger() rejects BigInt — so a partial patch omitting the
+      // field (the normal case, e.g. a proxy-only rotation) 400'd on ANY
+      // template with a memory cap (live-discovered 2026-10-26, D7 real-
+      // device run: "memoryLimitBytes must be an integer in [1 GiB, 256 GiB]"
+      // on a valid 4 GiB value). Normalize at the read boundary; Prisma
+      // coerces Number -> BigInt on write.
+      memoryLimitBytes: patch.memoryLimitBytes !== undefined
+        ? patch.memoryLimitBytes
+        : (current.memoryLimitBytes != null ? Number(current.memoryLimitBytes) : null),
       // W1 (ADR-025): {} patch = clear to baseline-off; undefined = keep.
       roOverrides: patch.roOverrides !== undefined ? patch.roOverrides : (current.roOverrides ?? {}),
     });
