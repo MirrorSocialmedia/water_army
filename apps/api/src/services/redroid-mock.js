@@ -306,7 +306,7 @@ export function createMockAdb({ online = true, logcatLines, spawnError = null, a
     // W2 non-shell ops (push / exec-out) ride the SAME engine + argv arrays.
     if (argv.includes('push')) {
       if (!adbOnline) return failShell('error: device offline');
-      const [, , , localPath, devicePath] = [...argv.slice(argv.indexOf('push'))];
+      const [, localPath, devicePath] = argv.slice(argv.indexOf('push'));
       let content;
       try {
         content = fs.readFileSync(localPath); // the mock reads the managed-dir file like adb would
