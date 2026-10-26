@@ -1,0 +1,22 @@
+{
+  "pass": true,
+  "w1ThirdParty": [],
+  "w2ThirdParty": [],
+  "shared": [],
+  "dataDirs": {
+    "w1": "/var/lib/water-army/redroid-rdev/redroid-rdev-w1",
+    "w2": "/var/lib/water-army/redroid-rdev/redroid-rdev-w2",
+    "distinct": true,
+    "existence": [
+      {
+        "p": "/var/lib/water-army/redroid-rdev/redroid-rdev-w1",
+        "exists": true
+      },
+      {
+        "p": "/var/lib/water-army/redroid-rdev/redroid-rdev-w2",
+        "exists": true
+      }
+    ]
+  },
+  "note": "third-party package visibility is the observable proxy for dataDir isolation (no shared /data volume across rdev devices); dataDir paths from view or the documented convention"
+}

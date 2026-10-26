@@ -86,17 +86,29 @@ async function main() {
   ];
   if (dev) {
     cases.push(['viewer GET apps list', view, 'GET', `/api/devices/redroid/${dev.id}/apps`, 200]);
-    // app install NEG by role (viewer) — must be 403 BEFORE reaching body validation
-    cases.push(['viewer POST app install (NEG role)', view, 'POST', `/api/devices/redroid/${dev.id}/apps`, 403]);
+    // app install NEG by role (viewer) — must be 403 BEFORE reaching body validation.
+    // (relay leg-2, live probe 2026-10-27): the install route is POST /apps/install
+    // (POST /apps does not exist → 404 masks the RBAC check); RBAC-first confirmed
+    // live: viewer + valid body → 403 FORBIDDEN.
+    cases.push(['viewer POST app install (NEG role)', view, 'POST', `/api/devices/redroid/${dev.id}/apps/install`, 403]);
     cases.push(['viewer POST ui tap (NEG role)', view, 'POST', `/api/devices/redroid/${dev.id}/ui/tap`, 403]);
   }
   for (const [label, jar, method, p, expect] of cases) {
     const body = method === 'PUT' ? { proxyUrl: 'socks5://u:p@127.0.0.1:1080', expectedEgressIp: '203.0.113.9' }
-      : method === 'POST' && p.endsWith('/apps') ? { fileName: 'zzz.apk' }
-      : method === 'POST' && p.endsWith('/ui/tap') ? { x: 1, y: 1 }
-      : method === 'POST' ? { name: 'rbac-neg-device', templateName: 'rdev-base' }
+      : method === 'POST' && p.endsWith('/apps/install') ? { fileName: 'zzz.apk' }
+      // (relay leg-2, live probe 2026-10-27): tap schema requires {selector} — the
+      // old {x:1,y:1} failed validation (400) before RBAC could be observed.
+      : method === 'POST' && p.endsWith('/ui/tap') ? { selector: { text: 'x' } }
+      // (relay leg-2, live probe 2026-10-27): create schema requires name pattern
+      // ^redroid-… + idempotencyKey; the old body 400'd on validation. RBAC-first
+      // confirmed live: viewer + fully valid body → 403 FORBIDDEN, zero devices.
+      : method === 'POST' ? { name: 'redroid-rbac-neg', templateName: 'rdev-base', idempotencyKey: 'rbac-neg-key' }
       : method === 'DELETE' ? { confirm: 'rbac-neg', removeData: false } : undefined;
-    const r = await jar.req(method, p, body).catch((e) => ({ status: 0, j: { err: String(e) } }));
+    // (relay leg-2, live find P6 run1 2026-10-27): adb-transient 502 on the
+    // positive apps-list probe (retries 200 ×3 immediately after). 502 =
+    // ADB_UNAVAILABLE class — retry before judging; a 502 is never an RBAC answer.
+    let r = await jar.req(method, p, body).catch((e) => ({ status: 0, j: { err: String(e) } }));
+    for (let a = 2; a <= 3 && r.status === 502; a++) { await sleep(1500); r = await jar.req(method, p, body).catch((e) => ({ status: 0, j: { err: String(e) } })); }
     const pass = r.status === expect;
     (out.rbac[label] = out.rbac[label] ?? []).push({ expect, got: r.status, pass });
     say(`RBAC ${label}: expect=${expect} got=${r.status} ${pass ? 'OK' : 'FAIL'}`);
@@ -167,9 +179,14 @@ async function main() {
       results.push({ surface: name, len: text.length, hits });
     }
     const clean = results.every((r) => Object.values(r.hits).every((h) => h === 0));
-    out.logLeak = { pass: clean, secretKeysScanned: Object.keys(secrets), results };
+    // (relay leg-2, live find P6 run1 2026-10-27): n1–n5 adb serials had dropped
+    // off the adb server → logcat reads returned ~40-byte error strings and the
+    // surfaces were vacuously "clean". A guest-logcat surface < 500 B is a failed
+    // read, not a scanned-and-clean surface — must not count as pass.
+    const degraded = results.filter((r) => r.surface.startsWith('guest logcat') && r.len < 500).map((r) => r.surface);
+    out.logLeak = { pass: clean && degraded.length === 0, degradedSurfaces: degraded, secretKeysScanned: Object.keys(secrets), results, note: degraded.length ? `DEGRADED: ${degraded.length} logcat surface(s) not fully scanned (run adb connect for the missing serials and re-run)` : 'all logcat surfaces fully scanned' };
     ev('log-leak-canary.json', out.logLeak);
-    say(`logLeak: clean=${clean} surfaces=${results.length}`);
+    say(`logLeak: clean=${clean} degraded=${degraded.length} surfaces=${results.length}`);
   }
 
   // ---------- 4. sensitive scan (repo tracked files) ----------

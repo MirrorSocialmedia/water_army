@@ -1,0 +1,21 @@
+{
+  "pass": true,
+  "results": {
+    "egress-canary-user": {
+      "inTrackedTree": [],
+      "inHistory": [],
+      "clean": true
+    },
+    "egress-canary-pass": {
+      "inTrackedTree": [],
+      "inHistory": [],
+      "clean": true
+    },
+    "real-db-password": {
+      "skipped": true,
+      "reason": "fixture by design (scratch)"
+    }
+  },
+  "fixturePasswordOccurrences": 10,
+  "fixtureNote": "scratch fixture passwords (rdev-*) live in seed scripts BY DESIGN — they are not production credentials; recorded, not \"leaks\""
+}

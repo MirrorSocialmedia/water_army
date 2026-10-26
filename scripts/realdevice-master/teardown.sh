@@ -85,11 +85,36 @@ else
 fi
 
 # --- 7. adb sessions -------------------------------------------------------------
-"$RD_ADB" disconnect 2>/dev/null | grep -c 165 | xargs -I{} log teardown "adb 165xx disconnects: {}"
+ndis=$("$RD_ADB" disconnect 2>/dev/null | grep -c 165 || true)
+log teardown "adb 165xx disconnects: ${ndis:-0}"
 "$RD_ADB" devices 2>/dev/null | awk 'NR>1 && $1 ~ /127.0.0.1:165/ {print $1}' | while read -r s; do "$RD_ADB" disconnect "$s" >/dev/null 2>&1; done
 
 # --- 8. disk: data root + apk fixtures -------------------------------------------
-[ -d "$RD_DATA_ROOT" ] && { find "$RD_DATA_ROOT" -mindepth 1 -delete 2>/dev/null; rmdir "$RD_DATA_ROOT" 2>/dev/null; log teardown "data root cleared"; }
+# (relay leg-2, live find 2026-10-27 teardown run1): device dataDirs contain
+# ROOT-OWNED subdirs (docker creates them inside the bind source) — plain
+# `find -delete` gets "Permission denied" (silenced by 2>/dev/null before), and
+# wiping within seconds of `docker rm` races in-flight unmounts (EBUSY). Both
+# observed live: run1 left the full data root behind. Fix: bounded retries,
+# then a disposable privileged alpine container (docker root, no sudo needed);
+# rmdir AFTER the container exits (its own bind mount holds the path while
+# running — also observed live). Residue is FAILED loudly, not logged past.
+wipe_data_root() {
+  [ -d "$RD_DATA_ROOT" ] || return 0
+  local attempt img
+  for attempt in 1 2 3; do
+    find "$RD_DATA_ROOT" -mindepth 1 -delete 2>/dev/null
+    rmdir "$RD_DATA_ROOT" 2>/dev/null && { log teardown "data root cleared (attempt $attempt)"; return 0; }
+    sleep 3
+  done
+  img=$(docker images --format '{{.Repository}}:{{.Tag}}' 2>/dev/null | grep -E '^alpine:' | head -1)
+  if [ -n "$img" ]; then
+    docker run --rm --privileged -v "$RD_DATA_ROOT":/t "$img" sh -c 'find /t -mindepth 1 -delete' >/dev/null 2>&1
+    rmdir "$RD_DATA_ROOT" 2>/dev/null && { log teardown "data root cleared (root-owned residue via disposable $img)"; return 0; }
+  fi
+  log FATAL "data root $RD_DATA_ROOT NOT fully wiped — residue: $(ls "$RD_DATA_ROOT" 2>/dev/null | wc -l) entries; manual sudo required"
+  return 1
+}
+wipe_data_root
 [ -d /var/lib/water-army/apk-rdev ] && rm -rf /var/lib/water-army/apk-rdev && log teardown "apk-rdev removed"
 
 # --- 9. /tmp state (canary fixture + pidfiles + cookies) -------------------------

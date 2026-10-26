@@ -1,0 +1,24 @@
+[sec 2026-10-26T21:24:24.354Z] 3 roles logged in
+[sec 2026-10-26T21:24:24.359Z] egress switch probe: admin GET binding -> 503 (viewer expected to match or be denied)
+[sec 2026-10-26T21:24:24.361Z] RBAC viewer GET device list: expect=200 got=200 OK
+[sec 2026-10-26T21:24:24.363Z] RBAC viewer POST device create (NEG): expect=403 got=403 OK
+[sec 2026-10-26T21:24:24.365Z] RBAC viewer DELETE device (NEG): expect=403 got=403 OK
+[sec 2026-10-26T21:24:24.367Z] RBAC viewer GET binding: expect=503 got=503 OK
+[sec 2026-10-26T21:24:24.369Z] RBAC viewer PUT binding (NEG): expect=403 got=403 OK
+[sec 2026-10-26T21:24:24.370Z] RBAC viewer GET audit (NEG): expect=403 got=403 OK
+[sec 2026-10-26T21:24:24.375Z] RBAC viewer GET interventions: expect=200 got=200 OK
+[sec 2026-10-26T21:24:24.377Z] RBAC operator DELETE device (NEG admin-only): expect=403 got=403 OK
+[sec 2026-10-26T21:24:24.379Z] RBAC operator PUT binding (NEG admin-only): expect=403 got=403 OK
+[sec 2026-10-26T21:24:24.380Z] RBAC operator GET audit (NEG admin-only): expect=403 got=403 OK
+[sec 2026-10-26T21:24:24.383Z] RBAC operator GET device list: expect=200 got=200 OK
+[sec 2026-10-26T21:24:24.389Z] RBAC viewer GET apps list: expect=200 got=502 FAIL
+[sec 2026-10-26T21:24:24.390Z] RBAC viewer POST app install (NEG role): expect=403 got=403 OK
+[sec 2026-10-26T21:24:24.392Z] RBAC viewer POST ui tap (NEG role): expect=403 got=403 OK
+[sec 2026-10-26T21:24:24.415Z] evidence -> /home/kenneth/.openclaw/workspace/water_army/logs/realdevice-master/final/cross-identity-residue.json
+[sec 2026-10-26T21:24:24.415Z] crossIdentity: shared=0 pass=true
+[sec 2026-10-26T21:24:24.616Z] evidence -> /home/kenneth/.openclaw/workspace/water_army/logs/realdevice-master/final/log-leak-canary.json
+[sec 2026-10-26T21:24:24.616Z] logLeak: clean=true surfaces=17
+[sec 2026-10-26T21:24:25.408Z] evidence -> /home/kenneth/.openclaw/workspace/water_army/logs/realdevice-master/final/sensitive-scan.json
+[sec 2026-10-26T21:24:25.408Z] sensitiveScan: pass=true
+[sec 2026-10-26T21:24:25.408Z] evidence -> /home/kenneth/.openclaw/workspace/water_army/logs/realdevice-master/final/security-summary.json
+[sec 2026-10-26T21:24:25.408Z] PHASE6 DONE — rbacFails=1 cross=true logLeak=true sensitive=true

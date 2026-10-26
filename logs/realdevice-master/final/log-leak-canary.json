@@ -1,0 +1,254 @@
+{
+  "pass": true,
+  "degradedSurfaces": [],
+  "secretKeysScanned": [
+    "MC_SESSION_SECRET",
+    "MC_APP_ENCRYPTION_KEY",
+    "MC_WORKER_API_TOKEN",
+    "MC_STREAM_TICKET_SECRET",
+    "MC_STREAM_SIDECAR_TOKEN",
+    "EGRESS_USER",
+    "EGRESS_PASS"
+  ],
+  "results": [
+    {
+      "surface": "scratch-api.log (cap 30MB)",
+      "len": 46830,
+      "hits": {
+        "MC_SESSION_SECRET": 0,
+        "MC_APP_ENCRYPTION_KEY": 0,
+        "MC_WORKER_API_TOKEN": 0,
+        "MC_STREAM_TICKET_SECRET": 0,
+        "MC_STREAM_SIDECAR_TOKEN": 0,
+        "EGRESS_USER": 0,
+        "EGRESS_PASS": 0,
+        "JWT(eyJ)": 0
+      }
+    },
+    {
+      "surface": "echo.log (cap 1MB)",
+      "len": 36,
+      "hits": {
+        "MC_SESSION_SECRET": 0,
+        "MC_APP_ENCRYPTION_KEY": 0,
+        "MC_WORKER_API_TOKEN": 0,
+        "MC_STREAM_TICKET_SECRET": 0,
+        "MC_STREAM_SIDECAR_TOKEN": 0,
+        "EGRESS_USER": 0,
+        "EGRESS_PASS": 0,
+        "JWT(eyJ)": 0
+      }
+    },
+    {
+      "surface": "evidence/w1 (all json)",
+      "len": 165920,
+      "hits": {
+        "MC_SESSION_SECRET": 0,
+        "MC_APP_ENCRYPTION_KEY": 0,
+        "MC_WORKER_API_TOKEN": 0,
+        "MC_STREAM_TICKET_SECRET": 0,
+        "MC_STREAM_SIDECAR_TOKEN": 0,
+        "EGRESS_USER": 0,
+        "EGRESS_PASS": 0,
+        "JWT(eyJ)": 0
+      }
+    },
+    {
+      "surface": "evidence/w3 (all json)",
+      "len": 30489,
+      "hits": {
+        "MC_SESSION_SECRET": 0,
+        "MC_APP_ENCRYPTION_KEY": 0,
+        "MC_WORKER_API_TOKEN": 0,
+        "MC_STREAM_TICKET_SECRET": 0,
+        "MC_STREAM_SIDECAR_TOKEN": 0,
+        "EGRESS_USER": 0,
+        "EGRESS_PASS": 0,
+        "JWT(eyJ)": 0
+      }
+    },
+    {
+      "surface": "progress file",
+      "len": 20464,
+      "hits": {
+        "MC_SESSION_SECRET": 0,
+        "MC_APP_ENCRYPTION_KEY": 0,
+        "MC_WORKER_API_TOKEN": 0,
+        "MC_STREAM_TICKET_SECRET": 0,
+        "MC_STREAM_SIDECAR_TOKEN": 0,
+        "EGRESS_USER": 0,
+        "EGRESS_PASS": 0,
+        "JWT(eyJ)": 0
+      }
+    },
+    {
+      "surface": "docker logs rdev-egress-a",
+      "len": 76,
+      "hits": {
+        "MC_SESSION_SECRET": 0,
+        "MC_APP_ENCRYPTION_KEY": 0,
+        "MC_WORKER_API_TOKEN": 0,
+        "MC_STREAM_TICKET_SECRET": 0,
+        "MC_STREAM_SIDECAR_TOKEN": 0,
+        "EGRESS_USER": 0,
+        "EGRESS_PASS": 0,
+        "JWT(eyJ)": 0
+      }
+    },
+    {
+      "surface": "docker logs rdev-egress-b",
+      "len": 1460,
+      "hits": {
+        "MC_SESSION_SECRET": 0,
+        "MC_APP_ENCRYPTION_KEY": 0,
+        "MC_WORKER_API_TOKEN": 0,
+        "MC_STREAM_TICKET_SECRET": 0,
+        "MC_STREAM_SIDECAR_TOKEN": 0,
+        "EGRESS_USER": 0,
+        "EGRESS_PASS": 0,
+        "JWT(eyJ)": 0
+      }
+    },
+    {
+      "surface": "docker logs rdev-egress-c",
+      "len": 52,
+      "hits": {
+        "MC_SESSION_SECRET": 0,
+        "MC_APP_ENCRYPTION_KEY": 0,
+        "MC_WORKER_API_TOKEN": 0,
+        "MC_STREAM_TICKET_SECRET": 0,
+        "MC_STREAM_SIDECAR_TOKEN": 0,
+        "EGRESS_USER": 0,
+        "EGRESS_PASS": 0,
+        "JWT(eyJ)": 0
+      }
+    },
+    {
+      "surface": "docker logs rdev-egress-d",
+      "len": 3491,
+      "hits": {
+        "MC_SESSION_SECRET": 0,
+        "MC_APP_ENCRYPTION_KEY": 0,
+        "MC_WORKER_API_TOKEN": 0,
+        "MC_STREAM_TICKET_SECRET": 0,
+        "MC_STREAM_SIDECAR_TOKEN": 0,
+        "EGRESS_USER": 0,
+        "EGRESS_PASS": 0,
+        "JWT(eyJ)": 0
+      }
+    },
+    {
+      "surface": "docker logs rdev-dnslog",
+      "len": 38,
+      "hits": {
+        "MC_SESSION_SECRET": 0,
+        "MC_APP_ENCRYPTION_KEY": 0,
+        "MC_WORKER_API_TOKEN": 0,
+        "MC_STREAM_TICKET_SECRET": 0,
+        "MC_STREAM_SIDECAR_TOKEN": 0,
+        "EGRESS_USER": 0,
+        "EGRESS_PASS": 0,
+        "JWT(eyJ)": 0
+      }
+    },
+    {
+      "surface": "guest logcat redroid-rdev-n1",
+      "len": 1999670,
+      "hits": {
+        "MC_SESSION_SECRET": 0,
+        "MC_APP_ENCRYPTION_KEY": 0,
+        "MC_WORKER_API_TOKEN": 0,
+        "MC_STREAM_TICKET_SECRET": 0,
+        "MC_STREAM_SIDECAR_TOKEN": 0,
+        "EGRESS_USER": 0,
+        "EGRESS_PASS": 0,
+        "JWT(eyJ)": 0
+      }
+    },
+    {
+      "surface": "guest logcat redroid-rdev-n2",
+      "len": 1999670,
+      "hits": {
+        "MC_SESSION_SECRET": 0,
+        "MC_APP_ENCRYPTION_KEY": 0,
+        "MC_WORKER_API_TOKEN": 0,
+        "MC_STREAM_TICKET_SECRET": 0,
+        "MC_STREAM_SIDECAR_TOKEN": 0,
+        "EGRESS_USER": 0,
+        "EGRESS_PASS": 0,
+        "JWT(eyJ)": 0
+      }
+    },
+    {
+      "surface": "guest logcat redroid-rdev-n3",
+      "len": 1999670,
+      "hits": {
+        "MC_SESSION_SECRET": 0,
+        "MC_APP_ENCRYPTION_KEY": 0,
+        "MC_WORKER_API_TOKEN": 0,
+        "MC_STREAM_TICKET_SECRET": 0,
+        "MC_STREAM_SIDECAR_TOKEN": 0,
+        "EGRESS_USER": 0,
+        "EGRESS_PASS": 0,
+        "JWT(eyJ)": 0
+      }
+    },
+    {
+      "surface": "guest logcat redroid-rdev-n4",
+      "len": 1999670,
+      "hits": {
+        "MC_SESSION_SECRET": 0,
+        "MC_APP_ENCRYPTION_KEY": 0,
+        "MC_WORKER_API_TOKEN": 0,
+        "MC_STREAM_TICKET_SECRET": 0,
+        "MC_STREAM_SIDECAR_TOKEN": 0,
+        "EGRESS_USER": 0,
+        "EGRESS_PASS": 0,
+        "JWT(eyJ)": 0
+      }
+    },
+    {
+      "surface": "guest logcat redroid-rdev-n5",
+      "len": 1999670,
+      "hits": {
+        "MC_SESSION_SECRET": 0,
+        "MC_APP_ENCRYPTION_KEY": 0,
+        "MC_WORKER_API_TOKEN": 0,
+        "MC_STREAM_TICKET_SECRET": 0,
+        "MC_STREAM_SIDECAR_TOKEN": 0,
+        "EGRESS_USER": 0,
+        "EGRESS_PASS": 0,
+        "JWT(eyJ)": 0
+      }
+    },
+    {
+      "surface": "guest logcat redroid-rdev-w1",
+      "len": 1999670,
+      "hits": {
+        "MC_SESSION_SECRET": 0,
+        "MC_APP_ENCRYPTION_KEY": 0,
+        "MC_WORKER_API_TOKEN": 0,
+        "MC_STREAM_TICKET_SECRET": 0,
+        "MC_STREAM_SIDECAR_TOKEN": 0,
+        "EGRESS_USER": 0,
+        "EGRESS_PASS": 0,
+        "JWT(eyJ)": 0
+      }
+    },
+    {
+      "surface": "guest logcat redroid-rdev-w2",
+      "len": 1999670,
+      "hits": {
+        "MC_SESSION_SECRET": 0,
+        "MC_APP_ENCRYPTION_KEY": 0,
+        "MC_WORKER_API_TOKEN": 0,
+        "MC_STREAM_TICKET_SECRET": 0,
+        "MC_STREAM_SIDECAR_TOKEN": 0,
+        "EGRESS_USER": 0,
+        "EGRESS_PASS": 0,
+        "JWT(eyJ)": 0
+      }
+    }
+  ],
+  "note": "all logcat surfaces fully scanned"
+}

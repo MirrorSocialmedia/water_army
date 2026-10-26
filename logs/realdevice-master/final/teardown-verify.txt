@@ -1,0 +1,45 @@
+=== zero-residue verification 2026-10-26T21:28:55Z ===
+-- rdev containers (expect 0):
+-- rdev containers count: 0
+-- network br-rdev-ladder (expect absent):
+-- ports 16490-16495 + 16460-16469 sidecar fwd (expect no LISTEN):
+-- data root (expect absent):
+drwxrwxr-x 23 kenneth kenneth 4096 Oct 27 03:58 /var/lib/water-army/redroid-rdev
+-- rdev scratch anonymous volumes (expect all removed):
+removed 726f4c578b5de568293b5d543f454be2a490bdbf50dc7a49049f5a9fa60e0f88
+removed 5ca895a14d2ec61f64deb1b94a6832dcbe3aad28aa194b75beed89a27bdeb3b6
+-- apk-rdev (expect absent):
+ls: cannot access '/var/lib/water-army/apk-rdev': No such file or directory
+-- RD_STATE (expect absent):
+ls: cannot access '/tmp/rdev-state': No such file or directory
+-- adb 165xx (expect 0):
+0
+-- USER STACK (expect 5/5 running — untouched):
+water-army-web-1 Up 14 hours (healthy)
+water-army-api-1 Up 14 hours (healthy)
+water-army-worker-1 Up 14 hours (healthy)
+water-army-postgres-1 Up 14 hours (healthy)
+water-army-redis-1 Up 14 hours (healthy)
+user-stack count: 5/5
+-- SGLang 30000 (expect alive — untouched):
+
+-- RAM:
+MemAvailable=44G
+
+=== RE-VERIFICATION (after root-owned subdir wipe via disposable alpine container) 2026-10-26T21:30:56Z ===
+-- rdev containers (expect 0): 0
+-- ports 16490-16495 + 16460-16469 (expect no LISTEN):
+(none above = all closed)
+-- data root (expect absent):
+ls: cannot access '/var/lib/water-army/redroid-rdev': No such file or directory
+-- apk-rdev (expect absent): ls: cannot access '/var/lib/water-army/apk-rdev': No such file or directory
+-- RD_STATE (expect absent): ls: cannot access '/tmp/rdev-state': No such file or directory
+-- adb 165xx (expect 0): 0
+-- USER STACK (expect 5/5): 5/5
+water-army-web-1 Up 14 hours (healthy)
+water-army-api-1 Up 14 hours (healthy)
+water-army-worker-1 Up 14 hours (healthy)
+water-army-postgres-1 Up 14 hours (healthy)
+water-army-redis-1 Up 14 hours (healthy)
+-- SGLang 30000: 200
+-- RAM: MemAvailable=44G

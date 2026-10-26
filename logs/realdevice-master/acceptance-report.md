@@ -13,8 +13,8 @@
 | P5/W3 | ADR-027 egress D1–D10 | **10/10 PASS**（run8） | logs/realdevice-master/w3/ |
 | P3/NV5b | ADR-024 lease 生命周期 + sidecar 風暴 | 4/5（NV5-4 = P5 限流已知限制） | logs/realdevice-master/nv5b/ |
 | P4/W2 | ADR-026 §26 E11+A10 | **完成（run7）：19 PASS + 2 EXPECTED-FAIL（E1 設計內 / A6 env-limit），halt 0**；實錚修 F12/F13 兩產品 bug；ADR-026 已回填 | logs/realdevice-master/w2/ |
-| P6 安全 | RBAC + cross-identity + log-leak canary + repo scan | _（PENDING）_ | logs/realdevice-master/final/ |
-| P6 teardown | 零殘留 | _（PENDING）_ | logs/realdevice-master/final/teardown-verify.txt |
+| P6 安全 | RBAC + cross-identity + log-leak canary + repo scan | **完成（run2）：RBAC 17/17、cross-identity 零共享、log-leak 17 surfaces 零命中（7 部 guest logcat 全掃）、sensitive scan clean** | logs/realdevice-master/final/ |
+| P6 teardown | 零殘留 | **完成：containers 0 / 16 端口全 closed / dataDir absent / apk absent / state absent / adb 0 / 用戶 stack 5/5 / SGLang 200 / RAM 44G 釋放** | logs/realdevice-master/final/teardown-verify.txt |
 
 ## 1. 四類判定（逐項）
 
@@ -27,7 +27,10 @@
 - **NV5-1/2/3/5**：五路 lease 生命周期、跨身份 403 OWNER_MISMATCH、單路 force-kill 3s 自動重連、release 零殘留
 - **W2 E-phase（10/11 PASS + E1 EXPECTED-FAIL 設計內）**：E2 install 200+pm 旁證 / E3 app-get `installed:true`+`versionName:2.16.1`（F12/F13 修後）/ E4 launcher-dump 22 nodes / E5 tap-icon（drawer fallback）/ E6 foreground IntroActivity / E7 in-app-dump / E8 in-app-tap / E9 activity / E10 clean-device 404 / E11 uninstall 200+`installed:false`
 - **W2 A-phase（9/10 PASS + A6 EXPECTED-FAIL env-limit）**：A1 注入 400×16+pm diff 0 / A2 路徑注入 400×6+symlink 拒+host 零改 / A3 自適應 cap 522+422 雙路實錚 / A4 413+pm diff 0 / A5 stale-selector 跨屏 404 零 blind tap / A7 腐敗四件（**magic spoof：host gate 按設計過 → 裝置裁決 502，pm diff 0 — ADR-026 實錚回填**）/ A8 真 docker stop 409×6→start→200 恢復 / A9 503×7 / A10 200×2
-- **P6 RBAC / cross-identity / log-leak / sensitive scan**：_（PENDING）_
+- **P6 RBAC（17/17）**：3 角色 × 真機 route（viewer 讀 200 / 4 類 NEG 403；operator admin-only NEG 403；RBAC-first 實證 = viewer + 完全合法 body → 403 FORBIDDEN 零副作用；admin positive control 200；two-step confirm 實彈：confirm 唔 match 裝置名/id → 400 拒）
+- **P6 cross-identity（dataDir 隔離）**：w1/w2 第三方 pkg 交集 = 0；dataDir 路徑不同 + 存在性記錄
+- **P6 log-leak canary（17 surfaces 零命中）**：scratch-api.log 30MB / echo.log / w1+w3 evidence / progress 檔 / 5 部 egress 容器 docker logs / **7 部 guest logcat（各 2MB 全掃）** — MC_SESSION_SECRET / APP_ENCRYPTION_KEY / WORKER_API_TOKEN / STREAM_TICKET_SECRET / SIDECAR_TOKEN / EGRESS_USER / EGRESS_PASS / JWT(eyJ) 全 0
+- **P6 sensitive scan**：repo tracked tree + git history（-S pickaxe）零 egress canary 憑證；scratch fixture 密碼 = 文檔化已知（seed 腳本，非生產憑證）
 
 ### 1.2 已實施未驗證（gap / 誠實 NOT VERIFIED）
 - **ro.* 映射生效（W1 V1/V2/V3/V4/V7）**：platform 實施 = ADR-025 開關 + carrier 注入；stock redroid14_x86_64 無 ro.boot.wa_*→ro.* 映射 → getprop ro.* 全 stock。V7 實證 root+SELinux-off 都寫唔到 ro.product.*（property_service ro-lock）、image 無 resetprop → **post-boot fallback 唔存在；要 image 層改**（見 §3 產品決策點）。開關照 ADR 生產維持 OFF。
@@ -95,6 +98,18 @@
 | NV5b leg-1 斷線於 storm 運行中 | 結果未記錄 | leg-2 採納完整 run（evidence 齊）+ 記錄 |
 | w2 首次啟動 log 目錄缺失 | run 0 秒死 | mkdir + 重跑（relay leg-2） |
 | w2 run1–6 六連紅（harness ×5 + 產品 bug ×2） | run1 log dir / run2 ensureDevices strict-throw / run3 online-flag fallthrough / run4 `adb -s … connect` 無效形式 / run5 A2 斷言字段錯（sl.http）/ run6 A5 假設唔成立 | 全部 live find 修復（7 輪，commit 鏈 7e5dccd→e492916→d4a4848→125bf07→43e7844→9de96e8→c5456f8→9b7c122→871587c）；F12/F13 = 真產品 bug 修 + 回歸鎖；**run7 全綠**（relay leg-2） |
+| P6 run1：viewer GET apps 瞬時 502 + n1–n5 adb serial 脫落（logcat 表面假清） | RBAC 1 假紅 + logLeak 5 表面 vacuous-clean | 502 = adb transient（retry ×3 全 200）；n serial 重新 `adb connect`（W1 finding #2 同款：platform 無 reconnect 路徑，harness 自連）+ **vacuous-clean guard**（logcat <500B = degraded 唔計 pass）→ run2 全綠（relay leg-2） |
+| P6 teardown run1：data root 殘留 22 dataDir（EBUSY race + root-owned 子目錄） | 零殘留未達 | `wipe_data_root()` 防線化（retry + disposable alpine + loud FATAL）+ 實地 wipe 完成 + RE-VERIFICATION 全綠（relay leg-2） |
 
-## 5. Teardown 零殘留（PENDING）
-_（teardown-verify.txt 回填：containers 0 / 164xx+16460-69 全 closed / dataDir absent / volume wiped / lease 0 / 用戶 stack 5/5 / SGLang 200）_
+## 5. Teardown 零殘留（P6 完成 — 2026-10-27 05:28-05:31 HKT）
+
+`teardown.sh` 執行 + RE-VERIFICATION（`final/teardown-verify.txt`）：
+- rdev containers = **0**；network br-rdev-ladder absent
+- 端口 16490-16495 + 16460-16469 = **全 closed**（無 LISTEN）
+- data root `/var/lib/water-army/redroid-rdev` = **absent**；`apk-rdev` = absent；`/tmp/rdev-state` = absent
+- adb 165xx sessions = **0**
+- 用戶 stack **5/5 healthy 零動**；SGLang 30000 = **200**；RAM 釋放至 **44G**
+
+**Teardown 實錚發現（2 項，已防線化）**：
+- **data-root wipe 雙陷阱**（run1 殘留 22 device dataDir × 30M）：(a) docker 刪容器後 bind unmount 係異步 — 4s 內 wipe = EBUSY；(b) device dataDir 入面有 **root-owned 子目錄**（docker 喺 bind source 內建）— 普通用戶 `find -delete` = Permission denied（舊代碼 2>/dev/null 靜默吞）。修：`wipe_data_root()` = 3× retry（3s 間隔）→ disposable privileged alpine 容器（docker root、無 sudo 需要）→ rmdir（容器退出後先做得，佢自己個 bind mount 占住 path）→ 殘留即 FATAL loud（唔再靜默）。commit 本 phase。
+- **step 7 xargs 調 shell function 失敗**（`xargs: log: No such file or directory`）：disconnect 計數 log 行未落（純 cosmetic，disconnect 本身成功、VERIFY adb=0 實證）→ 改直接變量 + log。

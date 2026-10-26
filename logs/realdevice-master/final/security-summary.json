@@ -1,0 +1,407 @@
+{
+  "at": "2026-10-26T21:26:46.156Z",
+  "rbac": {
+    "viewer GET device list": [
+      {
+        "expect": 200,
+        "got": 200,
+        "pass": true
+      }
+    ],
+    "viewer POST device create (NEG)": [
+      {
+        "expect": 403,
+        "got": 403,
+        "pass": true
+      }
+    ],
+    "viewer DELETE device (NEG)": [
+      {
+        "expect": 403,
+        "got": 403,
+        "pass": true
+      }
+    ],
+    "viewer GET binding": [
+      {
+        "expect": 503,
+        "got": 503,
+        "pass": true
+      }
+    ],
+    "viewer PUT binding (NEG)": [
+      {
+        "expect": 403,
+        "got": 403,
+        "pass": true
+      }
+    ],
+    "viewer GET audit (NEG)": [
+      {
+        "expect": 403,
+        "got": 403,
+        "pass": true
+      }
+    ],
+    "viewer GET interventions": [
+      {
+        "expect": 200,
+        "got": 200,
+        "pass": true
+      }
+    ],
+    "operator DELETE device (NEG admin-only)": [
+      {
+        "expect": 403,
+        "got": 403,
+        "pass": true
+      }
+    ],
+    "operator PUT binding (NEG admin-only)": [
+      {
+        "expect": 403,
+        "got": 403,
+        "pass": true
+      }
+    ],
+    "operator GET audit (NEG admin-only)": [
+      {
+        "expect": 403,
+        "got": 403,
+        "pass": true
+      }
+    ],
+    "operator GET device list": [
+      {
+        "expect": 200,
+        "got": 200,
+        "pass": true
+      }
+    ],
+    "viewer GET apps list": [
+      {
+        "expect": 200,
+        "got": 200,
+        "pass": true
+      }
+    ],
+    "viewer POST app install (NEG role)": [
+      {
+        "expect": 403,
+        "got": 403,
+        "pass": true
+      }
+    ],
+    "viewer POST ui tap (NEG role)": [
+      {
+        "expect": 403,
+        "got": 403,
+        "pass": true
+      }
+    ],
+    "admin GET audit (POSITIVE CONTROL)": [
+      {
+        "expect": 200,
+        "got": 200,
+        "pass": true
+      }
+    ]
+  },
+  "crossIdentity": {
+    "pass": true,
+    "w1ThirdParty": [],
+    "w2ThirdParty": [],
+    "shared": [],
+    "dataDirs": {
+      "w1": "/var/lib/water-army/redroid-rdev/redroid-rdev-w1",
+      "w2": "/var/lib/water-army/redroid-rdev/redroid-rdev-w2",
+      "distinct": true,
+      "existence": [
+        {
+          "p": "/var/lib/water-army/redroid-rdev/redroid-rdev-w1",
+          "exists": true
+        },
+        {
+          "p": "/var/lib/water-army/redroid-rdev/redroid-rdev-w2",
+          "exists": true
+        }
+      ]
+    },
+    "note": "third-party package visibility is the observable proxy for dataDir isolation (no shared /data volume across rdev devices); dataDir paths from view or the documented convention"
+  },
+  "logLeak": {
+    "pass": true,
+    "degradedSurfaces": [],
+    "secretKeysScanned": [
+      "MC_SESSION_SECRET",
+      "MC_APP_ENCRYPTION_KEY",
+      "MC_WORKER_API_TOKEN",
+      "MC_STREAM_TICKET_SECRET",
+      "MC_STREAM_SIDECAR_TOKEN",
+      "EGRESS_USER",
+      "EGRESS_PASS"
+    ],
+    "results": [
+      {
+        "surface": "scratch-api.log (cap 30MB)",
+        "len": 46830,
+        "hits": {
+          "MC_SESSION_SECRET": 0,
+          "MC_APP_ENCRYPTION_KEY": 0,
+          "MC_WORKER_API_TOKEN": 0,
+          "MC_STREAM_TICKET_SECRET": 0,
+          "MC_STREAM_SIDECAR_TOKEN": 0,
+          "EGRESS_USER": 0,
+          "EGRESS_PASS": 0,
+          "JWT(eyJ)": 0
+        }
+      },
+      {
+        "surface": "echo.log (cap 1MB)",
+        "len": 36,
+        "hits": {
+          "MC_SESSION_SECRET": 0,
+          "MC_APP_ENCRYPTION_KEY": 0,
+          "MC_WORKER_API_TOKEN": 0,
+          "MC_STREAM_TICKET_SECRET": 0,
+          "MC_STREAM_SIDECAR_TOKEN": 0,
+          "EGRESS_USER": 0,
+          "EGRESS_PASS": 0,
+          "JWT(eyJ)": 0
+        }
+      },
+      {
+        "surface": "evidence/w1 (all json)",
+        "len": 165920,
+        "hits": {
+          "MC_SESSION_SECRET": 0,
+          "MC_APP_ENCRYPTION_KEY": 0,
+          "MC_WORKER_API_TOKEN": 0,
+          "MC_STREAM_TICKET_SECRET": 0,
+          "MC_STREAM_SIDECAR_TOKEN": 0,
+          "EGRESS_USER": 0,
+          "EGRESS_PASS": 0,
+          "JWT(eyJ)": 0
+        }
+      },
+      {
+        "surface": "evidence/w3 (all json)",
+        "len": 30489,
+        "hits": {
+          "MC_SESSION_SECRET": 0,
+          "MC_APP_ENCRYPTION_KEY": 0,
+          "MC_WORKER_API_TOKEN": 0,
+          "MC_STREAM_TICKET_SECRET": 0,
+          "MC_STREAM_SIDECAR_TOKEN": 0,
+          "EGRESS_USER": 0,
+          "EGRESS_PASS": 0,
+          "JWT(eyJ)": 0
+        }
+      },
+      {
+        "surface": "progress file",
+        "len": 20464,
+        "hits": {
+          "MC_SESSION_SECRET": 0,
+          "MC_APP_ENCRYPTION_KEY": 0,
+          "MC_WORKER_API_TOKEN": 0,
+          "MC_STREAM_TICKET_SECRET": 0,
+          "MC_STREAM_SIDECAR_TOKEN": 0,
+          "EGRESS_USER": 0,
+          "EGRESS_PASS": 0,
+          "JWT(eyJ)": 0
+        }
+      },
+      {
+        "surface": "docker logs rdev-egress-a",
+        "len": 76,
+        "hits": {
+          "MC_SESSION_SECRET": 0,
+          "MC_APP_ENCRYPTION_KEY": 0,
+          "MC_WORKER_API_TOKEN": 0,
+          "MC_STREAM_TICKET_SECRET": 0,
+          "MC_STREAM_SIDECAR_TOKEN": 0,
+          "EGRESS_USER": 0,
+          "EGRESS_PASS": 0,
+          "JWT(eyJ)": 0
+        }
+      },
+      {
+        "surface": "docker logs rdev-egress-b",
+        "len": 1460,
+        "hits": {
+          "MC_SESSION_SECRET": 0,
+          "MC_APP_ENCRYPTION_KEY": 0,
+          "MC_WORKER_API_TOKEN": 0,
+          "MC_STREAM_TICKET_SECRET": 0,
+          "MC_STREAM_SIDECAR_TOKEN": 0,
+          "EGRESS_USER": 0,
+          "EGRESS_PASS": 0,
+          "JWT(eyJ)": 0
+        }
+      },
+      {
+        "surface": "docker logs rdev-egress-c",
+        "len": 52,
+        "hits": {
+          "MC_SESSION_SECRET": 0,
+          "MC_APP_ENCRYPTION_KEY": 0,
+          "MC_WORKER_API_TOKEN": 0,
+          "MC_STREAM_TICKET_SECRET": 0,
+          "MC_STREAM_SIDECAR_TOKEN": 0,
+          "EGRESS_USER": 0,
+          "EGRESS_PASS": 0,
+          "JWT(eyJ)": 0
+        }
+      },
+      {
+        "surface": "docker logs rdev-egress-d",
+        "len": 3491,
+        "hits": {
+          "MC_SESSION_SECRET": 0,
+          "MC_APP_ENCRYPTION_KEY": 0,
+          "MC_WORKER_API_TOKEN": 0,
+          "MC_STREAM_TICKET_SECRET": 0,
+          "MC_STREAM_SIDECAR_TOKEN": 0,
+          "EGRESS_USER": 0,
+          "EGRESS_PASS": 0,
+          "JWT(eyJ)": 0
+        }
+      },
+      {
+        "surface": "docker logs rdev-dnslog",
+        "len": 38,
+        "hits": {
+          "MC_SESSION_SECRET": 0,
+          "MC_APP_ENCRYPTION_KEY": 0,
+          "MC_WORKER_API_TOKEN": 0,
+          "MC_STREAM_TICKET_SECRET": 0,
+          "MC_STREAM_SIDECAR_TOKEN": 0,
+          "EGRESS_USER": 0,
+          "EGRESS_PASS": 0,
+          "JWT(eyJ)": 0
+        }
+      },
+      {
+        "surface": "guest logcat redroid-rdev-n1",
+        "len": 1999670,
+        "hits": {
+          "MC_SESSION_SECRET": 0,
+          "MC_APP_ENCRYPTION_KEY": 0,
+          "MC_WORKER_API_TOKEN": 0,
+          "MC_STREAM_TICKET_SECRET": 0,
+          "MC_STREAM_SIDECAR_TOKEN": 0,
+          "EGRESS_USER": 0,
+          "EGRESS_PASS": 0,
+          "JWT(eyJ)": 0
+        }
+      },
+      {
+        "surface": "guest logcat redroid-rdev-n2",
+        "len": 1999670,
+        "hits": {
+          "MC_SESSION_SECRET": 0,
+          "MC_APP_ENCRYPTION_KEY": 0,
+          "MC_WORKER_API_TOKEN": 0,
+          "MC_STREAM_TICKET_SECRET": 0,
+          "MC_STREAM_SIDECAR_TOKEN": 0,
+          "EGRESS_USER": 0,
+          "EGRESS_PASS": 0,
+          "JWT(eyJ)": 0
+        }
+      },
+      {
+        "surface": "guest logcat redroid-rdev-n3",
+        "len": 1999670,
+        "hits": {
+          "MC_SESSION_SECRET": 0,
+          "MC_APP_ENCRYPTION_KEY": 0,
+          "MC_WORKER_API_TOKEN": 0,
+          "MC_STREAM_TICKET_SECRET": 0,
+          "MC_STREAM_SIDECAR_TOKEN": 0,
+          "EGRESS_USER": 0,
+          "EGRESS_PASS": 0,
+          "JWT(eyJ)": 0
+        }
+      },
+      {
+        "surface": "guest logcat redroid-rdev-n4",
+        "len": 1999670,
+        "hits": {
+          "MC_SESSION_SECRET": 0,
+          "MC_APP_ENCRYPTION_KEY": 0,
+          "MC_WORKER_API_TOKEN": 0,
+          "MC_STREAM_TICKET_SECRET": 0,
+          "MC_STREAM_SIDECAR_TOKEN": 0,
+          "EGRESS_USER": 0,
+          "EGRESS_PASS": 0,
+          "JWT(eyJ)": 0
+        }
+      },
+      {
+        "surface": "guest logcat redroid-rdev-n5",
+        "len": 1999670,
+        "hits": {
+          "MC_SESSION_SECRET": 0,
+          "MC_APP_ENCRYPTION_KEY": 0,
+          "MC_WORKER_API_TOKEN": 0,
+          "MC_STREAM_TICKET_SECRET": 0,
+          "MC_STREAM_SIDECAR_TOKEN": 0,
+          "EGRESS_USER": 0,
+          "EGRESS_PASS": 0,
+          "JWT(eyJ)": 0
+        }
+      },
+      {
+        "surface": "guest logcat redroid-rdev-w1",
+        "len": 1999670,
+        "hits": {
+          "MC_SESSION_SECRET": 0,
+          "MC_APP_ENCRYPTION_KEY": 0,
+          "MC_WORKER_API_TOKEN": 0,
+          "MC_STREAM_TICKET_SECRET": 0,
+          "MC_STREAM_SIDECAR_TOKEN": 0,
+          "EGRESS_USER": 0,
+          "EGRESS_PASS": 0,
+          "JWT(eyJ)": 0
+        }
+      },
+      {
+        "surface": "guest logcat redroid-rdev-w2",
+        "len": 1999670,
+        "hits": {
+          "MC_SESSION_SECRET": 0,
+          "MC_APP_ENCRYPTION_KEY": 0,
+          "MC_WORKER_API_TOKEN": 0,
+          "MC_STREAM_TICKET_SECRET": 0,
+          "MC_STREAM_SIDECAR_TOKEN": 0,
+          "EGRESS_USER": 0,
+          "EGRESS_PASS": 0,
+          "JWT(eyJ)": 0
+        }
+      }
+    ],
+    "note": "all logcat surfaces fully scanned"
+  },
+  "sensitiveScan": {
+    "pass": true,
+    "results": {
+      "egress-canary-user": {
+        "inTrackedTree": [],
+        "inHistory": [],
+        "clean": true
+      },
+      "egress-canary-pass": {
+        "inTrackedTree": [],
+        "inHistory": [],
+        "clean": true
+      },
+      "real-db-password": {
+        "skipped": true,
+        "reason": "fixture by design (scratch)"
+      }
+    },
+    "fixturePasswordOccurrences": 10,
+    "fixtureNote": "scratch fixture passwords (rdev-*) live in seed scripts BY DESIGN — they are not production credentials; recorded, not \"leaks\""
+  }
+}
