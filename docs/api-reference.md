@@ -241,9 +241,9 @@ proxy.network = null（無 proxy 綁定）或：
 
 ## Stream Console（MC P1–P3 + P5 hardening — 真人即時操作 Redroid 設備）
 
-架構：browser WS ↔ **API gateway**（認證 + 盲管）↔ **stream-sidecar**（per-lease screencap/scrcpy 會話 + 輸入管道；ADR-019/020）。**Ticket 係 one-shot**（HMAC、60s TTL、綁 user/device/mode、consume 一次），經 `stream_ticket` HttpOnly cookie（Path=/api/device-streams）傳送；raw client 可用 `?ticket=` query（P1 probe 路徑）。Lease = server-side 資源（`stream_leases` 表 + Redis resource slot，max 5），TTL 30s（`STREAM_LEASE_TTL_MS`）+ heartbeat 延長；WS 連接本身 = liveness（API 自動 heartbeat）。
+架構：browser WS ↔ **API gateway**（認證 + 盲管）↔ **stream-sidecar**（per-lease screencap/scrcpy 會話 + 輸入管道；ADR-019/020）。**Ticket 消耗語義 = 「成功 handshake 先消耗」**（ADR-024，NV5b(c)：HMAC、60s TTL、綁 user/device/mode；驗證通過唔燒票 — 升級失敗可重用同一張，成功 handshake 後先消耗、重放 401），經 `stream_ticket` HttpOnly cookie（Path=/api/device-streams）傳送；raw client 可用 `?ticket=` query（P1 probe 路徑）。Lease = server-side 資源（`stream_leases` 表 + Redis resource slot，max 5），TTL 30s（`STREAM_LEASE_TTL_MS`）+ heartbeat 延長；WS 連接本身 = liveness（API 自動 heartbeat）。
 
-**WS upgrade 認證鏈（每步 server-side 重驗，MD §8.1）**：Origin（fail-closed：missing/唔喺 allowlist → 403 `ORIGIN_NOT_ALLOWED`）→ session（401）→ lease 存在（404）→ owner/admin（403 `STREAM_LEASE_OWNER_MISMATCH`）→ lease ACTIVE + 未過期（409 `STREAM_LEASE_CLOSED`/`STREAM_LEASE_EXPIRED`）→ device running（409 `STREAM_DEVICE_NOT_RUNNING`）→ ADB port 喺 host allowlist（403 `STREAM_DEVICE_ADB_NOT_ALLOWED`）→ ticket 驗證 + consume（401 `STREAM_TICKET_INVALID`/`STREAM_TICKET_REPLAYED`）。全部 reject = 結構化 error envelope + audit row。
+**WS upgrade 認證鏈（每步 server-side 重驗，MD §8.1）**：Origin（fail-closed：missing/唔喺 allowlist → 403 `ORIGIN_NOT_ALLOWED`）→ session（401）→ lease 存在（404）→ owner/admin（403 `STREAM_LEASE_OWNER_MISMATCH`）→ lease ACTIVE + 未過期（409 `STREAM_LEASE_CLOSED`/`STREAM_LEASE_EXPIRED`）→ device running（409 `STREAM_DEVICE_NOT_RUNNING`）→ ADB port 喺 host allowlist（403 `STREAM_DEVICE_ADB_NOT_ALLOWED`）→ ticket 驗證（未消耗檢查；401 `STREAM_TICKET_INVALID`/`STREAM_TICKET_REPLAYED`）→ **成功 sidecar handshake 後先消耗 ticket**（ADR-024；並行重複只有 consume 贏家存活，輸家 401 拆管）。全部 reject = 結構化 error envelope + audit row。
 
 **P5 inbound DoS guard（sidecar）**：WS `maxPayload` 64KiB（超額 frame → close 1009，API tunnel 隨拆）；輸入 token bucket 30/s（MD §11.9）。
 
@@ -252,7 +252,7 @@ proxy.network = null（無 proxy 綁定）或：
 | POST | `/devices/redroid/:id/streams` | viewer+（controller 需 operator+） | body `{mode: 'viewer'\|'controller'}`；`:id` = device UUID | 201 `{lease, ticket, streamWsPath}` + `Set-Cookie stream_ticket`；403 `STREAM_PERMISSION_DENIED`（controller 角色不足）/`STREAM_DEVICE_ADB_NOT_ALLOWED`；404 `STREAM_DEVICE_NOT_FOUND`；409 `STREAM_DEVICE_HELD`（device 已有 lease）/`STREAM_DEVICE_NOT_RUNNING`/`STREAM_CAPACITY_REACHED`（5/5）；**429 `RATE_LIMITED`（10/min/user，P5）** |
 | GET | `/device-streams` | viewer+ | — | 200 `{leases[], usage:{active,max}}`（allow-list 投影：零 secrets，MD §8.1/§13） |
 | POST | `/device-streams/:leaseId/heartbeat` | viewer+（owner/admin） | — | 200（TTL 延長）；403 `STREAM_LEASE_OWNER_MISMATCH`；404 `STREAM_LEASE_NOT_FOUND`；409 expired/closed |
-| POST | `/device-streams/:leaseId/reconnect` | viewer+（owner/admin） | — | 200 `{lease, ticket, streamWsPath}`（新 one-shot ticket；MD §2.1.8）；409 `STREAM_LEASE_EXPIRED`/`STREAM_LEASE_CLOSED`；**429（10/min/user，P5）** |
+| POST | `/device-streams/:leaseId/reconnect` | viewer+（owner/admin） | — | 200 `{lease, ticket, streamWsPath}`（新 ticket，成功 handshake 先消耗 — ADR-024；MD §2.1.8）；409 `STREAM_LEASE_EXPIRED`/`STREAM_LEASE_CLOSED`；**429（10/min/user，P5；前端遵從 Retry-After）** |
 | DELETE | `/device-streams/:leaseId` | viewer+（owner/admin） | — | 200（冪等；`idempotent:true` = 已 closed）；403/404 同上 |
 | WS | `/device-streams/:leaseId/ws` | owner/admin | cookie session + stream_ticket（或 `?ticket=`）+ Origin（allowlist） | 101 成功；reject 見上認證鏈（401/403/404/409 + 結構化 body） |
 

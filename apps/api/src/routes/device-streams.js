@@ -33,7 +33,8 @@ const STREAM_CREATE_BODY = {
 };
 
 /**
- * The one-shot ticket travels in a dedicated short-lived HttpOnly cookie
+ * The short-lived ticket (consumed only after a successful sidecar handshake —
+ * ADR-024) travels in a dedicated short-lived HttpOnly cookie
  * (browser WS cannot set headers) — Path-scoped to /api/device-streams so it
  * is only ever presented to the stream endpoints; 60s maxAge = ticket TTL;
  * never in a URL, never in an access log (MD §11.8). The body ALSO carries

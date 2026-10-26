@@ -1175,3 +1175,19 @@ MD §13.2 嘅 per-actor 寫 budget（20/60s）係為**人工誤操作**設嘅；
 **順帶更正**：ADR-022 文案寫「sliding window」，實作 = **固定窗口**（bucket `resetAt` 錨定首個 request — `rate-limit.js` `createRequestLimiter`）；風暴分析（窗口被前面 acquire 消耗）以此實作為準。
 
 **狀態**：已通過（NV3 / NV5 原問題 / NV6 基本級）＋ 暫緩（NV1 / NV2 / NV4 / NV6 進階）＋ 已知限制待拍板（NV5 storm × rate limit）。驗收矩陣（四類標記全項）= 最終報告 §11。
+
+---
+
+## 24. Mobile Console stream ticket 冪等化（ADR-024，2026-10-26 — 來源 = 老細拍板 NV5b 選項 (c)，2026-10-26）
+
+**背景（NV5b 實測根因，gen9 證據 — `nv5-4-storm2.json`）**：sidecar 全倒風暴（5 路同時斷）→ 5 tile 並發 `/reconnect` ×24 = 200×4 + 429×20（P5 limiter 10/min/user 固定窗口、create+reconnect 共享）；4 個拿到 200 嘅 ticket 全部中 upgrade race — **one-shot ticket 喺驗證瞬間被重啟中的 sidecar 燒咗**，follow-up 重試全部 `STREAM_TICKET_REPLAYED`；前端 backoff ladder 4 次（~45s）< limiter Retry-After 48s 就放棄 → 自動恢復 **0/5**，人工恢復 4/5（第 5 部被 limiter 擋 92s FAILED）。
+
+**決策（老細 2026-10-26 拍板 (c)，唔改 limiter）**：
+1. **ticket 消耗語義：one-shot →「成功 handshake 先消耗」**。WS upgrade 認證鏈（Origin → session → lease 存在 → owner/admin → lease ACTIVE+未過期 → device running → ADB serial 由 DB row 構建 → ticket HMAC+exp+綁(user/device/mode)+未消耗檢查）全部保留；差別 = 驗證通過**唔再即時燒票**，API 喺 sidecar `auth-ok`+`ready` handshake **成功之後**先 `consumeTicket`（Redis `SET NX EX` = consumed marker，TTL = ticket TTL+30s）。升級失敗（503/timeout/握手錯誤）→ ticket 存活 → backoff 重試照用同一張票，唔使再食 limiter budget 換新票。
+2. **成功後重放 = 拒絕**：consume 係冪等守門 — 第二條併發/重複 upgrade 喺 consume 位 401 `STREAM_TICKET_REPLAYED` 拆管（並行 duplicate 只有一個贏家存活）。TTL、owner/lease 綁定、close/lease 作廢、簽發/reconnect 流程全部不變；`validateTicket({consume:true})` 保留為 legacy one-shot 模式（向後兼容）。
+3. **前端 backoff 遵從 `Retry-After`**：429 有 RA → 直接等 RA+500ms（jitter；cap 90s）、**唔消耗 backoff ladder**；無 RA → 落返現有 ladder。cap = 5 次 RA 等待（最長 ~7.5min）後先 ERROR — 換取「limiter 窗口過咗一定仲試緊」。
+4. **limiter 唔改**（10/min/user 固定窗口 create+reconnect 共享 = P5 DoS 語義保留）— 風暴下 429 仍係正確產品行為；本次只令 429 **可等**（RA 跟從）+ 200 **唔會白捱**（票唔會燒）。
+
+**安全代價（記錄於 threat-model T9 殘留 (e)(f)）**：重放窗口由「一次用盡」放寬到「TTL（60s）內未消耗可重放」— 限 owner+lease 綁定、HttpOnly cookie 傳送、並行重試只有一個 consume 贏家；Redis 重啟秒級視窗內剛消耗嘅票可短暫變返 spendable（後果 = 多一條重複流，容量門照常守）。
+
+**驗證**：unit 全語義矩陣（`stream-lease.test.js` — 成功前重用 / 成功後作廢 / TTL 過期 / close 作廢 / 非 owner 403 / 風暴同票重試最終成功 / legacy one-shot / consumed marker store 失聯 fail-closed；`stream-client-reconnect.test.js` — RA 跟從 / 無 RA 落 ladder / RA cap / 並發語義）+ integration（`stream-ticket-idempotent.test.js` — fake sidecar 真實 WS 帧：升級失敗唔燒票、成功先燒、成功後重放 401、並行 duplicate 單一 consume 贏家）。**真機 sidecar 全倒風暴重跑 = 待 RAM 恢復（NOT VERIFIED）** — 宿主 MemAvailable 不足以過 RAM gate 啟動 redroid，本次全部 hermetic（fake adapter）；重跑命令見 progress 檔 NV5b 段。

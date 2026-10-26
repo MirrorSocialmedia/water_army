@@ -17,7 +17,8 @@
  *    HAL emits zero frames, so auto-mode always degrades).
  *
  * Security:
- *  - the one-shot ticket travels in the HttpOnly stream_ticket cookie set by
+ *  - the ticket (consumed only after a successful handshake — ADR-024) travels
+ *    in the HttpOnly stream_ticket cookie set by
  *    the acquire/reconnect responses — the client never sees it (MD §11.8).
  *  - video bytes are never logged; input frames carry coordinates/keycodes
  *    only (text input is sent to the device but never retained in this

@@ -546,7 +546,8 @@ export async function buildApp(opts = {}) {
 
   // --- P2: console WS endpoint (MD §8.1) ------------------------------------
   // Raw upgrade (no Fastify route): the browser WebSocket API cannot set
-  // headers, so auth = session cookie + one-shot stream_ticket cookie, all
+  // headers, so auth = session cookie + stream_ticket cookie (consumed on
+  // successful handshake — ADR-024), all
   // re-verified server-side (streamGateway.authenticateUpgrade). After a
   // clean sidecar handshake we write the 101 and blind-pipe the two sockets;
   // the gateway never inspects stream bytes (video is NOT logged — MD §15.2).

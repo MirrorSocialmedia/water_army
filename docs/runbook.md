@@ -506,7 +506,7 @@ digest pin + gost digest pin + 本 repo 嘅 tunnel setup sequence）喺專用 br
 
 ## 12. Mobile Console（串流）監控／故障排檢（MC P1–P5 — 2026-10-24）
 
-**拓撲速覽**：browser WS ↔ API gateway（`/api/device-streams/:id/ws`；認證 + 盲管）↔ stream-sidecar（子 process，API 自帶自管：crash → backoff 重啟 ×3 → fail-closed 503）↔ adb（`127.0.0.1:<adbPort>`，端口必喺 `REDROID_ADB_RANGE_START/END` allowlist）。Lease = `stream_leases` 表 + `resource_leases`（type=`stream_slot`，全局 5 slot）。Ticket = one-shot HMAC（60s，Redis single-use store）。
+**拓撲速覽**：browser WS ↔ API gateway（`/api/device-streams/:id/ws`；認證 + 盲管）↔ stream-sidecar（子 process，API 自帶自管：crash → backoff 重啟 ×3 → fail-closed 503）↔ adb（`127.0.0.1:<adbPort>`，端口必喺 `REDROID_ADB_RANGE_START/END` allowlist）。Lease = `stream_leases` 表 + `resource_leases`（type=`stream_slot`，全局 5 slot）。Ticket = HMAC（60s）— 消耗語義 = 「成功 handshake 先消耗」（ADR-024：Redis consumed marker，重放 401；升級失敗唔燒票）。
 
 **常用觀測**
 | 觀測 | 命令 / 位置 | 正常 |
@@ -527,7 +527,7 @@ digest pin + gost digest pin + 本 repo 嘅 tunnel setup sequence）喺專用 br
 | 輸入無反應 + log 見 `input_rejected rate_limited` | 輸入 >30/s/session（P5 guard，MD §11.9） | 降速；正常人手操作唔會觸發 |
 | 409 `STREAM_DEVICE_HELD` | 該 device 已有 lease（DB partial unique） | 等 lease close/expire（TTL 30s）或 admin 主動 close |
 | 409 `STREAM_CAPACITY_REACHED` / UI「5/5 已滿」 | 全局 5 slot 滿（**唔會靜默超分**，MD §7.1） | 關閉一個畫面重試 |
-| 401 `STREAM_TICKET_REPLAYED` | ticket 重用（one-shot；reconnect 後舊 ticket 失效屬正常） | UI 自動行 reconnect；raw client 重新 acquire/reconnect 攞新 ticket |
+| 401 `STREAM_TICKET_REPLAYED` | ticket 已喺一次**成功** handshake 消耗（重放／成功後重用；reconnect 後舊 ticket 失效屬正常） | UI 自動行 reconnect；raw client 重新 acquire/reconnect 攞新 ticket |
 | 401 `STREAM_TICKET_INVALID`（expired） | ticket 超過 60s 未用 | 重新 acquire / reconnect |
 | 409 `STREAM_LEASE_EXPIRED`（reconnect） | lease 超過 30s 無 heartbeat | 重新 acquire |
 | 403 `STREAM_LEASE_OWNER_MISMATCH` | 非 owner 非 admin 動他人 lease | 正常拒絶（安全）；admin 可 close 清理 |

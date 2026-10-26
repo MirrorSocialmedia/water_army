@@ -212,7 +212,7 @@ Worker 執行 tool 時經 HTTP 打回 API（`x-wa-service-token` = `WORKER_API_T
 
 **風險描述**
 1. **WS 劫持 / 越權看流**：browser WS 只能帶 cookie — 若 API 信前端發嘅 deviceId/leaseId/mode，session 劫持、跨用戶 ticket 重用、viewer 佯稱 controller 全部得逞（MD §8.1：前端發來嘅 identity 一律不信）。
-2. **Ticket 重放 / 洩漏**：one-shot ticket 如果被 log、入 URL、可重用 → 任何持票者（喺 60s 內）可開流。
+2. **Ticket 重放 / 洩漏**：ticket 如果被 log、入 URL、可重用 → 任何持票者（喺 60s 內）可開流。**NV5b(c) 語義變更（2026-10-26）**：ticket 由 one-shot 改為「**成功 handshake 先消耗**」（冪等至成功）— 未消耗前喺 TTL 內可重複 validate（升級失敗／sidecar 重啟風暴唔燒票）；成功 handshake 後重放同票 = 401 `STREAM_TICKET_REPLAYED`。重放窗口 = **TTL 內（60s）、限 owner+lease 綁定**（見殘留風險 (e)）。
 3. **Origin 劫持（CSRF-to-WS）**：惡意 web page 用受害者 session 開 WS 偷看設備畫面。
 4. **Inbound DoS**：API→sidecar 係盲管（blind pipe）— 惡意 client 可送巨包 frame / 輸入洪峰 → sidecar memory spike / adb 洪峰 → 全 fleet 影響。
 5. **容量濫用**：無限開流 → 每路 = 一條 screencap 循環 + 兩個 adb forward port → host 資源耗盡。
@@ -221,8 +221,8 @@ Worker 執行 tool 時經 HTTP 打回 API（`x-wa-service-token` = `WORKER_API_T
 8. **Viewer 寫**：viewer 開 read-only 流但 sidecar 層唔驗 mode → 輸入落地（佯裝只讀）。
 
 **緩解措施**
-1. **全鏈 server-side 重驗**（每一條 WS upgrade，MD §8.1；P5 E2E T50–T54 實測）：Origin allowlist（fail-closed：missing 都 403 `ORIGIN_NOT_ALLOWED`）→ session（401）→ lease 存在（404）→ **owner-or-admin**（403 `STREAM_LEASE_OWNER_MISMATCH`，跨用戶 ticket 喺 ticket 驗證之前就被擋）→ lease ACTIVE+未過期（409）→ device running（409）→ **ADB serial 由 DB row 構建**（port 必須喺 host allowlist 範圍；client 只可選 device row，永遠選唔到 host/IP — 無 SSRF 面）→ ticket HMAC+exp+綁(user/device/mode)+**single-use consume**（401 `STREAM_TICKET_INVALID`/`STREAM_TICKET_REPLAYED`）。
-2. **Ticket 零洩露**：HMAC（`STREAM_TICKET_SECRET`）、60s TTL、單用、綁 lease 三元組；傳送途徑 = `stream_ticket` HttpOnly cookie（Path 限定 /api/device-streams）或 raw-client `?ticket=` — 唔入任何 log 行、access log 唔記錄 query（MD §13）；`stream_leases` 表**零 secret 欄**（summarize 投影層保證，MD §8.1）。
+1. **全鏈 server-side 重驗**（每一條 WS upgrade，MD §8.1；P5 E2E T50–T54 實測）：Origin allowlist（fail-closed：missing 都 403 `ORIGIN_NOT_ALLOWED`）→ session（401）→ lease 存在（404）→ **owner-or-admin**（403 `STREAM_LEASE_OWNER_MISMATCH`，跨用戶 ticket 喺 ticket 驗證之前就被擋）→ lease ACTIVE+未過期（409）→ device running（409）→ **ADB serial 由 DB row 構建**（port 必須喺 host allowlist 範圍；client 只可選 device row，永遠選唔到 host/IP — 無 SSRF 面）→ ticket HMAC+exp+綁(user/device/mode)+**未消耗檢查**（401 `STREAM_TICKET_INVALID`/`STREAM_TICKET_REPLAYED`）→ **成功 sidecar handshake 後先消耗**（`consumeTicket`，NV5b(c)：SET NX；並行重複只有贏家存活，輸家喺 consume 位 401 拆管）。
+2. **Ticket 零洩露**：HMAC（`STREAM_TICKET_SECRET`）、60s TTL、綁 lease 三元組；消耗語義 = 成功 handshake 先燒（NV5b(c)，consumed marker Redis TTL = ticket TTL+30s）；傳送途徑 = `stream_ticket` HttpOnly cookie（Path 限定 /api/device-streams）或 raw-client `?ticket=` — 唔入任何 log 行、access log 唔記錄 query（MD §13）；`stream_leases` 表**零 secret 欄**（summarize 投影層保證，MD §8.1）。
 3. **Origin guard 係 onRequest 全域 hook**（HTTP + WS 同層）+ 全平台 CSRF 基線同規則（T5）。
 4. **P5 inbound DoS guard（sidecar 層）**：WS `maxPayload` 64KiB（ws 預設 100MB — 盲管下 = 無上限 DoS 面；超額 frame → close 1009，API tunnel 隨拆，API/sidecar 唔崩）；輸入 **token bucket 30/s/session**（超額 = `STREAM_INPUT_RATE_LIMITED` frame，唔斷流）；**API 層 rate limit**（MD §11.9）：stream create/reconnect 10/min/user、intervention create 30/min/user（`429 RATE_LIMITED` + `Retry-After`；preHandler 喺 RBAC 之後 → 401/403 唔燒 budget；system signal 路徑唔經 route、永遠唔會被限 → critical 事件唔會丟，MD §15.1）。P5 E2E T58/T59 實測。
 5. **雙層容量**：per-device partial unique index（一 device 一 lease，`STREAM_DEVICE_HELD` 409，DB 層最終守衛）+ 全局 5 slot Redis resource-lease（`STREAM_CAPACITY_REACHED` 409）+ ADB forward port 池（fixed range，boot sweep 已佔 port）。
@@ -230,7 +230,7 @@ Worker 執行 tool 時經 HTTP 打回 API（`x-wa-service-token` = `WORKER_API_T
 7. **Lease 三重回收**：client heartbeat（权威 keepalive）+ API tunnel auto-heartbeat（連接存活 = lease 存活）+ **30s server-side TTL**（`STREAM_LEASE_TTL_MS`）+ 週期 reaper（ACTIVE+過期 → EXPIRED + slot release，version-guarded）+ API-restart reconcile（死 process 嘅 PENDING/ACTIVE → INTERRUPTED，MD §10）。P5 E2E T54 實測過期 reconnect = 409 `STREAM_LEASE_EXPIRED`。
 8. **Read-only by construction**：viewer lease → sidecar session `mode:'viewer'` → 任何 input = `STREAM_READ_ONLY`（協議層 reject + `input_rejected_readonly` 事件；UI 隱藏唔算控制 — P5 E2E T55 實測 LIVE 畫面下 tap/text 全部 reject）。
 
-**殘留風險**：(a) sidecar 與 API 同 host、經 loopback + 共享 token — host compromise 場景下 token 可被讀（同 T1/T7 同級，接受）；(b) 畫面本身喺 LIVE 期間對授權用戶可见 — 係產品功能（真人操作設備），密級 = 設備內容本身（MD 範圍：只服務合法測試與運維）；(c) rate limit 係 per-user sliding window（per-IP 唔分 — 與 login 嘅 IP×帳號策略唔同；本地 loopback 部署場景下接受）；(d) 全局容量 5 喺單 host — 多 host 拓撲需要 sidecar fleet（超出 MVP 範圍）。
+**殘留風險**：(a) sidecar 與 API 同 host、經 loopback + 共享 token — host compromise 場景下 token 可被讀（同 T1/T7 同級，接受）；(b) 畫面本身喺 LIVE 期間對授權用戶可见 — 係產品功能（真人操作設備），密級 = 設備內容本身（MD 範圍：只服務合法測試與運維）；(c) rate limit 係 per-user sliding window（per-IP 唔分 — 與 login 嘅 IP×帳號策略唔同；本地 loopback 部署場景下接受）；(d) 全局容量 5 喺單 host — 多 host 拓撲需要 sidecar fleet（超出 MVP 範圍）；**(e) NV5b(c) 引入：重放窗口扩大** — 同一張未消耗 ticket 喺 TTL（60s）內可重複開流（每次都要過 owner+lease ACTIVE+HMAC 綁定檢查；前一路 WS 斷咗先至輪到下一路 — 並行重試只有一個 consume 贏家），持票者 = 持有 HttpOnly cookie 嘅本人 browser（XSS 都讀唔到）；泄漏面 = 60s 內嘅 cookie jar / raw-client query string，對上一代 one-shot 而言窗口由「一次用盡」放寬到「TTL 用盡」— 老細 2026-10-26 拍板接受（換取 sidecar 重啟風暴下自動恢復能力，見 ADR-024）；**(f) consumed marker 係 per-API-process Redis** — Redis 重啟 <秒級 可令剛消耗嘅票短暫變返 spendable（重新驗要過 owner+lease，影響 = 多一條重複流，接受）。
 
 ---
 
@@ -246,4 +246,4 @@ Worker 執行 tool 時經 HTTP 打回 API（`x-wa-service-token` = `WORKER_API_T
 | T6 | 排程重複/遺失 | Medium-High | PG source of truth、upsertJobScheduler 冪等、reconciliation、TTL 鎖、sync_error 可見 | 佇列繁忙致延遲（設計上 best-effort，UI 顯示） |
 | T7 | Service token 洩露 → 冒用 operator | Medium-High | timingSafeEqual、fail-closed、固定非人類身份、requireHuman 拒自批、redact list、worker 無 socket | 長生命周期 static token（runbook 輪替） |
 | T8 | 介入事件 evidence 洩 secrets / stuck 被靜默放過 | High | 寫入前雙軌 scrub（key + URL-userinfo value）、無 CAPTCHA 自動解路徑、dedupe partial unique、external-verification 禁 dismiss、RBAC + 狀態機 409、雙軌審計 | 新形式 secret 規避 scrub（生產路徑只發 machine code 緩解） |
-| T9 | Stream 劫持/重放/DoS/畫面洩 log | High | 全鏈 server-side 重驗（owner/ticket/ADB allowlist）、one-shot HMAC ticket、Origin fail-closed、P5 inbound guard（64KiB + 30/s + rate limit）、雙層容量、log 紅線 canary 實測 | host compromise（同 T1/T7 同級）；5-slot 單 host 上限 |
+| T9 | Stream 劫持/重放/DoS/畫面洩 log | High | 全鏈 server-side 重驗（owner/ticket/ADB allowlist）、HMAC ticket（成功 handshake 先消耗 — NV5b(c)）、Origin fail-closed、P5 inbound guard（64KiB + 30/s + rate limit）、雙層容量、log 紅線 canary 實測 | host compromise（同 T1/T7 同級）；5-slot 單 host 上限；ticket TTL 內重放窗口（限 owner+lease） |
