@@ -37,7 +37,53 @@ export const ADB_OPS = Object.freeze({
   LOGCAT: 'logcat',
   CONNECT: 'connect',
   GET_STATE: 'get-state',
+  // W2 (ADR-026): app-layer lifecycle ops. Every argument below is validated
+  // against a strict shape allowlist — no user string ever reaches a shell.
+  PACKAGE_LIST: 'package-list',      // shell pm list packages [filter]
+  PACKAGE_INFO: 'package-info',      // shell dumpsys package <pkg> (version query)
+  APK_PUSH: 'apk-push',              // push <localPath> <devicePath> (both shape-validated)
+  APK_INSTALL: 'apk-install',        // shell pm install -r <devicePath>
+  APK_UNINSTALL: 'apk-uninstall',    // shell pm uninstall <pkg>
+  UIA_DUMP: 'uia-dump',              // shell uiautomator dump <fixed path>
+  DEVICE_READ: 'device-read',        // exec-out cat <devicePath> (bounded read-back)
+  INPUT_TAP: 'input-tap',            // shell input tap <x> <y> (strict integers)
 });
+
+/**
+ * Java-style package name shape (2+ dot-separated segments, lowercase). Used
+ * for pm filters, package-info, and uninstall. Anything with `;`, spaces,
+ * quotes, or shell metacharacters fails here, before argv construction.
+ */
+export const PACKAGE_NAME_RE = /^[a-z][a-z0-9_]*(\.[a-z0-9_]+)+$/;
+
+/** Device-side read/push path: only these two managed prefixes, safe chars only. */
+export const DEVICE_PATH_RE = /^\/(?:data\/local\/tmp|sdcard)\/[A-Za-z0-9._\-/]{1,200}$/;
+
+/**
+ * Host-side APK path: absolute, safe chars ONLY (letters, digits, . _ - /).
+ * No whitespace, no quotes, no shell metacharacters, no `..` segments.
+ * The managed-directory containment check lives in the app service (realpath);
+ * this regex is the defense-in-depth layer inside the engine.
+ */
+export const LOCAL_PATH_RE = /^\/[A-Za-z0-9._\-/]{2,512}$/;
+
+/** Fixed on-device dump target for uiautomator (constant — never user input). */
+export const UIA_DUMP_DEVICE_PATH = '/data/local/tmp/wa_ui_dump.xml';
+
+/** Reject any `..` path segment regardless of regex compatibility. */
+function hasDotDotSegment(p) {
+  return p.split('/').includes('..');
+}
+
+/** Package-name validation with an explicit error message. */
+function assertPackageName(value, what) {
+  if (typeof value !== 'string' || value.length > 128 || !PACKAGE_NAME_RE.test(value) || hasDotDotSegment(value)) {
+    throw new AdbWhitelistError({
+      code: 'VALIDATION_ERROR', status: 400,
+      message: `${what} '${String(value).slice(0, 80)}' is not a valid package name (lowercase dot-separated segments, no shell metacharacters)`,
+    });
+  }
+}
 
 /** dumpsys service allowlist (MD §1.2: 查詢指定 dumpsys). */
 export const DUMPSYS_SERVICES = Object.freeze([
@@ -94,8 +140,12 @@ export class AdbWhitelistError extends Error {
  * @param {string} [p.prop]    getprop key (must be in GETPROP_PROPERTIES)
  * @param {string} [p.service] dumpsys service (must be in DUMPSYS_SERVICES)
  * @param {number} [p.tail]    logcat line count (1..logcatTailMax)
+ * @param {string} [p.packageName]  package name (W2 ops: list filter / info / uninstall)
+ * @param {string} [p.localPath]    host-side APK path (W2 apk-push)
+ * @param {string} [p.devicePath]   device-side path (W2 push/install/read)
+ * @param {number} [p.x] @param {number} [p.y]  tap coordinates (W2 input-tap)
  */
-export function buildAdbArgv({ op, target, prop, service, tail, logcatTailMax = 5000 }) {
+export function buildAdbArgv({ op, target, prop, service, tail, packageName, localPath, devicePath, x, y, tapCoordMax = 16384, logcatTailMax = 5000 }) {
   const fail = (message) => {
     throw new AdbWhitelistError({ code: 'VALIDATION_ERROR', status: 400, message });
   };
@@ -149,6 +199,59 @@ export function buildAdbArgv({ op, target, prop, service, tail, logcatTailMax = 
     case ADB_OPS.GET_STATE: {
       return [...t(), 'get-state'];
     }
+    // ---- W2 (ADR-026): app-layer lifecycle ops ------------------------------
+    case ADB_OPS.PACKAGE_LIST: {
+      if (packageName === undefined || packageName === null || packageName === '') {
+        return [...t(), 'shell', 'pm', 'list', 'packages'];
+      }
+      assertPackageName(packageName, 'package filter');
+      return [...t(), 'shell', 'pm', 'list', 'packages', packageName];
+    }
+    case ADB_OPS.PACKAGE_INFO: {
+      assertPackageName(packageName, 'package name');
+      return [...t(), 'shell', 'dumpsys', 'package', packageName];
+    }
+    case ADB_OPS.APK_PUSH: {
+      if (typeof localPath !== 'string' || !LOCAL_PATH_RE.test(localPath) || hasDotDotSegment(localPath)) {
+        fail(`apk local path '${String(localPath).slice(0, 96)}' is illegal (absolute, safe characters only, no '..' segments)`);
+      }
+      if (typeof devicePath !== 'string' || !DEVICE_PATH_RE.test(devicePath) || hasDotDotSegment(devicePath)) {
+        fail(`apk device path '${String(devicePath).slice(0, 96)}' is illegal (must be under /data/local/tmp or /sdcard, safe characters only)`);
+      }
+      return [...t(), 'push', localPath, devicePath];
+    }
+    case ADB_OPS.APK_INSTALL: {
+      // The APK payload itself is validated BEFORE push (magic bytes + size in
+      // the app service); this layer pins the argv shape: fixed `-r` flag
+      // (server-side constant) + managed device path.
+      if (typeof devicePath !== 'string' || !DEVICE_PATH_RE.test(devicePath) || hasDotDotSegment(devicePath)) {
+        fail(`apk device path '${String(devicePath).slice(0, 96)}' is illegal (must be under /data/local/tmp or /sdcard, safe characters only)`);
+      }
+      return [...t(), 'shell', 'pm', 'install', '-r', devicePath];
+    }
+    case ADB_OPS.APK_UNINSTALL: {
+      assertPackageName(packageName, 'package name');
+      return [...t(), 'shell', 'pm', 'uninstall', packageName];
+    }
+    case ADB_OPS.UIA_DUMP: {
+      // Fixed constant path — the op takes NO user arguments.
+      return [...t(), 'shell', 'uiautomator', 'dump', UIA_DUMP_DEVICE_PATH];
+    }
+    case ADB_OPS.DEVICE_READ: {
+      if (typeof devicePath !== 'string' || !DEVICE_PATH_RE.test(devicePath) || hasDotDotSegment(devicePath)) {
+        fail(`device read path '${String(devicePath).slice(0, 96)}' is illegal (must be under /data/local/tmp or /sdcard, safe characters only)`);
+      }
+      // exec-out: raw bytes over the wire, NO host shell involved at all.
+      return [...t(), 'exec-out', 'cat', devicePath];
+    }
+    case ADB_OPS.INPUT_TAP: {
+      for (const [name, v] of [['x', x], ['y', y]]) {
+        if (!Number.isInteger(v) || v < 0 || v > tapCoordMax) {
+          fail(`tap ${name} must be an integer in 0..${tapCoordMax} — got '${String(v).slice(0, 32)}'`);
+        }
+      }
+      return [...t(), 'shell', 'input', 'tap', String(x), String(y)];
+    }
     default:
       fail(`unknown op '${op}'`);
   }
@@ -183,8 +286,9 @@ export function createAdbWhitelist({
    *   { op, target, argv, exitCode, stdout, stderr, truncated, timedOut, durationMs }
    * Throws AdbWhitelistError only for validation violations (400).
    */
-  async function run({ op, target, prop, service, tail = logcatTailDefault }) {
-    const argv = buildAdbArgv({ op, target, prop, service, tail, logcatTailMax });
+  async function run({ op, target, prop, service, tail = logcatTailDefault, packageName, localPath, devicePath, x, y, maxOutputBytes: maxBytesOverride }) {
+    const argv = buildAdbArgv({ op, target, prop, service, tail, packageName, localPath, devicePath, x, y, logcatTailMax });
+    const cap = Number.isInteger(maxBytesOverride) && maxBytesOverride > 0 ? maxBytesOverride : maxOutputBytes;
     const startedAt = Date.now();
 
     const result = await new Promise((resolve) => {
@@ -197,7 +301,7 @@ export function createAdbWhitelist({
       };
       const timer = setTimeout(() => settle({ timedOut: true }), timeoutMs);
       Promise.resolve()
-        .then(() => exec(adbBinary, argv, { timeout: timeoutMs, maxBuffer: maxOutputBytes, killSignal: 'SIGKILL', windowsHide: true }))
+        .then(() => exec(adbBinary, argv, { timeout: timeoutMs, maxBuffer: cap, killSignal: 'SIGKILL', windowsHide: true }))
         .then(
           ({ stdout, stderr }) => {
             clearTimeout(timer);
@@ -206,9 +310,9 @@ export function createAdbWhitelist({
             settle({
               timedOut: false,
               exitCode: 0,
-              stdout: out.slice(0, maxOutputBytes),
-              stderr: errOut.slice(0, maxOutputBytes),
-              truncated: out.length > maxOutputBytes || errOut.length > maxOutputBytes,
+              stdout: out.slice(0, cap),
+              stderr: errOut.slice(0, cap),
+              truncated: out.length > cap || errOut.length > cap,
             });
           },
           (err) => {
@@ -219,9 +323,9 @@ export function createAdbWhitelist({
             settle({
               timedOut,
               exitCode: typeof err?.code === 'number' ? err.code : null,
-              stdout: out.slice(0, maxOutputBytes),
-              stderr: errOut.slice(0, maxOutputBytes),
-              truncated: out.length > maxOutputBytes || errOut.length > maxOutputBytes,
+              stdout: out.slice(0, cap),
+              stderr: errOut.slice(0, cap),
+              truncated: out.length > cap || errOut.length > cap,
             });
           },
         );

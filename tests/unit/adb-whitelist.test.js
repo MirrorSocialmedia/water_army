@@ -221,5 +221,10 @@ test('binary must be an absolute fixed path — relative/empty rejected at const
 });
 
 test('op constants match the documented set', () => {
-  assert.deepEqual(Object.values(ADB_OPS).sort(), ['connect', 'dumpsys', 'get-state', 'getprop', 'logcat']);
+  assert.deepEqual(Object.values(ADB_OPS).sort(), [
+    // sorted; P5 core (W1 era) + W2 (ADR-026) app-layer ops = the FULL documented set
+    'apk-install', 'apk-push', 'apk-uninstall',
+    'connect', 'device-read', 'dumpsys', 'get-state', 'getprop',
+    'input-tap', 'logcat', 'package-info', 'package-list', 'uia-dump',
+  ]);
 });
