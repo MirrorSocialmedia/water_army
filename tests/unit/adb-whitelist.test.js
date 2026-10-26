@@ -190,6 +190,34 @@ test('output cap: huge stdout is truncated and flagged (never silent drop)', asy
   assert.equal(r.truncated, true);
 });
 
+test('output cap: report cap is decoupled from the execFile kill-buffer (live 2026-10-27 W2 E3: 324KB dumpsys > 256KB cap must truncate, not 502)', async () => {
+  // Faithful to node:child_process: output exceeding opts.maxBuffer KILLS the
+  // child and rejects with the NON-numeric code ERR_CHILD_PROCESS_STDIO_MAXBUFFER.
+  // The old engine passed maxBuffer === report cap, so any output above the cap
+  // died here and surfaced as exitCode: null → ADB_UNAVAILABLE (502) instead of
+  // truncated output — the "truncation is flagged" contract was dead code that
+  // only these hermetic fakes (which ignore maxBuffer) could not expose.
+  const big = 'y'.repeat(300 * 1024); // > 1024 cap, well under the 4MiB hard buffer
+  let seenMaxBuffer;
+  const realish = async (_bin, _args, opts) => {
+    seenMaxBuffer = opts?.maxBuffer;
+    if (big.length > (opts?.maxBuffer ?? Infinity)) {
+      const e = new Error('stdout maxBuffer length exceeded');
+      e.code = 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER';
+      throw e;
+    }
+    return { stdout: big, stderr: '' };
+  };
+  const adb = createAdbWhitelist({ adbBinary: '/usr/bin/adb', execFile: realish, maxOutputBytes: 1024, timeoutMs: 1000 });
+  const r = await adb.run({ op: 'getprop', target: TARGET });
+  assert.ok(seenMaxBuffer > 1024, 'exec maxBuffer must exceed the report cap');
+  assert.ok(seenMaxBuffer >= 4 * 1024 * 1024, 'hard kill-buffer is 4MiB');
+  assert.equal(r.timedOut, false);
+  assert.equal(r.exitCode, 0, 'large-but-bounded output is an engine SUCCESS, not an engine failure');
+  assert.equal(r.stdout.length, 1024, 'report cap still slices the returned stdout');
+  assert.equal(r.truncated, true, 'truncation is flagged, never silently dropped');
+});
+
 test('timeout: a hanging adb call resolves with timedOut (never hangs the API)', async () => {
   const hang = () => new Promise(() => {}); // adb that never returns
   const adb = createAdbWhitelist({ adbBinary: '/usr/bin/adb', execFile: hang, timeoutMs: 60 });

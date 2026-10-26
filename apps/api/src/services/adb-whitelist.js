@@ -56,6 +56,20 @@ export const ADB_OPS = Object.freeze({
  */
 export const PACKAGE_NAME_RE = /^[a-z][a-z0-9_]*(\.[a-z0-9_]+)+$/;
 
+/**
+ * Hard execFile buffer: strictly ABOVE the report cap. The cap is the
+ * REPORTING contract (slice + `truncated` flag); execFile's maxBuffer is a
+ * KILL SWITCH on the child. Equating the two makes truncation unreachable:
+ * any output > cap kills the child with a non-numeric error code, which this
+ * engine normalizes to `exitCode: null` → callers see ADB_UNAVAILABLE (502)
+ * instead of truncated output. Live 2026-10-27 (W2 real-device E3/A3):
+ * `dumpsys package` = 324KB > 256KB cap → GET /apps/:pkg 502'd for any app
+ * with a moderately large package dump; the 522 UIA byte-bomb path (A3) was
+ * likewise unreachable. 4MiB hard cap stays memory-safe for all real ops
+ * (logcat -t 5000 worst case ~1MiB; UIA dumps < 1MiB on these geometries).
+ */
+const HARD_MAX_BUFFER = 4 * 1024 * 1024;
+
 /** Device-side read/push path: only these two managed prefixes, safe chars only. */
 export const DEVICE_PATH_RE = /^\/(?:data\/local\/tmp|sdcard)\/[A-Za-z0-9._\-/]{1,200}$/;
 
@@ -289,6 +303,8 @@ export function createAdbWhitelist({
   async function run({ op, target, prop, service, tail = logcatTailDefault, packageName, localPath, devicePath, x, y, maxOutputBytes: maxBytesOverride }) {
     const argv = buildAdbArgv({ op, target, prop, service, tail, packageName, localPath, devicePath, x, y, logcatTailMax });
     const cap = Number.isInteger(maxBytesOverride) && maxBytesOverride > 0 ? maxBytesOverride : maxOutputBytes;
+    // Decoupled from the report cap — see HARD_MAX_BUFFER (live 2026-10-27 W2 fix).
+    const hardBuffer = Math.max(cap, HARD_MAX_BUFFER);
     const startedAt = Date.now();
 
     const result = await new Promise((resolve) => {
@@ -301,7 +317,7 @@ export function createAdbWhitelist({
       };
       const timer = setTimeout(() => settle({ timedOut: true }), timeoutMs);
       Promise.resolve()
-        .then(() => exec(adbBinary, argv, { timeout: timeoutMs, maxBuffer: cap, killSignal: 'SIGKILL', windowsHide: true }))
+        .then(() => exec(adbBinary, argv, { timeout: timeoutMs, maxBuffer: hardBuffer, killSignal: 'SIGKILL', windowsHide: true }))
         .then(
           ({ stdout, stderr }) => {
             clearTimeout(timer);

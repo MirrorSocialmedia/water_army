@@ -352,7 +352,7 @@ async function main() {
     await new Promise((r) => setTimeout(r, 2500));
     const f = await fg(DEV1);
     ev('E6-foreground-switch', { http: f.status, body: f.j, expectedPkg: PKG },
-      f.status === 200 && f.j.package === PKG);
+      f.status === 200 && f.j.foreground?.package === PKG);
   }
 
   // E7 — in-app dump
@@ -375,12 +375,12 @@ async function main() {
     ev('E8-inapp-tap', { selector: inAppSelector, http: t.status, tap: t.j }, t.status === 200);
   }
 
-  // E9 — activity changed after in-app tap (genuine platform tap)
+  // E9 — foreground stays in target app after in-app tap (genuine platform tap)
   {
     await new Promise((r) => setTimeout(r, 2500));
     const f = await fg(DEV1);
     ev('E9-activity-change', { http: f.status, body: f.j },
-      f.status === 200 && f.j.package === PKG);
+      f.status === 200 && f.j.foreground?.package === PKG);
   }
 
   // E10 — on clean device w2: app not installed, selector not found
@@ -433,7 +433,7 @@ async function main() {
     const hostIntact = fs.existsSync('/etc/hostname');
     try { fs.unlinkSync(`${APK_DIR}/${linkName}`); } catch {}
     ev('A2-filename-injection', { out, symlink: { http: sl.status, code: sl.j.code ?? sl.j.error?.code }, hostIntact },
-      out.every((o) => o.http === 400) && [400, 422].includes(sl.http) && hostIntact);
+      out.every((o) => o.http === 400) && [400, 422].includes(sl.status) && hostIntact);
   }
 
   // A4 — APK size cap (restart API with WA_APK_MAX_BYTES=1MiB)
