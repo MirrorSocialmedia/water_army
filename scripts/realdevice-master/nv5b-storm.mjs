@@ -58,8 +58,8 @@ const API = process.env.MC_API ?? 'http://127.0.0.1:16490';
 const EVID = process.env.MC_EVID ?? '/home/kenneth/.openclaw/workspace/water_army/logs/realdevice-master/nv5b';
 const DEVICES = ['redroid-rdev-n1', 'redroid-rdev-n2', 'redroid-rdev-n3', 'redroid-rdev-n4', 'redroid-rdev-n5'];
 const VICTIM = 'redroid-rdev-n2';
-const OP_USER = 'mce2eop1'; // scratch-only seeded operator (nv-seed-users.mjs)
-const OP_PASS = 'nv-e2e-op-pw';
+const OP_USER = 'rdev-op1'; // rdev scratch seeded operator (seed-users.mjs)
+const OP_PASS = 'rdev-e2e-op-pw';
 const SIDECAR_HEALTH = 'http://127.0.0.1:16493/health';
 const RUN = `nv5-${randomBytes(3).toString('hex')}`;
 fs.mkdirSync(EVID, { recursive: true });
@@ -182,7 +182,7 @@ function tileByName(rows, name) {
 
   // HTTP truth: every stream acquire/reconnect the admin page makes
   const httpSeen = [];
-  const admin = await login(browser, process.env.MC_ADMIN_USER, process.env.MC_ADMIN_PASS, { withWsRegistry: true });
+  const admin = await login(browser, 'rdev-admin', 'rdev-e2e-admin-pw', { withWsRegistry: true });
   admin.ctx.on('response', async (r) => {
     try {
       const u = r.url();
