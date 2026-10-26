@@ -75,3 +75,34 @@ All migrations have been successfully applied.
 [rdev api] 15:02:51 login ok (rdev-admin)
 [rdev template] 15:02:51 rdev-base created (720x1280/320dpi, gpu host, 4GiB limit)
 [rdev bringup] 15:02:53 DONE
+[rdev teardown] 21:27:49 device redroid-rdev-n1 deleted (200)
+[rdev teardown] 21:27:59 device redroid-rdev-n2 deleted (200)
+[rdev teardown] 21:28:10 device redroid-rdev-n3 deleted (200)
+[rdev teardown] 21:28:20 device redroid-rdev-n4 deleted (200)
+[rdev teardown] 21:28:30 device redroid-rdev-n5 deleted (200)
+[rdev teardown] 21:28:41 device redroid-rdev-w1 deleted (200)
+[rdev teardown] 21:28:51 device redroid-rdev-w2 deleted (200)
+[rdev teardown] 21:28:51 template rdev-w3 deleted
+[rdev teardown] 21:28:51 template rdev-base deleted
+[rdev teardown] 21:28:51 binding c9f1c001-0000-4000-8000-0000000000c2 deleted
+[rdev teardown] 21:28:51 binding c9f1c001-0000-4000-8000-0000000000c1 deleted
+[rdev teardown] 21:28:51 binding c9f1c001-0000-4000-8000-0000000000c3 deleted
+[rdev teardown] 21:28:51 container rdev-egress-a removed
+[rdev teardown] 21:28:52 container rdev-egress-b removed
+[rdev teardown] 21:28:52 container rdev-egress-c removed
+[rdev teardown] 21:28:52 container rdev-egress-d removed
+[rdev teardown] 21:28:52 container rdev-dnslog removed
+[rdev teardown] 21:28:52 container rdev-pg removed
+[rdev teardown] 21:28:52 anonymous volume 726f4c578b5de568293b5d543f454be2a490bdbf50dc7a49049f5a9fa60e0f88 removed
+[rdev teardown] 21:28:52 container rdev-redis removed
+[rdev teardown] 21:28:52 anonymous volume 5ca895a14d2ec61f64deb1b94a6832dcbe3aad28aa194b75beed89a27bdeb3b6 removed
+[rdev teardown] 21:28:53 network br-rdev-ladder removed
+[rdev teardown] 21:28:53 api.pid stopped
+[rdev teardown] 21:28:53 web.pid stopped
+[rdev teardown] 21:28:53 sidecar.pid stopped
+[rdev teardown] 21:28:54 echo.pid stopped
+[rdev teardown] 21:28:54 sidecar already gone (died with api)
+[rdev teardown] 21:28:55 data root cleared
+[rdev teardown] 21:28:55 apk-rdev removed
+[rdev teardown] 21:28:55 RD_STATE (/tmp/rdev-state) removed
+[rdev teardown] 21:28:56 verification -> /home/kenneth/.openclaw/workspace/water_army/logs/realdevice-master/final/teardown-verify.txt

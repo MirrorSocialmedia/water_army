@@ -1,7 +1,8 @@
 # water_army 真機對抗式測試 — 總驗收報告（realdevice-master / P7）
 
+**狀態: FINAL — 全部 7 相位完成**（2026-10-27 05:3x HKT）
 **date**: 2026-10-27（HKT）| **relay**: leg 2（waterarmy-realdevice-relay2）接手 leg 1（P1+W1+W3 完成後中斷）
-**base**: 127f10 → HEAD（每 phase commit）| **fleet**: scratch rdev-*（14 容器：infra 6 + n1–n5 + W2 用 w1/w2）+ 真機 redroid-rdev-*（water-army/redroid:14.0.0-240527-matrixa-r3）
+**base**: 127f10 → 09951dc（每 phase commit，main 直 push）| **fleet**: scratch rdev-*（14 容器：infra 6 + n1–n5 + W2 用 w1/w2）+ 真機 redroid-rdev-*（water-army/redroid:14.0.0-240527-matrixa-r3）→ **teardown 零殘留已驗證（§5）**
 **紀律遵守**: 用戶 stack water-army-* 5/5 + SGLang 30000 全程零動；禁碰端口零觸；RAM gate 38G→>16G 常守；secrets 零入 log（D10 + P6 canary 實證）；Kairo 單 mvpd0vj2ez8nx 由 CEO 記帳
 
 ## 0. 總覽
