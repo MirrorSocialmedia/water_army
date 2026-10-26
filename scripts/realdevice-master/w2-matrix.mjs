@@ -181,6 +181,7 @@ async function ensureDevices() {
   }
   await resolveDevices();
   const t0 = Date.now();
+  let online = false;
   while (Date.now() - t0 < 1800000) {
     const st = await req('GET', '/api/devices/redroid');
     // E1-faithful: exit when RUNNING (not adb-online). A fresh no-proxy
@@ -192,7 +193,7 @@ async function ensureDevices() {
       const d = (st.j.devices ?? []).find((x) => x.name === n);
       return d && d.containerState === 'running';
     });
-    if (done) break;
+    if (done) { online = true; break; }
     const now = Date.now();
     for (const n of [DEV1, DEV2]) {
       const key = `/tmp/rdev-wait-throttle-${n}`;
@@ -206,7 +207,11 @@ async function ensureDevices() {
     console.log(`waiting boot: ${ages.join(' ')} (${Math.round((Date.now() - t0) / 1000)}s)`);
     await new Promise((r) => setTimeout(r, 30000));
   }
-  throw new Error('devices did not come online within 30min');
+  // (relay leg-2 fix: original code threw UNCONDITIONALLY after the loop —
+  // a successful `break` (devices running fast on warm cache) fell straight
+  // into the timeout throw. Live 2026-10-27 03:58: w1/w2 running in ~1s,
+  // matrix FATAL'd with the bogus 30min message.)
+  if (!online) throw new Error('devices did not come online within 30min');
 }
 
 function isPortrait(dev) {
