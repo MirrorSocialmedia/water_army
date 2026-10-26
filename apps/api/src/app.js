@@ -34,6 +34,7 @@ import { createBatchMetricsService } from './services/batch-metrics-service.js';
 import { runRedroidPreflight } from './services/preflight.js';
 import { createRedroidService } from './services/redroid-service.js';
 import { createFingerprintService } from './services/fingerprint-service.js';
+import { createAppService } from './services/app-service.js';
 import { buildRamGateService } from './services/ram-gate-service.js';
 import { createAdbWhitelist } from './services/adb-whitelist.js';
 import { createMockRedroidEnvironment } from './services/redroid-mock.js';
@@ -44,6 +45,7 @@ import { templateRoutes } from './routes/templates.js';
 import { redroidTemplateRoutes } from './routes/redroid-templates.js';
 import { redroidDeviceRoutes } from './routes/devices.js';
 import { identityFingerprintRoutes } from './routes/identity-fingerprints.js';
+import { deviceAppRoutes } from './routes/device-apps.js';
 import { taskRoutes } from './routes/tasks.js';
 import { batchRoutes } from './routes/batches.js';
 import { scheduleRoutes } from './routes/schedules.js';
@@ -276,6 +278,23 @@ export async function buildApp(opts = {}) {
   // WA_REDROID_RO_OVERRIDES_ENABLED is off (createDevice never consults it).
   const fingerprintService = createFingerprintService({ db, log: app.log });
 
+  // W2 (ADR-026): app lifecycle + UI-tree service. Routes fail closed
+  // (503 APP_OPS_DISABLED) while WA_APP_OPS_ENABLED is off. The adb engine
+  // is its own whitelist instance (mock mode: same canned executor).
+  const appService = createAppService({
+    db,
+    config,
+    log: app.log,
+    audit,
+    adb: createAdbWhitelist({
+      adbBinary: config.redroidAdbBinary ?? '/usr/bin/adb',
+      timeoutMs: config.redroidAdbTimeoutMs ?? 20_000,
+      maxOutputBytes: config.redroidAdbMaxOutput ?? 262_144,
+      execFile: redroidEnv ? redroidEnv.adb.exec : undefined,
+      log: app.log,
+    }),
+  });
+
   const redroidService = createRedroidService({
     db,
     docker: redroidDocker,
@@ -403,6 +422,7 @@ export async function buildApp(opts = {}) {
   app.decorate('batchMetrics', batchMetrics);
   app.decorate('redroidService', redroidService);
   app.decorate('fingerprintService', fingerprintService);
+  app.decorate('appService', appService);
   app.decorate('ramGateService', ramGateService);
   app.decorate('streamLeaseService', streamLeaseService);
   app.decorate('interventionService', interventionService);
@@ -540,6 +560,7 @@ export async function buildApp(opts = {}) {
   redroidTemplateRoutes(app);
   redroidDeviceRoutes(app);
   identityFingerprintRoutes(app);
+  deviceAppRoutes(app);
   taskRoutes(app, { taskQueue });
   batchRoutes(app);
   scheduleRoutes(app);

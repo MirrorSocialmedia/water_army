@@ -16,10 +16,19 @@
  * The mock does NOT pretend to be real: every result carries mock:true.
  */
 import { EventEmitter } from 'node:events';
+import fs from 'node:fs';
 
 import { removeRedroidDataDir, T2S_SETUP_FILE, T2S_NETCHECK_MARKER, T2S_CANARY_MARKER, TUN2SOCKS_CHECK_MARKER, TUN2SOCKS_PIN, GOST_HOST_BIND } from './redroid-service.js';
 
 let mockIdSeq = 9000;
+
+/** W2 (ADR-026): default fake UI tree served by `uiautomator dump`. */
+const DEFAULT_UI_XML = `<?xml version='1.0' encoding='UTF-8' standalone=yes ?>
+<hierarchy rotation="0">
+  <node index="0" text="" resource-id="com.android.mock:id/title" class="android.widget.TextView" package="com.android.mock" content-desc="" clickable="false" enabled="true" bounds="[40,80][680,160]" />
+  <node index="1" text="Sign in" resource-id="com.android.mock:id/login" class="android.widget.Button" package="com.android.mock" content-desc="Login button" clickable="true" enabled="true" bounds="[260,600][460,680]" />
+  <node index="2" text="Sign in" resource-id="com.android.mock:id/login_alt" class="android.widget.TextView" package="com.android.mock" content-desc="" clickable="true" enabled="true" bounds="[260,700][460,740]" />
+</hierarchy>`;
 
 /**
  * @param {object} [opts]
@@ -249,8 +258,14 @@ export function createMockRedroidDockerWrapper(opts = {}) {
  * @param {string} [opts.spawnError] make EVERY exec throw a spawn failure
  *   (ENOENT-shaped — the adb binary is missing / unrunnable on this host;
  *   R6 ADB_UNAVAILABLE error-contract test seam)
+ * @param {object} [opts.appState] W2 (ADR-026) mock Android state:
+ *   { packages?: Map|Object<string,{versionCode,versionName}>,
+ *     uiXml?: string (uiautomator dump content),
+ *     focusedApp?: 'pkg/Activity' | null (dumpsys window mCurrentFocus) }
+ *   The returned object exposes .w2 = {packages, files, uiXml, taps} so tests
+ *   can seed/inspect the fake device without touching the argv plumbing.
  */
-export function createMockAdb({ online = true, logcatLines, spawnError = null } = {}) {
+export function createMockAdb({ online = true, logcatLines, spawnError = null, appState = {} } = {}) {
   const calls = [];
   // Mutable so a test can model the R5 recreate-stall transition
   // (confirmed online → adbd stops answering) without a new app instance.
@@ -259,6 +274,17 @@ export function createMockAdb({ online = true, logcatLines, spawnError = null } 
   const lines =
     logcatLines ??
     Array.from({ length: 300 }, (_, i) => `I/MockSystem(${1000 + (i % 50)}): mock logcat line ${i}`);
+
+  // ---- W2 (ADR-026): fake Android device state ------------------------------
+  const seedPkgs = appState.packages ?? { 'com.android.mock': { versionCode: '30', versionName: '1.0-mock' } };
+  const w2 = {
+    packages: new Map(Object.entries(typeof seedPkgs === 'object' && !Array.isArray(seedPkgs) && !(seedPkgs instanceof Map) ? seedPkgs : Object.fromEntries(seedPkgs))),
+    files: new Map(), // device path → content pushed (string/Buffer)
+    uiXml: appState.uiXml ?? DEFAULT_UI_XML,
+    focusedApp: appState.focusedApp === undefined ? 'com.android.mock/com.android.mock.MainActivity' : appState.focusedApp,
+    taps: [], // {x,y} in call order
+  };
+  const failShell = (msg) => ({ exitCode: 1, stdout: '', stderr: `${msg}\n` });
 
   async function exec(bin, argv) {
     calls.push({ bin, argv: [...argv] });
@@ -276,6 +302,27 @@ export function createMockAdb({ online = true, logcatLines, spawnError = null } 
     }
     if (argv[0] === 'connect') {
       return { stdout: adbOnline ? `connected to ${target}\n` : `cannot connect to ${target}: Connection refused\n`, stderr: '' };
+    }
+    // W2 non-shell ops (push / exec-out) ride the SAME engine + argv arrays.
+    if (argv.includes('push')) {
+      if (!adbOnline) return failShell('error: device offline');
+      const [, , , localPath, devicePath] = [...argv.slice(argv.indexOf('push'))];
+      let content;
+      try {
+        content = fs.readFileSync(localPath); // the mock reads the managed-dir file like adb would
+      } catch {
+        return failShell(`adb: error: cannot stat '${localPath}': No such file or directory`);
+      }
+      w2.files.set(devicePath, content);
+      return { stdout: `${content.length} KB (${(content.length / 1024).toFixed(0)} MB)? mock push ${devicePath}\n`, stderr: '' };
+    }
+    if (argv.includes('exec-out')) {
+      if (!adbOnline) return failShell('error: device offline');
+      const catArgs = argv.slice(argv.indexOf('exec-out') + 1);
+      if (catArgs[0] !== 'cat' || catArgs.length !== 2) return failShell('mock adb: unexpected exec-out');
+      const content = w2.files.get(catArgs[1]);
+      if (content === undefined) return failShell(`cat: ${catArgs[1]}: No such file or directory`);
+      return { stdout: content, stderr: '' };
     }
     const shellArgv = argv.slice(argv.indexOf('shell') + 1);
     if (!adbOnline) {
@@ -307,7 +354,60 @@ export function createMockAdb({ online = true, logcatLines, spawnError = null } 
     }
     if (op === 'dumpsys') {
       const svc = shellArgv[1];
+      if (svc === 'window') {
+        const focus = w2.focusedApp
+          ? `  mCurrentFocus=Window{1a2b3c4 u0 ${w2.focusedApp}}\n  mFocusedApp=AppWindowToken{5d6e7f8 token Token{9a0b1c2 ${w2.focusedApp}}}`
+          : '  mCurrentFocus=null\n  mFocusedApp=null';
+        return { stdout: `DUMP OF SYSTEM SERVICE WINDOW (mock)\n${focus}\n`, stderr: '' };
+      }
+      if (svc === 'package') {
+        const pkg = shellArgv[2];
+        const info = pkg ? w2.packages.get(pkg) : null;
+        if (pkg && !info) return { stdout: `Unable to find package: ${pkg}\n`, stderr: '' };
+        if (pkg && info) {
+          return { stdout: `Packages:\n  Package [${pkg}] (${pkg})\n    versionCode=${info.versionCode} minSdk=24 targetSdk=34\n    versionName=${info.versionName}\n`, stderr: '' };
+        }
+      }
       return { stdout: `DUMP OF SYSTEM SERVICE ${svc.toUpperCase()} (mock)\n  entry: mock-value\n  entries: 2\n`, stderr: '' };
+    }
+    if (op === 'pm') {
+      const args = shellArgv.slice(1);
+      if (args[0] === 'list' && args[1] === 'packages') {
+        const filter = args[2];
+        const names = [...w2.packages.keys()].filter((p) => !filter || p.includes(filter)).sort();
+        return { stdout: names.map((p) => `package:${p}`).join('\n') + (names.length ? '\n' : ''), stderr: '' };
+      }
+      if (args[0] === 'install') {
+        const path_ = args[args.length - 1];
+        const content = w2.files.get(path_);
+        if (content === undefined) return failShell('Failure [Exception: java.io.FileNotFoundException (No such file or directory)]');
+        const buf = Buffer.isBuffer(content) ? content : Buffer.from(String(content));
+        // Honest corruption semantics: only ZIP-magic payloads parse on device.
+        if (!(buf[0] === 0x50 && buf[1] === 0x4b && buf[2] === 0x03 && buf[3] === 0x04)) {
+          return { exitCode: 1, stdout: 'Failure [INSTALL_PARSE_FAILED_NOT_APK]\n', stderr: '' };
+        }
+        const pkg = /package=([a-z0-9_.]+)/.exec(buf.toString('latin1'))?.[1] ?? 'com.mock.pushed';
+        w2.packages.set(pkg, { versionCode: '1', versionName: `mock-${Date.now()}` });
+        return { stdout: 'Success\n', stderr: '' };
+      }
+      if (args[0] === 'uninstall') {
+        const pkg = args[1];
+        if (!w2.packages.has(pkg)) return { exitCode: 1, stdout: `Failure [DELETE_FAILED_INTERNAL_ERROR]\n`, stderr: '' };
+        w2.packages.delete(pkg);
+        return { stdout: 'Success\n', stderr: '' };
+      }
+      return failShell(`mock adb: unexpected pm args ${JSON.stringify(args)}`);
+    }
+    if (op === 'uiautomator') {
+      const outPath = shellArgv[shellArgv.length - 1];
+      w2.files.set(outPath, w2.uiXml);
+      return { stdout: `UI hierchary dumped to: ${outPath}\n`, stderr: '' };
+    }
+    if (op === 'input') {
+      if (shellArgv[1] !== 'tap') return failShell(`mock adb: unexpected input op ${shellArgv[1]}`);
+      const [x, y] = [Number(shellArgv[2]), Number(shellArgv[3])];
+      w2.taps.push({ x, y });
+      return { stdout: '', stderr: '' };
     }
     if (op === 'logcat') {
       const tIdx = shellArgv.indexOf('-t');
@@ -328,6 +428,8 @@ export function createMockAdb({ online = true, logcatLines, spawnError = null } 
     calls,
     // R6 test seam: model the recreate-stall transition (online → offline).
     setOnline: (v) => { adbOnline = Boolean(v); },
+    // W2 (ADR-026): the fake device state (packages/files/uiXml/taps).
+    w2,
   };
 }
 
