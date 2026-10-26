@@ -25,6 +25,16 @@ const server = http.createServer((req, res) => {
     res.end(`client_ip=${ip} nonce=${nonce}\n`);
     return;
   }
+  if (req.method === 'GET' && u.pathname === '/resolve') {
+    // DoH mimic (D4b, ADR-027): the guest issues an HTTP "DNS" query over the
+    // tunnel; the response echoes which source IP it arrived from — proves
+    // which egress the name-resolution traffic exits from.
+    const name = u.searchParams.get('name') ?? '';
+    const ip = req.socket.remoteAddress?.replace(/^::ffff:/, '') ?? 'unknown';
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ Status: 0, client_ip: ip, Question: [{ name: name || 'unknown' }] }));
+    return;
+  }
   if (req.method === 'GET' && u.pathname === '/healthz') { res.writeHead(200); res.end('ok\n'); return; }
   res.writeHead(404); res.end('not found\n');
 });
