@@ -13,6 +13,9 @@
 | ADR-021 | 人工介入事件系統（狀態機 + dedupe + blocked_pending_review + 零 secrets） | 已實裝、E2E T40–T49 通過 | §21 |
 | ADR-022 | P5 security hardening（rate limit 落點 / sidecar inbound guard / scrub 補漏 / E2E matrix） | 已實裝、E2E T50–T61 通過 | §22 |
 | ADR-023 | NV follow-up（NV1/NV2/NV4 暫緩；NV3 受控全鏈 8/8；NV5 cookie slot 非 scrcpy 限定 + rate-limit×storm 新發現；NV6 基本級核對） | 已實裝、NV E2E 通過（2026-10-24） | §23 |
+| ADR-024 | Mobile Console stream ticket 冪等化 | 已實裝 | §24 |
+| ADR-025 | W1 identity 級 device fingerprint profile | 已實裝（代碼段）、真機 V3 待 RAM | §25 |
+| ADR-026 | W2 App 層基礎（adb-whitelist 擴容 + ui-tree + app-service + device-apps routes） | 已實裝（代碼 + unit + mock integration 全綠）、真機矩陣待總測試單 | §26 |
 
 ---
 
@@ -1217,3 +1220,85 @@ MD §13.2 嘅 per-actor 寫 budget（20/60s）係為**人工誤操作**設嘅；
 - RAM gate：V3 執行需要 ≥1 部 redroid 上機（MemAvailable 而家 ~2 GiB < gate）— 掛起係預期狀態，唔係阻塞 bug。
 
 **驗證（代碼段，已做）**：unit `fingerprint-profile.test.js`（12：冪等 / 200+2000 fleet unique 欄位 0 碰撞 / validator 負矩陣 / 碰撞器 blocking vs informational / carrier 編碼 + 穩定序 + never-partial）；integration `redroid-fingerprint.test.js`（6：開關 OFF 惰性（Cmd byte-identical + row unbound + 無 profile lookup）/ ON 注入落 mock createContainer body（Cmd 唔落 Env）+ row snapshot / 3× recreate 逐字節一致 / 404 fail-closed 零副作用 / template 基線寫入校驗 + merge 勝負 + OFF 惰性 / routes 冪等 ensure + RBAC + fleet 碰撞審計 clean）。**真機層 = NOT VERIFIED（V3 待 RAM）** — 本 ADR 所有「生效」描述只指代碼層。
+
+## 26. W2 App 層基礎（ADR-026，2026-10-26 — 來源 = CEO W2 工單）
+
+**背景**：水軍 200 身份需要喺每部 redroid 上面裝目標平台 app、驗證安裝、探測首屏（UI tree）、tap 元素（登入流程 / 轉入主界面）、偵測 activity 變更。W2 = App 層基礎：所有裝置互動**只可經 ADB whitelist engine**（MD §1.2/§7/§10.3 硬規則）— W2 將 whitelist 由「5 個唯讀 op」擴容到「5 個唯讀 + 8 個 app-layer op」。真機矩陣掛起等真機總測試單（見 §待辦）。
+
+**決策**：
+
+1. **ui-tree 模組**（`apps/api/src/services/ui-tree.js`，pure function、零 I/O）：bounded uiautomator XML 解析 — quote-aware `<node ...>` scan（引號入面嘅 `>` 係 data 唔係 tag 結束）、XML entity decode（`&lt; &gt; &amp; &quot; &apos;` + `&#NN;`/`&#xHH;`）、per-node bounds 校驗（integer 對、x2≥x1、y2≥y1）— **壞 bounds 只 skip 嗰個 node**（`stats.skippedMalformed` 誠實計數，唔靜默丟）。三層尺寸 bomb 防禦：`maxBytes` 4 MiB（UIA_DUMP_TOO_LARGE 422）/ `maxNodes` 2000（UIA_DUMP_NODE_LIMIT 422）/ per-attribute `maxTextLen` 512（單個 attribute 巨型亦被 clip）。Selector = AND 語義 + ≥1 條件（空 selector = bug 唔係 feature；unknown field 400）。`pickTapTarget` = **恰好一個** element + integer center；多匹配 = 409 UIA_ELEMENT_AMBIGUOUS（candidates ≤8 + 完整 count，**永唔猜邊個 tap**）；零匹配 = 404 UIA_ELEMENT_NOT_FOUND；element center 出 screen bounds = 422 UIA_ELEMENT_OFFSCREEN（stale dump / rotation race 嘅兜）。錯誤契約七碼全部穩定 API code（422/400/404/409 分層）。
+
+2. **app-service**（`app-service.js`）：每部裝置嘅 app 生命周期 + UI tree 管線。
+   - **Host-side APK gate**（managed dir，defense in depth，順序唔可換）：file name RE（flat、safe chars、`.apk` 尾、≤104）→ `realpath` containment **直接喺** managed dir 入面（symlink 指出去 = reject）→ regular file → 0-byte / size cap（WA_APK_MAX_BYTES 512 MiB）→ ZIP magic `PK\x03\x04`。**腐敗 APK 永唔到裝置**（零副作用、no half-install）。**gate 刻意無法解析 APK**（設計決定）：ZIP magic 有效但 body 係垃圾嘅「magic spoof」檔案過 host gate，由裝置自己 `pm install` 裁決（`INSTALL_PARSE_FAILED_NOT_APK` → 502 APK_INSTALL_FAILED + error audit）— 平台**永不 claim 裝咗邊個 package**（response / audit 都無 package 欄；發現路徑只有 packageInfo，裝置係 truth）。
+   - **裝置 verdict 先係 success**：`pm install/uninstall` 必須見 `Success`（嚴格 word boundary — `Successfully` ≠ Success，unit 已鎖）；exitCode≠0 / 無 verdict / timeout = 502。裝置原子裁決，平台無 half-installed 狀態要 unwind（device tmp file 下次 push 覆蓋；device-rm 唔喺白名單 — 見安全論證 §7）。
+   - **Fail-closed 鏈**：switch OFF（默認）= 503 APP_OPS_DISABLED（7 條 route 全擋）；containerState ≠ running = 409 APP_DEVICE_NOT_RUNNING（**零 adb call**）；engine 不可用（exitCode null）= 502 ADB_UNAVAILABLE；uiautomator `could not get idle state`（真實裝置常見失敗）= 502 UIA_DUMP_FAILED 誠實 passthrough；dump read-back 被 truncate = 522 UIA_DUMP_TOO_LARGE（**截斷嘅 tree 唔可 tap、唔可 parse**）。
+   - **Login-state 誠實**（§3）：foreground probe = `dumpsys window` `mCurrentFocus`（fallback `mFocusedApp`）→ 只回報 package + activity；`loginState` 欄恆定 `'unknown (activity-level detection only)'` — activity 係咪「已登入」係老細喺真機上定義嘅業務規則，本層永唔給 verdict。
+   - **UI 管線**：`ui/dump` = uiautomator dump（fixed 路徑 `/data/local/tmp/wa_ui_dump.xml`，constant，零 user input）→ exec-out cat（raw bytes，**host 端零 shell**）→ bounded parse；`ui/tap` = **同一份 fresh dump** → selector 解析（錯誤契約）→ element center → `input tap`（全程一個 dump，唔會二次 dump 令 tap 同觀察唔一致）。
+   - **審計**：每 mutation + dump/tap 都審計（`app.device.*`；detailsJson 零 secrets — 只有 names/paths/coords/counts）。
+
+3. **Routes + RBAC + 開關**（`routes/device-apps.js`）：reads（`GET /apps`、`GET /apps/:package`、`GET /foreground`）= viewer+；mutations（`POST /apps/install`、`DELETE /apps/:package`、`POST /ui/dump`、`POST /ui/tap`）= operator+。Schema 層第一道：route param `package` = Java package shape RE；install body `fileName` = flat safe name RE（traversal 形狀 400 喺 service 之前）；selector = `additionalProperties:false` + `minProperties:1`（空 / 未知字段 400）。開關 `WA_APP_OPS_ENABLED` 默認 OFF — W1 教訓：新行為 ship OFF-by-default，真機 evidence matrix 未過之前唔准默默改變真機行為。
+
+4. **Mock adb 裝置狀態**（`redroid-mock.js` w2）：packages Map / files Map（device path → pushed bytes）/ uiXml / focusedApp / taps[]；`pm install` = 誠實腐敗語義（只 ZIP magic 可 parse）；push / exec-out 行**同一 engine 同一 argv array**（zero-shell 斷言對 W2 新 op 一樣成立）。
+
+**白名單擴容安全論證**（8 個新 op 點解唔破 MD §1.2/§7/§10.3 硬規則）：
+
+1. **唯一通道不變**：`execFile(adbBinary, argv, {timeout, maxBuffer, killSignal})` + fixed binary（`/usr/bin/adb`，constructor 強制 absolute）；`shell:true` 唔存在；**任何 user string 永唔到任何 shell** — 8 個新 op 全部經 `buildAdbArgv`（pure function，可獨立 unit test）→ argv 數組。
+2. **`-s` serial gate**：target 只可 `127.0.0.1:<port>`（port 1..65535、≤5 位數字）；0.0.0.0 / localhost / ::1 / public / `;` / `\n` / `\0` / 空白全部 reject。redroid 慣例 serial = adb server 嘅 loopback port（唔係 device serial string）— 呢個 port 由 DB row 嘅 `adbPort`（分配器產生）決定，**request 層冇任何字段可以改 target**。
+3. **三道 shape allowlist**（engine 層 defense in depth；service 層重複校驗）：`PACKAGE_NAME_RE = ^[a-z][a-z0-9_]*(\.[a-z0-9_]+)+$`（+≤128 + `..` 段檢查）管 pm filter / dumpsys package / uninstall；`DEVICE_PATH_RE = ^/(data/local/tmp|sdcard)/[safe]{1,200}$`（+ `..` 段）管 push 目標 / install 來源 / exec-out cat；`LOCAL_PATH_RE = ^/[safe]{2,512}$`（+ `..` 段）管 push 來源。注入面實測全 reject：shell metachars（`; $ ( ) | & > < \`）、quotes、空白 / CR / LF / NUL / tab、CJK / fullwidth / zero-width 字元、backslash（windows 形狀）、過長路徑（length boundary 已鎖）。
+4. **固定常數**：`pm install -r`（`-r` = server-side constant）、uiautomator dump 路徑 = constant（該 op **零 user argument** — 多余 fields 直接忽略）、logcat `-d`（server-side，永唔 stream）。
+5. **input tap = strict bounded integers**：`Number.isInteger` + 0..16384（唔收 string coercion、float、NaN、Infinity）→ argv `String(x) String(y)`；越界 tap 喺 engine 層已唔可能（out-of-screen 嘅元素由 ui-tree OFFSCREEN 契約兜住）。
+6. **輸出封頂 + timeout**：per-call cap 默認 262 KiB（per-call override；ui dump read-back 用 WA_UIA_MAX_BYTES 4 MiB 層）、timeout 20s SIGKILL；truncation 誠實 flag（`truncated:true`，唔靜默丟）。
+7. **Verb collision guard**：原始動詞（`shell` / `pm` / `install` / `push` / `cat` / `exec-out` / `uiautomator` …）唔係 op 名 → 400（唔存在任何 `/exec` 語義可以借 op 名復活）；device-rm / device shell arbitrary 刻意**唔擴容** — 安裝失敗嘅 tmp 殘留由下次 push 覆蓋（device 端 262KB cap 以下，唔係安全邊界，係磁碟衛生；要加 `rm` 需要另一輪安全論證）。
+8. **零新 egress 面**：8 個 op 全部綁同一 loopback adb server（127.0.0.1 only）；request schema 冇任何新 host / port / binary / target 字段；RBAC 跟 devices 矩陣；audit 全覆蓋。
+
+**驗證（代碼段，已完成 — 2026-10-26）**：
+- unit `adb-whitelist-w2.test.js`（9）：exact argv shape ×8 op / injection 矩陣（package / device-path / local-path）/ tap strict ints / verb collision + W1 ops 回歸 / fixed binary no-shell / per-call cap + 誠實 truncation。
+- unit `ui-tree.test.js`（14）：quote-aware scan / entity decode / malformed-skip-counted / truncated + 非 hierarchy / size + node cap / `<nodex` prefix / selector AND + exact-vs-contains / NOT_FOUND-AMBIGUOUS-OFFSCREEN 契約 / rotation attr 容忍。
+- unit `app-service.test.js`（8）：APK gate 負矩陣（traversal / symlink escape / size / magic / 缺 dir / 缺 file / 非法名）/ stopped-device 409 / package 校驗先於 adb / ADB_UNAVAILABLE 映射 / uninstall Failure verdict + error audit / focus parse（mCurrentFocus → mFocusedApp → null 三態）。
+- unit `w2-adversarial.test.js`（12）：serial port boundary（0/65535/6 位/空/`\n`/`\0`）/ package exotic chars（NUL / CJK / fullwidth / zero-width / quotes / metachars）/ path NUL + backslash + 513-vs-514 length boundary（`a..b` 單段 ≠ traversal）/ op 名篡改（大小寫 / 空白 / 近碰撞）/ dump 尺寸彈（exactly-at-cap pass、one byte less fail；node cap 同款；per-attr 512 clip）/ tap edge（zero-size element、center 正落 screen boundary = OFFSCREEN、負 bounds、無 screen dims 時跳過檢查、AMBIGUOUS cap 8 + honest count）/ verdict word boundary（`Successfully` ≠ Success）/ uia dump 失敗三徑（idle state / engine null / read-back fail）/ **magic spoof**（host gate 按設計通過 → 裝置 verdict 裁決 → no partial state → no package claim）。
+- integration `redroid-app-ops.test.js`（7）：switch OFF 全 route 503 / install→list→packageInfo→dump→tap 全鏈 + audit 6 動作 + zero-shell 證據 / 腐敗 APK 零 adb call / selector 契約 through routes（409/404/schema 400）/ off-screen 422（template geometry 驅動）/ RBAC 矩陣 / stopped-device 409 零 adb。
+- integration `w2-adversarial.test.js`（3）：magic spoof end-to-end（exactly 1 push、裝置收到 byte-for-byte、audit 無 package claim）/ 無 magic 檔案零裝置流量（regression guard）/ dump 尺寸彈（byte cap → 522 擋 dump **同** tap；node cap → 422 另一枚彈）。
+- **Full suite：1353 pass / 0 fail / 6 skip**（skip = RAM-G1 real-redis ×5 + P4 scheduler ×1，環境依賴、與 W2 無關）。
+
+**真機待辦清單（成單 — 真機總測試單一次過跑；RAM 已恢復 ~44 GiB，條件已備）**：
+
+### E. 真機 E2E 矩陣（裝機 → 首屏 → 探測 → tap → activity 變更）
+
+前置：1 部 redroid（template 預設幾何）、目標平台真 APK（signed、真 APK 結構）放 managed dir（`WA_APK_DIR`，默認 `/var/lib/water-army/apk`）、dedicated host `WA_APP_OPS_ENABLED=true`。除特別註明外全部經 platform route（唔經手動 adb — 手動 adb 只作旁證抽樣）。
+
+| # | 步驟 | 點樣跑 | 期望結果（通過標準） |
+|---|------|--------|----------------------|
+| E1 | 裝機 | start device → `POST /refresh` | adbState=online；`get-state` = device |
+| E2 | 安裝 | `POST /apps/install {fileName}`（managed dir 入面嘅真 APK） | 200 + `installed:true` + audit `app.device.install` success(bytes)；旁證：`adb -s 127.0.0.1:<port> shell pm list packages` 見到目標 pkg |
+| E3 | 驗證安裝 | `GET /apps/:package` | `installed:true` + `versionName` = APK 真實版本號；`loginState` = 'unknown (activity-level…)'（誠實性檢查：唔准出現 verdict 詞） |
+| E4 | 首屏 | 新裝置（或 reboot 後）`GET /foreground` + `POST /ui/dump` | foreground = launcher/system UI；dump 200 + nodes>0 + `stats.skippedMalformed` 有值（真機 XML 必有少量怪 node，計數要誠實）；key resource-id（launcher icon）喺 nodes 入面 |
+| E5 | tap 進 app | `POST /ui/tap {selector: {contentDesc/text: <app 名>}}`（launcher grid 上面個 icon） | 200 + `tapped` = icon element center；AMBIGUOUS 會暴露同名 icon（預期喺 launcher 唔會） |
+| E6 | activity 變更 #1 | `GET /foreground`（tap 後） | `foreground.package` = 目標 pkg + `activity` = entry activity（全鏈真驗收 1） |
+| E7 | 探測（in-app） | `POST /ui/dump` | nodes>0；真機 `uiautomator dump` 旁證對節（node 數量同 order、關鍵 resource-id 存在） |
+| E8 | in-app tap | `POST /ui/tap {selector: <主按鈕 resourceId/text>}` | 200 + `tapped` = element center |
+| E9 | activity 變更 #2 | `GET /foreground`（in-app tap 後） | `foreground.activity` 由 entry 變去目標 activity（全鏈真驗收 2 — W2 底線） |
+| E10 | 未裝降級 | 另一部**未裝**目標 app 嘅裝置：`POST /ui/tap` 用目標 app 嘅 selector | 404 UIA_ELEMENT_NOT_FOUND（launcher dump 入面無該元素）；`GET /apps/:package` `installed:false`；平台唔會「搵到近似元素」當命中 |
+| E11 | 卸機 | `DELETE /apps/:package` → `GET /apps/:package` | 200 → `installed:false`；`pm list packages` 旁證無該 pkg |
+
+### A. 真機對抗矩陣（注入 / 尺寸彈 / 越界 / 旋轉 race / 腐敗 APK）
+
+| # | 攻擊 | 點樣跑 | 期望結果 |
+|---|------|--------|----------|
+| A1 | 注入（package 名） | install/uninstall/filter 用 `com.example;id`、`com.a$(reboot)`、反引號、`com.a\|nc`、`com.a>x`、`com.a app`、CR/LF/NUL 尾巴 | 400（schema 或 service）；**零 adb call**（旁證 mock 斷言於真機 = `adb` server log 無對應指令） |
+| A2 | 注入（路徑） | install fileName：`../../etc/passwd.apk`、`a b.apk`、symlink 指出去嘅 `link.apk`（operator 喺 managed dir 放 symlink） | 400（schema / realpath containment）；**零 push**；host 檔案系統零改動 |
+| A3 | 尺寸彈（dump） | 目標 app 最複雜界面（百 node 級 list）`POST /ui/dump`；如真機界面唔夠彈，暫時降 `WA_UIA_MAX_BYTES`（例 8 KiB）再 dump | 彈內：200（nodes 完整）；彈外：**522 UIA_DUMP_TOO_LARGE**（無 partial tree、無「前 N 個 node」半份）；node cap 版：降 `WA_UIA_MAX_NODES`（例 50）→ 422 UIA_DUMP_NODE_LIMIT |
+| A4 | 尺寸彈（APK） | 超 `WA_APK_MAX_BYTES` 嘅檔案（或暫時降 cap 到 1 MiB 用真 APK） | 413 APK_TOO_LARGE；**零 push** |
+| A5 | 越界（tap） | selector 指向**已 scroll 離屏**嘅元素（dump 得返佢嘅 bounds 喺 screen 外） | 422 UIA_ELEMENT_OFFSCREEN；blind tap 嘅 engine 層坐標 >16384 結構上唔可能（strict ints）— 旁證：tap 後 screencap 無點擊痕跡 |
+| A6 | 旋轉 race | portrait dump → 裝置旋轉 landscape（`adb shell input keyevent 24` 旁證觸發）→ 立即 `POST /ui/tap`（用 portrait 時嘅 selector 語法，tap 會做 fresh dump） | 兩種**有效**行為擇一：fresh dump 反映新幾何 → tap 落新坐標成功；或 element center 超出 template（portrait）bounds → 422 OFFSCREEN。**絕不允許** stale 坐標 blind tap（旁證：screencap / 錄屏確認點擊位置） |
+| A7 | 腐敗 APK | managed dir 放四樣：(a) 純文字 (b) 0-byte (c) 截斷 ZIP (d) **ZIP magic + 垃圾 body（magic spoof）** | (a)(b)(c)：422 APK_CORRUPT + **零裝置流量**；(d)：host gate 按設計通過 → push 一次 → 裝置 `pm install` 裁決 `INSTALL_PARSE_FAILED_NOT_APK` → 502 APK_INSTALL_FAILED + error audit(deviceVerdict)；**全無 partial state**（`pm list packages` 前後 diff = 0）— 真機 (d) 結果回填本 ADR §決策 2（驗證「裝置 verdict 係仲裁者」） |
+| A8 | 裝置離線 | `POST /stop` 後調任一 app route | 409 APP_DEVICE_NOT_RUNNING + **零 adb call**；start 返即刻恢復 |
+| A9 | 開關 OFF | 生產 host（`WA_APP_OPS_ENABLED` 默認 OFF）調 7 條 route | 503 APP_OPS_DISABLED ×7；零副作用 |
+| A10 | idle-state 失敗路徑 | 持續動畫界面（feed 自動 scroll）`POST /ui/dump` | 502 UIA_DUMP_FAILED（`could not get idle state` 誠實 passthrough）**或** 200（dump 成功）— 兩者皆可接受，但**唔可** 200 + 空 nodes 假象 |
+
+**執行紀律**：
+1. 先 E 矩陣（happy path 11 項）後 A 矩陣（10 項）；每項記錄真實輸出 + 判定（E1 ✅/❌ + 證據 snippet）喺本 ADR §待辦 下面新增「執行結果」段。
+2. 手動 adb 旁證（`pm list`、screencap、錄屏）只係**觀察**，唔會改任何狀態；platform 行為斷言全部跟 platform response + audit log。
+3. A 矩陣任何一項 ❌ = halt 全矩陣 + 回報 CEO（安全面回退，唔係 flake）；E 矩陣 ❌ 但 A 全 ✅ = 功能 bug 單立。
+4. **E + A 全過之前，`WA_APP_OPS_ENABLED` 生產必須保持 OFF**；真機跑用 dedicated host + 開關 ON。
+5. 跑完：本 ADR §待辦 打勾 + 結果回填；`WA_APP_OPS_ENABLED` 保持 OFF 直到老細拍板常態開。
