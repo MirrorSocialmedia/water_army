@@ -35,6 +35,21 @@ const sh = (cmd, timeout = 120000) =>
 const adb = (serial, ...args) =>
   spawnSync(ADB, ['-s', serial, ...args], { encoding: 'utf8', timeout: 60000 }).stdout.trim();
 
+/** `adb connect <host:port>` — note: NOT `adb -s serial connect` (that is an
+ * invalid form: -s selects a target for a device command, and 'connect' is a
+ * server-level command. Live 2026-10-27 W2 run2: the -s form returned empty
+ * and never registered the device → all platform app-ops 502 'device not
+ * found'). Retries: adbd may still be finishing boot. */
+async function adbConnect(serial) {
+  let out = '';
+  for (let i = 0; i < 5; i++) {
+    out = spawnSync(ADB, ['connect', serial], { encoding: 'utf8', timeout: 30000 }).stdout.trim();
+    if (/connected to|already connected/.test(out)) return out;
+    await sleep(2000);
+  }
+  return out;
+}
+
 async function req(method, path, body, { retries = 3 } = {}) {
   // Retries: undici keep-alive pool + API restart (A9 switch-off) = first
   // post-restart request on a pooled socket ECONNRESETs ("fetch failed")
@@ -252,7 +267,7 @@ async function main() {
     // Operator-surface connect (documented gap workaround): the rest of the
     // matrix needs live adb. This is exactly what an operator would do.
     for (const n of [DEV1, DEV2]) {
-      const c = adb(`127.0.0.1:${DEVICES[n].adbPort}`, 'connect');
+      const c = await adbConnect(`127.0.0.1:${DEVICES[n].adbPort}`);
       console.log(`operator-connect ${n}: ${String(c).trim().slice(0, 80)}`);
     }
     await new Promise((res) => setTimeout(res, 2000));
