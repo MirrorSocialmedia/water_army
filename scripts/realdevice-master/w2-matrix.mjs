@@ -35,15 +35,34 @@ const sh = (cmd, timeout = 120000) =>
 const adb = (serial, ...args) =>
   spawnSync(ADB, ['-s', serial, ...args], { encoding: 'utf8', timeout: 60000 }).stdout.trim();
 
-async function req(method, path, body) {
-  const r = await fetch(API + path, {
-    method,
-    headers: { ...(body ? { 'content-type': 'application/json' } : {}), ...(cookie ? { cookie } : {}) },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const sc = r.headers.get('set-cookie');
-  if (sc) cookie = sc.split(';')[0];
-  return { status: r.status, j: await r.json().catch(() => ({})) };
+async function req(method, path, body, { retries = 3 } = {}) {
+  // Retries: undici keep-alive pool + API restart (A9 switch-off) = first
+  // post-restart request on a pooled socket ECONNRESETs ("fetch failed")
+  // despite a healthy server (same defect as w3-matrix, live 2026-10-26).
+  for (let i = 0; ; i++) {
+    let r;
+    try {
+      r = await fetch(API + path, {
+        method,
+        headers: { ...(body ? { 'content-type': 'application/json' } : {}), ...(cookie ? { cookie } : {}) },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+    } catch (e) {
+      // Any TypeError from fetch is a connection-level failure (HTTP errors
+      // return a response, they never throw) — covers ECONNREFUSED/ECONNRESET,
+      // "socket hang up", and undici's keep-alive race "other side closed"
+      // (a pooled connection from the pre-restart server process; live-observed
+      // 2026-10-26 D8: ready-200 at T, first req at T+1ms threw).
+      if (i < retries && (e instanceof TypeError || /fetch failed|ECONNRESET|ECONNREFUSED|EPIPE|socket|closed|terminated|timeout/i.test(String(e?.cause?.message ?? e?.message ?? e)))) {
+        await new Promise((res) => setTimeout(res, 400 * (i + 1)));
+        continue;
+      }
+      throw e;
+    }
+    const sc = r.headers.get('set-cookie');
+    if (sc) cookie = sc.split(';')[0];
+    return { status: r.status, j: await r.json().catch(() => ({})) };
+  }
 }
 
 function ev(item, data, pass) {

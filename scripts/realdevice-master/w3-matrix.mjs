@@ -34,8 +34,10 @@ const EGRESS_C = '172.38.222.53'; // drift relay (dialer.mjs, port 9999)
 const EGRESS_D = '172.38.222.54'; // D7 rotation target (fresh egress)
 const DNSLOG = '172.38.222.52';
 const ECHO = '192.168.31.144:16491'; // host LAN anchor (NOT on-link to guests — on-link destinations bypass the tunnel via the local routing table; 2026-10-26 D1 drift discovery)
+const [ECHO_HOST, ECHO_PORT] = ECHO.split(':');
 const NODE_IMG = 'node:22-alpine';
 const TEMPLATE = 'rdev-w3';
+let TEMPLATE_ID = null; // UUID — the PUT route resolves :id as the PK (cuid/uuid), NOT the name (2026-10-26 D7 500 discovery: Prisma P2023 on non-uuid)
 const TPL_BODY = { // rdev-w3 template (mirrors rdev-base + proxy)
   name: TEMPLATE, image: 'water-army/redroid:14.0.0-240527-matrixa-r3', androidVersion: '14',
   width: 720, height: 1280, dpi: 320, fps: 30, gpuMode: 'host',
@@ -56,15 +58,36 @@ const psql = (sql) => execSync(`docker exec -i rdev-pg psql -U postgres -d water
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 let cookie = '';
-async function req(method, p, body) {
-  const r = await fetch(`${API}${p}`, {
-    method,
-    headers: { ...(body ? { 'content-type': 'application/json' } : {}), ...(cookie ? { cookie } : {}) },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const sc = r.headers.get('set-cookie'); if (sc) cookie = sc.split(';')[0];
-  const j = await r.json().catch(() => ({}));
-  return { status: r.status, j };
+async function req(method, p, body, { retries = 3 } = {}) {
+  // Retries: undici's global fetch keep-alive pool holds sockets from before
+  // an API restart; the first post-restart request on a pooled socket gets
+  // ECONNRESET ("fetch failed") even though the server is healthy — live
+  // observed 2026-10-26 (D8: ready-200 at T, first request at T+2ms failed,
+  // server log shows no request received). Transient conn-level errors only;
+  // HTTP errors (4xx/5xx) are returned as-is.
+  for (let i = 0; ; i++) {
+    let r;
+    try {
+      r = await fetch(`${API}${p}`, {
+        method,
+        headers: { ...(body ? { 'content-type': 'application/json' } : {}), ...(cookie ? { cookie } : {}) },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+    } catch (e) {
+      // Any TypeError from fetch is a connection-level failure (HTTP errors
+      // return a response object, they never throw) — covers ECONNREFUSED,
+      // ECONNRESET, "socket hang up", and undici's keep-alive race "Other
+      // side closed" (observed live 2026-10-26 D8).
+      if (i < retries && (e instanceof TypeError || /fetch failed|ECONNRESET|ECONNREFUSED|EPIPE|socket|closed|terminated|timeout/i.test(String(e?.cause?.message ?? e?.message ?? e)))) {
+        await sleep(400 * (i + 1));
+        continue;
+      }
+      throw e;
+    }
+    const sc = r.headers.get('set-cookie'); if (sc) cookie = sc.split(';')[0];
+    const j = await r.json().catch(() => ({}));
+    return { status: r.status, j };
+  }
 }
 
 // --- RAM redline (task discipline): MemAvailable < 16GiB before any new boot
@@ -160,11 +183,10 @@ async function main() {
   if (!U || !P) throw new Error('canary fixture missing EGRESS_USER/EGRESS_PASS');
   const url = (ip) => `socks5://${U}:${P}@${ip}:1080`;
 
-  await login();
-
   // ================= SETUP =================
   say('SETUP: restart API with W3 ON (echo = ladder gateway)');
   restartApi();
+  await login(); // AFTER the restart: a crashed prior run leaves 16490 dead (run4 discovery)
   // W3-ON probe: binding PUT must NOT answer the disabled-switch code
   psql(`INSERT INTO identities (id, external_ref, display_name, identity_type, status, data_path, metadata_json, created_at, updated_at) VALUES
     ('${C1}','rdev-w3-c1','rdev-w3-c1','qa_device','READY','/var/lib/water-army/identities/rdev-w3-c1','{}'::jsonb, now(), now()),
@@ -178,6 +200,15 @@ async function main() {
     if (tr.status !== 200 && tr.status !== 201) throw new Error(`template create -> ${tr.status} ${JSON.stringify(tr.j).slice(0, 300)}`);
     say('template rdev-w3 created (proxy = egress-a)');
   }
+  const tplRow = (tlist.j.templates ?? tlist.j.items ?? []).find?.((t) => t.name === TEMPLATE);
+  if (!tplRow) throw new Error('template rdev-w3 missing from list after setup');
+  TEMPLATE_ID = tplRow.id;
+  // Canonical reset: clear residual bindings from crashed runs (a D8
+  // mid-crash leaves c3 pinned to .50 → 409 EGRESS_IP_CONFLICT on c1's
+  // canonical bind — run5 discovery). DELETE is idempotent (404 = clean).
+  for (const id of [C1, C2, C3]) {
+    await req('DELETE', `/api/identities/${id}/egress`);
+  }
   for (const [id, ip] of [[C1, EGRESS_A], [C2, EGRESS_B]]) {
     const b = await req('PUT', `/api/identities/${id}/egress`, { proxyUrl: url(ip), expectedEgressIp: ip });
     if (b.status !== 200) throw new Error(`binding ${id} -> ${b.status} ${JSON.stringify(b.j).slice(0, 300)}`);
@@ -187,6 +218,32 @@ async function main() {
   for (const c of ['rdev-egress-a', 'rdev-egress-b', 'rdev-egress-c', 'rdev-egress-d', 'rdev-dnslog']) {
     const st = shSoft(`docker inspect ${c} --format '{{.State.Status}}'`).trim();
     if (st !== 'running') throw new Error(`egress infra ${c} not running (${st})`);
+  }
+  // Template/binding/device consistency (idempotent re-runs): a mid-D7
+  // re-run leaves the template rotated to .54 and c1 with a .54 proxy baked,
+  // while the bindings above say .50 — the device bakes the template proxy
+  // at create, so a binding-only re-bind would never reconcile (D1 would
+  // hang on DRIFTED forever). Restore the canonical baseline (.50) and
+  // recreate c1 from it. Warm dataDir → fast boot.
+  const tplPut = await req('PUT', `/api/redroid/templates/${TEMPLATE_ID}`, { proxyUrl: url(EGRESS_A) });
+  if (tplPut.status !== 200) throw new Error(`SETUP template proxy restore -> ${tplPut.status} ${JSON.stringify(tplPut.j).slice(0, 200)}`);
+  const devList = await req('GET', '/api/devices/redroid');
+  const c1old = (devList.j.devices ?? []).find((d) => d.name === 'redroid-rdev-c1');
+  if (c1old) {
+    ramOk();
+    const d1 = await req('DELETE', `/api/devices/redroid/${c1old.id}`, { confirm: 'redroid-rdev-c1', removeData: false });
+    if (d1.status !== 200) throw new Error(`SETUP c1 reset delete -> ${d1.status} ${JSON.stringify(d1.j).slice(0, 200)}`);
+    const cr1 = await req('POST', '/api/devices/redroid', { name: 'redroid-rdev-c1', templateName: TEMPLATE, identityId: C1, idempotencyKey: `rdev-w3-c1-setup-${Date.now().toString(36)}` });
+    if (cr1.status !== 200 && cr1.status !== 201) throw new Error(`SETUP c1 reset create -> ${cr1.status} ${JSON.stringify(cr1.j).slice(0, 200)}`);
+    say('SETUP: c1 recreated (template/binding/device proxy consistency)');
+  }
+  const c3old = (devList.j.devices ?? []).find((d) => d.name === 'redroid-rdev-c3');
+  if (c3old) {
+    // D8 recreates c3 under echo-off semantics — a stale c3 from a crashed
+    // run would 409 the create and carry unknown proxy state.
+    const d3 = await req('DELETE', `/api/devices/redroid/${c3old.id}`, { confirm: 'redroid-rdev-c3', removeData: false });
+    if (d3.status !== 200) say(`SETUP c3 reset delete -> ${d3.status} (continuing)`);
+    else say('SETUP: stale c3 removed (D8 recreates)');
   }
   say('setup complete');
 
@@ -323,13 +380,23 @@ async function main() {
   // ================= D5: two identities, two egresses + IP collision =================
   {
     ramOk();
-    const cr = await req('POST', '/api/devices/redroid', {
-      name: 'redroid-rdev-c2', templateName: TEMPLATE, identityId: C2,
-      proxyUrl: url(EGRESS_B), // device-level override: c2 egresses via .51
-      idempotencyKey: `rdev-w3-c2-${Date.now().toString(36)}`,
-    });
-    if (cr.status !== 200 && cr.status !== 201) throw new Error(`c2 create -> ${cr.status} ${JSON.stringify(cr.j).slice(0, 300)}`);
-    say('D5: c2 created — waiting VERIFIED (budget 30min cold)');
+    // adoption-tolerant (idempotent re-runs): an existing c2 is reused — its
+    // binding (.51) and proxy override (device-level) are intact from create.
+    let adopt2 = false;
+    const l2 = await req('GET', '/api/devices/redroid');
+    const c2old = (l2.j.devices ?? []).find((d) => d.name === 'redroid-rdev-c2');
+    if (c2old) {
+      adopt2 = true;
+      say('D5: c2 already exists (adopted) — waiting for VERIFIED @.51');
+    } else {
+      const cr = await req('POST', '/api/devices/redroid', {
+        name: 'redroid-rdev-c2', templateName: TEMPLATE, identityId: C2,
+        proxyUrl: url(EGRESS_B), // device-level override: c2 egresses via .51
+        idempotencyKey: `rdev-w3-c2-${Date.now().toString(36)}`,
+      });
+      if (cr.status !== 200 && cr.status !== 201) throw new Error(`c2 create -> ${cr.status} ${JSON.stringify(cr.j).slice(0, 300)}`);
+      say('D5: c2 created — waiting VERIFIED (budget 30min cold)');
+    }
     const { v: v2, waitedMs } = await waitForView('redroid-rdev-c2',
       (x) => x.adbState === 'online' && egressOf(x)?.state === 'VERIFIED', 30 * 60 * 1000, 'D5 c2 VERIFIED');
     const v1 = await view('redroid-rdev-c1'); // simultaneous snapshot
@@ -339,7 +406,7 @@ async function main() {
       pass: e1.state === 'VERIFIED' && e2.state === 'VERIFIED'
         && e1.lastObservedIp === EGRESS_A && e2.lastObservedIp === EGRESS_B
         && clash.status === 409 && /EGRESS_IP_CONFLICT/.test(JSON.stringify(clash.j)),
-      simultaneous: { c1: e1, c2: e2 }, c2WaitedMs: waitedMs,
+      simultaneous: { c1: e1, c2: e2 }, c2WaitedMs: waitedMs, c2Adopted: adopt2,
       collision: { status: clash.status, code: clash.j.code ?? null },
     };
     ev('d5-two-identities.json', summary.items.D5);
@@ -358,22 +425,64 @@ async function main() {
     } else {
       d4.a_nslookup = { tool: 'nslookup', out: 'NOT AVAILABLE in guest — item (a) NOT VERIFIED (tool absent)' };
     }
-    // (b) DoH mimic over the tunnel: HTTP GET /resolve through the proxy chain
-    const doh = g(`printf 'GET /resolve?name=canary.rdevtest HTTP/1.0\\r\\nHost: ${ECHO}\\r\\n\\r\\n' | nc -w 8 ${ECHO}`).slice(0, 500);
+    // (b) DoH mimic over the tunnel: raw HTTP GET /resolve through the proxy
+    //     chain. toybox nc takes host/port as SEPARATE args, and (R8) its
+    //     stdin must be held open across a FIFO — piped stdin EOFs instantly
+    //     and the FIN tears the gost relay down before the response returns
+    //     (both defects observed 2026-10-26: "bad argument count" + empty OUT).
+    const dohLocal = '/tmp/rdev-state/d4doh-guest.sh';
+    fs.writeFileSync(dohLocal, `#!/system/bin/sh
+set -u
+HOST=${ECHO_HOST}
+PORT=${ECHO_PORT}
+TMPD=/data/local/tmp
+IN=$TMPD/d4doh.$$
+OUTF=$TMPD/d4doh_out.$$
+rm -f "$IN" "$OUTF"
+mkfifo "$IN" 2>/dev/null
+timeout 13 nc -w 8 "$HOST" "$PORT" < "$IN" > "$OUTF" 2>/dev/null &
+NCP=$!
+exec 3>"$IN"
+printf 'GET /resolve?name=canary.rdevtest HTTP/1.1\\r\\nHost: probe\\r\\nConnection: close\\r\\n\\r\\n' >&3
+wait $NCP
+RC=$?
+exec 3>&-
+echo "rc=$RC"
+cat "$OUTF" 2>/dev/null
+rm -f "$IN" "$OUTF"
+`);
+    shSoft(`${ADB} -s ${serial} push ${dohLocal} /data/local/tmp/d4doh.sh >/dev/null 2>&1`, 30000);
+    const doh = g('sh /data/local/tmp/d4doh.sh').slice(0, 800);
     let dohClientIp = null;
-    try { dohClientIp = JSON.parse(doh.split('\r\n\r\n').pop() || '{}').client_ip ?? null; } catch { /* non-json */ }
+    try {
+      const bodyPart = doh.split('\r\n\r\n').pop() ?? '';
+      const lines = bodyPart.split('\n').map((l) => l.replace(/\r$/, '')).filter((l) => l.length > 0);
+      // chunked framing (node http, no content-length): [sizeHex, json, '0']
+      dohClientIp = JSON.parse(lines[1] ?? lines[0] ?? '{}').client_ip ?? null;
+    } catch { /* non-json */ }
     d4.b_doh = { raw: doh, clientIp: dohClientIp, pass: dohClientIp === EGRESS_A };
-    // (c) leak window: egress-a dead -> guest direct UDP query reaches dnslog from the CONTAINER ip
+    // (c) leak window: tunnel dead -> guest direct UDP DNS from the CONTAINER
+    //     ip. NOT VERIFIABLE on scratch: the guest has NO DNS client (D1 tooling:
+    //     nslookup/wget absent) and a hand-rolled UDP DNS wire query in toybox
+    //     sh is unreliable (printf \x support, packet assembly). The direct
+    //     (non-tunnel) egress behavior IS observed elsewhere in this campaign:
+    //     pre-tunnel probes exited from the container's own ladder IP (API
+    //     egress transition log: DRIFTED observed=172.38.222.2 / .4).
     sh('docker stop rdev-egress-a', 30000);
     await sleep(2000); // let the tunnel connections die
     const before = shSoft(`docker exec rdev-dnslog cat /logs/dnslog.jsonl 2>/dev/null || true`);
-    const direct = summary.items.D1.guestTools.nslookup ? g(`nslookup canary.rdevtest ${DNSLOG}`) : 'nslookup unavailable';
+    const eDown = egressOf(await view('redroid-rdev-c1'));
     await sleep(1500);
     const after = shSoft(`docker exec rdev-dnslog cat /logs/dnslog.jsonl 2>/dev/null || true`);
     const newLines = after.split('\n').filter((l) => l && !before.includes(l));
     const c1ip = containerIp('redroid-rdev-c1');
-    const leaked = newLines.some((l) => l.includes(c1ip));
-    d4.c_leakWindow = { c1ContainerIp: c1ip, newDnsEntries: newLines.slice(0, 5), leakedFromContainerIp: leaked, directOut: String(direct).slice(0, 300) };
+    d4.c_leakWindow = {
+      verified: false,
+      reason: 'NOT VERIFIED on scratch: no DNS client tool in guest (D1: nslookup/wget absent); hand-rolled UDP DNS in toybox sh infeasible',
+      observedDirectEgressElsewhere: { driftObservedIp: '172.38.222.2', source: 'API egress transition log (this campaign, pre-tunnel probe window)', containerIp: c1ip },
+      egressStateWhileEgressDown: eDown?.state ?? null,
+      newDnsEntries: newLines.slice(0, 5),
+    };
     sh('docker start rdev-egress-a', 30000);
     await waitForView('redroid-rdev-c1', (x) => egressOf(x)?.state === 'VERIFIED', 5 * 60 * 1000, 'D4 recover VERIFIED');
     d4.recovered = true;
@@ -382,7 +491,7 @@ async function main() {
       a_nslookup: d4.a_nslookup, b_doh: d4.b_doh, c_leakWindow: d4.c_leakWindow,
     };
     ev('d4-dns-doh.json', summary.items.D4);
-    say(`D4: dohClientIp=${dohClientIp} leakFromContainer=${d4.c_leakWindow.leakedFromContainerIp} a=${d4.a_nslookup.out.slice(0, 40)}`);
+    say(`D4: dohClientIp=${dohClientIp} c-verified=${d4.c_leakWindow.verified} a=${d4.a_nslookup.out.slice(0, 40)}`);
   }
 
   // ================= D7: binding rotation (admin updates IP + proxy synced swap) =================
@@ -402,8 +511,8 @@ async function main() {
     const vReset = await view('redroid-rdev-c1');
     // proxy synced swap: template -> .54, then recreate c1 (device baked its URL at create)
     ramOk();
-    const tpl = await req('PUT', `/api/redroid/templates/${TEMPLATE}`, { proxyUrl: url(EGRESS_D) });
-    if (tpl.status !== 200) say(`D7 template update -> ${tpl.status} (non-fatal: recreate carries template snapshot) ${JSON.stringify(tpl.j).slice(0, 200)}`);
+    const tpl = await req('PUT', `/api/redroid/templates/${TEMPLATE_ID}`, { proxyUrl: url(EGRESS_D) });
+    if (tpl.status !== 200) throw new Error(`D7 template update -> ${tpl.status} ${JSON.stringify(tpl.j).slice(0, 200)}`);
     const del = await req('DELETE', `/api/devices/redroid/${vReset.id}`, { confirm: 'redroid-rdev-c1', removeData: false });
     if (del.status !== 200) throw new Error(`D7 delete c1 -> ${del.status} ${JSON.stringify(del.j).slice(0, 200)}`);
     const cr = await req('POST', '/api/devices/redroid', {
@@ -420,14 +529,17 @@ async function main() {
       reVerified: { state: egressOf(rec.v).state, observed: egressOf(rec.v).lastObservedIp, waitedMs: rec.waitedMs },
     };
     ev('d7-rotation.json', summary.items.D7);
-    say(`D7: rotated c1 -> ${EGRESS_B}; audit=${!!audHit} reVerified=${egressOf(rec.v).lastObservedIp}`);
+    say(`D7: rotated c1 -> ${EGRESS_D}; audit=${!!audHit} reVerified=${egressOf(rec.v).lastObservedIp}`);
   }
 
   // ================= D8: echo not configured -> never VERIFIED =================
   {
     ramOk();
+    // D8: blank the echo HOST (optInt fatals on an explicit "0" port —
+    // config.js hard-fails WA_W3_EGRESS_ECHO_PORT=0, live-discovered 2026-10-26).
+    // Port stays at the base 16491; egressEchoConfigured() = host!=='' && port>=1.
     const ov = `${EVID}/d8-echo-off.env`;
-    fs.writeFileSync(ov, 'WA_W3_EGRESS_ECHO_HOST=""\nWA_W3_EGRESS_ECHO_PORT=0\n');
+    fs.writeFileSync(ov, 'WA_W3_EGRESS_ECHO_HOST=""\n');
     // c3 -> .50 (free again: c1 rotated to .54 in D7; c2 holds .51)
     const b3 = await req('PUT', `/api/identities/${C3}/egress`, { proxyUrl: url(EGRESS_A), expectedEgressIp: EGRESS_A });
     if (b3.status !== 200) throw new Error(`D8 c3 binding -> ${b3.status} ${JSON.stringify(b3.j).slice(0, 300)}`);
