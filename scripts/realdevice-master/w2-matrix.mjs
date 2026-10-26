@@ -475,55 +475,92 @@ async function main() {
     await restartApi({});
   }
 
-  // A5 — offscreen tap (swipe list, then tap element no longer on screen)
+  // A5 — stale-selector safety (offscreen/stale tap must NOT blind-tap).
+  // (relay leg-2 redesign, live 2026-10-27 runs 5-6 + probes): the original
+  // design (scroll a list, tap the scrolled-away row) assumed a scrollable
+  // list with offscreen-bounds retention in fresh dumps. This redroid image
+  // has neither: markor first-launch = intro screen (no list), launcher
+  // drawer = 11 apps fitting the viewport (scroll is a no-op, probe run5/6),
+  // settings rows carry no direct text, and ZERO offscreen-bounds nodes were
+  // observed in ANY fresh dump (4 probes). The security property is identical
+  // and MORE strictly testable across a screen transition: a selector from
+  // screen A must NOT tap blind on screen B (probe: stale drawer icon tapped
+  // on Settings → 404 UIA_ELEMENT_NOT_FOUND, zero blind taps).
   {
-    // ensure we are on markor home (list)
-    await fg(DEV1);
-    const d0 = await dump(DEV1);
-    const row = pick(d0.j.nodes ?? [], (n) => n.clickable && (n.text || n.contentDesc));
-    const rowSel = row ? (row.text ? { text: row.text } : { contentDesc: row.contentDesc }) : null;
-    // trigger: scroll list up (device-side, ADR-prescribed trigger)
     const serial = `127.0.0.1:${DEVICES[DEV1].adbPort}`;
-    adb(serial, 'shell', 'input', 'swipe', '360', '1100', '360', '300');
+    adb(serial, 'shell', 'input', 'keyevent', '3'); // HOME
+    await new Promise((r) => setTimeout(r, 800));
+    adb(serial, 'shell', 'input', 'swipe', '360', '1150', '360', '400', '300'); // open app drawer
     await new Promise((r) => setTimeout(r, 1500));
+    const d0 = await dump(DEV1);
+    const icons = (d0.j.nodes ?? []).filter((n) => n.clickable && n.contentDesc && n.resourceId === 'com.android.launcher3:id/icon')
+      .sort((a, b) => a.bounds.y1 - b.bounds.y1);
+    if (!icons.length) throw new Error('A5 precondition: no drawer icons found (unexpected launcher state)');
+    const staleSel = { contentDesc: icons[0].contentDesc };
+    const staleCenter = { x: Math.floor((icons[0].bounds.x1 + icons[0].bounds.x2) / 2), y: Math.floor((icons[0].bounds.y1 + icons[0].bounds.y2) / 2) };
+    // navigate to a screen where that icon does not exist (component form —
+    // `am start -a android.settings.SETTINGS` silently no-ops on this image)
+    adb(serial, 'shell', 'am', 'start', '-n', 'com.android.settings/.Settings');
+    await new Promise((r) => setTimeout(r, 2500));
     const d1 = await dump(DEV1);
-    const nodes1 = d1.j.nodes ?? [];
-    // look for any node whose bounds lie offscreen (fresh dump retains recycled bounds?)
-    const off = pick(nodes1, (n) => n.bounds && (n.bounds.y2 < 0 || n.bounds.y1 >= 1280 || n.bounds.x2 < 0 || n.bounds.x1 >= 720));
-    let t = null;
-    let observed;
-    if (off) {
-      t = await tap(DEV1, off.contentDesc ? { contentDesc: off.contentDesc } : off.text ? { text: off.text } : { resourceId: off.resourceId });
-      observed = `offscreen-node-tap: http=${t.status} code=${t.j.code ?? t.j.error?.code}`;
-    } else if (rowSel) {
-      // row may simply be gone from fresh dump → NOT_FOUND (also a safe no-tap)
-      t = await tap(DEV1, rowSel);
-      observed = `stale-row-tap: http=${t.status} code=${t.j.code ?? t.j.error?.code} (fresh dump excludes scrolled row)`;
+    const stillPresent = (d1.j.nodes ?? []).some((n) => n.contentDesc === staleSel.contentDesc);
+    // best-effort 422 OFFSCREEN path: any offscreen-bounds node in the fresh dump?
+    const offNode = pick(d1.j.nodes ?? [], (n) => n.bounds && (n.bounds.y2 < 0 || n.bounds.y1 >= 1280 || n.bounds.x2 < 0 || n.bounds.x1 >= 720));
+    let offResult = null;
+    if (offNode) {
+      const ot = await tap(DEV1, offNode.contentDesc ? { contentDesc: offNode.contentDesc } : offNode.text ? { text: offNode.text } : { resourceId: offNode.resourceId });
+      offResult = { http: ot.status, code: ot.j.code ?? ot.j.error?.code };
     }
-    ev('A5-offscreen-tap', { offscreenNodeFound: !!off, rowSel, observed, offNode: off ?? null },
-      t !== null && [404, 422].includes(t.status));
+    const t = await tap(DEV1, staleSel);
+    const blindTapAtStaleCoords = t.status === 200 && t.j.x === staleCenter.x && t.j.y === staleCenter.y;
+    ev('A5-offscreen-tap', {
+      staleIcon: staleSel.contentDesc, staleCenter, stillPresentAfterNavigate: stillPresent,
+      offscreenNodeInFreshDump: offNode ? { contentDesc: offNode.contentDesc ?? null, text: offNode.text ?? null, bounds: offNode.bounds } : null,
+      offscreenTap: offResult, // null on this image: 422 path unit-tested, not exercisable live (no offscreen-bounds nodes exist here)
+      staleTap: { http: t.status, code: t.j.code ?? t.j.error?.code, x: t.j.x, y: t.j.y }, blindTapAtStaleCoords,
+    }, !blindTapAtStaleCoords && [404, 422].includes(t.status));
+    adb(serial, 'shell', 'input', 'keyevent', '3'); // HOME (restore)
   }
 
-  // A6 — rotation race (dump portrait → rotate → immediate tap with portrait selector)
+  // A6 — rotation race (dump portrait → rotate → immediate tap with portrait selector).
+  // (relay leg-2, live probe 2026-10-27): redroid fixed-geometry virtual display —
+  // runtime rotation is NOT supported (probe: `wm size override 1280x720` AND
+  // keyevent 24 both leave "Physical size: 720x1280"). The race is therefore NOT
+  // EXERCISABLE on real redroid; recorded as an expected environment limitation
+  // (pattern: E1) with probe evidence — not a product failure. Rotation logic
+  // remains unit-tested. On a rotatable display the original design still runs.
   {
-    setOrientation(DEV1, true);
+    const serial = `127.0.0.1:${DEVICES[DEV1].adbPort}`;
+    const before = adb(serial, 'shell', 'wm', 'size');
+    adb(serial, 'shell', 'wm', 'size', 'override', '1280', '720');
     await new Promise((r) => setTimeout(r, 1500));
-    const dP = await dump(DEV1);
-    const node = pick(dP.j.nodes ?? [], (n) => n.clickable && (n.text || n.contentDesc));
-    if (!node) throw new Error('A6: no portrait node found');
-    const sel = node.text ? { text: node.text } : { contentDesc: node.contentDesc };
-    const portraitCenter = { x: Math.floor((node.bounds.x1 + node.bounds.x2) / 2), y: Math.floor((node.bounds.y1 + node.bounds.y2) / 2) };
-    // rotate to landscape, then IMMEDIATELY tap with the portrait-dump selector
-    setOrientation(DEV1, false);
-    const t = await tap(DEV1, sel);
-    const f = await fg(DEV1);
-    const blindStale = t.status === 200 && t.j.x === portraitCenter.x && t.j.y === portraitCenter.y;
-    ev('A6-rotation-race', {
-      portraitCenter, tap: { http: t.status, code: t.j.code ?? t.j.error?.code, x: t.j.x, y: t.j.y },
-      foreground: f.j, blindStaleTap: blindStale,
-    }, t.status === 200 ? !blindStale : [404, 422].includes(t.status));
-    setOrientation(DEV1, true);
-    await new Promise((r) => setTimeout(r, 1000));
+    const afterOverride = adb(serial, 'shell', 'wm', 'size');
+    adb(serial, 'shell', 'wm', 'size', 'reset');
+    const rotationSupported = before !== afterOverride;
+    if (rotationSupported) {
+      setOrientation(DEV1, true);
+      await new Promise((r) => setTimeout(r, 1500));
+      const dP = await dump(DEV1);
+      const node = pick(dP.j.nodes ?? [], (n) => n.clickable && (n.text || n.contentDesc));
+      if (!node) throw new Error('A6: no portrait node found');
+      const sel = node.text ? { text: node.text } : { contentDesc: node.contentDesc };
+      const portraitCenter = { x: Math.floor((node.bounds.x1 + node.bounds.x2) / 2), y: Math.floor((node.bounds.y1 + node.bounds.y2) / 2) };
+      setOrientation(DEV1, false);
+      const t = await tap(DEV1, sel);
+      const f = await fg(DEV1);
+      const blindStale = t.status === 200 && t.j.x === portraitCenter.x && t.j.y === portraitCenter.y;
+      ev('A6-rotation-race', {
+        rotationSupported, portraitCenter, tap: { http: t.status, code: t.j.code ?? t.j.error?.code, x: t.j.x, y: t.j.y },
+        foreground: f.j, blindStaleTap: blindStale,
+      }, t.status === 200 ? !blindStale : [404, 422].includes(t.status));
+      setOrientation(DEV1, true);
+      await new Promise((r) => setTimeout(r, 1000));
+    } else {
+      ev('A6-rotation-race', {
+        rotationSupported, probe: { before, afterOverride },
+        note: 'redroid fixed-geometry display: runtime rotation unsupported (wm size override + keyevent 24 both no-op) — race NOT EXERCISABLE on real device; expected env limitation (pattern E1); rotation logic unit-tested',
+      }, false, { expected: true });
+    }
   }
 
   // A7 — corrupt-APK battery (4 files: text / 0-byte / truncated / zip-magic+garbage)
@@ -563,6 +600,12 @@ async function main() {
     const d = await dump(DEV1);
     sh(`docker start ${DEV1}`);
     await new Promise((r) => setTimeout(r, 15000));
+    // Operator-surface precondition (pattern: pre-E2 connect): after the
+    // container restart the TCP adb serial is offline to the host adb server
+    // (W1 finding #2 — no platform connect path). The recovery assertion
+    // (g2=200) tests the platform's post-up behavior, not the adb server's
+    // reconnect timing — so the harness restores the operator connection.
+    adbConnect(`127.0.0.1:${DEVICES[DEV1].adbPort}`);
     const rf2 = await req('POST', `/api/devices/redroid/${DEVICES[DEV1].id}/refresh`);
     await new Promise((r) => setTimeout(r, 5000));
     const g2 = await req('GET', `/api/devices/redroid/${DEVICES[DEV1].id}/apps`);
