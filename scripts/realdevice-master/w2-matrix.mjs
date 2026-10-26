@@ -139,13 +139,13 @@ async function bootGate(name) {
   }
 }
 
-async function resolveDevices() {
+async function resolveDevices({ required = true } = {}) {
   const r = await req('GET', '/api/devices/redroid');
   DEVICES = {};
   for (const d of r.j.devices ?? []) {
     if (d.name === DEV1 || d.name === DEV2) DEVICES[d.name] = { id: d.id, adbPort: d.adbPort };
   }
-  if (!DEVICES[DEV1] || !DEVICES[DEV2]) throw new Error('w1/w2 devices not found in API list');
+  if (required && (!DEVICES[DEV1] || !DEVICES[DEV2])) throw new Error('w1/w2 devices not found in API list');
 }
 
 function pmList(dev) {
@@ -169,7 +169,7 @@ const pick = (nodes, pred) => (nodes ?? []).find(pred) ?? null;
 
 /** create w1/w2 if missing (idempotent), then wait for both online (budget 30 min) */
 async function ensureDevices() {
-  await resolveDevices();
+  await resolveDevices({ required: false }); // lenient: fresh fleet has neither yet
   for (const name of [DEV1, DEV2]) {
     if (!DEVICES[name]) {
       const r = await req('POST', '/api/devices/redroid', {
