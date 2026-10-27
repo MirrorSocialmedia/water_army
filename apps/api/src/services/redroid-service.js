@@ -27,6 +27,7 @@ import { DOCKER_ERROR, encryptSecret, decryptSecret, resolveProviderKey, buildRo
 
 import { DockerServiceError, classifyDockerError } from './docker-service.js';
 import { GOST_HOST_BIND, deviceNetwork, withDeviceNetwork, ensureDeviceNetwork } from './device-network.js';
+import { randomUUID } from 'node:crypto';
 import { checkPortAvailable, } from './preflight.js';
 import { createAdbWhitelist } from './adb-whitelist.js';
 import {
@@ -2081,6 +2082,28 @@ export function createRedroidService({
     const dataRoot = path.resolve(config?.redroidDataRoot ?? '/var/lib/water-army/redroid');
     const dataDir = path.join(dataRoot, name);
 
+    // T2 (ADR-029): EXPLICIT identity↔dataDir ownership contract. Pre-T2 the
+    // reuse was an implicit side effect (dataDir = dataRoot/<name>; delete
+    // keeps the dir unless removeData → same-name re-create silently inherited
+    // the old /data). Now a bound identity OWNS its dir via a DB claim:
+    //  - a DIFFERENT identity claiming this dir → 409 fail-closed (cross-
+    //    contamination is the exact failure T2 exists to prevent);
+    //  - the SAME identity re-claiming (stop → remove → rebuild flow) → the
+    //    retained /data is the POINT — allowed, claim refreshed below;
+    //  - an identity that already owns a DIFFERENT dir → 409 (one identity,
+    //    one data home — split-brain device names fail closed).
+    // Unbound devices never touch claims (today's behaviour, byte-identical).
+    if (identityIdForDevice && db.identityDataDirClaim) {
+      const dirClaim = await db.identityDataDirClaim.findUnique({ where: { dataDir } }).catch(() => null);
+      if (dirClaim && dirClaim.identityId !== identityIdForDevice) {
+        throw fail('DATA_DIR_CLAIM_CONFLICT', 409, `data dir '${name}' is owned by another identity (${String(dirClaim.identityId).slice(0, 8)}…) — /data from a different identity must not be inherited (pass removeData=true on delete, or use a new device name)`);
+      }
+      const ownClaim = await db.identityDataDirClaim.findUnique({ where: { identityId: identityIdForDevice } }).catch(() => null);
+      if (ownClaim && ownClaim.dataDir !== dataDir) {
+        throw fail('DATA_DIR_CLAIM_CONFLICT', 409, `identity already owns data dir '${String(ownClaim.dataDir).split('/').pop()}' — one identity, one data home (rename does not migrate data)`);
+      }
+    }
+
     // RAM-G1: host-RAM admission — BEFORE any side effect (no data dir, no
     // DB row, no docker create on a denial). The lease lives until the
     // device stops (the RAM is held for the device's lifetime).
@@ -2177,6 +2200,31 @@ export function createRedroidService({
             if (String(err?.message ?? '').includes('adbPort') && attempt < portAttempts) continue;
             if (String(err?.message ?? '').includes('gostPort') && attempt < portAttempts) continue;
             throw err;
+          }
+          throw err;
+        }
+      }
+
+      // T2 (ADR-029): stamp the identity↔dataDir ownership claim NOW (the DB
+      // row exists; the docker create may still fail → rollback releases).
+      // Pre-check above already proved there is no conflict (the TOCTOU race
+      // lands on the DB-unique guards → P2002 → 409, never silent adoption).
+      if (identityIdForDevice && db.identityDataDirClaim) {
+        try {
+          const existingClaim = await db.identityDataDirClaim.findUnique({ where: { dataDir } });
+          if (existingClaim) {
+            if (existingClaim.identityId !== identityIdForDevice) throw Object.assign(new Error('claim raced'), { code: 'P2002' });
+            if (existingClaim.deviceName !== name) {
+              await db.identityDataDirClaim.update({ where: { dataDir }, data: { deviceName: name } });
+            }
+          } else {
+            await db.identityDataDirClaim.create({
+              data: { id: randomUUID(), dataDir, identityId: identityIdForDevice, deviceName: name, createdAt: new Date(), updatedAt: new Date() },
+            });
+          }
+        } catch (err) {
+          if (err?.code === 'P2002') {
+            throw fail('DATA_DIR_CLAIM_CONFLICT', 409, `data dir '${name}' claim raced with another create — retry after inspecting the ownership state`);
           }
           throw err;
         }
@@ -2351,6 +2399,18 @@ export function createRedroidService({
       if (row) await db.device.delete({ where: { id: row.id } }).catch(() => {});
     } catch {
       /* best-effort */
+    }
+    // T2 (ADR-029): a create that rolls back AFTER stamping must not leave a
+    // claim on a dir that is being removed too (createdDir=true means the
+    // rollback deletes the dir — ownership goes with it). When the dir
+    // pre-existed (createdDir=false) the claim stays: it predates this create.
+    if (createdDir && row?.identityId && db.identityDataDirClaim) {
+      try {
+        const claim = await db.identityDataDirClaim.findUnique({ where: { dataDir } }).catch(() => null);
+        if (claim && claim.identityId === row.identityId) await db.identityDataDirClaim.delete({ where: { dataDir } }).catch(() => {});
+      } catch {
+        /* best-effort */
+      }
     }
     try {
       if (createdDir) await fs.promises.rm(dataDir, { recursive: true, force: true }).catch(() => {});
@@ -2543,6 +2603,23 @@ export function createRedroidService({
       dataRemoveErrorCode = r.code ?? null;
     }
 
+    // T2 (ADR-029): the dataDir ownership claim is released ONLY when the
+    // data is ACTUALLY gone (removeData=true + successful removal). A default
+    // delete keeps dir + claim — the same identity can rebuild and re-inherit
+    // its /data; a different identity still fails closed on the claim.
+    let claimReleased = false;
+    if (dataRemoved && db.identityDataDirClaim) {
+      try {
+        const claim = await db.identityDataDirClaim.findUnique({ where: { dataDir: row.dataDir } }).catch(() => null);
+        if (claim) {
+          await db.identityDataDirClaim.delete({ where: { dataDir: row.dataDir } }).catch(() => {});
+          claimReleased = true;
+        }
+      } catch {
+        /* best-effort — a stale claim is fail-CLOSED (blocks adoption), never silently permissive */
+      }
+    }
+
     let gostTeardown = null;
     if (row.gostPort) {
       gostTeardown = await teardownGost(row).catch((e) => ({ removed: false, error: String(e?.message ?? e).slice(0, 200) }));
@@ -2574,9 +2651,9 @@ export function createRedroidService({
       requestId: requestId ?? null,
       ip: ip ?? null,
       status: containerError ? 'failure' : 'success',
-      details: { name: row.name, adbPort: row.adbPort, containerRemoved, removeData: Boolean(removeData), dataRemoved, dataRemoveErrorCode, dataRemoveError: dataRemoveError ?? undefined, containerError: containerError ?? undefined, proxyTornDown: tunnelTeardown ?? undefined, gostRemoved: gostTeardown ?? undefined },
+      details: { name: row.name, adbPort: row.adbPort, containerRemoved, removeData: Boolean(removeData), dataRemoved, dataRemoveErrorCode, dataRemoveError: dataRemoveError ?? undefined, containerError: containerError ?? undefined, proxyTornDown: tunnelTeardown ?? undefined, gostRemoved: gostTeardown ?? undefined, claimReleased },
     });
-    return { deleted: true, name: row.name, containerRemoved, removeData: Boolean(removeData), dataRemoved, dataRemoveErrorCode, dataRemoveError: dataRemoveError ?? undefined, containerError: containerError ?? undefined, proxyTornDown: tunnelTeardown ?? undefined, gostRemoved: gostTeardown ?? undefined };
+    return { deleted: true, name: row.name, containerRemoved, removeData: Boolean(removeData), dataRemoved, dataRemoveErrorCode, dataRemoveError: dataRemoveError ?? undefined, containerError: containerError ?? undefined, proxyTornDown: tunnelTeardown ?? undefined, gostRemoved: gostTeardown ?? undefined, claimReleased };
   }
 
   /**

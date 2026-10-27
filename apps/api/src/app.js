@@ -47,6 +47,9 @@ import { redroidTemplateRoutes } from './routes/redroid-templates.js';
 import { redroidDeviceRoutes } from './routes/devices.js';
 import { identityFingerprintRoutes } from './routes/identity-fingerprints.js';
 import { identityEgressRoutes } from './routes/identity-egress.js';
+import { identityLoginRoutes } from './routes/identity-login.js';
+import { createLoginStateService } from './services/login-state-service.js';
+import { createIdentityProvisionService } from './services/identity-provision-service.js';
 import { deviceAppRoutes } from './routes/device-apps.js';
 import { taskRoutes } from './routes/tasks.js';
 import { batchRoutes } from './routes/batches.js';
@@ -282,6 +285,21 @@ export async function buildApp(opts = {}) {
   // template generator for NEW rows (existing rows are generator-sticky).
   const fingerprintService = createFingerprintService({ db, log: app.log, templateProfiles: config?.redroidTemplateProfilesEnabled === true });
 
+  // T2 (ADR-029): identity login-state machine + provisioning. Conditional
+  // wiring (W3 discipline): a db WITHOUT the T2 tables keeps buildApp alive —
+  // the routes fail closed 503 LOGIN_STATE_DISABLED. The machine is manual-
+  // only: this service is imported by NO worker/queue path (grep-enforced).
+  const hasLoginSurface = Boolean(db?.identityLoginAudit && typeof db.identityLoginAudit.findMany === 'function');
+  const loginStateService = hasLoginSurface
+    ? createLoginStateService({ db, log: app.log, audit })
+    : null;
+  const identityProvisionService = hasLoginSurface && db?.identityEgress
+    ? createIdentityProvisionService({ db, config, log: app.log, audit, fingerprintService })
+    : null;
+  if (hasLoginSurface) {
+    app.log.info('identity login-state service ON — T2 (ADR-029) manual login machine + provisioning');
+  }
+
   // W3 (ADR-027): identity egress binding service. Conditional wiring (same
   // contract as intervention/stream): a db WITHOUT the identity_egress_bindings
   // table (partial test fakes / pre-migration schemas) keeps buildApp alive —
@@ -450,6 +468,8 @@ export async function buildApp(opts = {}) {
   app.decorate('redroidService', redroidService);
   app.decorate('fingerprintService', fingerprintService);
   app.decorate('identityEgressService', identityEgressService);
+  app.decorate('loginStateService', loginStateService);
+  app.decorate('identityProvisionService', identityProvisionService);
   app.decorate('appService', appService);
   app.decorate('ramGateService', ramGateService);
   app.decorate('streamLeaseService', streamLeaseService);
@@ -589,6 +609,7 @@ export async function buildApp(opts = {}) {
   redroidDeviceRoutes(app);
   identityFingerprintRoutes(app);
   identityEgressRoutes(app);
+  identityLoginRoutes(app);
   deviceAppRoutes(app);
   taskRoutes(app, { taskQueue });
   batchRoutes(app);

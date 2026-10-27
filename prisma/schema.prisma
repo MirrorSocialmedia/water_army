@@ -419,6 +419,17 @@ model Identity {
   identityType String   @map("identity_type") // registry allowlist: qa_device | staging_user
   status       String   @default("READY") // DISABLED|READY|RESERVED|RUNNING|CANCELLING|COMPLETED|RETRY_WAIT|RECOVERING|FAILED_FINAL|CANCELLED|SKIPPED
   dataPath     String   @unique @map("data_path") // canonical host dir, UNIQUE = no two identities share a writable path (MD §4.1)
+  // T2 (ADR-029): identity-level LOGIN state — the human-confirmed truth about
+  // whether this account is logged in on its device. Written ONLY via the
+  // audited login-state-service transition path. NEVER inferred automatically
+  // (CONFIRMED_LOGGED_IN requires an operator+ click — an app can lie, only a
+  // human asserts the truth). Additive column, default = awaiting login.
+  //   PENDING_LOGIN      待登入 (initial state)
+  //   CONFIRMED_LOGGED_IN 使用者已確認登入 (manual operator+ assertion)
+  //   RELOGIN_REQUIRED   需重新驗證 (credential challenged / 2FA / expiry seen)
+  //   LOGGED_OUT         已登出 (explicit manual logout)
+  loginState      String    @default("PENDING_LOGIN") @map("login_state")
+  loginStateSince DateTime? @map("login_state_since")
   metadataJson Json     @default("{}") @map("metadata_json")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
@@ -430,10 +441,58 @@ model Identity {
   devices            Device[]        @relation("DeviceIdentity")
   // W3 (ADR-027): 1:1 pinned egress binding (proxy + expected egress IP).
   egressBinding IdentityEgress?
+  // T2 (ADR-029): login-state transition audit trail + dataDir ownership claim.
+  loginAudits     IdentityLoginAudit[]
+  dataDirClaim    IdentityDataDirClaim?
 
   @@index([status])
   @@index([identityType])
+  @@index([loginState])
   @@map("identities")
+}
+
+// ------------------------------------------- identity login audits (T2, ADR-029)
+// One row per login-state transition (who / when / evidence). The audit trail
+// is the accountability anchor: CONFIRMED_LOGGED_IN is only ever written by a
+// human click (operator+), and this table proves it. evidenceJson carries the
+// operator's free-form note ONLY (scrubbed, length-capped) — never
+// passwords/cookies/tokens (MD §9.1 rule inherited).
+model IdentityLoginAudit {
+  id           String   @id @default(uuid()) @db.Uuid
+  identityId   String   @map("identity_id") @db.Uuid
+  fromState    String   @map("from_state")
+  toState      String   @map("to_state")
+  actorUserId  String?  @map("actor_user_id") @db.Uuid // human actor — transition route always supplies one (RBAC operator+)
+  evidenceJson Json     @default("{}") @map("evidence_json")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  identity Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+
+  @@index([identityId, createdAt])
+  @@map("identity_login_audits")
+}
+
+// --------------------------------------- identity ↔ dataDir ownership (T2, ADR-029)
+// The EXPLICIT ownership contract that replaces the pre-T2 implicit side
+// effect (dataDir = dataRoot/<device-name>; deleteDevice keeps the dir unless
+// removeData=true → recreating a same-name device silently inherited the old
+// /data). The claim is stamped at device create WHEN an identity is bound and
+// released ONLY when the data is actually removed (removeData=true and the
+// removal succeeded). A bound re-create must match the claim — a different
+// identity trying to inherit someone else's /data fails closed 409
+// DATA_DIR_CLAIM_CONFLICT (identity data cross-contamination is the exact
+// failure T2 exists to prevent).
+model IdentityDataDirClaim {
+  id         String   @id @default(uuid()) @db.Uuid
+  dataDir    String   @unique @map("data_dir") // the host dir this claim covers
+  identityId String   @unique @map("identity_id") @db.Uuid // 1 identity ↔ 1 claimed dir (identity.dataPath mirror)
+  deviceName String   @map("device_name") // last device that created/stamped the dir (convention: name = externalRef)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  identity Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+
+  @@map("identity_data_dir_claims")
 }
 
 // ------------------------------------------------- identity fingerprints (W1)
