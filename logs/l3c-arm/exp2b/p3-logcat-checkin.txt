@@ -1,0 +1,4 @@
+10-27 13:48:43.695  1276  5103 I ActivityManager: Broadcasting: Intent { act=com.google.android.checkin.CHECKIN_NOW flg=0x400000 pkg=com.google.android.gsf }
+10-27 13:48:43.696  1276  5103 I ActivityManager: Enqueued broadcast Intent { act=com.google.android.checkin.CHECKIN_NOW flg=0x400000 pkg=com.google.android.gsf }: 0
+10-27 13:48:44.215  5492  5492 I Safeboot: Checking safeboot...
+10-27 13:48:44.243  5492  5522 I ProcessStableCheckInFix: Running fixer!

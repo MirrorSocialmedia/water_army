@@ -1,0 +1,5 @@
+# generate_204 proxy proof 2026-10-27T13:56:28Z
+direct: curl: (28) Connection timed out after 8002 milliseconds
+000
+host-via-mihomo-7897: 204
+device-path-via-gost-18443: 204

@@ -1,0 +1,316 @@
+--------- beginning of system
+10-27 14:18:55.808   246  2262 I ActivityManager: Force stopping com.google.android.gms appid=10059 user=0: from pid 4309
+10-27 14:18:55.808   246  2262 E ActivityManager: Unable to freeze binder for 1659: java.lang.RuntimeException: Unable to freeze/unfreeze binder
+10-27 14:18:55.808   246  2262 E ActivityManager: Unable to freeze binder for 2324: java.lang.RuntimeException: Unable to freeze/unfreeze binder
+10-27 14:18:55.809   246  2262 E ActivityManager: Unable to freeze binder for 1686: java.lang.RuntimeException: Unable to freeze/unfreeze binder
+10-27 14:18:55.809   246  2262 I ActivityManager: Killing 1659:com.google.android.gms.persistent/u0a59 (adj 100): stop com.google.android.gms due to from pid 4309
+10-27 14:18:55.809   246   246 D PackageManager: Disconnected from instant app resolver
+--------- beginning of main
+10-27 14:18:55.809   246   265 I ServiceWatcher: [HardwareActivityRecognitionProxy] disconnected from 10059/com.google.android.gms/com.google.android.location.internal.server.HardwareArProviderService@1
+10-27 14:18:55.809   246   265 W ServiceWatcher: [HardwareActivityRecognitionProxy] 10059/com.google.android.gms/com.google.android.location.internal.server.HardwareArProviderService@1 died
+10-27 14:18:55.809   246   265 I ServiceWatcher: [GeocoderProxy] disconnected from 10059/com.google.android.gms/.location.geocode.GeocodeService@2
+10-27 14:18:55.809   246  2262 I ActivityManager: Killing 2324:com.google.android.gms.unstable/u0a59 (adj 100): stop com.google.android.gms due to from pid 4309
+10-27 14:18:55.809   246   265 W ServiceWatcher: [GeocoderProxy] 10059/com.google.android.gms/.location.geocode.GeocodeService@2 died
+10-27 14:18:55.809   246   265 I ServiceWatcher: [fused] disconnected from 10059/com.google.android.gms/com.google.android.location.fused.FusedLocationService@1
+10-27 14:18:55.809   246   265 W ServiceWatcher: [fused] 10059/com.google.android.gms/com.google.android.location.fused.FusedLocationService@1 died
+10-27 14:18:55.809   246   265 I ServiceWatcher: [network] disconnected from 10059/com.google.android.gms/com.google.android.location.network.NetworkLocationService@2
+10-27 14:18:55.809   246   265 W ServiceWatcher: [network] 10059/com.google.android.gms/com.google.android.location.network.NetworkLocationService@2 died
+10-27 14:18:55.809   246  2262 I ActivityManager: Killing 1686:com.google.android.gms/u0a59 (adj 905): stop com.google.android.gms due to from pid 4309
+10-27 14:18:55.809   246  2262 I ActivityManager:   Force stopping service ServiceRecord{8724a1c u0 com.google.android.gms/com.google.android.location.internal.server.GoogleLocationService}
+10-27 14:18:55.810   246   307 D CompatibilityChangeReporter: Compat change id reported: 265195908; UID 10059; state: ENABLED
+10-27 14:18:55.810  1382  1382 D CarrierSvcBindHelper: onHandleForceStop: [com.google.android.gms]
+10-27 14:18:55.810  1382  1382 D CarrierSvcBindHelper: No carrier app for: 0
+10-27 14:18:55.812  2220  2220 I BgTaskExecutorImpl: Starting EXCLUSIVE background task UPLOAD_ASSISTANT_DEVICE_SETTINGS.
+10-27 14:18:55.812  2931  2931 I Finsky  : [2] rrt.onStartJob(4): SCH: job service start with id 9015.
+10-27 14:18:55.813  2220  4313 I NetworkRecognitionRnr: Using pair HTTP connection
+10-27 14:18:55.813  2220  3695 W LocationOracle: getBestLocation(): no location is available
+10-27 14:18:55.813  2220  3696 I A       : [Upload] Connected
+10-27 14:18:55.813   246  1232 W ActivityManager: ProcessRecord{8ada124 0:com.google.android.gms.persistent/u0a59} is attached to a previous process 1659
+10-27 14:18:55.814  2220  2315 W CronetNetworkRqstWrppr: Upload request without a content type.
+10-27 14:18:55.814   246  1232 D CompatibilityChangeReporter: Compat change id reported: 135634846; UID 10059; state: DISABLED
+10-27 14:18:55.814  2931  4314 I Finsky  : [131] rqi.a(92): SCH: Satisfied jobs for 9015 are: 1-1337
+10-27 14:18:55.814  2931  4315 I Finsky  : [132] rhu.accept(27): SCH: Job 1-1337 starting
+10-27 14:18:55.814   246  1232 V ActivityManager: Got obituary of 2324:com.google.android.gms.unstable
+10-27 14:18:55.814  2931  2931 I Finsky  : [2] RoutineHygieneCoreJob.v(29): DailyHygiene holdoff continue
+10-27 14:18:55.814   172   172 I Zygote  : Process 2324 exited due to signal 9 (Killed)
+10-27 14:18:55.814  2931  2931 I Finsky  : [2] rqb.r(4): SCH: jobFinished: 1-1337. TimeElapsed: 0ms.
+10-27 14:18:55.816  2931  2931 W Finsky  : [2] rqv.j(2): SCH: Controller has no job when job 1-1337 checks state.
+10-27 14:18:55.817   246  2262 V ActivityManager: Got obituary of 1686:com.google.android.gms
+10-27 14:18:55.817   246  1172 V ActivityManager: Got obituary of 1659:com.google.android.gms.persistent
+10-27 14:18:55.817   246   275 D CompatibilityChangeReporter: Compat change id reported: 143937733; UID 10059; state: ENABLED
+10-27 14:18:55.818   172   172 I Zygote  : Process 1659 exited due to signal 9 (Killed)
+10-27 14:18:55.818  2931  2983 I Finsky  : [53] rpx.a(2): SCH: no pending jobs to schedule.
+10-27 14:18:55.818  2931  4315 I Finsky  : [132] rrt.a(16): SCH: job service finished with id 9015.
+10-27 14:18:55.818   246  1032 D ConnectivityService: releasing NetworkRequest [ REQUEST id=64, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VCN_MANAGED Uid: 10059 RequestorUid: 10059 RequestorPkg: com.google.android.gms UnderlyingNetworks: Null] ] (release request)
+10-27 14:18:55.818   172   172 I Zygote  : Process 1686 exited due to signal 9 (Killed)
+10-27 14:18:55.818   246  1031 D EthernetNetworkFactory: eth0: onNetworkUnneeded for request: NetworkRequest [ REQUEST id=64, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VCN_MANAGED Uid: 10059 RequestorUid: 10059 RequestorPkg: com.google.android.gms UnderlyingNetworks: Null] ]
+10-27 14:18:55.820   172   172 D Zygote  : Forked child process 4326
+10-27 14:18:55.820   246   275 I ActivityManager: Start proc 4326:com.google.android.gms.persistent/u0a59 for service {com.google.android.gms/com.google.android.location.internal.GoogleLocationManagerService}
+10-27 14:18:55.829  4326  4326 I Zygote  : seccomp disabled by setenforce 0
+10-27 14:18:55.830  4326  4326 I .gms.persistent: Using CollectorTypeCC GC.
+10-27 14:18:55.830  4326  4326 W .gms.persistent: Unexpected CPU variant for x86: x86_64.
+10-27 14:18:55.830  4326  4326 W .gms.persistent: Known variants: atom, sandybridge, silvermont, goldmont, goldmont-plus, tremont, kabylake, default
+10-27 14:18:55.830  4326  4326 E .gms.persistent: Not starting debugger since process cannot load the jdwp agent.
+10-27 14:18:55.832   246  4166 D CompatibilityChangeReporter: Compat change id reported: 168419799; UID 10059; state: DISABLED
+10-27 14:18:55.832   246  4166 D CompatibilityChangeReporter: Compat change id reported: 273564678; UID 10059; state: DISABLED
+10-27 14:18:55.832  4326  4326 D CompatibilityChangeReporter: Compat change id reported: 171979766; UID 10059; state: ENABLED
+10-27 14:18:55.832  4326  4326 D CompatibilityChangeReporter: Compat change id reported: 242716250; UID 10059; state: DISABLED
+10-27 14:18:55.833   246  4166 D CompatibilityChangeReporter: Compat change id reported: 170503758; UID 10059; state: ENABLED
+10-27 14:18:55.833  4326  4326 D nativeloader: Configuring clns-4 for other apk /system/framework/org.apache.http.legacy.jar. target_sdk_version=33, uses_libraries=ALL, library_path=/system/product/priv-app/GmsCore/lib/x86_64:/system/product/priv-app/GmsCore/GmsCore.apk!/lib/x86_64, permitted_path=/data:/mnt/expand:/data/user/0/com.google.android.gms
+10-27 14:18:55.834  4326  4326 D nativeloader: Configuring clns-5 for other apk /system/framework/com.android.media.remotedisplay.jar. target_sdk_version=33, uses_libraries=ALL, library_path=/system/product/priv-app/GmsCore/lib/x86_64:/system/product/priv-app/GmsCore/GmsCore.apk!/lib/x86_64, permitted_path=/data:/mnt/expand:/data/user/0/com.google.android.gms
+10-27 14:18:55.834  4326  4326 D nativeloader: Configuring clns-6 for other apk /system/framework/com.android.location.provider.jar. target_sdk_version=33, uses_libraries=ALL, library_path=/system/product/priv-app/GmsCore/lib/x86_64:/system/product/priv-app/GmsCore/GmsCore.apk!/lib/x86_64, permitted_path=/data:/mnt/expand:/data/user/0/com.google.android.gms
+10-27 14:18:55.835  4326  4326 D nativeloader: InitLlndkLibrariesProduct: libEGL.so:libGLESv1_CM.so:libGLESv2.so:libGLESv3.so:libRS.so:libandroid_net.so:libbinder_ndk.so:libc.so:libcgrouprc.so:libclang_rt.asan-i686-android.so:libclang_rt.asan-x86_64-android.so:libcom.android.tethering.connectivity_native.so:libdl.so:libft2.so:liblog.so:libm.so:libmediandk.so:libnativewindow.so:libneuralnetworks.so:libselinux.so:libsync.so:libvndksupport.so:libvulkan.so
+10-27 14:18:55.835  4326  4326 D nativeloader: Configuring product-clns-7 for unbundled product apk /system/product/priv-app/GmsCore/GmsCore.apk. target_sdk_version=33, uses_libraries=, library_path=/system/product/priv-app/GmsCore/lib/x86_64:/system/product/priv-app/GmsCore/GmsCore.apk!/lib/x86_64:/product/lib64:/system/product/lib64, permitted_path=/data:/mnt/expand:/data/user/0/com.google.android.gms:/product/lib64:/system/product/lib64
+10-27 14:18:55.835  4326  4326 D nativeloader: InitVndkspLibrariesProduct: android.hardware.common-V2-ndk.so:android.hardware.common.fmq-V1-ndk.so:android.hardware.graphics.allocator-V2-ndk.so:android.hardware.graphics.common-V4-ndk.so:android.hardware.graphics.common@1.0.so:android.hardware.graphics.common@1.1.so:android.hardware.graphics.common@1.2.so:android.hardware.graphics.composer3-V1-ndk.so:android.hardware.graphics.mapper@2.0.so:android.hardware.graphics.mapper@2.1.so:android.hardware.graphics.mapper@3.0.so:android.hardware.graphics.mapper@4.0.so:android.hardware.renderscript@1.0.so:android.hidl.memory.token@1.0.so:android.hidl.memory@1.0-impl.so:android.hidl.memory@1.0.so:android.hidl.safe_union@1.0.so:libRSCpuRef.so:libRSDriver.so:libRS_internal.so:libbase.so:libbcinfo.so:libblas.so:libc++.so:libcompiler_rt.so:libcutils.so:libdmabufheap.so:libgralloctypes.so:libhardware.so:libhidlbase.so:libhidlmemory.so:libion.so:libjsoncpp.so:liblzma.so:libprocessgroup.so:libunwindstack.so:libutils.so:libutilscallstack.so:libz.so
+10-27 14:18:55.837  4326  4326 V GraphicsEnvironment: Currently set values for:
+10-27 14:18:55.837  4326  4326 V GraphicsEnvironment:   angle_gl_driver_selection_pkgs=[]
+10-27 14:18:55.837  4326  4326 V GraphicsEnvironment:   angle_gl_driver_selection_values=[]
+10-27 14:18:55.837  4326  4326 V GraphicsEnvironment: ANGLE GameManagerService for com.google.android.gms: false
+10-27 14:18:55.837  4326  4326 V GraphicsEnvironment: com.google.android.gms is not listed in per-application setting
+10-27 14:18:55.837  4326  4326 V GraphicsEnvironment: Neither updatable production driver nor prerelease driver is supported.
+10-27 14:18:55.841  4326  4326 I Safeboot: Checking safeboot...
+10-27 14:18:55.843  4326  4326 I DynamiteModule: Considering local module com.google.android.gms.permissions:1 and remote module com.google.android.gms.permissions:1
+10-27 14:18:55.843  4326  4326 I DynamiteModule: Selected local version of com.google.android.gms.permissions
+10-27 14:18:55.844  4326  4326 W ProviderHelper: Unknown dynamite feature providerinstaller.dynamite
+10-27 14:18:55.844  4326  4326 I DynamiteModule: Considering local module com.google.android.gms.providerinstaller.dynamite:1 and remote module com.google.android.gms.providerinstaller.dynamite:0
+10-27 14:18:55.844  4326  4326 I DynamiteModule: Selected local version of com.google.android.gms.providerinstaller.dynamite
+10-27 14:18:55.845  4326  4326 V NativeCrypto: Registering com/google/android/gms/org/conscrypt/NativeCrypto's 295 native methods...
+10-27 14:18:55.854  4326  4326 I ProviderInstaller: Installed default security provider GmsCore_OpenSSL
+10-27 14:18:55.855  4326  4326 I GmsApplication: Registering the BackgroundBroadcastReceiverSupport receiver.
+10-27 14:18:55.856  4326  4326 I GmsReceiverSupport: Registered Receiver for 16+1 IntentFilters
+10-27 14:18:55.857  4326  4326 D CompatibilityChangeReporter: Compat change id reported: 183155436; UID 10059; state: ENABLED
+10-27 14:18:55.857  4326  4326 I GmsApplication: [gms_startup_benchmark] Static start time (ms): 42140451, Startup latency (ms): 20, Is system user: true
+10-27 14:18:55.857  4326  4348 I Watchcat: Started
+10-27 14:18:55.857  4326  4349 I GMS_MM_Logger: Started.
+10-27 14:18:55.857  4326  4326 I buhd    : Primes not initialized, returning default (no-op) Primes instance which will ignore all calls. Please call Primes.initialize(...) before using any Primes API.
+10-27 14:18:55.857   246  4166 W ProcessStats: Tracking association SourceState{2d680c2 com.google.android.gms.persistent/10059 ImpBg #7220} whose proc state 6 is better than process ProcessState{7f5cbd7 com.google.process.gservices/10059 pkg=com.google.android.gsf} proc state 13 (14 skipped)
+10-27 14:18:55.858  2931  2965 I Finsky  : [42] rjy.accept(45): SCH: Scheduling phonesky job Id: 1-1337, CT: 1793110735816, Constraints: [{ L: 60000, D: 60000, C: 1, I: 1, N: 0 }]
+10-27 14:18:55.859  4326  4353 I ProcessStableCheckInFix: Running fixer!
+10-27 14:18:55.859  2931  2983 I Finsky  : [53] rht.apply(84): SCH: Scheduling 1 system job(s)
+10-27 14:18:55.859  2931  2983 I Finsky  : [53] rht.apply(90): SCH: Scheduling system job Id: 9016, L: 59957, D: 59957, C: false, I: false, N: 0
+10-27 14:18:55.860  4326  4353 W SnapshotHandler: Unable to retrieve flag snapshot for com.google.android.gms.test_process_stable, using defaults.
+10-27 14:18:55.860  4326  4353 W SnapshotHandler: java.io.FileNotFoundException: /data/user/0/com.google.android.gms/files/phenotype/shared/com.google.android.gms.test_process_stable.pb: open failed: ENOENT (No such file or directory)
+10-27 14:18:55.860  4326  4353 W SnapshotHandler: 	at libcore.io.IoBridge.open(IoBridge.java:574)
+10-27 14:18:55.860  4326  4353 W SnapshotHandler: 	at java.io.FileInputStream.<init>(FileInputStream.java:160)
+10-27 14:18:55.860  4326  4353 W SnapshotHandler: 	at bwkn.d(:com.google.android.gms@222116056@22.21.16 (140800-454906765):2)
+10-27 14:18:55.860  4326  4353 W SnapshotHandler: 	at bwjx.d(:com.google.android.gms@222116056@22.21.16 (140800-454906765):2)
+10-27 14:18:55.860  4326  4353 W SnapshotHandler: 	at bwms.c(:com.google.android.gms@222116056@22.21.16 (140800-454906765):1)
+10-27 14:18:55.860  4326  4353 W SnapshotHandler: 	at bwmr.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):2)
+10-27 14:18:55.860  4326  4353 W SnapshotHandler: 	at bwjs.d(:com.google.android.gms@222116056@22.21.16 (140800-454906765):0)
+10-27 14:18:55.860  4326  4353 W SnapshotHandler: 	at bvea.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):3)
+10-27 14:18:55.860  4326  4353 W SnapshotHandler: 	at bvef.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):2)
+10-27 14:18:55.860  4326  4353 W SnapshotHandler: 	at bvfg.c(:com.google.android.gms@222116056@22.21.16 (140800-454906765):11)
+10-27 14:18:55.860  4326  4353 W SnapshotHandler: 	at bvfg.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):0)
+10-27 14:18:55.860  4326  4353 W SnapshotHandler: 	at deva.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):0)
+10-27 14:18:55.860  4326  4353 W SnapshotHandler: 	at wjr.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):3)
+10-27 14:18:55.860  4326  4353 W SnapshotHandler: 	at wia.b(:com.google.android.gms@222116056@22.21.16 (140800-454906765):1)
+10-27 14:18:55.860  4326  4353 W SnapshotHandler: 	at wif.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):36)
+10-27 14:18:55.860  4326  4353 W SnapshotHandler: 	at wid.call(:com.google.android.gms@222116056@22.21.16 (140800-454906765):0)
+10-27 14:18:55.860  4326  4353 W SnapshotHandler: 	at java.util.concurrent.FutureTask.run(FutureTask.java:264)
+10-27 14:18:55.860  4326  4353 W SnapshotHandler: 	at java.lang.Thread.run(Thread.java:1012)
+10-27 14:18:55.860  4326  4353 W SnapshotHandler: Caused by: android.system.ErrnoException: open failed: ENOENT (No such file or directory)
+10-27 14:18:55.860  4326  4353 W SnapshotHandler: 	at libcore.io.Linux.open(Native Method)
+10-27 14:18:55.860  4326  4353 W SnapshotHandler: 	at libcore.io.ForwardingOs.open(ForwardingOs.java:563)
+10-27 14:18:55.860  4326  4353 W SnapshotHandler: 	at libcore.io.BlockGuardOs.open(BlockGuardOs.java:274)
+10-27 14:18:55.860  4326  4353 W SnapshotHandler: 	at libcore.io.ForwardingOs.open(ForwardingOs.java:563)
+10-27 14:18:55.860  4326  4353 W SnapshotHandler: 	at android.app.ActivityThread$AndroidOs.open(ActivityThread.java:8134)
+10-27 14:18:55.860  4326  4353 W SnapshotHandler: 	at libcore.io.IoBridge.open(IoBridge.java:560)
+10-27 14:18:55.860  4326  4353 W SnapshotHandler: 	... 17 more
+10-27 14:18:55.860  4326  4326 I DynamiteModule: Considering local module com.google.android.gms.googlecertificates:7 and remote module com.google.android.gms.googlecertificates:7
+10-27 14:18:55.860  4326  4326 I DynamiteModule: Selected local version of com.google.android.gms.googlecertificates
+10-27 14:18:55.865  4326  4326 I bbdx    : onUpgrade 25 to 27 [CONTEXT service_id=51 ]
+10-27 14:18:55.865  4326  4326 I bbdx    : Add androidPackageName to LastSyncAfterRequest. [CONTEXT service_id=51 ]
+10-27 14:18:55.865  4326  4326 E SQLiteLog: (1) no such column: androidPackageName in "SELECT androidPackageName FROM LastSyncAfterRequest"
+10-27 14:18:55.865  4326  4326 I bbdx    : Add runtimeProperties to Packages. [CONTEXT service_id=51 ]
+10-27 14:18:55.865  4326  4326 E SQLiteLog: (1) no such column: runtimeProperties in "SELECT runtimeProperties FROM Packages"
+10-27 14:18:55.873  4326  4326 W SystemServiceRegistry: No service published for: contexthub
+10-27 14:18:55.888  4326  4326 D CompatibilityChangeReporter: Compat change id reported: 160794467; UID 10059; state: ENABLED
+10-27 14:18:55.894  4326  4326 W SystemServiceRegistry: No service published for: contexthub
+10-27 14:18:55.894  4326  4326 E NanoAppLogging: Failed to begin contexthub communication
+10-27 14:18:55.894   246  4316 W ActivityManager: Appop Denial: Accessing service com.google.android.gms/com.google.android.location.internal.server.GoogleLocationService from pid=4326, uid=10059 requires appop COARSE_LOCATION
+10-27 14:18:55.894  4326  4326 W Settings: Setting airplane_mode_on has moved from android.provider.Settings.System to android.provider.Settings.Global, returning read-only value.
+10-27 14:18:55.894  4326  4360 E NlpInternalApi: failed to send request to NLP [CONTEXT service_id=6 ]
+10-27 14:18:55.896   246  1239 W ActivityManager: Appop Denial: Accessing service com.google.android.gms/com.google.android.location.internal.server.GoogleLocationService from pid=4326, uid=10059 requires appop COARSE_LOCATION
+10-27 14:18:55.896   246  1239 W ActivityManager: Appop Denial: Accessing service com.google.android.gms/com.google.android.location.internal.server.GoogleLocationService from pid=4326, uid=10059 requires appop COARSE_LOCATION
+10-27 14:18:55.896   246  1239 W ActivityManager: Appop Denial: Accessing service com.google.android.gms/com.google.android.location.internal.server.GoogleLocationService from pid=4326, uid=10059 requires appop COARSE_LOCATION
+10-27 14:18:55.896  4326  4326 D BoundBrokerSvc: onBind: Intent { act=com.google.android.gms.gmscompliance.service.START dat=chimera-action: cmp=com.google.android.gms/.chimera.PersistentBoundBrokerService }
+10-27 14:18:55.897  4326  4326 D BoundBrokerSvc: Loading bound service for intent: Intent { act=com.google.android.gms.gmscompliance.service.START dat=chimera-action: cmp=com.google.android.gms/.chimera.PersistentBoundBrokerService }
+10-27 14:18:55.897   246  4316 W ActivityManager: Appop Denial: Accessing service com.google.android.gms/com.google.android.location.internal.server.GoogleLocationService from pid=4326, uid=10059 requires appop COARSE_LOCATION
+10-27 14:18:55.898   246  4316 W ActivityManager: Appop Denial: Accessing service com.google.android.gms/com.google.android.location.internal.server.GoogleLocationService from pid=4326, uid=10059 requires appop COARSE_LOCATION
+10-27 14:18:55.898   246  4316 W ActivityManager: Appop Denial: Accessing service com.google.android.gms/com.google.android.location.internal.server.GoogleLocationService from pid=4326, uid=10059 requires appop COARSE_LOCATION
+10-27 14:18:55.898  4326  4326 D BoundBrokerSvc: onBind: Intent { act=com.google.android.gms.phenotype.service.START dat=chimera-action: cmp=com.google.android.gms/.chimera.PersistentApiService }
+10-27 14:18:55.898  4326  4326 D BoundBrokerSvc: Loading bound service for intent: Intent { act=com.google.android.gms.phenotype.service.START dat=chimera-action: cmp=com.google.android.gms/.chimera.PersistentApiService }
+10-27 14:18:55.899  4326  4326 D BoundBrokerSvc: onBind: Intent { act=com.google.android.gms.clearcut.service.START dat=chimera-action: cmp=com.google.android.gms/.chimera.PersistentDirectBootAwareApiService }
+10-27 14:18:55.899  4326  4326 D BoundBrokerSvc: Loading bound service for intent: Intent { act=com.google.android.gms.clearcut.service.START dat=chimera-action: cmp=com.google.android.gms/.chimera.PersistentDirectBootAwareApiService }
+10-27 14:18:55.899  2220  2315 W LocationOracle: No location returned by GMS core getLastLocation()
+10-27 14:18:55.899  4326  4326 D BoundBrokerSvc: onBind: Intent { act=com.google.android.gms.usagereporting.service.START dat=chimera-action: cmp=com.google.android.gms/.chimera.PersistentDirectBootAwareApiService }
+10-27 14:18:55.899  4326  4326 D BoundBrokerSvc: Loading bound service for intent: Intent { act=com.google.android.gms.usagereporting.service.START dat=chimera-action: cmp=com.google.android.gms/.chimera.PersistentDirectBootAwareApiService }
+10-27 14:18:55.899  2220  2220 E A       : onError
+10-27 14:18:55.899  2220  2220 E A       : com.google.android.apps.gsa.shared.speech.a.m: errorCode: 65561, engine: 2
+10-27 14:18:55.899  2220  2220 E A       : 	at com.google.android.apps.gsa.staticplugins.db.a.e.a(PG:3)
+10-27 14:18:55.899  2220  2220 E A       : 	at com.google.android.apps.gsa.s3.n.gO(PG:1)
+10-27 14:18:55.899  2220  2220 E A       : 	at com.google.cd.g.a.f.e(PG:2)
+10-27 14:18:55.899  2220  2220 E A       : 	at com.google.android.apps.gsa.speech.k.a.g.d(PG:22)
+10-27 14:18:55.899  2220  2220 E A       : 	at com.google.android.apps.gsa.speech.k.a.g.jS(PG:6)
+10-27 14:18:55.899  2220  2220 E A       : 	at com.google.android.apps.gsa.s3.o.c(PG:14)
+10-27 14:18:55.899  2220  2220 E A       : 	at com.google.android.apps.gsa.s3.p.run(PG:1)
+10-27 14:18:55.899  2220  2220 E A       : 	at java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:487)
+10-27 14:18:55.899  2220  2220 E A       : 	at java.util.concurrent.FutureTask.run(FutureTask.java:264)
+10-27 14:18:55.899  2220  2220 E A       : 	at com.google.android.apps.gsa.shared.util.c.a.e.run(PG:2)
+10-27 14:18:55.899  2220  2220 E A       : 	at com.google.android.apps.gsa.shared.util.c.a.bi.run(PG:1)
+10-27 14:18:55.899  2220  2220 E A       : 	at com.google.android.apps.gsa.shared.util.c.a.bi.run(PG:1)
+10-27 14:18:55.899  2220  2220 E A       : 	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1145)
+10-27 14:18:55.899  2220  2220 E A       : 	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:644)
+10-27 14:18:55.899  2220  2220 E A       : 	at java.lang.Thread.run(Thread.java:1012)
+10-27 14:18:55.899  2220  2220 E A       : 	at com.google.android.apps.gsa.shared.util.c.a.l.run(PG:5)
+10-27 14:18:55.899  2220  2220 E A       : Caused by: com.google.android.apps.gsa.shared.speech.a.o: errorCode: 65586, engine: 2
+10-27 14:18:55.899  2220  2220 E A       : 	... 15 more
+10-27 14:18:55.899  2220  2220 E A       : Caused by: com.google.android.apps.gsa.shared.speech.a.k: errorCode: 401, engine: 2
+10-27 14:18:55.899  2220  2220 E A       : 	at com.google.android.apps.gsa.assistant.shared.n.h.a(PG:5)
+10-27 14:18:55.899  2220  2220 E A       : 	at com.google.android.apps.gsa.s3.producers.j.hh(PG:2)
+10-27 14:18:55.899  2220  2220 E A       : 	at com.google.android.apps.gsa.speech.k.a.g.d(PG:16)
+10-27 14:18:55.899  2220  2220 E A       : 	... 12 more
+10-27 14:18:55.899  2220  3696 I NetworkRecognitionRnr: Using pair HTTP connection
+10-27 14:18:55.900  2220  3695 I A       : [Upload] Connected
+10-27 14:18:55.900  2220  2220 W A       : Failed to sync device settings.
+10-27 14:18:55.900  2220  2220 I A       : Retrying to sync device settings.
+10-27 14:18:55.901   246  1239 W JobScheduler: Job didn't exist in JobStore: 4cbc99 #u0a58/-353 com.google.android.googlequicksearchbox/com.google.android.apps.gsa.tasks.BackgroundTasksJobService
+10-27 14:18:55.906   246  1239 W ActivityManager: Appop Denial: Accessing service com.google.android.gms/com.google.android.location.internal.server.GoogleLocationService from pid=4326, uid=10059 requires appop COARSE_LOCATION
+10-27 14:18:55.909  4326  4357 I bbdx    : onUpgrade 25 to 27 [CONTEXT service_id=51 ]
+10-27 14:18:55.909  4326  4357 I bbdx    : Add androidPackageName to LastSyncAfterRequest. [CONTEXT service_id=51 ]
+10-27 14:18:55.909  4326  4357 E SQLiteLog: (1) no such column: androidPackageName in "SELECT androidPackageName FROM LastSyncAfterRequest"
+10-27 14:18:55.909  4326  4357 I bbdx    : Add runtimeProperties to Packages. [CONTEXT service_id=51 ]
+10-27 14:18:55.909  4326  4357 E SQLiteLog: (1) no such column: runtimeProperties in "SELECT runtimeProperties FROM Packages"
+10-27 14:18:56.309   246   265 I ServiceWatcher: [HardwareActivityRecognitionProxy] chose new implementation 10059/com.google.android.gms/com.google.android.location.internal.server.HardwareArProviderService@1
+10-27 14:18:56.309   246   265 I ServiceWatcher: [GeocoderProxy] chose new implementation 10059/com.google.android.gms/.location.geocode.GeocodeService@2
+10-27 14:18:56.309   246   265 I ServiceWatcher: [fused] chose new implementation 10059/com.google.android.gms/com.google.android.location.fused.FusedLocationService@1
+10-27 14:18:56.309   246   265 I ServiceWatcher: [network] chose new implementation 10059/com.google.android.gms/com.google.android.location.network.NetworkLocationService@2
+10-27 14:18:56.311   246   265 I ServiceWatcher: [HardwareActivityRecognitionProxy] connected to {com.google.android.gms/com.google.android.location.internal.server.HardwareArProviderService}
+10-27 14:18:56.312   246   265 I ServiceWatcher: [GeocoderProxy] connected to {com.google.android.gms/com.google.android.gms.location.geocode.GeocodeService}
+10-27 14:18:56.313   246   265 I ServiceWatcher: [fused] connected to {com.google.android.gms/com.google.android.location.fused.FusedLocationService}
+10-27 14:18:56.313   246  1239 I LocationManagerService: fused provider loaded extra attribution tags: [activity_recognition_provider, awareness_provider, current_semantic_location, fused_location_provider, fused_provider_shim, geofencer_provider, network_location_calibration, network_location_provider, network_provider_shim]
+10-27 14:18:56.314   246  1239 W ActivityManager: Appop Denial: Accessing service com.google.android.gms/com.google.android.location.internal.server.GoogleLocationService from pid=4326, uid=10059 requires appop COARSE_LOCATION
+10-27 14:18:56.314   246   265 I ServiceWatcher: [network] connected to {com.google.android.gms/com.google.android.location.network.NetworkLocationService}
+10-27 14:18:56.314   246  1239 I LocationManagerService: network provider loaded extra attribution tags: [activity_recognition_provider, awareness_provider, current_semantic_location, fused_location_provider, fused_provider_shim, geofencer_provider, network_location_calibration, network_location_provider, network_provider_shim]
+10-27 14:18:58.820   246  4316 I ActivityManager: Broadcasting: Intent { act=android.intent.action.BOOT_COMPLETED flg=0x400000 }
+10-27 14:18:58.820   246  4316 I ActivityManager: Enqueued broadcast Intent { act=android.intent.action.BOOT_COMPLETED flg=0x400000 }: 0
+10-27 14:18:58.821   246   246 I Telecom : MissedCallNotifierImpl: reloadAfterBootComplete: no user(s) to check; skipping reload.: TSBCR.oR@AEY🔒
+10-27 14:18:58.821   246   246 D FastPairService: onReceive: ACTION_BOOT_COMPLETED.
+10-27 14:18:58.821   246   246 V FastPairService: invalidateScan: scan is disabled
+10-27 14:18:58.821   246   246 E NearbyManager: Cannot stop scan with this callback because it is never registered.
+10-27 14:18:58.821   246   246 W AudioManager: attempt to call registerAudioPlaybackCallback() on a previouslyregistered callback
+10-27 14:18:58.821   246   246 I DevicePolicyManager: Finished calculating hasIncompatibleAccountsTask
+10-27 14:18:58.821  1382  1382 D CarrierConfigLoader: mHandler: EVENT_SYSTEM_UNLOCKED phoneId: 0
+10-27 14:18:58.821   246   274 D CompatibilityChangeReporter: Compat change id reported: 135634846; UID 10068; state: DISABLED
+10-27 14:18:58.821   246   274 D CompatibilityChangeReporter: Compat change id reported: 177438394; UID 10068; state: DISABLED
+10-27 14:18:58.821   246   274 D CompatibilityChangeReporter: Compat change id reported: 135772972; UID 10068; state: DISABLED
+10-27 14:18:58.821   246   274 D CompatibilityChangeReporter: Compat change id reported: 135754954; UID 10068; state: DISABLED
+10-27 14:18:58.821   246   275 D CompatibilityChangeReporter: Compat change id reported: 143937733; UID 10068; state: DISABLED
+10-27 14:18:58.824   172   172 D Zygote  : Forked child process 4376
+10-27 14:18:58.824   246   275 I ActivityManager: Start proc 4376:com.google.android.gm.exchange/u0a68 for broadcast {com.google.android.gm.exchange/com.google.android.gm.exchange.UpgradeReceiver}
+10-27 14:18:58.830  4376  4376 I Zygote  : seccomp disabled by setenforce 0
+10-27 14:18:58.831  4376  4376 I oid.gm.exchange: Using CollectorTypeCC GC.
+10-27 14:18:58.831  4376  4376 W oid.gm.exchange: Unexpected CPU variant for x86: x86_64.
+10-27 14:18:58.831  4376  4376 W oid.gm.exchange: Known variants: atom, sandybridge, silvermont, goldmont, goldmont-plus, tremont, kabylake, default
+10-27 14:18:58.831  4376  4376 E oid.gm.exchange: Not starting debugger since process cannot load the jdwp agent.
+10-27 14:18:58.833   246  1239 D CompatibilityChangeReporter: Compat change id reported: 168419799; UID 10068; state: DISABLED
+10-27 14:18:58.833   246  1239 D CompatibilityChangeReporter: Compat change id reported: 273564678; UID 10068; state: DISABLED
+10-27 14:18:58.833   246   307 D CompatibilityChangeReporter: Compat change id reported: 265195908; UID 10068; state: ENABLED
+10-27 14:18:58.833  4376  4376 D CompatibilityChangeReporter: Compat change id reported: 171979766; UID 10068; state: DISABLED
+10-27 14:18:58.833  4376  4376 D CompatibilityChangeReporter: Compat change id reported: 242716250; UID 10068; state: DISABLED
+10-27 14:18:58.834   246  1239 D CompatibilityChangeReporter: Compat change id reported: 170503758; UID 10068; state: DISABLED
+10-27 14:18:58.834  4376  4376 D ApplicationLoaders: Returning zygote-cached class loader: /system/framework/android.test.base.jar
+10-27 14:18:58.834  4376  4376 D ApplicationLoaders: Returning zygote-cached class loader: /system/framework/android.hidl.manager-V1.0-java.jar
+10-27 14:18:58.834  4376  4376 D ApplicationLoaders: Returning zygote-cached class loader: /system/framework/android.hidl.base-V1.0-java.jar
+10-27 14:18:58.834  4376  4376 D nativeloader: Configuring clns-4 for other apk /system/framework/org.apache.http.legacy.jar. target_sdk_version=23, uses_libraries=ALL, library_path=/system/product/app/PrebuiltExchange3Google/lib/x86_64, permitted_path=/data:/mnt/expand:/data/user/0/com.google.android.gm.exchange
+10-27 14:18:58.835  4376  4376 D nativeloader: InitLlndkLibrariesProduct: libEGL.so:libGLESv1_CM.so:libGLESv2.so:libGLESv3.so:libRS.so:libandroid_net.so:libbinder_ndk.so:libc.so:libcgrouprc.so:libclang_rt.asan-i686-android.so:libclang_rt.asan-x86_64-android.so:libcom.android.tethering.connectivity_native.so:libdl.so:libft2.so:liblog.so:libm.so:libmediandk.so:libnativewindow.so:libneuralnetworks.so:libselinux.so:libsync.so:libvndksupport.so:libvulkan.so
+10-27 14:18:58.835  4376  4376 D nativeloader: Configuring product-clns-5 for unbundled product apk /system/product/app/PrebuiltExchange3Google/PrebuiltExchange3Google.apk. target_sdk_version=23, uses_libraries=, library_path=/system/product/app/PrebuiltExchange3Google/lib/x86_64:/product/lib64:/system/product/lib64, permitted_path=/data:/mnt/expand:/data/user/0/com.google.android.gm.exchange:/product/lib64:/system/product/lib64
+10-27 14:18:58.835  4376  4376 D nativeloader: InitVndkspLibrariesProduct: android.hardware.common-V2-ndk.so:android.hardware.common.fmq-V1-ndk.so:android.hardware.graphics.allocator-V2-ndk.so:android.hardware.graphics.common-V4-ndk.so:android.hardware.graphics.common@1.0.so:android.hardware.graphics.common@1.1.so:android.hardware.graphics.common@1.2.so:android.hardware.graphics.composer3-V1-ndk.so:android.hardware.graphics.mapper@2.0.so:android.hardware.graphics.mapper@2.1.so:android.hardware.graphics.mapper@3.0.so:android.hardware.graphics.mapper@4.0.so:android.hardware.renderscript@1.0.so:android.hidl.memory.token@1.0.so:android.hidl.memory@1.0-impl.so:android.hidl.memory@1.0.so:android.hidl.safe_union@1.0.so:libRSCpuRef.so:libRSDriver.so:libRS_internal.so:libbase.so:libbcinfo.so:libblas.so:libc++.so:libcompiler_rt.so:libcutils.so:libdmabufheap.so:libgralloctypes.so:libhardware.so:libhidlbase.so:libhidlmemory.so:libion.so:libjsoncpp.so:liblzma.so:libprocessgroup.so:libunwindstack.so:libutils.so:libutilscallstack.so:libz.so
+10-27 14:18:58.836  4376  4376 V GraphicsEnvironment: Currently set values for:
+10-27 14:18:58.836  4376  4376 V GraphicsEnvironment:   angle_gl_driver_selection_pkgs=[]
+10-27 14:18:58.836  4376  4376 V GraphicsEnvironment:   angle_gl_driver_selection_values=[]
+10-27 14:18:58.836  4376  4376 V GraphicsEnvironment: ANGLE GameManagerService for com.google.android.gm.exchange: false
+10-27 14:18:58.836  4376  4376 V GraphicsEnvironment: com.google.android.gm.exchange is not listed in per-application setting
+10-27 14:18:58.836  4376  4376 V GraphicsEnvironment: Neither updatable production driver nor prerelease driver is supported.
+10-27 14:18:58.837  4376  4376 W EasBundling: Tombstone: isGmailBundlingCapable=false
+10-27 14:18:58.837   246  1239 I BroadcastQueue: BOOT_COMPLETED_BROADCAST_COMPLETION_LATENCY_REPORTED action:android.intent.action.BOOT_COMPLETED dispatchLatency:-42143434 completeLatency:17 dispatchRealLatency:-42143434 completeRealLatency:17 receiversSize:53 userId:0 userType:android.os.usertype.full.SYSTEM
+10-27 14:18:58.837   246   265 I ActivityManager: Broadcast completed: result=0
+10-27 14:18:59.768  2220  3693 W A       : [Download] response code: 400
+10-27 14:19:05.849   246   289 E ResilientAtomicFile: Failed to verity-protect package restrictions
+10-27 14:19:05.849   246   289 E ResilientAtomicFile: java.io.IOException: Failed to enable fs-verity on FD(379): Operation not supported on transport endpoint
+10-27 14:19:05.849   246   289 E ResilientAtomicFile: 	at com.android.internal.security.VerityUtils.setUpFsverity(VerityUtils.java:89)
+10-27 14:19:05.849   246   289 E ResilientAtomicFile: 	at com.android.server.security.FileIntegrity.setUpFsVerity(FileIntegrity.java:56)
+10-27 14:19:05.849   246   289 E ResilientAtomicFile: 	at com.android.server.pm.ResilientAtomicFile.finishWrite(ResilientAtomicFile.java:146)
+10-27 14:19:05.849   246   289 E ResilientAtomicFile: 	at com.android.server.pm.Settings.writePackageRestrictions(Settings.java:2336)
+10-27 14:19:05.849   246   289 E ResilientAtomicFile: 	at com.android.server.pm.Settings.writePackageRestrictions(Settings.java:2171)
+10-27 14:19:05.849   246   289 E ResilientAtomicFile: 	at com.android.server.pm.PackageManagerService.writePendingRestrictions(PackageManagerService.java:1481)
+10-27 14:19:05.849   246   289 E ResilientAtomicFile: 	at com.android.server.pm.PackageManagerService$2.handleMessage(PackageManagerService.java:1508)
+10-27 14:19:05.849   246   289 E ResilientAtomicFile: 	at android.os.Handler.dispatchMessage(Handler.java:102)
+10-27 14:19:05.849   246   289 E ResilientAtomicFile: 	at android.os.Looper.loopOnce(Looper.java:205)
+10-27 14:19:05.849   246   289 E ResilientAtomicFile: 	at android.os.Looper.loop(Looper.java:294)
+10-27 14:19:05.849   246   289 E ResilientAtomicFile: 	at android.os.HandlerThread.run(HandlerThread.java:67)
+10-27 14:19:05.849   246   289 E ResilientAtomicFile: 	at com.android.server.ServiceThread.run(ServiceThread.java:46)
+10-27 14:19:10.949   246  4316 D CompatibilityChangeReporter: Compat change id reported: 261072174; UID 10059; state: DISABLED
+10-27 14:19:10.949  4326  4326 D BoundBrokerSvc: onUnbind: Intent { act=com.google.android.gms.gmscompliance.service.START dat=chimera-action: cmp=com.google.android.gms/.chimera.PersistentBoundBrokerService }
+10-27 14:19:10.949  4326  4326 D BoundBrokerSvc: onUnbind: Intent { act=com.google.android.gms.phenotype.service.START dat=chimera-action: cmp=com.google.android.gms/.chimera.PersistentApiService }
+10-27 14:19:10.949  4326  4326 D BoundBrokerSvc: onUnbind: Intent { act=com.google.android.gms.clearcut.service.START dat=chimera-action: cmp=com.google.android.gms/.chimera.PersistentDirectBootAwareApiService }
+10-27 14:19:34.583   180   180 I netd    : setProcSysNet(4, 2, eth0, retrans_time_ms, 750) <0.05ms>
+10-27 14:19:34.583   180   180 I netd    : setProcSysNet(4, 2, eth0, ucast_solicit, 10) <0.00ms>
+10-27 14:19:34.583   180   180 I netd    : setProcSysNet(6, 2, eth0, retrans_time_ms, 750) <0.02ms>
+10-27 14:19:34.583   180   180 I netd    : setProcSysNet(6, 2, eth0, ucast_solicit, 10) <0.00ms>
+10-27 14:19:55.810   246   280 W BatteryExternalStatsWorker: error reading Bluetooth stats: 9
+10-27 14:19:55.892  4326  4326 D BoundBrokerSvc: onBind: Intent { act=com.google.android.gms.scheduler.ACTION_PROXY_SCHEDULE dat=chimera-action: cmp=com.google.android.gms/.chimera.PersistentApiService }
+10-27 14:19:55.892  4326  4326 D BoundBrokerSvc: Loading bound service for intent: Intent { act=com.google.android.gms.scheduler.ACTION_PROXY_SCHEDULE dat=chimera-action: cmp=com.google.android.gms/.chimera.PersistentApiService }
+10-27 14:19:55.893  4326  4326 D BoundBrokerSvc: onBind: Intent { act=com.google.android.gms.gmscompliance.service.START dat=chimera-action: cmp=com.google.android.gms/.chimera.PersistentBoundBrokerService }
+10-27 14:19:55.893  4326  4326 D BoundBrokerSvc: Loading bound service for intent: Intent { act=com.google.android.gms.gmscompliance.service.START dat=chimera-action: cmp=com.google.android.gms/.chimera.PersistentBoundBrokerService }
+10-27 14:19:55.894  4326  4362 W .gms.persistent: Accessing hidden method Landroid/net/ConnectivityManager;->isNetworkTypeMobile(I)Z (max-target-p, reflection, denied)
+10-27 14:19:55.894  4326  4362 W .gms.persistent: Accessing hidden method Landroid/os/PowerManager;->isLightDeviceIdleMode()Z (max-target-s, reflection, denied)
+10-27 14:19:55.895  4326  4362 D CompatibilityChangeReporter: Compat change id reported: 236704164; UID 10059; state: DISABLED
+10-27 14:19:55.895  4326  4362 W PendingIntent: android.app.StackTrace: New mutable implicit PendingIntent: pkg=com.google.android.gms, action=com.google.android.gms.gcm.nts.reachability.WAKE_UP, featureId=com.google.android.gms.gcm. This will be blocked once the app targets U+ for security reasons.
+10-27 14:19:55.895  4326  4362 W PendingIntent: 	at android.app.PendingIntent.checkPendingIntent(PendingIntent.java:465)
+10-27 14:19:55.895  4326  4362 W PendingIntent: 	at android.app.PendingIntent.getBroadcastAsUser(PendingIntent.java:753)
+10-27 14:19:55.895  4326  4362 W PendingIntent: 	at android.app.PendingIntent.getBroadcast(PendingIntent.java:740)
+10-27 14:19:55.895  4326  4362 W PendingIntent: 	at bdur.<init>(:com.google.android.gms@222116056@22.21.16 (140800-454906765):4)
+10-27 14:19:55.895  4326  4362 W PendingIntent: 	at bdsd.e(:com.google.android.gms@222116056@22.21.16 (140800-454906765):11)
+10-27 14:19:55.895  4326  4362 W PendingIntent: 	at bdsd.c(:com.google.android.gms@222116056@22.21.16 (140800-454906765):3)
+10-27 14:19:55.895  4326  4362 W PendingIntent: 	at bdsd.b(:com.google.android.gms@222116056@22.21.16 (140800-454906765):5)
+10-27 14:19:55.895  4326  4362 W PendingIntent: 	at bdsf.run(:com.google.android.gms@222116056@22.21.16 (140800-454906765):10)
+10-27 14:19:55.895  4326  4362 W PendingIntent: 	at bdrt.f(:com.google.android.gms@222116056@22.21.16 (140800-454906765):0)
+10-27 14:19:55.895  4326  4362 W PendingIntent: 	at agrj.en(:com.google.android.gms@222116056@22.21.16 (140800-454906765):1)
+10-27 14:19:55.895  4326  4362 W PendingIntent: 	at agrp.run(:com.google.android.gms@222116056@22.21.16 (140800-454906765):11)
+10-27 14:19:55.895  4326  4362 W PendingIntent: 	at ceik.run(:com.google.android.gms@222116056@22.21.16 (140800-454906765):2)
+10-27 14:19:55.895  4326  4362 W PendingIntent: 	at xdw.c(:com.google.android.gms@222116056@22.21.16 (140800-454906765):6)
+10-27 14:19:55.895  4326  4362 W PendingIntent: 	at xdw.run(:com.google.android.gms@222116056@22.21.16 (140800-454906765):7)
+10-27 14:19:55.895  4326  4362 W PendingIntent: 	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1145)
+10-27 14:19:55.895  4326  4362 W PendingIntent: 	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:644)
+10-27 14:19:55.895  4326  4362 W PendingIntent: 	at xjb.run(:com.google.android.gms@222116056@22.21.16 (140800-454906765):0)
+10-27 14:19:55.895  4326  4362 W PendingIntent: 	at java.lang.Thread.run(Thread.java:1012)
+10-27 14:19:55.895   246  4316 D CompatibilityChangeReporter: Compat change id reported: 236704164; UID 10059; state: DISABLED
+10-27 14:19:55.895   246  4316 D CompatibilityChangeReporter: Compat change id reported: 161145287; UID 10059; state: DISABLED
+10-27 14:19:55.895   246  4316 D CompatibilityChangeReporter: Compat change id reported: 161145287; UID 10059; state: ENABLED
+10-27 14:19:55.896  4326  4362 I NetworkScheduler: Using standalone scheduling engine [CONTEXT service_id=218 ]
+10-27 14:20:02.231   180   180 I netd    : setProcSysNet(4, 2, eth0, retrans_time_ms, 750) <0.04ms>
+10-27 14:20:02.231   180   180 I netd    : setProcSysNet(4, 2, eth0, ucast_solicit, 10) <0.00ms>
+10-27 14:20:02.231   180   180 I netd    : setProcSysNet(6, 2, eth0, retrans_time_ms, 750) <0.01ms>
+10-27 14:20:02.231   180   180 I netd    : setProcSysNet(6, 2, eth0, ucast_solicit, 10) <0.00ms>
+10-27 14:20:10.917  4326  4326 D BoundBrokerSvc: onUnbind: Intent { act=com.google.android.gms.scheduler.ACTION_PROXY_SCHEDULE dat=chimera-action: cmp=com.google.android.gms/.chimera.PersistentApiService }
+10-27 14:20:10.917  4326  4326 D BoundBrokerSvc: onUnbind: Intent { act=com.google.android.gms.gmscompliance.service.START dat=chimera-action: cmp=com.google.android.gms/.chimera.PersistentBoundBrokerService }
+10-27 14:20:21.175   180   180 I netd    : setProcSysNet(4, 2, eth0, retrans_time_ms, 750) <0.04ms>
+10-27 14:20:21.175   180   180 I netd    : setProcSysNet(4, 2, eth0, ucast_solicit, 10) <0.00ms>
+10-27 14:20:21.175   180   180 I netd    : setProcSysNet(6, 2, eth0, retrans_time_ms, 750) <0.02ms>
+10-27 14:20:21.175   180   180 I netd    : setProcSysNet(6, 2, eth0, ucast_solicit, 10) <0.00ms>
+10-27 14:20:40.786  2931  2931 I Finsky  : [2] rrt.onStartJob(4): SCH: job service start with id 9016.
+10-27 14:20:40.850  2931  4400 I Finsky  : [134] rqi.a(92): SCH: Satisfied jobs for 9016 are: 1-1337
+10-27 14:20:40.850  2931  4401 I Finsky  : [135] rhu.accept(27): SCH: Job 1-1337 starting
+10-27 14:20:40.851  2931  2931 I Finsky  : [2] RoutineHygieneCoreJob.v(29): DailyHygiene holdoff continue
+10-27 14:20:40.851  2931  2931 I Finsky  : [2] rqb.r(4): SCH: jobFinished: 1-1337. TimeElapsed: 1ms.
+10-27 14:20:40.857  2931  2931 W Finsky  : [2] rqv.j(2): SCH: Controller has no job when job 1-1337 checks state.
+10-27 14:20:40.857  2931  2985 I Finsky  : [54] rpx.a(2): SCH: no pending jobs to schedule.
+10-27 14:20:40.858  2931  4401 I Finsky  : [135] rrt.a(16): SCH: job service finished with id 9016.
+10-27 14:20:40.903  2931  2985 I Finsky  : [54] rjy.accept(45): SCH: Scheduling phonesky job Id: 1-1337, CT: 1793110840856, Constraints: [{ L: 60000, D: 60000, C: 1, I: 1, N: 0 }]
+10-27 14:20:40.904  2931  2985 I Finsky  : [54] rht.apply(84): SCH: Scheduling 1 system job(s)
+10-27 14:20:40.904  2931  2985 I Finsky  : [54] rht.apply(90): SCH: Scheduling system job Id: 9017, L: 59952, D: 59952, C: false, I: false, N: 0
+10-27 14:20:46.263   180   180 I netd    : setProcSysNet(4, 2, eth0, retrans_time_ms, 750) <0.04ms>
+10-27 14:20:46.263   180   180 I netd    : setProcSysNet(4, 2, eth0, ucast_solicit, 10) <0.00ms>
+10-27 14:20:46.263   180   180 I netd    : setProcSysNet(6, 2, eth0, retrans_time_ms, 750) <0.01ms>
+10-27 14:20:46.263   180   180 I netd    : setProcSysNet(6, 2, eth0, ucast_solicit, 10) <0.00ms>

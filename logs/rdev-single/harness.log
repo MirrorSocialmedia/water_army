@@ -15,3 +15,7 @@
 [rdev-single] rdev-a1 started cid=b9152896d74a9ac5d2042f06b5e4e600ac80c6810fcccbf66eecb86014a153bd adb=127.0.0.1:16511 datadir=/tmp/rdev-single-state/a1-data
 [rdev-single] 2026-10-27T12:52:37Z RAM gate OK MemAvailable=12233MiB projected_postboot=9673MiB (gate=8192, budget=2560/device, boss 17:13 scratch override)
 [rdev-single] rdev-c1 started cid=f9ce3ab19e34946c3e3540baa3a75116ec1938a59ba7324407091d9dd5549a4a adb=127.0.0.1:16512 datadir=/tmp/rdev-single-state/c1-data
+[rdev-single] 2026-10-27T13:40:20Z RAM gate OK MemAvailable=11288MiB projected_postboot=8728MiB (gate=8192, budget=2560/device, boss 17:13 scratch override)
+[rdev-single] rdev-e1 started cid=45ba8cee98d4272079eb1ac52ed115b50aa4169ec1c3a26c4c832f8916e59785 adb=127.0.0.1:16512 datadir=/tmp/rdev-single-state/e1-data
+[rdev-single] 2026-10-27T14:04:31Z RAM gate OK MemAvailable=12163MiB projected_postboot=9603MiB (gate=8192, budget=2560/device, boss 17:13 scratch override)
+[rdev-single] rdev-e1 started cid=8fa99a1c0080c0feab47b5cd3a3864ab1a4b60184d07a1b325db56078183a97c adb=127.0.0.1:16512 datadir=/tmp/rdev-single-state/e1b-data

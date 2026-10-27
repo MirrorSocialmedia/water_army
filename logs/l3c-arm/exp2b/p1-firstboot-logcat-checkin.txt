@@ -1,0 +1,767 @@
+10-27 13:40:25.954   252   252 D SystemServerTiming: OnBootPhase_550_com.android.server.permission.access.AccessCheckingService
+10-27 13:40:25.954   252   252 V SystemServerTiming: OnBootPhase_550_com.android.server.permission.access.AccessCheckingService took to complete: 0ms
+10-27 13:40:26.533  1276  1276 D SystemServerTiming: StartAccessCheckingService
+10-27 13:40:26.533  1276  1276 I SystemServiceManager: Starting com.android.server.permission.access.AccessCheckingService
+10-27 13:40:26.533  1276  1276 V SystemServerTiming: StartAccessCheckingService took to complete: 1ms
+10-27 13:40:26.570  1276  1276 D SystemServerTiming: OnBootPhase_100_com.android.server.permission.access.AccessCheckingService
+10-27 13:40:26.570  1276  1276 V SystemServerTiming: OnBootPhase_100_com.android.server.permission.access.AccessCheckingService took to complete: 0ms
+10-27 13:40:26.713  1276  1276 V UserSystemPackageInstaller: Checking that all system packages are whitelisted.
+10-27 13:40:26.774  1276  1276 D ActivityManager: Checking cgroup freezer: /sys/fs/cgroup/uid_0/pid_1184/cgroup.freeze
+10-27 13:40:26.774  1276  1276 D ActivityManager: Checking binder freezer ioctl
+10-27 13:40:26.787  1276  1276 D SystemServerTiming: OnBootPhase_200_com.android.server.permission.access.AccessCheckingService
+10-27 13:40:26.787  1276  1276 V SystemServerTiming: OnBootPhase_200_com.android.server.permission.access.AccessCheckingService took to complete: 0ms
+10-27 13:40:30.590  1276  1276 D SystemServerTiming: OnBootPhase_480_com.android.server.permission.access.AccessCheckingService
+10-27 13:40:30.590  1276  1276 V SystemServerTiming: OnBootPhase_480_com.android.server.permission.access.AccessCheckingService took to complete: 0ms
+10-27 13:40:30.593  1276  1276 D SystemServerTiming: OnBootPhase_500_com.android.server.permission.access.AccessCheckingService
+10-27 13:40:30.593  1276  1276 V SystemServerTiming: OnBootPhase_500_com.android.server.permission.access.AccessCheckingService took to complete: 0ms
+10-27 13:40:30.662  1276  1276 D SystemServerTiming: OnBootPhase_520_com.android.server.permission.access.AccessCheckingService
+10-27 13:40:30.662  1276  1276 V SystemServerTiming: OnBootPhase_520_com.android.server.permission.access.AccessCheckingService took to complete: 0ms
+10-27 13:40:30.678  1276  1276 D SystemServerTiming: OnBootPhase_550_com.android.server.permission.access.AccessCheckingService
+10-27 13:40:30.678  1276  1276 V SystemServerTiming: OnBootPhase_550_com.android.server.permission.access.AccessCheckingService took to complete: 0ms
+10-27 13:40:31.051  1276  1276 D SystemServerTiming: OnBootPhase_600_com.android.server.permission.access.AccessCheckingService
+10-27 13:40:31.051  1276  1276 V SystemServerTiming: OnBootPhase_600_com.android.server.permission.access.AccessCheckingService took to complete: 0ms
+10-27 13:40:31.066  1276  1276 D SystemServerTimingAsync: ssm.onStartUser-0_com.android.server.permission.access.AccessCheckingService
+10-27 13:40:31.066  1276  1276 V SystemServerTimingAsync: ssm.onStartUser-0_com.android.server.permission.access.AccessCheckingService took to complete: 0ms
+10-27 13:40:31.500  1276  1298 D ActivityManagerTiming: OnBootPhase_1000_com.android.server.permission.access.AccessCheckingService
+10-27 13:40:31.500  1276  1298 V ActivityManagerTiming: OnBootPhase_1000_com.android.server.permission.access.AccessCheckingService took to complete: 0ms
+10-27 13:40:31.549  1276  1304 D SystemServerTimingAsync: ssm.onUnlockingUser-0_com.android.server.permission.access.AccessCheckingService
+10-27 13:40:31.549  1276  1304 V SystemServerTimingAsync: ssm.onUnlockingUser-0_com.android.server.permission.access.AccessCheckingService took to complete: 0ms
+10-27 13:40:31.554  1276  1367 I StorageSessionController:     mountUserId=0 state=CHECKING 
+10-27 13:40:31.882  1276  1304 D SystemServerTimingAsync: ssm.onUnlockedUser-0_com.android.server.permission.access.AccessCheckingService
+10-27 13:40:31.882  1276  1304 V SystemServerTimingAsync: ssm.onUnlockedUser-0_com.android.server.permission.access.AccessCheckingService took to complete: 0ms
+10-27 13:40:31.918  1276  2868 I BootReceiver: Checking for fsck errors
+10-27 13:40:31.919  2520  2520 I CheckInBootCompletedReceiver: Received boot completed intent
+10-27 13:40:31.920  2520  2870 I DeviceCheckInHelper: enqueueDeviceCheckInWork with delay: PT0S
+10-27 13:40:32.645  1276  1367 D StorageManagerService: Volume emulated;0 broadcasting checking to UserHandle{0}
+10-27 13:40:32.832  1276  1305 I ActivityManager: Start proc 3320:com.android.vending:instant_app_installer/u0a54 for service {com.android.vending/com.google.android.finsky.instantapps.PhenotypeUpdateService}
+10-27 13:40:36.886  1276  3501 D SystemServerTimingAsync: ssm.onCompletedEventUser-0_{|Unlocked|}_com.android.server.permission.access.AccessCheckingService
+10-27 13:40:36.886  1276  3501 V SystemServerTimingAsync: ssm.onCompletedEventUser-0_{|Unlocked|}_com.android.server.permission.access.AccessCheckingService took to complete: 0ms
+10-27 13:42:50.475  2520  4366 E TaskWorkerFactory: Cannot create worker: com.android.devicelockcontroller.provision.worker.DeviceCheckInWorker
+10-27 13:42:50.475  2520  4366 E TaskWorkerFactory: java.lang.NoSuchMethodException: com.android.devicelockcontroller.provision.worker.DeviceCheckInWorker.<init> [class android.content.Context, class androidx.work.WorkerParameters, interface com.google.common.util.concurrent.ListeningExecutorService]
+10-27 13:42:50.475  2520  4370 D DeviceCheckInClient: Creating instance for com.android.devicelockcontroller.debug.DeviceCheckInClientDebug
+10-27 13:42:50.477  2520  4375 I CheckInWorker: perform check-in request
+10-27 13:42:50.479  2520  4375 W CheckInWorker: CheckIn failed. No device identifier available!
+10-27 13:44:33.896  1276  1305 I ActivityManager: Start proc 4558:com.google.android.googlequicksearchbox/u0a58 for broadcast {com.google.android.googlequicksearchbox/com.google.android.libraries.phenotype.client.stable.PhenotypeUpdateBackgroundBroadcastReceiver}
+10-27 13:45:57.793  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.793  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.793  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.com_android_resolv, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.794  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.794  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.794  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.input_method, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.795  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.795  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.795  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.safetycore, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.796  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.796  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.796  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.profiling, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.797  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.797  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.797  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.ipsec, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.798  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.798  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.798  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.wearable_sensing, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.799  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.799  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.799  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.xr_app_compat_overrides, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.800  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.800  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.800  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.shared_native, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.801  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.801  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.801  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.touchflow_native, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.802  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.802  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.802  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.shared, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.803  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.803  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.803  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.wear, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.804  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.804  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.804  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.xr_camera, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.805  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.805  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.805  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.app_cloning, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.806  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.806  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.806  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.pixel_faceauth, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.807  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.807  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.807  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.com_android_captiveportallogin, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.808  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.808  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.808  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.vcn, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.809  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.809  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.809  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.com_android_wifi, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.810  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.810  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.810  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.auto_pin_confirmation, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.811  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.811  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.811  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.com_android_permission, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.812  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.812  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.812  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.launcher_lily, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.813  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.813  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.813  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.com_android_uprobestats, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.814  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.814  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.815  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.biometrics, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.816  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.816  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.816  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.com_android_healthfitness, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.817  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.817  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.817  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.mglru_native, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.818  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.818  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.818  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.com_android_conscrypt, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.819  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.819  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.819  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.mobserve, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.821  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.821  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.821  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.on_device_personalization, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.822  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.822  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.822  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.com_android_networkstack, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.826  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.826  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.826  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.kiwi, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.827  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.827  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.827  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.arc_app_compat, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.828  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.828  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.828  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.astrea_controlled_releases, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.829  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.829  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.829  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.com_android_bt, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.831  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.831  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.831  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.multiuser, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.832  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.832  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.832  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.camera_native, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.833  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.833  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.833  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.com_android_sdkext, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.834  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.834  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.834  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.leaked_animator, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.835  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.835  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.835  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.hdmi_control, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.836  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.836  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.836  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.pdf_viewer, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.837  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.837  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.837  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.remote_auth, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.838  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.838  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.838  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.mediaprovider, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.839  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.839  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.839  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.credential_manager, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.840  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.840  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.840  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.com_android_tethering, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.841  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.841  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.841  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.dropbox, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.842  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.842  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.842  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.remote_key_provisioning_native, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.843  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.843  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.843  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.aicore, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.844  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.844  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.844  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.media_better_together, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.846  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.846  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.846  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.health_fitness, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.847  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.847  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.847  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.com_android_profiling, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.848  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.848  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.848  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.com_android_mediaprovider, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.849  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.849  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.849  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.companion, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.850  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.850  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.850  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.com_android_cellbroadcast, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.851  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.851  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.851  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.haptics, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.852  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.852  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.852  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.security, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.853  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.853  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.853  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.com_android_webapp, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.854  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.854  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.854  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.com_android_uwb, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.855  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.855  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.855  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.wear_connectivity, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.856  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.856  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.856  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.computer_control, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.857  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.857  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.857  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.pixel_pearl, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.858  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.858  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.858  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.bluetooth_native, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.859  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.859  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.859  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.thread_network, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.860  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.860  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.860  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.tv_hdr_output_control, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.861  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.861  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.861  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.cellular_security, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.862  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.862  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.862  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.vpn, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.862  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.862  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.863  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.backup_and_restore, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.863  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.863  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.863  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.vendor_system_native, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.864  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.864  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.864  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.device_policy_manager, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.865  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.865  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.865  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.com_android_telephonycore, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:45:57.866  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:45:57.866  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:45:57.866  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.growth, retryCount 2 [CONTEXT service_id=204 ]
+10-27 13:46:02.896  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.896  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.896  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.statsd_java_boot, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.900  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.900  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.900  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.storage_native_boot, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.901  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.901  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.901  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.profcollect_native_boot, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.902  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.902  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.902  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.runtime_native_boot, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.903  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.903  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.903  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.window_manager_native_boot, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.905  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.905  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.905  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.statsd_native_boot, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.906  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.906  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.906  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.surface_flinger_native_boot, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.907  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.907  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.907  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.activity_manager_native_boot, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.908  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.908  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.908  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.input_native_boot, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.909  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.909  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.909  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.rollback_boot, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.910  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.910  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.910  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.netd_native, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.911  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.911  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.911  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.statsd_java, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.912  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.912  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.912  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.odad, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.913  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.913  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.913  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.app_compat_overrides, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.914  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.914  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.914  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.clipboard, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.916  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.916  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.916  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.device_personalization_services, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.917  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.917  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.917  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.connectivity, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.918  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.918  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.918  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.permissions, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.919  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.919  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.919  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.app_compat, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.920  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.920  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.920  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.swcodec_native, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.921  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.921  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.921  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.device_idle, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.922  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.922  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.922  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.content_capture, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.923  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.923  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.923  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.exo, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.924  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.924  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.924  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.ota, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.925  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.925  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.925  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.wifi, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.926  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.926  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.926  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.system_time, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.927  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.927  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.927  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.settings_stats, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.928  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.928  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.928  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.runtime, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.929  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.929  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.929  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.appsearch, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.930  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.930  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.930  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.telephony, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.931  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.931  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.931  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.interaction_jank_monitor, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.932  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.932  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.932  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.runtime_native, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.933  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.933  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.933  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.adaptive_charging, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.934  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.934  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.934  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.app_standby, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.935  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.935  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.935  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.flipendo, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.936  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.936  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.936  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.connectivity_thermal_power_manager, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.937  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.937  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.937  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.launcher, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.938  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.938  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.938  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.widget, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.939  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.939  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.939  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.aiai_controlled_releases, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.940  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.940  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.940  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.configuration, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.942  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.942  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.942  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.adservices, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.943  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.943  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.943  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.package_manager_service, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.944  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.944  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.944  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.privacy, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.945  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.945  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.945  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.intelligence_bubbles, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.946  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.946  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.946  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.game_driver, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.947  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.947  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.947  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.systemui, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.948  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.948  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.948  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.media, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.948  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.948  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.949  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.alarm_manager, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.950  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.950  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.950  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.notification_assistant, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.951  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.951  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.951  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.private_compute_services, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.952  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.952  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.952  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.oslo, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.953  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.953  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.953  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.app_hibernation, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.954  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.954  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.954  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.car, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.955  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.955  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.955  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.tare, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.956  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.956  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.956  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.on_device_abuse, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.957  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.957  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.957  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.textclassifier, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.958  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.958  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.958  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.statsd_native, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.959  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.959  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.959  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.lmkd_native, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.960  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.960  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.960  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.jobscheduler, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.961  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.961  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.961  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.window_manager, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.962  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.962  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.962  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.rollback, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.963  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.963  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.963  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.virtualization_framework_native, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.964  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.964  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.964  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.attention_manager_service, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.965  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.965  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.965  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.input_native, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.967  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.967  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.967  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.game_overlay, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.968  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.968  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.968  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.captive_portal_login, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.969  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.969  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.969  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.display_manager, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.970  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.970  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.970  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.media_native, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.971  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.971  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.971  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.twoshay_native, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.972  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.972  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.972  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.bluetooth, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.973  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.973  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.973  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.system_scheduler, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.975  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.975  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.975  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.latency_tracker, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.976  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.976  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.976  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.battery_saver, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.976  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.976  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.976  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.constrain_display_apis, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.977  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.977  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.977  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.nnapi_native, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.978  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.978  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.978  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.tethering, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.979  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.979  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.979  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.activity_manager, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.980  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.980  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.980  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.location, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.981  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.981  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.981  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.logcat_manager, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.982  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.982  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.982  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.autofill, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.983  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.983  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.983  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.wallpaper_content, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.985  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.985  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.985  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.rotation_resolver, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.986  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.986  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.986  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.device_personalization_services, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.987  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.987  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.987  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.latency_tracker, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.988  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.988  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.988  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.tethering_boot, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.989  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.989  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.989  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.memory_management_native_boot, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.990  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.990  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.990  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.shared_native_boot, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.992  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.992  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.992  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.vendor_system_native_boot, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.993  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.993  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.993  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.uwb, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.994  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.994  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.994  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.low_power_standby, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.995  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.995  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.995  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.com_android_ipsec, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.996  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.996  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.996  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.sdk_sandbox, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.997  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.997  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.997  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.accessibility, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.998  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.998  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.998  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.com_android_extservices, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:02.999  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:02.999  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:02.999  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.nearby, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.001  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.001  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.001  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.audioproxy, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.002  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.002  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.002  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.system_server_watchdog, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.004  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.004  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.004  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.com_android_crashrecovery, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.005  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.005  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.005  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.devicelock, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.008  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.008  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.008  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.text, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.010  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.010  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.010  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.network_security, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.011  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.011  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.011  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.memory_safety_native, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.014  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.014  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.014  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.cellbroadcast, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.015  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.015  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.015  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.com_android_nfcservices, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.016  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.016  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.016  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.edgetpu_native, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.017  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.017  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.017  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.com_android_resolv, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.018  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.018  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.018  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.input_method, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.019  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.019  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.019  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.safetycore, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.020  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.020  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.020  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.profiling, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.021  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.021  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.021  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.ipsec, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.022  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.022  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.022  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.wearable_sensing, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.023  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.023  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.023  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.xr_app_compat_overrides, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.024  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.024  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.024  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.shared_native, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.025  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.025  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.025  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.touchflow_native, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.026  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.026  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.026  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.shared, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.027  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.027  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.027  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.wear, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.028  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.028  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.028  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.xr_camera, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.029  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.029  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.029  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.app_cloning, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.029  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.029  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.029  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.pixel_faceauth, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.030  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.030  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.030  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.com_android_captiveportallogin, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.031  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.031  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.031  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.vcn, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.032  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.032  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.032  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.com_android_wifi, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.034  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.034  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.034  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.auto_pin_confirmation, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.035  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.035  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.035  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.com_android_permission, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.036  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.036  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.036  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.launcher_lily, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.037  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.037  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.037  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.com_android_uprobestats, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.038  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.038  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.038  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.biometrics, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.039  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.039  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.039  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.com_android_healthfitness, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.040  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.040  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.040  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.mglru_native, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.041  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.041  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.041  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.com_android_conscrypt, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.042  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.042  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.042  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.mobserve, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.044  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.044  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.044  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.on_device_personalization, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.045  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.045  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.045  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.com_android_networkstack, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.046  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.046  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.046  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.kiwi, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.047  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.047  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.047  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.arc_app_compat, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.048  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.048  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.048  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.astrea_controlled_releases, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.049  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.049  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.049  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.com_android_bt, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.050  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.050  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.050  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.multiuser, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.051  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.051  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.051  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.camera_native, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.051  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.051  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.051  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.com_android_sdkext, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.052  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.052  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.052  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.leaked_animator, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.053  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.053  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.053  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.hdmi_control, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.054  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.054  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.054  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.pdf_viewer, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.055  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.055  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.055  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.remote_auth, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.056  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.056  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.056  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.mediaprovider, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.057  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.057  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.057  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.credential_manager, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.058  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.058  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.058  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.com_android_tethering, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.059  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.059  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.059  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.dropbox, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.060  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.060  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.060  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.remote_key_provisioning_native, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.061  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.061  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.061  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.aicore, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.062  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.062  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.062  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.media_better_together, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.063  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.063  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.063  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.health_fitness, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.064  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.064  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.064  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.com_android_profiling, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.065  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.065  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.065  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.com_android_mediaprovider, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.066  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.066  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.066  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.companion, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.067  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.067  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.067  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.com_android_cellbroadcast, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.068  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.068  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.068  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.haptics, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.069  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.069  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.069  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.security, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.070  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.070  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.070  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.com_android_webapp, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.071  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.071  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.071  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.com_android_uwb, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.071  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.071  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.071  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.wear_connectivity, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.072  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.072  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.072  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.computer_control, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.073  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.073  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.073  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.pixel_pearl, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.074  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.074  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.074  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.bluetooth_native, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.075  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.075  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.075  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.thread_network, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.076  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.076  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.076  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.tv_hdr_output_control, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.077  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.077  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.077  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.cellular_security, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.078  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.078  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.078  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.vpn, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.079  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.079  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.079  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.backup_and_restore, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.080  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.080  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.080  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.vendor_system_native, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.081  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.081  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.081  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.device_policy_manager, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.082  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.082  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.082  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.growth, retryCount 3 [CONTEXT service_id=204 ]
+10-27 13:46:03.083  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.a(:com.google.android.gms@222116056@22.21.16 (140800-454906765):15)
+10-27 13:46:03.083  2056  4802 W bbin    : 	at com.google.android.gms.platformconfigurator.PhenotypeConfigurationUpdateListener.onHandleIntent(:com.google.android.gms@222116056@22.21.16 (140800-454906765):13)
+10-27 13:46:03.083  2056  4802 I PhenotypeConfigurationU: Failed to propagate package com.google.android.platform.com_android_telephonycore, retryCount 3 [CONTEXT service_id=204 ]

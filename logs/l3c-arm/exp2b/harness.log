@@ -1,0 +1,8 @@
+[exp2] 2026-10-27T13:44:46Z first-boot observation window (90s for GMS checkin attempts)
+[exp2] 2026-10-27T13:46:16Z collect phase=p1-firstboot
+[exp2] 2026-10-27T13:46:17Z collect done phase=p1-firstboot checkin_lines=767 secure_android_id=349be290d5685a35
+[exp2] 2026-10-27T13:46:20Z pm clear com.google.android.gms -> re-checkin observation
+[exp2] 2026-10-27T13:46:20Z waiting 120s for re-checkin attempts
+[exp2] 2026-10-27T13:48:20Z collect phase=p2-afterclear
+[exp2] 2026-10-27T13:48:21Z collect done phase=p2-afterclear checkin_lines=1048 secure_android_id=349be290d5685a35
+[exp2] 2026-10-27T13:48:21Z post-clear secure_android_id=349be290d5685a35

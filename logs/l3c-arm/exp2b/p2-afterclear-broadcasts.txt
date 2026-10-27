@@ -1,0 +1,2 @@
+    #563: act=com.google.android.checkin.CHECKIN_COMPLETE flg=0x1000010 (has extras)
+    #854: act=com.google.android.checkin.CHECKIN_COMPLETE flg=0x1000010 (has extras)

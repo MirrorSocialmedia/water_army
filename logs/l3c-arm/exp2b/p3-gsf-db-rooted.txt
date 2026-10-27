@@ -1,0 +1,7 @@
+== googlesettings.db tables + android_id ==
+android_metadata  partner         
+---
+Error: in prepare, no such table: android_id
+== gservices overrides android_id ==
+== provider dump (root) ==
+No result found.
