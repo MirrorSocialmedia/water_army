@@ -38,6 +38,7 @@ import { dirname, join } from 'node:path';
 import {
   SAFE_PROFILE_VALUE_RE,
   PROFILE_PROP_MAP,
+  profilePropEntries,
   POOL_LOCALES,
   POOL_TIMEZONES,
   POOL_CARRIERS,
@@ -75,6 +76,8 @@ export const TEMPLATE_REQUIRED_FIELDS = Object.freeze([
   'androidRelease', 'brand', 'manufacturer', 'model', 'device', 'productName',
   'buildId', 'displayId', 'incremental', 'fingerprint', 'sdkVersion',
   'firstApiLevel', 'buildType', 'buildTags',
+  // L2 wave-1 (ADR-031): the real board name (ro.hardware/ro.boot.hardware)
+  'hardware',
 ]);
 
 /**
@@ -102,6 +105,8 @@ export function validateBuildTemplate(t) {
     if (f[k].includes('%')) problems.push(`${t.id}: fields.${k} must not contain "%" (reserved char — ADR-028)`);
     if (!SAFE_PROFILE_VALUE_RE.test(f[k])) problems.push(`${t.id}: fields.${k} "${f[k].slice(0, 40)}" must be transport-safe (no spaces/=/quotes)`);
   }
+  // board name shape (ro.hardware story — lowercase board token)
+  if (!/^[a-z0-9][a-z0-9_-]{0,39}$/.test(f.hardware)) problems.push(`${t.id}: fields.hardware "${String(f.hardware).slice(0, 40)}" must be a lowercase board name`);
   // fingerprint = brand/device/name:release/buildId/incremental:type/keys — the FULL join
   const expectedFp = `${f.brand}/${f.device}/${f.productName}:${f.androidRelease}/${f.buildId}/${f.incremental}:${f.buildType}/${f.buildTags}`;
   if (f.fingerprint !== expectedFp) problems.push(`${t.id}: fingerprint must equal "${expectedFp}" (full AOSP cross-check)`);
@@ -160,7 +165,7 @@ export const TEMPLATE_PROFILE_FIELDS = Object.freeze([
   'androidRelease', 'brand', 'manufacturer', 'model', 'device', 'productName',
   'buildId', 'displayId', 'fingerprint', 'serial',
   'locale', 'timezone', 'carrierName', 'carrierMcc', 'carrierMnc',
-  'securityPatch', 'templateId',
+  'securityPatch', 'templateId', 'hardware',
 ]);
 
 /** Validate a GENERATED template profile (W1 core validator + W1b extras). */
@@ -187,6 +192,11 @@ export function validateTemplateProfile(profile) {
   }
   if (profile && typeof profile.securityPatch === 'string' && profile.securityPatch !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(profile.securityPatch)) {
     problems.push('securityPatch must be YYYY-MM-DD');
+  }
+  // template rows ALWAYS carry the hardware story (L2 wave-1) — a missing
+  // hardware here means a pre-ADR-031 profile shape feeding the template path
+  if (profile && (typeof profile.hardware !== 'string' || profile.hardware === '')) {
+    problems.push('hardware must be a non-empty string on template profiles (L2 wave-1)');
   }
   return problems;
 }
@@ -216,6 +226,7 @@ export function generateTemplateProfile(identityId, opts = {}) {
     model: t.fields.model, // real model incl. spaces — model is NOT a carrier field (ADR-028)
     device: t.fields.device,
     productName: t.fields.productName,
+    hardware: t.fields.hardware, // real board name (L2 wave-1, ADR-031)
     buildId: t.fields.buildId,
     displayId: t.fields.displayId,
     fingerprint: t.fields.fingerprint,
@@ -236,15 +247,17 @@ export function generateTemplateProfile(identityId, opts = {}) {
 }
 
 /**
- * Template profile → ro.* override map for the carrier (ADR-028).
- * Same 9 props as W1's profileToRoOverrides, but model is %20-encoded:
- * real models contain spaces ("Pixel 8 Pro") and the kernel-cmdline carrier
- * forbids them; wa-propctl (w1b image) decodes %20 back to spaces when it
- * writes the prop. Models are validated to never contain a literal '%'.
+ * Template profile → prop override map for the carrier (ADR-028 + ADR-031).
+ * Same expanded prop set as W1's profileToRoOverrides (identity ro.* +
+ * persist.sys.timezone + ro.hardware/ro.boot.hardware), but model is
+ * %20-encoded: real models contain spaces ("Pixel 8 Pro") and the
+ * kernel-cmdline carrier forbids them; wa-propctl (w1b image) decodes %20
+ * back to spaces when it writes the prop. Models are validated to never
+ * contain a literal '%'.
  */
 export function templateProfileToRoOverrides(profile) {
   const out = {};
-  for (const [field, prop] of Object.entries(PROFILE_PROP_MAP)) {
+  for (const [field, prop] of profilePropEntries()) {
     const v = profile?.[field];
     if (typeof v !== 'string' || v === '') continue;
     out[prop] = field === 'model' ? v.replaceAll(' ', '%20') : v;

@@ -6,7 +6,7 @@
     {
       "id": "pixel8pro-a17-cp3a261005",
       "verified": true,
-      "source": "github.com/Pixel-Props/build.prop release build-20261011, asset Husky_CP3A.261005.005.zip system.prop (ro.product.build.fingerprint + ro.product.* lines), fetched 2026-10-27",
+      "source": "github.com/Pixel-Props/build.prop release build-20261011, asset Husky_CP3A.261005.005.zip system.prop (ro.product.build.fingerprint + ro.product.* lines), fetched 2026-10-27 | ro.hardware: board token = bootloader androidboot.hardware copy (AOSP init mechanism — the same path that gives redroid 'redroid'); L2 wave-1 ADR-031, real-device recheck pending",
       "fields": {
         "androidRelease": "17",
         "brand": "google",
@@ -21,13 +21,14 @@
         "sdkVersion": "37",
         "firstApiLevel": "34",
         "buildType": "user",
-        "buildTags": "release-keys"
+        "buildTags": "release-keys",
+        "hardware": "husky"
       }
     },
     {
       "id": "pixel8-a17-cp3a261005",
       "verified": true,
-      "source": "github.com/Pixel-Props/build.prop release build-20261011, asset Shiba_CP3A.261005.005.zip system.prop, fetched 2026-10-27",
+      "source": "github.com/Pixel-Props/build.prop release build-20261011, asset Shiba_CP3A.261005.005.zip system.prop, fetched 2026-10-27 | ro.hardware: board token = bootloader androidboot.hardware copy (AOSP init mechanism — the same path that gives redroid 'redroid'); L2 wave-1 ADR-031, real-device recheck pending",
       "fields": {
         "androidRelease": "17",
         "brand": "google",
@@ -42,13 +43,14 @@
         "sdkVersion": "37",
         "firstApiLevel": "34",
         "buildType": "user",
-        "buildTags": "release-keys"
+        "buildTags": "release-keys",
+        "hardware": "shiba"
       }
     },
     {
       "id": "pixel8a-a17-cp3a261005",
       "verified": true,
-      "source": "github.com/Pixel-Props/build.prop release build-20261011, asset Akita_CP3A.261005.005.zip system.prop, fetched 2026-10-27",
+      "source": "github.com/Pixel-Props/build.prop release build-20261011, asset Akita_CP3A.261005.005.zip system.prop, fetched 2026-10-27 | ro.hardware: board token = bootloader androidboot.hardware copy (AOSP init mechanism — the same path that gives redroid 'redroid'); L2 wave-1 ADR-031, real-device recheck pending",
       "fields": {
         "androidRelease": "17",
         "brand": "google",
@@ -63,13 +65,14 @@
         "sdkVersion": "37",
         "firstApiLevel": "34",
         "buildType": "user",
-        "buildTags": "release-keys"
+        "buildTags": "release-keys",
+        "hardware": "akita"
       }
     },
     {
       "id": "pixel7-a17-cp3a261005a1",
       "verified": true,
-      "source": "github.com/Pixel-Props/build.prop release build-20261011, asset Panther_CP3A.261005.002.A1.zip system.prop, fetched 2026-10-27",
+      "source": "github.com/Pixel-Props/build.prop release build-20261011, asset Panther_CP3A.261005.002.A1.zip system.prop, fetched 2026-10-27 | ro.hardware: board token = bootloader androidboot.hardware copy (AOSP init mechanism — the same path that gives redroid 'redroid'); L2 wave-1 ADR-031, real-device recheck pending",
       "fields": {
         "androidRelease": "17",
         "brand": "google",
@@ -84,13 +87,14 @@
         "sdkVersion": "37",
         "firstApiLevel": "33",
         "buildType": "user",
-        "buildTags": "release-keys"
+        "buildTags": "release-keys",
+        "hardware": "panther"
       }
     },
     {
       "id": "pixel6a-a17-cp3a261005a1",
       "verified": true,
-      "source": "github.com/Pixel-Props/build.prop release build-20261011, asset Bluejay_CP3A.261005.002.A1.zip system.prop, fetched 2026-10-27",
+      "source": "github.com/Pixel-Props/build.prop release build-20261011, asset Bluejay_CP3A.261005.002.A1.zip system.prop, fetched 2026-10-27 | ro.hardware: board token = bootloader androidboot.hardware copy (AOSP init mechanism — the same path that gives redroid 'redroid'); L2 wave-1 ADR-031, real-device recheck pending",
       "fields": {
         "androidRelease": "17",
         "brand": "google",
@@ -105,14 +109,15 @@
         "sdkVersion": "37",
         "firstApiLevel": "31",
         "buildType": "user",
-        "buildTags": "release-keys"
+        "buildTags": "release-keys",
+        "hardware": "bluejay"
       }
     },
     {
       "id": "galaxy-a5-2017-r16nw",
       "verified": false,
       "verification_note": "Device codename a5y17lte is well documented (LineageOS); incremental/CSC code + securityPatch pattern-plausible. REPLACE with live samfirm/probe data at real-device stage.",
-      "source": "community-published (LineageOS device tree a5y17lte + XDA firmware posts); NOT machine-verified",
+      "source": "community-published (LineageOS device tree a5y17lte + XDA firmware posts); NOT machine-verified | ro.hardware='s5e7880x': Exynos board id (s5e7880x = Exynos 7880 platform); template unverified — real-device recheck pending (ADR-031)",
       "fields": {
         "androidRelease": "8.0.0",
         "brand": "samsung",
@@ -127,14 +132,15 @@
         "sdkVersion": "26",
         "firstApiLevel": "24",
         "buildType": "user",
-        "buildTags": "release-keys"
+        "buildTags": "release-keys",
+        "hardware": "s5e7880x"
       }
     },
     {
       "id": "xiaomi-13-tkq1-a13",
       "verified": false,
       "verification_note": "Xiaomi 13 global (codename fuxi documented in AOSP/LineageOS device trees). MIUI incremental (V14.x pattern) pattern-plausible. REPLACE with live Xiaomi firmware catalog/probe data at real-device stage.",
-      "source": "community-published (XMU firmware index pattern); NOT machine-verified",
+      "source": "community-published (XMU firmware index pattern); NOT machine-verified | ro.hardware='qcom': Snapdragon SoC board token (shipping Snapdragon devices carry ro.hardware=qcom); template unverified — real-device recheck pending (ADR-031)",
       "fields": {
         "androidRelease": "13",
         "brand": "Xiaomi",
@@ -149,14 +155,15 @@
         "sdkVersion": "33",
         "firstApiLevel": "32",
         "buildType": "user",
-        "buildTags": "release-keys"
+        "buildTags": "release-keys",
+        "hardware": "qcom"
       }
     },
     {
       "id": "oneplus-11-salami-ukq1-a14",
       "verified": false,
       "verification_note": "OnePlus 11 (codename salami documented in LineageOS device trees). OxygenOS hash-style incremental pattern-plausible. REPLACE with live OTA/probe data at real-device stage.",
-      "source": "community-published (LineageOS salami device tree + OTA posts); NOT machine-verified",
+      "source": "community-published (LineageOS salami device tree + OTA posts); NOT machine-verified | ro.hardware='qcom': Snapdragon SoC board token (shipping Snapdragon devices carry ro.hardware=qcom); template unverified — real-device recheck pending (ADR-031)",
       "fields": {
         "androidRelease": "14",
         "brand": "OnePlus",
@@ -171,7 +178,8 @@
         "sdkVersion": "34",
         "firstApiLevel": "33",
         "buildType": "user",
-        "buildTags": "release-keys"
+        "buildTags": "release-keys",
+        "hardware": "qcom"
       }
     }
   ]

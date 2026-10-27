@@ -35,11 +35,13 @@ public class ProbeActivity extends Activity {
     private static final String TAG = "WA_PROBE";
     private static final String OUT_PATH = "/data/local/tmp/wa-probe-dump.json";
 
-    // the 9 carrier-mapped identity props (mirror of PROFILE_PROP_MAP)
+    // the carrier-mapped identity props (mirror of PROFILE_PROP_MAP, expanded:
+    // 9 identity ro.* + persist.sys.timezone + ro.hardware/ro.boot.hardware — L2 wave-1)
     private static final String[] PROPS = {
         "ro.product.brand", "ro.product.manufacturer", "ro.product.model",
         "ro.product.device", "ro.product.name",
         "ro.build.id", "ro.build.display.id", "ro.build.fingerprint", "ro.serialno",
+        "persist.sys.timezone", "ro.hardware", "ro.boot.hardware",
     };
     // context fields the validator cross-joins + L2 inventory seeds
     private static final String[] CONTEXT_PROPS = {
@@ -47,7 +49,7 @@ public class ProbeActivity extends Activity {
         "ro.build.version.security_patch", "ro.build.description",
         "ro.product.build.fingerprint", "ro.system.build.fingerprint", "ro.vendor.build.fingerprint",
         "ro.product.cpu.abi", "ro.kernel.qemu",
-        "init.svc.zygote", "ro.debuggable", "ro.adb.secure", "ro.hardware", "ro.boot.hardware",
+        "init.svc.zygote", "ro.debuggable", "ro.adb.secure",
     };
     // multi-partition product namespaces (Android 14 splits these; a partial
     // mapping across partitions is a fingerprinting surface — dump raw)

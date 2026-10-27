@@ -43,9 +43,14 @@ export function runAssert({ dump, expected }) {
   pass = pass && selfProblems.length === 0;
   // L1 informational layer (never blocking): what L2 must close
   const ctx = dump.context ?? {};
+  // L2 wave-1 (ADR-031): ro.hardware/ro.boot.hardware moved from the
+  // informational context block INTO the asserted props map (they are now
+  // carrier-mapped identity props). Read both placements so old probe APK
+  // dumps (context-only) still produce the tell note.
+  const hwView = { ...dump.props, ...ctx };
   const notes = [];
   if (ctx['ro.kernel.qemu'] === '1') notes.push('ro.kernel.qemu=1 (emulator tell — L2)');
-  if (ctx['ro.hardware'] === 'redroid' || ctx['ro.boot.hardware'] === 'redroid') notes.push('ro.hardware=redroid (image tell — L2)');
+  if (hwView['ro.hardware'] === 'redroid' || hwView['ro.boot.hardware'] === 'redroid') notes.push('ro.hardware=redroid (image tell — L2)');
   if (typeof dump.propCount === 'number' && dump.propCount >= 0 && dump.propCount < 1500) notes.push(`prop count ${dump.propCount} below real-firmware range (L2 inventory gap)`);
   for (const n of notes) lines.push(`NOTE    ${n}`);
   return { lines, pass };

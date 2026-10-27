@@ -28,7 +28,7 @@ import {
   checkProbeSelfConsistency,
 } from '../../packages/shared/src/w1b-consistency.js';
 import { runAssert } from '../../scripts/w1b/probe-assert.mjs';
-import { PROFILE_PROP_MAP, propToAndroidbootKey } from '../../packages/shared/src/fingerprint-profile.js';
+import { profilePropEntries, propToAndroidbootKey } from '../../packages/shared/src/fingerprint-profile.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -145,13 +145,21 @@ test('generator: cross-template fields differ between templates (pool diversity)
 // Carrier overrides (%20 model encoding, ADR-028)
 // ---------------------------------------------------------------------------
 
-test('overrides: templateProfileToRoOverrides maps 9 props, model %20-encoded', () => {
+test('overrides: templateProfileToRoOverrides maps the full expanded prop set, model %20-encoded', () => {
   const p = generateTemplateProfile('w1bmodel0aaaaaaaaaaaa');
   const o = templateProfileToRoOverrides(p);
-  assert.deepEqual(Object.keys(o).sort(), Object.values(PROFILE_PROP_MAP).sort());
+  const flattened = profilePropEntries().map(([, prop]) => prop).sort();
+  assert.ok(flattened.length === 12, `expanded prop set must be 12 rows (11 fields incl. hardware x2), got ${flattened.length}`);
+  assert.deepEqual(Object.keys(o).sort(), flattened);
   assert.equal(o['ro.product.model'], p.model.replaceAll(' ', '%20'));
   assert.ok(!o['ro.product.model'].includes(' '), 'carrier value must not contain raw spaces');
   assert.equal(o['ro.build.fingerprint'], p.fingerprint);
+  // L2 wave-1 (ADR-031): timezone + hardware ride the same carrier chain as the
+  // identity ro.* props — one field tells BOTH hardware props the same story
+  assert.equal(o['persist.sys.timezone'], p.timezone);
+  assert.match(o['persist.sys.timezone'], /^[A-Za-z]+\/[A-Za-z_+]+$/, 'IANA timezone rides the carrier verbatim');
+  assert.equal(o['ro.hardware'], p.hardware);
+  assert.equal(o['ro.boot.hardware'], p.hardware, 'ro.hardware and ro.boot.hardware carry the SAME board token');
   // round-trip through the W1 carrier builder
   const args = (m) => Object.keys(m).sort().map((k) => `${propToAndroidbootKey(k)}=${m[k]}`);
   for (const a of args(o)) {
@@ -174,18 +182,27 @@ test('rc artifact: committed file equals generator output (drift guard)', () => 
   assert.equal(committed, generateWaRoMapRc(), 'oem-ro-map.rc drifted — run scripts/w1b/generate-wa-ro-map-rc.mjs');
 });
 
-test('rc artifact: parses back to exactly the 9-entry mapping table', () => {
+test('rc artifact: parses back to exactly the 12-entry mapping table (non-empty guard)', () => {
   const { rows, problems } = parseWaRoMapRc(generateWaRoMapRc());
   assert.deepEqual(problems, []);
   const table = carrierMappingTable().map((r) => ({ carrier: r.carrier, target: r.target })).sort((a, b) => (a.target < b.target ? -1 : 1));
+  assert.ok(table.length === 12, 'mapping table must be 12 rows — a silently empty/short table is the vacuous-assertion failure mode');
   assert.deepEqual([...rows].sort((a, b) => (a.target < b.target ? -1 : 1)), table);
-  assert.equal(rows.length, 9);
+  assert.equal(rows.length, 12);
+  // L2 wave-1 phase discipline: persist.* maps in post-fs-data ONLY (ro.* in
+  // early-init) — enforced by the parser too, but assert it here at source
+  const rc = generateWaRoMapRc();
+  assert.match(rc, /on post-fs-data && property:ro\.boot\.oem_persist_sys_timezone=\*/);
+  assert.ok(!/^on early-init && property:ro\.boot\.oem_persist_/m.test(rc), 'persist.* carrier must NOT map in early-init (load_persistent_properties races it)');
 });
 
-test('rc parser: catches tampering (dangling trigger / foreign content / carrier mismatch)', () => {
+test('rc parser: catches tampering (dangling trigger / foreign content / carrier mismatch / wrong phase)', () => {
   assert.ok(parseWaRoMapRc('on early-init && property:ro.boot.oem_x=*\n').problems.some((m) => /dangling/.test(m)));
   assert.ok(parseWaRoMapRc('service sneaky /system/bin/sneaky\n').problems.some((m) => /unexpected/.test(m)));
   assert.ok(parseWaRoMapRc('on early-init && property:ro.boot.oem_a=*\n    exec -- /vendor/bin/oem-propctl ro.x ${ro.boot.oem_b}').problems.some((m) => /does not match trigger/.test(m)));
+  // phase tampering: persist.* in early-init / ro.* in post-fs-data both rejected
+  assert.ok(parseWaRoMapRc('on early-init && property:ro.boot.oem_persist_sys_timezone=*\n    exec -- /vendor/bin/oem-propctl persist.sys.timezone ${ro.boot.oem_persist_sys_timezone}').problems.some((m) => /must be post-fs-data/.test(m)));
+  assert.ok(parseWaRoMapRc('on post-fs-data && property:ro.boot.oem_ro_serialno=*\n    exec -- /vendor/bin/oem-propctl ro.serialno ${ro.boot.oem_ro_serialno}').problems.some((m) => /must be early-init/.test(m)));
 });
 
 // ---------------------------------------------------------------------------
@@ -194,7 +211,7 @@ test('rc parser: catches tampering (dangling trigger / foreign content / carrier
 
 function devicePropsFrom(profile) {
   const props = {};
-  for (const [field, prop] of Object.entries(PROFILE_PROP_MAP)) props[prop] = profile[field]; // device sees REAL values (spaces decoded)
+  for (const [field, prop] of profilePropEntries()) props[prop] = profile[field]; // device sees REAL values (spaces decoded)
   return props;
 }
 
@@ -203,7 +220,37 @@ test('consistency: device truth matching profile -> all PASS', () => {
   const r = checkProfileConsistency(p, devicePropsFrom(p));
   assert.ok(r.pass, JSON.stringify(r.rows.filter((x) => x.status !== 'PASS')));
   assert.equal(r.blocking, false);
-  assert.equal(r.rows.length, 9);
+  assert.equal(r.rows.length, 12);
+  // L2 wave-1: timezone + hardware rows must EXIST and PASS (vacuous guard: a
+  // row silently missing from the kernel would let device drift slip unnoticed)
+  for (const prop of ['persist.sys.timezone', 'ro.hardware', 'ro.boot.hardware']) {
+    const row = r.rows.find((x) => x.prop === prop);
+    assert.ok(row && row.status === 'PASS', `${prop} row missing/not PASS: ${JSON.stringify(row)}`);
+  }
+});
+
+test('consistency: hardware mismatch on ONE of the two props -> blocking FAIL', () => {
+  const p = generateTemplateProfile('w1bcons03aaaaaaaaaa');
+  const props = devicePropsFrom(p);
+  props['ro.boot.hardware'] = 'redroid'; // boot arg mirrored but identity rc forgot one target
+  const r = checkProfileConsistency(p, props);
+  assert.equal(r.pass, false);
+  assert.equal(r.rows.find((x) => x.prop === 'ro.boot.hardware').status, 'FAIL');
+  assert.equal(r.rows.find((x) => x.prop === 'ro.hardware').status, 'PASS');
+});
+
+test('consistency: legacy W1 profile (no hardware field) -> SKIP rows, never FAIL', () => {
+  const p = generateTemplateProfile('w1bcons04aaaaaaaaaa');
+  const legacy = { ...p };
+  delete legacy.hardware; // stored profile predates L2 wave-1: no carrier emitted, device shows image default
+  const props = devicePropsFrom(p);
+  props['ro.hardware'] = 'redroid';
+  props['ro.boot.hardware'] = 'redroid';
+  const r = checkProfileConsistency(legacy, props);
+  assert.equal(r.pass, true, 'SKIP must not block legacy rows');
+  const skips = r.rows.filter((x) => x.status === 'SKIP');
+  assert.equal(skips.length, 2);
+  assert.deepEqual(skips.map((x) => x.prop).sort(), ['ro.boot.hardware', 'ro.hardware']);
 });
 
 test('consistency: fingerprint mismatch / missing prop -> FAIL/MISSING + blocking', () => {
@@ -221,11 +268,14 @@ test('consistency: fingerprint mismatch / missing prop -> FAIL/MISSING + blockin
 test('probe-assert runner: fixture dump -> per-field lines + VERDICT semantics', () => {
   const p = generateTemplateProfile('w1bassert00aaaaaaaaa');
   const props = devicePropsFrom(p);
-  const dump = { schema: 'wa-probe/1', props, context: { 'ro.hardware': 'redroid', 'ro.build.type': 'user', 'ro.build.tags': 'release-keys' }, propCount: 900 };
+  const dump = { schema: 'wa-probe/1', props, context: { 'ro.build.type': 'user', 'ro.build.tags': 'release-keys' }, propCount: 900 };
   const good = runAssert({ dump, expected: p });
   assert.equal(good.pass, true, good.lines.join('\n'));
-  assert.ok(good.lines.filter((l) => l.startsWith('PASS')).length === 9);
-  assert.ok(good.lines.some((l) => l.startsWith('NOTE') && /ro.hardware=redroid/.test(l)), 'L2 tells reported as notes (non-blocking)');
+  assert.ok(good.lines.filter((l) => l.startsWith('PASS')).length === 12);
+
+  const legacyProbe = { ...dump, context: { ...dump.context, 'ro.hardware': 'redroid' } }; // pre-L2 probe APK kept hardware in context only
+  const withTell = runAssert({ dump: legacyProbe, expected: null });
+  assert.ok(withTell.lines.some((l) => l.startsWith('NOTE') && /ro.hardware=redroid/.test(l)), 'L2 tells reported as notes (non-blocking)');
 
   const broken = runAssert({ dump: { ...dump, props: { ...props, 'ro.serialno': 'OTHER' } }, expected: p });
   assert.equal(broken.pass, false);

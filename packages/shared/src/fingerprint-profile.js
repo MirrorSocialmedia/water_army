@@ -25,14 +25,17 @@
 
 import { createHash } from 'node:crypto';
 
+
 // ---------------------------------------------------------------------------
 // Field registry
 // ---------------------------------------------------------------------------
 
 /**
- * Android property a profile field maps to (the ro.* set is the
- * androidboot-cmdline candidate carrier; locale/timezone/carrier ride
- * settings/telephony — V3 decides the per-prop mechanism).
+ * Android property a profile field maps to (the ro.* / persist.* set is the
+ * androidboot-cmdline carrier; values reach the device via the generated
+ * init mapping, see w1b-image-mapping.js). Array values = one field telling
+ * several props the SAME story (hardware). locale/carrier ride
+ * settings/telephony — no ro.* carrier for them.
  */
 export const PROFILE_PROP_MAP = Object.freeze({
   brand: 'ro.product.brand',
@@ -44,7 +47,32 @@ export const PROFILE_PROP_MAP = Object.freeze({
   displayId: 'ro.build.display.id',
   fingerprint: 'ro.build.fingerprint',
   serial: 'ro.serialno',
+  // L2 wave-1 (ADR-031): timezone falls to the device — persist.sys.timezone
+  // rides the SAME androidboot carrier; the generated rc maps it in the
+  // post-fs-data phase (AFTER init loads stored persistent properties, so a
+  // stale /data value can never out-rank the identity story; and BEFORE
+  // zygote, so every process resolves the identity timezone).
+  timezone: 'persist.sys.timezone',
+  // L2 wave-1 (ADR-031, D2): ro.hardware/ro.boot.hardware = "redroid" is a
+  // classic container tell. One field, two targets, one story: real devices
+  // carry the board name in both (init copies androidboot.hardware=<board>
+  // to ro.hardware, and exports the same token as ro.boot.hardware — the
+  // very mechanism by which redroid gets "redroid" in both).
+  hardware: Object.freeze(['ro.hardware', 'ro.boot.hardware']),
 });
+
+/**
+ * Flatten PROFILE_PROP_MAP to [field, prop] pairs (array-valued fields
+ * expand to one pair per prop). All carrier/mapping/consistency consumers
+ * iterate THIS so a field with several props can never be half-wired.
+ */
+export function profilePropEntries() {
+  const out = [];
+  for (const [field, prop] of Object.entries(PROFILE_PROP_MAP)) {
+    for (const p of Array.isArray(prop) ? prop : [prop]) out.push([field, p]);
+  }
+  return out;
+}
 
 /**
  * Fields that MUST be unique across identities (pairwise collision = the
@@ -86,6 +114,7 @@ const FIELD_MAX_LEN = Object.freeze({
   serial: 32,
   locale: 16,
   timezone: 48,
+  hardware: 40,
   carrierName: 32,
   carrierMcc: 4,
   carrierMnc: 4,
@@ -96,6 +125,9 @@ const FIELD_RE = Object.freeze({
   androidRelease: /^\d+(\.\d+){0,2}$/,
   carrierMcc: /^\d{3,4}$/,
   carrierMnc: /^\d{1,4}$/,
+  // board names: lowercase alnum with -/_ separators (device codenames on
+  // Pixel-class devices, "qcom"/"s5e7880x"-class board ids elsewhere)
+  hardware: /^[a-z0-9][a-z0-9_-]{0,39}$/,
 });
 
 // ---------------------------------------------------------------------------
@@ -214,6 +246,10 @@ export function generateFingerprintProfile(identityId) {
   const slug = `${line.replace(/[^A-Za-z0-9]/g, '').toLowerCase()}-${modelNum.toLowerCase()}`;
   const device = slug.slice(0, 24);
   const productName = slug.slice(0, 24);
+  // L2 wave-1: synthetic board name = device codename (the Pixel-class
+  // convention: ro.hardware == the board codename the bootloader passes as
+  // androidboot.hardware). Same slug, same story.
+  const hardware = device;
   const androidRelease = rng.pick(POOL_ANDROID_RELEASES);
   const securityPatch = `2025-${String(1 + (rng.u32() % 9)).padStart(2, '0')}-${String(1 + (rng.u32() % 28)).padStart(2, '0')}`;
   const buildId = `${rng.letter()}${rng.digits(1)}AB${rng.code(3)}`; // e.g. "B4AB7QF"
@@ -235,6 +271,7 @@ export function generateFingerprintProfile(identityId) {
     model,
     device,
     productName,
+    hardware,
     buildId,
     displayId,
     fingerprint,
@@ -260,8 +297,11 @@ export function generateFingerprintProfile(identityId) {
 
 /**
  * @returns {string[]} problems (empty = valid). Unknown top-level keys are
- * tolerated ONLY for `securityPatch`; anything else is a shape violation —
- * a silent typo here would silently drop an override on a real device.
+ * tolerated ONLY for `securityPatch`, `templateId` and `hardware` (L2 wave-1:
+ * OPTIONAL in W1 core rows so legacy stored profiles stay valid — rows
+ * without it simply carry no hardware carrier, degrading to the image
+ * default); anything else is a shape violation — a silent typo here would
+ * silently drop an override on a real device.
  */
 export function validateFingerprintProfile(profile) {
   const problems = [];
@@ -288,9 +328,19 @@ export function validateFingerprintProfile(profile) {
     }
   }
   for (const key of Object.keys(profile)) {
-    // securityPatch: W1 metadata; templateId: W1b provenance metadata (ADR-028)
-    if (!PROFILE_FIELDS.includes(key) && key !== 'securityPatch' && key !== 'templateId') {
+    // securityPatch: W1 metadata; templateId: W1b provenance metadata (ADR-028);
+    // hardware: L2 wave-1 optional carrier field (see PROFILE_PROP_MAP)
+    if (!PROFILE_FIELDS.includes(key) && key !== 'securityPatch' && key !== 'templateId' && key !== 'hardware') {
       problems.push(`unknown profile field "${key}"`);
+    }
+  }
+  // hardware: optional, but when present it must be board-name shaped and
+  // transport-safe (a malformed value would ride the carrier and fail closed
+  // at buildRoCmdArgs with a worse error site)
+  if (profile.hardware !== undefined) {
+    const v = profile.hardware;
+    if (typeof v !== 'string' || v === '' || v.length > FIELD_MAX_LEN.hardware || !FIELD_RE.hardware.test(v)) {
+      problems.push(`hardware "${String(v).slice(0, 40)}" must be a 1-${FIELD_MAX_LEN.hardware} char lowercase board name`);
     }
   }
   // fingerprint must self-consistently reference brand/device (platforms cross-check)
@@ -362,12 +412,14 @@ export function propToAndroidbootKey(prop) {
 
 /**
  * Map a profile onto its Android-prop override set (only fields with a known
- * prop mapping; locale/timezone/carrier have no ro.* carrier and are
- * delivered via settings/telephony in a later phase — see ADR-025).
+ * prop mapping; array-valued map entries expand to one entry per prop).
+ * locale/carrier still have no ro.* carrier (settings/telephony side, later
+ * phase); timezone rides persist.sys.timezone since L2 wave-1 (ADR-031),
+ * hardware rides ro.hardware + ro.boot.hardware.
  */
 export function profileToRoOverrides(profile) {
   const out = {};
-  for (const [field, prop] of Object.entries(PROFILE_PROP_MAP)) {
+  for (const [field, prop] of profilePropEntries()) {
     if (typeof profile?.[field] === 'string' && profile[field] !== '') out[prop] = profile[field];
   }
   return out;

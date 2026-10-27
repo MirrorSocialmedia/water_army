@@ -43,7 +43,7 @@ EOF
 fi
 
 # ---------------------------------------------------------------------------
-# 2) rc simulation — one fake "cmdline" with carriers for all 9 props
+# 2) rc simulation — one fake "cmdline" with carriers for all 12 props
 # ---------------------------------------------------------------------------
 note "# oem-ro-map.rc simulation (init semantics: property present -> action)"
 RC="oem-ro-map.rc"
@@ -60,6 +60,9 @@ set_carrier() { # field -> value
     ro.build.display.id) echo "CP3A.261005.005";;
     ro.build.fingerprint) echo "google/shiba/shiba:17/CP3A.261005.005/16271449:user/release-keys";;
     ro.serialno) echo "GXWV1234ABCD";;
+    ro.hardware) echo "shiba";;
+    ro.boot.hardware) echo "shiba";;
+    persist.sys.timezone) echo "Asia/Tokyo";;
   esac
 }
 : > "$WORK/writes.log"
@@ -84,9 +87,9 @@ while IFS= read -r line; do
   fi
 done < <(grep 'exec --' "$RC")
 note "  mapped lines executed: $TOTAL"
-[ "$TOTAL" = "9" ] && ok "rc contains exactly 9 exec lines" || bad "expected 9 exec lines, got $TOTAL"
+[ "$TOTAL" = "12" ] && ok "rc contains exactly 12 exec lines" || bad "expected 12 exec lines, got $TOTAL"
 if command -v gcc >/dev/null 2>&1; then
-  [ "$MATCH" = "9" ] && ok "all 9 target/value pairs land correctly (incl. model decode)" || bad "only $MATCH/9 correct"
+  [ "$MATCH" = "12" ] && ok "all 12 target/value pairs land correctly (incl. model decode, timezone, hardware)" || bad "only $MATCH/12 correct"
 fi
 
 note "# result: $([ $FAIL = 0 ] && echo GREEN || echo RED)"

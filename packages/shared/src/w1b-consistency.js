@@ -16,36 +16,41 @@
  *        // otherwise the caller passes expected explicitly.
  * }
  *
- * Policy fields (ADR-028 L1 scope): the 9 carrier props are STRICT (they must
- * match the profile exactly — a mismatch means the w1b image mapping failed).
- * Model-adjacent settings the device cannot spoof via carrier (model string
- * with spaces, locale, timezone, carrier display) are REPORTED but not
- * blocking at L1 — they ride settings/telephony at L2. Everything returns
- * per-field rows; nothing throws on data disagreement (fail-CLOSED lives in
- * the caller's verdict handling).
+ * Policy fields (ADR-028 L1 scope + ADR-031 wave-1): every carrier-mapped
+ * prop (ro.* identity props, persist.sys.timezone, ro.hardware/ro.boot.hardware)
+ * is STRICT (a mismatch means the w1b image mapping failed). Fields a stored
+ * profile does not carry (legacy rows) are SKIPped. Model-adjacent settings
+ * the device cannot spoof via carrier (model string with spaces, locale,
+ * carrier display) are REPORTED but not blocking — they ride settings /
+ * telephony at a later phase. Everything returns per-field rows; nothing
+ * throws on data disagreement (fail-CLOSED lives in the caller's verdict
+ * handling).
  */
 
-import { PROFILE_PROP_MAP, UNIQUE_PROFILE_FIELDS } from './fingerprint-profile.js';
+import { profilePropEntries, UNIQUE_PROFILE_FIELDS } from './fingerprint-profile.js';
 
 /**
  * @param {object} expected profile fields (generateTemplateProfile output or stored profile)
  * @param {object} props    map of android prop name -> observed value (from device)
- * @returns {{rows: Array<{field: string, prop: string, expected: string, observed: string|null, status: 'PASS'|'FAIL'|'MISSING'}>, pass: boolean, blocking: boolean}}
+ * @returns {{rows: Array<{field: string, prop: string, expected: string, observed: string|null, status: 'PASS'|'FAIL'|'MISSING'|'SKIP'}>, pass: boolean, blocking: boolean}}
  *   `blocking` = a STRICT carrier-mapped prop mismatched (image mapping broken
- *   or identity cross-contamination).
+ *   or identity cross-contamination). SKIP (non-blocking) = the stored profile
+ *   predates the field (e.g. L2 wave-1 hardware on W1-era rows: no carrier was
+ *   emitted, so the device correctly shows the image default — nothing to
+ *   assert against).
  */
 export function checkProfileConsistency(expected, props) {
   const rows = [];
-  for (const [field, prop] of Object.entries(PROFILE_PROP_MAP)) {
+  for (const [field, prop] of profilePropEntries()) {
     const want = expected?.[field];
     const got = typeof props?.[prop] === 'string' ? props[prop] : null;
     let status;
-    if (typeof want !== 'string' || want === '') status = 'FAIL'; // profile itself malformed
+    if (typeof want !== 'string' || want === '') status = 'SKIP'; // field not carried by this profile generation
     else if (got === null) status = 'MISSING';
     else status = got === want ? 'PASS' : 'FAIL';
     rows.push({ field, prop, expected: want ?? null, observed: got, status });
   }
-  const strict = rows.filter((r) => r.status !== 'PASS');
+  const strict = rows.filter((r) => r.status !== 'PASS' && r.status !== 'SKIP');
   return {
     rows,
     pass: strict.length === 0,
@@ -81,9 +86,9 @@ export function checkProbeSelfConsistency(props) {
   const type = fp.split(':')[2]?.split('/')[0];
   if (type && type !== 'user') problems.push(`build type "${type}" is not "user" (farm tell)`);
   // uniqueness fields observed must not be empty
-  for (const f of UNIQUE_PROFILE_FIELDS) {
-    const prop = PROFILE_PROP_MAP[f];
-    if (prop && !(typeof props?.[prop] === 'string' && props[prop] !== '')) problems.push(`${prop} missing/empty (unique identity field)`);
+  for (const [f, prop] of profilePropEntries()) {
+    if (!UNIQUE_PROFILE_FIELDS.includes(f)) continue;
+    if (!(typeof props?.[prop] === 'string' && props[prop] !== '')) problems.push(`${prop} missing/empty (unique identity field)`);
   }
   return problems;
 }

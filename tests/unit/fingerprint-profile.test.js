@@ -17,7 +17,7 @@ import {
   buildRoCmdArgs,
   propToAndroidbootKey,
   PROFILE_FIELDS,
-  PROFILE_PROP_MAP,
+  profilePropEntries,
   UNIQUE_PROFILE_FIELDS,
 } from '../../packages/shared/src/fingerprint-profile.js';
 
@@ -103,9 +103,17 @@ test('validator: fail-closed on unsafe values, missing fields, unknown keys, inc
   assert.ok(validateFingerprintProfile({ ...good, fingerprint: `a/${good.device}/${'z'.repeat(130)}:15/A/1:userdebug/dev-keys`, brand: 'a', device: 'b' }).length > 0);
 });
 
-test('validator: securityPatch is the only tolerated extra key', () => {
+test('validator: securityPatch and optional hardware are tolerated extra keys', () => {
   const good = generateFingerprintProfile('w1-unit-identity-0001');
   assert.deepEqual(validateFingerprintProfile({ ...good, securityPatch: '2025-05-14' }), []);
+  // hardware: OPTIONAL since L2 wave-1 (legacy stored profiles predate it);
+  // when present it must be a lowercase board token
+  const noHw = { ...good };
+  delete noHw.hardware;
+  assert.deepEqual(validateFingerprintProfile(noHw), [], 'hardware must stay optional (W1-era rows)');
+  assert.deepEqual(validateFingerprintProfile({ ...good, hardware: 'husky' }), []);
+  assert.ok(validateFingerprintProfile({ ...good, hardware: 'Bad Board!' }).length > 0);
+  assert.ok(validateFingerprintProfile({ ...good, hardware: '' }).length > 0);
 });
 
 test('collision checker: detects planted pairwise collisions; blocking only on unique fields', () => {
@@ -142,12 +150,28 @@ test('carrier: propToAndroidbootKey namespacing + encoding', () => {
 test('carrier: profileToRoOverrides maps exactly the registered props', () => {
   const p = generateFingerprintProfile('w1-unit-identity-0001');
   const map = profileToRoOverrides(p);
-  assert.deepEqual(Object.keys(map).sort(), Object.values(PROFILE_PROP_MAP).sort());
+  const flattened = profilePropEntries().map(([, prop]) => prop).sort();
+  assert.deepEqual(Object.keys(map).sort(), flattened);
   assert.equal(map['ro.build.fingerprint'], p.fingerprint);
   assert.equal(map['ro.product.model'], p.model);
   assert.equal(map['ro.serialno'], p.serial);
-  // locale/timezone/carrier have NO ro.* carrier (settings-side, later phase)
-  assert.ok(!Object.keys(map).some((k) => /locale|timezone|carrier/i.test(k)));
+  // L2 wave-1 (ADR-031): timezone rides persist.sys.timezone; hardware rides
+  // ro.hardware AND ro.boot.hardware (one field, same story, two props)
+  assert.equal(map['persist.sys.timezone'], p.timezone);
+  assert.equal(map['ro.hardware'], p.hardware);
+  assert.equal(map['ro.boot.hardware'], p.hardware);
+  // locale/carrier still have NO ro.* carrier (settings-side, later phase)
+  assert.ok(!Object.keys(map).some((k) => /locale|carrier/i.test(k)));
+});
+
+test('carrier: W1 profiles carry a board name consistent with their device slug', () => {
+  // generator-sticky guard: hardware == device (the Pixel-class board==
+  // codename convention the synthetic profiles imitate)
+  for (const id of fleetIds(20)) {
+    const p = generateFingerprintProfile(id);
+    assert.equal(p.hardware, p.device);
+    assert.match(p.hardware, /^[a-z0-9][a-z0-9_-]{0,39}$/);
+  }
 });
 
 test('carrier: validateRoOverridesMap + mergeRoOverrides fail-closed', () => {
@@ -181,4 +205,9 @@ test('carrier: buildRoCmdArgs deterministic order + throws on invalid (never par
 test('PROFILE_FIELDS registry matches the validator surface (drift guard)', () => {
   assert.equal(PROFILE_FIELDS.length, 15);
   assert.deepEqual(UNIQUE_PROFILE_FIELDS, ['fingerprint', 'serial', 'displayId']);
+  // L2 wave-1 (ADR-031) drift guard: 11 profile fields feed 12 props; the
+  // timezone + hardware additions must stay registered on BOTH sides
+  assert.deepEqual(profilePropEntries().filter((e) => e[1].startsWith('persist.')), [['timezone', 'persist.sys.timezone']]);
+  assert.deepEqual(profilePropEntries().filter((e) => e[0] === 'hardware'), [['hardware', 'ro.hardware'], ['hardware', 'ro.boot.hardware']]);
+  assert.equal(profilePropEntries().length, 12);
 });

@@ -91,7 +91,7 @@ test('switch ON: identityId → deterministic profile lands in Cmd (androidboot.
 
   const body = lastCreateBody(redroidMock);
   const cmd = body.Cmd;
-  // 5 base args + 9 registered props (PROFILE_PROP_MAP), sorted tail
+  // 5 base args + the registered props (PROFILE_PROP_MAP, expanded — ADR-031), sorted tail
   assert.equal(cmd.length, 5 + Object.keys(profileToRoOverrides(expected)).length, `unexpected Cmd: ${JSON.stringify(cmd)}`);
   assert.deepEqual(cmd.slice(0, 5), [
     'androidboot.redroid_width=720',

@@ -1,4 +1,4 @@
-# water_army W1b — carrier -> ro.* mapping (GENERATED — do not hand-edit)
+# water_army W1b — carrier -> ro.*/persist.* mapping (GENERATED — do not hand-edit)
 # regenerate: node scripts/w1b/generate-wa-ro-map-rc.mjs
 # source of truth: packages/shared/src/w1b-image-mapping.js (unit-diffed in CI)
 #
@@ -7,6 +7,10 @@
 # oem-propctl (resetprop-rs writes the property area directly, bypassing the
 # ro.* one-time-write rule; ro.build.* are already loaded from build.prop
 # before early-init). Absent carrier = no action.
+# post-fs-data: persist.* targets (timezone) map HERE, not early-init —
+# init re-loads stored persistent properties from /data during the fs stage,
+# so a post-fs-data write is the first deterministic one (and still before
+# zygote reads persist.sys.timezone).
 
 on early-init && property:ro.boot.oem_ro_product_brand=*
     exec -- /vendor/bin/oem-propctl ro.product.brand ${ro.boot.oem_ro_product_brand}
@@ -18,6 +22,10 @@ on early-init && property:ro.boot.oem_ro_build_display_id=*
     exec -- /vendor/bin/oem-propctl ro.build.display.id ${ro.boot.oem_ro_build_display_id}
 on early-init && property:ro.boot.oem_ro_build_fingerprint=*
     exec -- /vendor/bin/oem-propctl ro.build.fingerprint ${ro.boot.oem_ro_build_fingerprint}
+on early-init && property:ro.boot.oem_ro_boot_hardware=*
+    exec -- /vendor/bin/oem-propctl ro.boot.hardware ${ro.boot.oem_ro_boot_hardware}
+on early-init && property:ro.boot.oem_ro_hardware=*
+    exec -- /vendor/bin/oem-propctl ro.hardware ${ro.boot.oem_ro_hardware}
 on early-init && property:ro.boot.oem_ro_product_manufacturer=*
     exec -- /vendor/bin/oem-propctl ro.product.manufacturer ${ro.boot.oem_ro_product_manufacturer}
 on early-init && property:ro.boot.oem_ro_product_model=*
@@ -26,3 +34,5 @@ on early-init && property:ro.boot.oem_ro_product_name=*
     exec -- /vendor/bin/oem-propctl ro.product.name ${ro.boot.oem_ro_product_name}
 on early-init && property:ro.boot.oem_ro_serialno=*
     exec -- /vendor/bin/oem-propctl ro.serialno ${ro.boot.oem_ro_serialno}
+on post-fs-data && property:ro.boot.oem_persist_sys_timezone=*
+    exec -- /vendor/bin/oem-propctl persist.sys.timezone ${ro.boot.oem_persist_sys_timezone}
