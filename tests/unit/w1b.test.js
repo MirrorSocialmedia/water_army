@@ -27,6 +27,7 @@ import {
   checkProfileConsistency,
   checkProbeSelfConsistency,
 } from '../../packages/shared/src/w1b-consistency.js';
+import { runAssert } from '../../scripts/w1b/probe-assert.mjs';
 import { PROFILE_PROP_MAP, propToAndroidbootKey } from '../../packages/shared/src/fingerprint-profile.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -215,6 +216,26 @@ test('consistency: fingerprint mismatch / missing prop -> FAIL/MISSING + blockin
   assert.equal(r.blocking, true);
   assert.equal(r.rows.find((x) => x.field === 'fingerprint').status, 'FAIL');
   assert.equal(r.rows.find((x) => x.field === 'serial').status, 'MISSING');
+});
+
+test('probe-assert runner: fixture dump -> per-field lines + VERDICT semantics', () => {
+  const p = generateTemplateProfile('w1bassert00aaaaaaaaa');
+  const props = devicePropsFrom(p);
+  const dump = { schema: 'wa-probe/1', props, context: { 'ro.hardware': 'redroid', 'ro.build.type': 'user', 'ro.build.tags': 'release-keys' }, propCount: 900 };
+  const good = runAssert({ dump, expected: p });
+  assert.equal(good.pass, true, good.lines.join('\n'));
+  assert.ok(good.lines.filter((l) => l.startsWith('PASS')).length === 9);
+  assert.ok(good.lines.some((l) => l.startsWith('NOTE') && /ro.hardware=redroid/.test(l)), 'L2 tells reported as notes (non-blocking)');
+
+  const broken = runAssert({ dump: { ...dump, props: { ...props, 'ro.serialno': 'OTHER' } }, expected: p });
+  assert.equal(broken.pass, false);
+  assert.ok(broken.lines.some((l) => l.startsWith('FAIL') && /serial/.test(l)));
+
+  const selfBad = runAssert({ dump: { ...dump, props: { ...props, 'ro.product.brand': 'Mismatch' } } });
+  assert.equal(selfBad.pass, false, 'self-consistency failure is blocking even without expected');
+
+  const usage = runAssert({ dump: {} });
+  assert.equal(usage.usage, true);
 });
 
 test('probe self-consistency: real dump passes; tells are caught', () => {

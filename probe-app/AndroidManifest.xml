@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- W1b ground-truth probe (ADR-028). No UI, no permissions beyond none —
+     system properties and settings are readable without any. Built offline
+     via build.sh (aapt2/javac/d8/apksigner); NOT built in the code segment. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.waterarmy.probe"
+    android:versionCode="1"
+    android:versionName="0.1-w1b">
+    <uses-sdk android:minSdkVersion="29" android:targetSdkVersion="34" />
+    <application android:label="WA Probe">
+        <activity
+            android:name=".ProbeActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
