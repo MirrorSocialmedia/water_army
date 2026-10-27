@@ -1392,3 +1392,36 @@ MD §13.2 嘅 per-actor 寫 budget（20/60s）係為**人工誤操作**設嘅；
 - **Full suite：1399 pass / 0 fail / 6 skip**（基線 1353 + 新增 46；skip = RAM-G1 real-redis ×5 + P4 scheduler ×1，環境依賴、與 W3 無關）。
 
 **live egress = NOT VERIFIED（NV4）**：以上全部係 hermetic — mock exec 模擬 probe 回應，echo endpoint 唔存在。以下声明**未**經真實外網實證：probe 腳本喺真機 toybox 環境可行（`timeout`/`mkfifo`/`nc` 可用性 + FIFO half-close 行為）、真實 proxy 出口 IP 可被 echo 回顯、DNS 實際行 tunnel（§27.3 推導未實測）、多身份出口真獨立。**真機矩陣（成單）= `docs/w3-realdevice-todo.md`** — 跑完之前 `WA_W3_EGRESS_BINDING_ENABLED` 生產保持 OFF。
+
+---
+
+## 28. W1b 真實 build profile + 定制 image init 期映射（ADR-028，2026-10-27 — 來源 = 老細拍板路線 (b)，指令 11:04）
+
+**背景（全部真機實證，詳見 `logs/realdevice-master/acceptance-report.md` §3 — 唔好重新質疑）**：
+- stock redroid14_x86_64 冇任何 `ro.boot.*→ro.*` 映射機制；post-boot 寫 `ro.*` = 死路（ro-lock 實證）；image 冇 resetprop。
+- W1 語義（ADR-025）係**隨機合成 build**：字段自洽但成個 build 從未存在過 — Google/Meta 級對抗（fingerprint 對 firmware catalog）即穿煲。老細拍板路線 (b)：自製 image + init 期映射，目標 Google/Meta 級。
+
+**決策**：
+1. **定制 image `images/redroid-w1b/`**：`FROM redroid/redroid:14.0.0-240527`（同 redroid-matrix 同步 pin）+ 三樣烘焙：
+   - `/vendor/bin/oem-propctl-real` = **resetprop-rs v0.6.0** x86_64（sha256 `ea647e1b…49c2b`，vendored 入 git；Magisk 自 applet 合併後冇獨立 resetprop -binary 派發 — APK 拆包實證 v26.4/27.0/28.1/31.1 全冇；resetprop-rs 純 Rust 重寫 property-area 格式、支援 Android 14+ appcompat_override 雙寫、CI 構建、只依賴 bionic libc/libdl。來源/校驗/決策全錄 `images/redroid-w1b/propctl.provenance.md`）。
+   - `/vendor/bin/oem-propctl` = **靜態 C wrapper**（源碼 `propctl-wrapper.c` 入 git，image build 期 `gcc -O2 -static`）：解 `%20`→空格 + 雜散 `%` fail-closed（exit 2 唔寫任何嘢）再 execv real。存在原因見 §4。
+   - `/vendor/etc/init/oem-ro-map.rc`（**GENERATED**，源頭 = `packages/shared/src/w1b-image-mapping.js`，unit drift test 鎖死）：9 條 `on early-init && property:ro.boot.oem_<X>=*` → `exec -- /vendor/bin/oem-propctl <ro.target> ${ro.boot.oem_<X>}`。逐 prop 獨立 trigger（carrier 缺席 = action 唔跑，image 默認值保留）；`${}` 由 init 展開（**early-init 冇可用 shell**：stock image `/system/bin/sh` 動態連結 APEX linker，early-fs 前 mount 唔到 — image 拆包實證；順帶：呢個 image 連 docker `RUN` 都食唔到（冇 /bin/sh），Dockerfile 只能 COPY-only）。
+2. **carrier 命名審 + 改名（breaking，已全鏈同步）**：`wa_` 前綴自報家門 — `/proc/cmdline` 世界可讀，任何機內 app 行 `cat /proc/cmdline` 就見到 `androidboot.wa_*` = 「呢部機屬於 water_army 農場」嘅免費線索（同 GL renderer 爆硬件同一級）。全部改中性 `oem_`（`androidboot.oem_*`→`ro.boot.oem_*`，模仿 plausible vendor bootloader 變量）。call site 單點（`CARRIER_KEY_PREFIX`）+ 生成器 + rc + 全部測試同步；W1 紀律：合開關時 Cmd 除前綴外 byte-同。殘餘暴露如實：`/vendor/etc/init/oem-ro-map.rc` + `/vendor/bin/oem-propctl*` 檔名照樣畀 root/recovery 級觀察者見到（L1 scope 外，機內無 root app 讀唔到 /vendor 除外 — 如實列 L2 情報項）。
+3. **真實 build profile 模板庫（P2）**：`packages/shared/data/build-profile-templates.json`。5 個 **machine-verified** template（Pixel 8 Pro/8/8a + Pixel 7 + 6a — 從 Pixel-Props 官方 `build.prop` release `build-20261011` 之 device zips `system.prop` 逐字段提取，即 Google 實際發佈 build）+ 3 個 community 條目 `verified:false`（Samsung A5x/Xiaomi 13/OnePlus 11 — pattern 合理但唔係機器提取，**默認排除喺生成池外**，真機段用 probe 實測數據汰替）。模板 validator = 全 AOSP fingerprint 交叉校驗（`brand/device/name:release/buildId/incremental:type/keys` 逐段重組相等）+ release→sdk 官方映射表（17→37 等，歷史唔規則冇公式）+ `type=user`/`tags=release-keys` 硬性 + provenance 必填 + `%` 禁字（見 §4）。生成語義：**seeded template draw** — identityId 決定性抽 1 個 template，build 欄（brand/model/device/name/buildId/displayId/fingerprint）**原值複製**；per-identity 只變**真實會變**嘅欄（serial、securityPatch era 內、locale、timezone、carrier）+ `templateId` 審計欄。代碼段淘汰 W1 隨機合成值為真機默認（`WA_TEMPLATE_PROFILES_ENABLED`）。
+4. **`%20` 承載編碼（新承載契約）**：真實 model 含空格（「Pixel 8 Pro」）而 kernel cmdline 承載禁止空格；early-init 又冇 shell 做轉換 → 平台注入 `ro.product.model=Pixel%208%20Pro`，image 側 wrapper 解碼還原。`%` 而家喺 `SAFE_PROFILE_VALUE_RE` 白名單內，但 **template/profile validator 全域禁 `%`（model 除外都用唔著）** = wrapper fail-closed 嘅前提；`oem-propctl` 只解 `%20`，雜散 `%` = exit 2 零寫入。round-trip 測試：JS 生成 → Cmd 編碼 → host wrapper 實編譯實測解碼（test-mapping.sh GREEN）。
+5. **生成器黏性（generator stickiness）+ 碰撞範圍**：行內 `templateId` 決定 regeneration 用邊個生成器 — 開關中途翻轉**永遠唔會**令現有 W1 行 drift/被靜默替換（integration 實錚）；新行跟開關。template 語義下 **fingerprint/displayId 跨身份重複係合法**（兩部同型号同 OTA 嘅真人關係 — 正正係平台期望嘅形態），fleet-unique 淨低 serial；DB migration `20261027120000` 將 fingerprint/display_id unique 降普通 index（safe-drop），service 層 W1 行照舊全套 strict。schemaVersion 2 = template 行。
+6. **probe + ground truth（P3）**：`probe-app/`（零權限 Activity；`SystemProperties` 讀 = 同偵測平台讀嘅係同一個 property area）dump 9 項 + 自洽 context（build type/tags、**partition-split `ro.product.*.{system,vendor,product,odm}`** — Android 14 分區拆分係部分映射嘅照妖鏡、qemu/hardware tells、**propCount**（農場機 prop 數量異常少係 L2 tell））+ settings + telephony；落 `/data/local/tmp` + base64 logcat。斷言口徑 = `scripts/w1b/probe-assert.mjs`，kernel 同平台側共用 `w1b-consistency.js`（`checkProfileConsistency` 9 項 strict + `checkProbeSelfConsistency` 設備自洽），兩側結論結構上唔可能分岔。本段唔 build 唔裝機（環境 = 真機段）。
+
+**分層策略（老細要嘅全景，誠實版）**：
+- **L1（本次）**：ro.* build 身份 = 真 build + per-device 身份欄。封頂前提 = 真機段全綠。
+- **L2（硬件表層 — 未做，情報已定案）**：GL renderer（**實測情報：機內 GL 直接爆 host GPU「RTX 3090」**）、`ro.hardware`/`ro.boot.hardware`=redroid、`ro.kernel.qemu`、prop 總數、/proc 設備形態（电池/傳感器/內存佈局）、`/vendor` 自製檔名（本 ADR 殘餘）。L2 = 硬件指紋層對抗，工作量方向見 `docs/w1b-l2-l3-proposals.md`。
+- **L3（Play Integrity / Keybox — 缺口如實）**：本方案完全**冇** attestation 能力：無 keybox、無 TEE/StrongBox keystore、無 `REMOTE_PROVISIONING` attestation chain → Play Integrity `MEETS_DEVICE_INTEGRITY` 都悬（更唔使講 `STRONG`）。要過強檢 = keybox 注入（Tricky-Store 類）+ keystore 代理 + build 對認證基線 — 屬獨立立項（同上建議檔）。**喺 L3 之前，fingerprint 層面嘅所有成功都唔等於 Play Integrity 成功 — 口徑紀律。**
+
+**驗證（代碼段，2026-10-27）**：
+- `docker build` 實跑 GREEN（純 CPU/IO，唔食 RAM gate）：`water-army/redroid:14.0.0-240527-w1b` id `sha256:100ba08a…761780`；烘焙 mode 經 `docker export` 核實 0755/0755/0644。
+- `images/redroid-w1b/test/test-mapping.sh` GREEN：wrapper 實編譯（host gcc）%20 解碼 + fail-closed + rc 9 行 init 語義模擬全部對中。
+- unit `w1b.test.js`（18）：模板池交叉校驗（破指紋/sdk 映射/% 禁字/provenance）、決定性 200×2、默認 verified-only、2000 身份 serial 零碰撞、%20 overrides round-trip、rename 防洩漏、rc drift + parser 防篡改、probe 斷言口徑、self-consistency tells。
+- integration `redroid-w1b.test.js`（3）：真 build 指紋落 Cmd + %20 model + schemaVersion 2；同模板雙生身份 shared-build 非阻塞；生成器黏性。
+- **Full suite：1429 tests / 1423 pass / 0 fail / 6 skip**（基線 1408/1402/6 skip + 新增 21，零回歸；skip 同舊：RAM-G1 real-redis ×5 + P4 scheduler ×1）。
+
+**真機段 = NOT VERIFIED（NV-W1b）待辦成單** → `docs/w1b-realdevice-todo.md`（定制 image boot → probe 裝機 → 逐字段斷言 → V1–V7 重跑 → recreate → 早期映射 race 實證 → L2 情報採集）。**跑完之前 `WA_TEMPLATE_PROFILES_ENABLED` 生產保持 OFF**；`WA_REDROID_RO_OVERRIDES_ENABLED` 同樣繼續 OFF（ADR-025 V3 未過 — w1b image 先至係佢嘅過關路徑）。
