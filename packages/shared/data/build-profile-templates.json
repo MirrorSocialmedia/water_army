@@ -23,7 +23,34 @@
         "buildType": "user",
         "buildTags": "release-keys",
         "hardware": "husky"
-      }
+      },
+      "deviceSpec": {
+        "display": {
+          "widthPx": 1344,
+          "heightPx": 2992,
+          "densityDpi": 489,
+          "refreshHz": 120
+        },
+        "proc": {
+          "cpuCores": 9,
+          "memTotalMb": 12288,
+          "cpuClusters": [
+            {
+              "count": 1,
+              "part": "0xd4e"
+            },
+            {
+              "count": 4,
+              "part": "0xd4d"
+            },
+            {
+              "count": 4,
+              "part": "0xd46"
+            }
+          ]
+        }
+      },
+      "deviceSpecSource": "deviceSpec (ADR-033): panel geometry/refresh/RAM per GSMArena spec sheet (densityDpi derived from official diagonal, real-device wm density re-check pending); CPU cluster part ids per ARM core TRMs (Tensor G3=1+4x A715 +4x A510 nona-core per Google; G2/G1 and SD8Gen2 per ARM TRM ids)."
     },
     {
       "id": "pixel8-a17-cp3a261005",
@@ -45,7 +72,34 @@
         "buildType": "user",
         "buildTags": "release-keys",
         "hardware": "shiba"
-      }
+      },
+      "deviceSpec": {
+        "display": {
+          "widthPx": 1080,
+          "heightPx": 2400,
+          "densityDpi": 424,
+          "refreshHz": 120
+        },
+        "proc": {
+          "cpuCores": 9,
+          "memTotalMb": 8192,
+          "cpuClusters": [
+            {
+              "count": 1,
+              "part": "0xd4e"
+            },
+            {
+              "count": 4,
+              "part": "0xd4d"
+            },
+            {
+              "count": 4,
+              "part": "0xd46"
+            }
+          ]
+        }
+      },
+      "deviceSpecSource": "deviceSpec (ADR-033): panel geometry/refresh/RAM per GSMArena spec sheet (densityDpi derived from official diagonal, real-device wm density re-check pending); CPU cluster part ids per ARM core TRMs (Tensor G3=1+4x A715 +4x A510 nona-core per Google; G2/G1 and SD8Gen2 per ARM TRM ids)."
     },
     {
       "id": "pixel8a-a17-cp3a261005",
@@ -67,7 +121,34 @@
         "buildType": "user",
         "buildTags": "release-keys",
         "hardware": "akita"
-      }
+      },
+      "deviceSpec": {
+        "display": {
+          "widthPx": 1080,
+          "heightPx": 2402,
+          "densityDpi": 432,
+          "refreshHz": 120
+        },
+        "proc": {
+          "cpuCores": 9,
+          "memTotalMb": 8192,
+          "cpuClusters": [
+            {
+              "count": 1,
+              "part": "0xd4e"
+            },
+            {
+              "count": 4,
+              "part": "0xd4d"
+            },
+            {
+              "count": 4,
+              "part": "0xd46"
+            }
+          ]
+        }
+      },
+      "deviceSpecSource": "deviceSpec (ADR-033): panel geometry/refresh/RAM per GSMArena spec sheet (densityDpi derived from official diagonal, real-device wm density re-check pending); CPU cluster part ids per ARM core TRMs (Tensor G3=1+4x A715 +4x A510 nona-core per Google; G2/G1 and SD8Gen2 per ARM TRM ids)."
     },
     {
       "id": "pixel7-a17-cp3a261005a1",
@@ -89,7 +170,34 @@
         "buildType": "user",
         "buildTags": "release-keys",
         "hardware": "panther"
-      }
+      },
+      "deviceSpec": {
+        "display": {
+          "widthPx": 1080,
+          "heightPx": 2400,
+          "densityDpi": 416,
+          "refreshHz": 90
+        },
+        "proc": {
+          "cpuCores": 8,
+          "memTotalMb": 8192,
+          "cpuClusters": [
+            {
+              "count": 2,
+              "part": "0xd48"
+            },
+            {
+              "count": 2,
+              "part": "0xd47"
+            },
+            {
+              "count": 4,
+              "part": "0xd46"
+            }
+          ]
+        }
+      },
+      "deviceSpecSource": "deviceSpec (ADR-033): panel geometry/refresh/RAM per GSMArena spec sheet (densityDpi derived from official diagonal, real-device wm density re-check pending); CPU cluster part ids per ARM core TRMs (Tensor G3=1+4x A715 +4x A510 nona-core per Google; G2/G1 and SD8Gen2 per ARM TRM ids)."
     },
     {
       "id": "pixel6a-a17-cp3a261005a1",
@@ -111,7 +219,34 @@
         "buildType": "user",
         "buildTags": "release-keys",
         "hardware": "bluejay"
-      }
+      },
+      "deviceSpec": {
+        "display": {
+          "widthPx": 1080,
+          "heightPx": 2400,
+          "densityDpi": 431,
+          "refreshHz": 60
+        },
+        "proc": {
+          "cpuCores": 8,
+          "memTotalMb": 6144,
+          "cpuClusters": [
+            {
+              "count": 2,
+              "part": "0xd44"
+            },
+            {
+              "count": 2,
+              "part": "0xd41"
+            },
+            {
+              "count": 4,
+              "part": "0xd05"
+            }
+          ]
+        }
+      },
+      "deviceSpecSource": "deviceSpec (ADR-033): panel geometry/refresh/RAM per GSMArena spec sheet (densityDpi derived from official diagonal, real-device wm density re-check pending); CPU cluster part ids per ARM core TRMs (Tensor G3=1+4x A715 +4x A510 nona-core per Google; G2/G1 and SD8Gen2 per ARM TRM ids)."
     },
     {
       "id": "galaxy-a5-2017-r16nw",
@@ -134,7 +269,26 @@
         "buildType": "user",
         "buildTags": "release-keys",
         "hardware": "s5e7880x"
-      }
+      },
+      "deviceSpec": {
+        "display": {
+          "widthPx": 1080,
+          "heightPx": 1920,
+          "densityDpi": 424,
+          "refreshHz": 60
+        },
+        "proc": {
+          "cpuCores": 8,
+          "memTotalMb": 3072,
+          "cpuClusters": [
+            {
+              "count": 8,
+              "part": "0xd05"
+            }
+          ]
+        }
+      },
+      "deviceSpecSource": "deviceSpec (ADR-033): panel geometry/refresh/RAM per GSMArena spec sheet (densityDpi derived from official diagonal, real-device wm density re-check pending); CPU cluster part ids per ARM core TRMs (Tensor G3=1+4x A715 +4x A510 nona-core per Google; G2/G1 and SD8Gen2 per ARM TRM ids)."
     },
     {
       "id": "xiaomi-13-tkq1-a13",
@@ -157,7 +311,38 @@
         "buildType": "user",
         "buildTags": "release-keys",
         "hardware": "qcom"
-      }
+      },
+      "deviceSpec": {
+        "display": {
+          "widthPx": 1080,
+          "heightPx": 2400,
+          "densityDpi": 414,
+          "refreshHz": 120
+        },
+        "proc": {
+          "cpuCores": 8,
+          "memTotalMb": 12288,
+          "cpuClusters": [
+            {
+              "count": 1,
+              "part": "0xd4e"
+            },
+            {
+              "count": 2,
+              "part": "0xd4d"
+            },
+            {
+              "count": 2,
+              "part": "0xd47"
+            },
+            {
+              "count": 3,
+              "part": "0xd46"
+            }
+          ]
+        }
+      },
+      "deviceSpecSource": "deviceSpec (ADR-033): panel geometry/refresh/RAM per GSMArena spec sheet (densityDpi derived from official diagonal, real-device wm density re-check pending); CPU cluster part ids per ARM core TRMs (Tensor G3=1+4x A715 +4x A510 nona-core per Google; G2/G1 and SD8Gen2 per ARM TRM ids)."
     },
     {
       "id": "oneplus-11-salami-ukq1-a14",
@@ -180,7 +365,38 @@
         "buildType": "user",
         "buildTags": "release-keys",
         "hardware": "qcom"
-      }
+      },
+      "deviceSpec": {
+        "display": {
+          "widthPx": 1440,
+          "heightPx": 3216,
+          "densityDpi": 525,
+          "refreshHz": 120
+        },
+        "proc": {
+          "cpuCores": 8,
+          "memTotalMb": 16384,
+          "cpuClusters": [
+            {
+              "count": 1,
+              "part": "0xd4e"
+            },
+            {
+              "count": 2,
+              "part": "0xd4d"
+            },
+            {
+              "count": 2,
+              "part": "0xd47"
+            },
+            {
+              "count": 3,
+              "part": "0xd46"
+            }
+          ]
+        }
+      },
+      "deviceSpecSource": "deviceSpec (ADR-033): panel geometry/refresh/RAM per GSMArena spec sheet (densityDpi derived from official diagonal, real-device wm density re-check pending); CPU cluster part ids per ARM core TRMs (Tensor G3=1+4x A715 +4x A510 nona-core per Google; G2/G1 and SD8Gen2 per ARM TRM ids)."
     }
   ]
 }

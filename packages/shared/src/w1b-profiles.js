@@ -45,6 +45,7 @@ import {
   makeRng,
   validateFingerprintProfile,
 } from './fingerprint-profile.js';
+import { validateDeviceSpec, memTotalKbForIdentity } from './device-spec.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -121,6 +122,12 @@ export function validateBuildTemplate(t) {
   // AOSP release↔sdk mapping (known majors only; unknown major skips)
   const major = Number(String(f.androidRelease).split('.')[0]);
   if (RELEASE_TO_SDK[major] !== undefined && Number(f.sdkVersion) !== RELEASE_TO_SDK[major]) problems.push(`${t.id}: androidRelease ${f.androidRelease} inconsistent with sdkVersion ${f.sdkVersion} (AOSP map: ${major} -> ${RELEASE_TO_SDK[major]})`);
+  // L2 wave-2 (ADR-033): verified templates carry the device geometry + /proc
+  // story (display pool + per-identity fake meminfo/cpuinfo) — without it the
+  // browser sees host RAM/cores and a fleet-wide identical virtual screen.
+  // Unverified rows may lag (provenance rule applies when they are promoted).
+  if (t.deviceSpec !== undefined) problems.push(...validateDeviceSpec(t.deviceSpec, `${t.id}.deviceSpec`));
+  else if (t.verified === true) problems.push(`${t.id}: deviceSpec required on verified templates (L2 wave-2)`);
   return problems;
 }
 
@@ -165,7 +172,7 @@ export const TEMPLATE_PROFILE_FIELDS = Object.freeze([
   'androidRelease', 'brand', 'manufacturer', 'model', 'device', 'productName',
   'buildId', 'displayId', 'fingerprint', 'serial',
   'locale', 'timezone', 'carrierName', 'carrierMcc', 'carrierMnc',
-  'securityPatch', 'templateId', 'hardware',
+  'securityPatch', 'templateId', 'hardware', 'deviceSpec',
 ]);
 
 /** Validate a GENERATED template profile (W1 core validator + W1b extras). */
@@ -198,7 +205,33 @@ export function validateTemplateProfile(profile) {
   if (profile && (typeof profile.hardware !== 'string' || profile.hardware === '')) {
     problems.push('hardware must be a non-empty string on template profiles (L2 wave-1)');
   }
+  // template rows ALWAYS carry the geometry/proc story (L2 wave-2) — shape is
+  // validated by the W1 core validator when present; presence is enforced here
+  if (profile && profile.deviceSpec === undefined) {
+    problems.push('deviceSpec must be present on template profiles (L2 wave-2)');
+  }
   return problems;
+}
+
+/**
+ * Template deviceSpec → per-identity deviceSpec. display + cluster topology
+ * are the model's REAL hardware (copied verbatim, like the build fields);
+ * memTotalKb is per-identity (real kernels withhold a model-dependent
+ * reserve from MemTotal, and two phones of one model never show byte-identical
+ * meminfo). rng consumed LAST in the generator — every pre-wave-2 field keeps
+ * its exact stream position (drift discipline, same rule as L2 wave-1).
+ */
+function deviceSpecForTemplate(rng, t) {
+  const problems = validateDeviceSpec(t.deviceSpec, `template ${t.id} deviceSpec`);
+  if (problems.length) throw new Error(`generateTemplateProfile: ${problems.join('; ')}`);
+  return {
+    display: { ...t.deviceSpec.display },
+    proc: {
+      cpuCores: t.deviceSpec.proc.cpuCores,
+      cpuClusters: t.deviceSpec.proc.cpuClusters.map((c) => ({ ...c })),
+      memTotalKb: memTotalKbForIdentity(rng, t.deviceSpec.proc.memTotalMb),
+    },
+  };
 }
 
 /**
@@ -238,6 +271,8 @@ export function generateTemplateProfile(identityId, opts = {}) {
     carrierMnc: carrier.mnc,
     securityPatch: securityPatchForTemplate(rng, t),
     templateId: t.id, // audit + probe ground-truth linkage
+    // appended last: rng stream of all pre-wave-2 fields stays byte-identical
+    deviceSpec: deviceSpecForTemplate(rng, t),
   };
   const problems = validateTemplateProfile(profile);
   if (problems.length) {

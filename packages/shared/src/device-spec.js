@@ -76,7 +76,15 @@ export function validateDeviceSpec(spec, label = 'deviceSpec') {
   if (!p || typeof p !== 'object' || Array.isArray(p)) problems.push(`${label}.proc must be a plain object`);
   else {
     intField(problems, p, 'cpuCores', 1, 256, `${label}.proc`);
-    intField(problems, p, 'memTotalKb', 131072, 33554432, `${label}.proc`); // 128MB..32TB
+    // proc RAM has TWO shapes: template rows carry the nominal marketing
+    // figure (memTotalMb — the per-identity kernel reserve is applied at
+    // generation), generated profiles carry the final fake MemTotal (memTotalKb).
+    const hasKb = p.memTotalKb !== undefined;
+    const hasMb = p.memTotalMb !== undefined;
+    if (hasKb && hasMb) problems.push(`${label}.proc: memTotalKb and memTotalMb are mutually exclusive`);
+    else if (hasKb) intField(problems, p, 'memTotalKb', 131072, 33554432, `${label}.proc`); // 128MB..32TB
+    else if (hasMb) intField(problems, p, 'memTotalMb', 128, 32768, `${label}.proc`); // 128MB..32GB nominal
+    else problems.push(`${label}.proc requires memTotalKb (profile form) or memTotalMb (template form)`);
     const cl = p.cpuClusters;
     // VACUOUS GUARD: a missing/empty cluster list is invalid — cpuinfo would
     // render zero cores and every "cores > 0" assertion would pass vacuously.
