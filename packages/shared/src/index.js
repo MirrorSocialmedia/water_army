@@ -486,3 +486,23 @@ export {
   planRegistrationSchedule,
   actionDelay,
 } from './account-schedule.js';
+
+/** 行為引擎 S1 (ADR-035) — life schedule engine. */
+export {
+  LIFE_ACTION_TYPES,
+  KIND_MULTIPLIER,
+  CADENCE_WEIGHT,
+  HK_HOLIDAYS,
+  holidayFor,
+  HK_OCCUPATIONS,
+  HK_INTERESTS,
+  TOPIC_AFFINITY,
+  TOPIC_BASE_WEIGHT,
+  deriveLifeProfile,
+  pickTopic,
+  travelSpec,
+  ageMultiplier,
+  generateLifePlan,
+  CONTENT_STYLES,
+  pickStyle,
+} from './life-schedule.js';
