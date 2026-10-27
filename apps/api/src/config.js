@@ -139,6 +139,14 @@ export function loadConfig(env = process.env, opts = {}) {
   // experimental by definition.
   const redroidRoOverridesEnabled = ['1', 'true', 'yes', 'on'].includes(String(e.WA_REDROID_RO_OVERRIDES_ENABLED ?? 'false').toLowerCase());
 
+  // W1b (ADR-028): REAL build-profile templates for NEW fingerprint rows —
+  // OFF by default (byte-inert W1 semantics). Subordinate to
+  // redroidRoOverridesEnabled (which gates injection itself): with this off,
+  // profiles keep the W1 synthetic generator; with it on, newly-created rows
+  // draw from the verified real-build template pool. Existing rows keep the
+  // generator they were created with (drift guard matches per row).
+  const redroidTemplateProfilesEnabled = ['1', 'true', 'yes', 'on'].includes(String(e.WA_TEMPLATE_PROFILES_ENABLED ?? 'false').toLowerCase());
+
   // W2 (ADR-026): app-layer ops (install/packages/UI tree/tap) — OFF by
   // default. Until the real-device matrix passes, routes fail closed with
   // 503 APP_OPS_DISABLED; flipping on is an explicit operator opt-in.
@@ -207,6 +215,7 @@ export function loadConfig(env = process.env, opts = {}) {
     // P5 redroid (工單: 127.0.0.1-only ADB, pinned images, 診斷白名單).
     redroidAdapter,
     redroidRoOverridesEnabled,
+    redroidTemplateProfilesEnabled,
     waAppOpsEnabled,
     egressBindingEnabled,
     waApkDir,

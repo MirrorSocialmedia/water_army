@@ -278,7 +278,9 @@ export async function buildApp(opts = {}) {
 
   // W1 (ADR-025): identity fingerprint service. Inert while
   // WA_REDROID_RO_OVERRIDES_ENABLED is off (createDevice never consults it).
-  const fingerprintService = createFingerprintService({ db, log: app.log });
+  // W1b (ADR-028): WA_TEMPLATE_PROFILES_ENABLED selects the REAL build-profile
+  // template generator for NEW rows (existing rows are generator-sticky).
+  const fingerprintService = createFingerprintService({ db, log: app.log, templateProfiles: config?.redroidTemplateProfilesEnabled === true });
 
   // W3 (ADR-027): identity egress binding service. Conditional wiring (same
   // contract as intervention/stream): a db WITHOUT the identity_egress_bindings

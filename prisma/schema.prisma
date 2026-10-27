@@ -454,8 +454,8 @@ model IdentityFingerprint {
   manufacturer  String
   androidRelease String  @map("android_release")
   buildId       String   @map("build_id")
-  displayId     String   @unique @map("display_id")
-  fingerprint   String   @unique
+  displayId     String   @map("display_id")
+  fingerprint   String
   serial        String   @unique
   locale        String
   timezone      String
@@ -469,6 +469,8 @@ model IdentityFingerprint {
   identity Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
 
   @@index([brand, model])
+  @@index([fingerprint])
+  @@index([displayId])
   @@map("identity_fingerprints")
 }
 

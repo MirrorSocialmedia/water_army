@@ -867,7 +867,8 @@ export function makeFakeDb({ users = [] } = {}) {
     },
     // ---- W1 (ADR-025): identities + identity_fingerprints -------------------
     // Minimal Prisma-shaped in-memory models. fingerprint row mirrors the DB
-    // unique guards (fingerprint/serial/displayId → P2002) so the service's
+    // unique guards (W1b: serial only — migration 20261027120000 relaxed
+    // fingerprint/displayId for shared real builds → P2002) so the service's
     // fail-closed collision path is exercised without postgres.
     identity: {
       create: async ({ data }) => {
@@ -897,7 +898,10 @@ export function makeFakeDb({ users = [] } = {}) {
     },
     identityFingerprint: {
       create: async ({ data }) => {
-        const uniqueHit = ['fingerprint', 'serial', 'displayId'].find(
+        // W1b (ADR-028) schema change 20261027120000: only `serial` keeps the
+        // DB unique guard — template-backed rows share fingerprint/displayId
+        // legitimately (same real build on two identities).
+        const uniqueHit = ['serial'].find(
           (f) => data[f] !== undefined && [...fingerprintRows.values()].some((r) => r[f] === data[f] && r.identityId !== data.identityId),
         );
         if (uniqueHit) {

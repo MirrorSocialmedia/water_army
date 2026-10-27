@@ -18,6 +18,8 @@ import {
   findProfileCollisions,
   PROFILE_FIELDS,
   UNIQUE_PROFILE_FIELDS,
+  generateTemplateProfile,
+  validateTemplateProfile,
 } from '@water-army/shared';
 import { RedroidServiceError } from './redroid-service.js';
 
@@ -55,9 +57,34 @@ function profileToColumns(identityId, profile) {
  * @param {object} deps
  * @param {object} deps.db prisma (identity / identityFingerprint models)
  * @param {object} [deps.log]
+ * @param {boolean} [deps.templateProfiles] W1b (ADR-028): new rows draw from
+ *   the REAL build-profile template pool instead of the W1 synthetic
+ *   generator. Existing rows are generator-sticky (drift guard regenerates
+ *   with the generator recorded in the row), so flipping the switch mid-fleet
+ *   is safe: old identities keep W1 semantics, new ones get real builds.
  */
-export function createFingerprintService({ db, log = { info() {}, warn() {}, error() {} } } = {}) {
+export function createFingerprintService({ db, log = { info() {}, warn() {}, error() {} }, templateProfiles = false } = {}) {
   if (!db) throw new Error('createFingerprintService: db is required');
+
+  /** Generator recorded in a stored profile (generator-sticky drift checks). */
+  const rowIsTemplate = (profileJson) => Boolean(profileJson?.templateId);
+  const regen = (identityId, template) => (template ? generateTemplateProfile(identityId) : generateFingerprintProfile(identityId));
+  const validate = (profileJson, template) => (template ? validateTemplateProfile(profileJson) : validateFingerprintProfile(profileJson));
+  /**
+   * W1b collision scope (ADR-028): template profiles share fingerprint and
+   * displayId ACROSS identities by design (two phones of the same model run
+   * the same build — the REAL-world relation a platform expects). Only the
+   * per-device serial must stay unique fleet-wide. W1 rows keep the full
+   * UNIQUE_PROFILE_FIELDS scope (synthetic builds have no sharing semantics).
+   */
+  function scopedCollisions(entries) {
+    const all = entries.map((e) => ({ ...e, profile: e.profile }));
+    const serialOnly = all.filter((e) => e.profile?.serial); // both generators: serial always per-device
+    const w1 = all.filter((e) => !e.profile?.templateId);
+    const a = findProfileCollisions(serialOnly, ['serial']);
+    const b = findProfileCollisions(w1, UNIQUE_PROFILE_FIELDS);
+    return { collisions: [...a.collisions, ...b.collisions] };
+  }
 
   /**
    * Ensure the identity's fingerprint profile exists and matches the
@@ -68,31 +95,42 @@ export function createFingerprintService({ db, log = { info() {}, warn() {}, err
     const identity = await db.identity.findUnique({ where: { id: identityId } });
     if (!identity) throw fail('FINGERPRINT_IDENTITY_NOT_FOUND', 404, `Identity ${identityId} not found — cannot generate fingerprint profile`);
 
-    const expected = generateFingerprintProfile(identityId);
     const existing = await db.identityFingerprint.findUnique({ where: { identityId } });
     if (existing) {
-      const problems = validateFingerprintProfile(existing.profileJson);
+      const template = rowIsTemplate(existing.profileJson);
+      const problems = validate(existing.profileJson, template);
       if (problems.length) {
         throw fail('FINGERPRINT_PROFILE_INVALID', 500, `Stored fingerprint profile for ${identityId} is invalid: ${problems.join('; ')}`);
       }
-      // Drift guard: the row MUST equal deterministic regeneration. Divergence
-      // means someone edited the row or the generator changed — fail closed
-      // rather than silently boot a device on an unknown profile.
-      const storedKey = JSON.stringify(PROFILE_FIELDS.map((f) => existing.profileJson[f]));
-      const expectedKey = JSON.stringify(PROFILE_FIELDS.map((f) => expected[f]));
-      if (storedKey !== expectedKey) {
-        throw fail('FINGERPRINT_PROFILE_DRIFT', 500, `Stored fingerprint profile for ${identityId} diverges from deterministic regeneration — refusing to guess (fix or delete the row)`);
+      // Drift guard: the row MUST equal deterministic regeneration BY ITS OWN
+      // GENERATOR (generator-sticky — W1 rows vs W1b template rows never
+      // cross-compare). Divergence means someone edited the row or a generator
+      // changed — fail closed rather than silently boot a device on an unknown
+      // profile.
+      const expected = regen(identityId, template);
+      if (template) {
+        if (JSON.stringify(existing.profileJson) !== JSON.stringify(expected)) {
+          throw fail('FINGERPRINT_PROFILE_DRIFT', 500, `Stored fingerprint profile for ${identityId} diverges from deterministic regeneration — refusing to guess (fix or delete the row)`);
+        }
+      } else {
+        const storedKey = JSON.stringify(PROFILE_FIELDS.map((f) => existing.profileJson[f]));
+        const expectedKey = JSON.stringify(PROFILE_FIELDS.map((f) => expected[f]));
+        if (storedKey !== expectedKey) {
+          throw fail('FINGERPRINT_PROFILE_DRIFT', 500, `Stored fingerprint profile for ${identityId} diverges from deterministic regeneration — refusing to guess (fix or delete the row)`);
+        }
       }
       return existing;
     }
 
+    const expected = regen(identityId, templateProfiles);
+
     // Pre-check collisions against the fleet (the DB unique guards below are
     // the authoritative race-safe layer; this yields the readable error).
     const others = await db.identityFingerprint.findMany();
-    const { collisions } = findProfileCollisions([
+    const { collisions } = scopedCollisions([
       ...others.map((r) => ({ identityId: r.identityId, profile: r.profileJson })),
       { identityId, profile: expected },
-    ], UNIQUE_PROFILE_FIELDS);
+    ]);
     if (collisions.length) {
       throw fail(
         'FINGERPRINT_COLLISION',
@@ -103,7 +141,8 @@ export function createFingerprintService({ db, log = { info() {}, warn() {}, err
     }
 
     try {
-      return await db.identityFingerprint.create({ data: { ...profileToColumns(identityId, expected), createdAt: new Date(), updatedAt: new Date() } });
+      // schemaVersion 2 = W1b template-backed profile (ADR-028); 1 = W1 synthetic
+      return await db.identityFingerprint.create({ data: { ...profileToColumns(identityId, expected), schemaVersion: templateProfiles ? 2 : 1, createdAt: new Date(), updatedAt: new Date() } });
     } catch (err) {
       if (err?.code === 'P2002') {
         // race or a manually-seeded row — refetch once, else surface the clash
@@ -128,10 +167,11 @@ export function createFingerprintService({ db, log = { info() {}, warn() {}, err
    */
   async function fleetCollisionReport(candidates = []) {
     const stored = await db.identityFingerprint.findMany();
-    return findProfileCollisions([
+    const { collisions } = scopedCollisions([
       ...stored.map((r) => ({ identityId: r.identityId, profile: r.profileJson })),
       ...candidates,
     ]);
+    return { collisions, blocking: collisions.some((c) => c.uniqueField) };
   }
 
   /**

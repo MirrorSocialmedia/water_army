@@ -23,7 +23,7 @@ import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 
-import { DOCKER_ERROR, encryptSecret, decryptSecret, resolveProviderKey, buildRoCmdArgs, profileToRoOverrides, mergeRoOverrides, validateRoOverridesMap } from '@water-army/shared';
+import { DOCKER_ERROR, encryptSecret, decryptSecret, resolveProviderKey, buildRoCmdArgs, profileToRoOverrides, templateProfileToRoOverrides, mergeRoOverrides, validateRoOverridesMap } from '@water-army/shared';
 
 import { DockerServiceError, classifyDockerError } from './docker-service.js';
 import { GOST_HOST_BIND, deviceNetwork, withDeviceNetwork, ensureDeviceNetwork } from './device-network.js';
@@ -2047,7 +2047,10 @@ export function createRedroidService({
           throw fail('FINGERPRINT_SERVICE_UNAVAILABLE', 500, 'identityId supplied but the fingerprint service is unavailable — cannot inject a verified profile');
         }
         const profile = await fingerprintService.resolveForDeviceCreate(input.identityId);
-        layers.push(profileToRoOverrides(profile));
+        // W1b (ADR-028): template-backed profiles carry REAL models with
+        // spaces -> %20 carrier encoding (decoded on-device by oem-propctl).
+        // W1 synthetic profiles keep the byte-identical legacy path.
+        layers.push(profile.templateId ? templateProfileToRoOverrides(profile) : profileToRoOverrides(profile));
         identityIdForDevice = input.identityId;
       }
       const merged = mergeRoOverrides(layers);
