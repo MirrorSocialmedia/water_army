@@ -1,0 +1,9 @@
+2026-10-27T09:26:58Z
+R1 finding v0 (image 9b0c697c, rc group-writable): mapping DEAD — init 'Skipping insecure file'; manual wrapper exec proved write+%20 decode OK
+verbatim host-log lines from rdev-s1 first boot (image 9b0c697c, adb root shell):
+  10-27 09:23:24.626  0 0 I init : Parsing file /vendor/etc/init/oem-ro-map.rc...
+  10-27 09:23:24.626  0 0 E init : could not import file '/vendor/etc/init/oem-ro-map.rc': Unable to read config file '/vendor/etc/init/oem-ro-map.rc': Skipping insecure file
+carriers present: getprop | grep -c ro.boot.oem = 9 ; ro.boot.oem_ro_product_model = Pixel%208%20Pro
+manual wrapper exec (adb root): /vendor/bin/oem-propctl ro.product.model TestDecode%20Space -> getprop = "TestDecode Space" (write OK, %20 decode OK)
+root cause: rc baked 0664 group-writable (workspace umask) -> init check_file_permissions rejects (base-image rc all 0/0 0644)
+fix: images/redroid-w1b/finalize.sh (docker cp + layer tar re-own/mode) -> tag 14.0.0-240527-w1b-f1

@@ -1,0 +1,7 @@
+2026-10-27T17:12:29+08:00
+               total        used        free      shared  buff/cache   available
+Mem:            91Gi        81Gi       887Mi       8.5Gi        18Gi        10Gi
+Swap:          8.0Gi       3.0Gi       5.0Gi
+---
+---
+ports 16490-16499 free

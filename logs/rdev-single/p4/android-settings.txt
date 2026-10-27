@@ -1,0 +1,43 @@
+== X1 settings full dump ==
+adb_enabled=1
+adb_wifi_enabled=0
+add_users_when_locked=0
+airplane_mode_on=0
+airplane_mode_radios=cell,bluetooth,uwb,wifi,wimax
+airplane_mode_toggleable_radios=bluetooth,wifi
+alt_bypass_wifi_requirement_time_millis=0
+ambient_enabled=1
+ambient_force_when_docked=0
+ambient_low_bit_enabled=0
+ambient_low_bit_enabled_dev=0
+ambient_plugged_timeout_min=-1
+ambient_tilt_to_bright=0
+ambient_tilt_to_wake=1
+ambient_touch_to_wake=1
+android_wear_system_edition=1
+android_wear_version=2
+apm_enhancement_enabled=1
+assisted_gps_enabled=1
+audio_safe_volume_state=3
+auto_time=1
+auto_time_zone=1
+auto_wifi=1
+bluetooth_disabled_profiles=0
+bluetooth_on=1
+boot_count=5
+bug_report=1
+burn_in_protection=0
+call_auto_retry=0
+car_dock_sound=/product/media/audio/ui/Dock.ogg
+--- secure
+android_id=a8928637dd09600a
+default_input_method=com.android.inputmethod.latin/.LatinIME
+--- system
+accelerometer_rotation=0
+alarm_alert=content://media/internal/audio/media/209?title=Cesium&canonical=1
+alarm_alert_set=1
+apply_ramping_ringer=0
+dim_screen=1
+dtmf_tone=1
+dtmf_tone_type=0
+end_button_behavior=2

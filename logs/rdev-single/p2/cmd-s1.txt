@@ -1,0 +1,14 @@
+androidboot.redroid_width=720
+androidboot.redroid_height=1280
+androidboot.redroid_dpi=320
+androidboot.redroid_fps=30
+androidboot.redroid_gpu_mode=host
+androidboot.oem_ro_build_display_id=CP3A.261005.005
+androidboot.oem_ro_build_fingerprint=google/husky/husky:17/CP3A.261005.005/16271449:user/release-keys
+androidboot.oem_ro_build_id=CP3A.261005.005
+androidboot.oem_ro_product_brand=google
+androidboot.oem_ro_product_device=husky
+androidboot.oem_ro_product_manufacturer=Google
+androidboot.oem_ro_product_model=Pixel%208%20Pro
+androidboot.oem_ro_product_name=husky
+androidboot.oem_ro_serialno=G551834511

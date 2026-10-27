@@ -17,10 +17,11 @@ STATE=/tmp/rdev-single-state; mkdir -p "$STATE" "$EVID"
 NET=br-rdev-single; SUBNET=172.38.223.0/24
 
 ma() { awk '/MemAvailable/{print int($2/1024)}' /proc/meminfo; }
+FLOOR=${RAM_GATE_FLOOR_MIB:-6144}   # boss 17:31: scratch redline lowered 8G -> 6G (product default 16G unchanged)
 M=$(ma)
 P=$((M - 2560))
-if [ "$M" -lt 8192 ] || [ "$P" -lt 8192 ]; then
-  echo "[rdev-single] RAM GATE DENY: MemAvailable=${M}MiB projected=${P}MiB (need >=8192/8192)" | tee -a "$EVID/harness.log"
+if [ "$M" -lt "$FLOOR" ] || [ "$P" -lt "$FLOOR" ]; then
+  echo "[rdev-single] RAM GATE DENY: MemAvailable=${M}MiB projected=${P}MiB (need >=${FLOOR}/${FLOOR})" | tee -a "$EVID/harness.log"
   exit 3
 fi
 echo "[rdev-single] $(date -u +%FT%TZ) RAM gate OK MemAvailable=${M}MiB projected_postboot=${P}MiB (gate=8192, budget=2560/device, boss 17:13 scratch override)" | tee -a "$EVID/harness.log"

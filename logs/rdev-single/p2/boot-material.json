@@ -1,0 +1,51 @@
+{
+  "identityId": "rdev-single-p2-0001",
+  "templateId": "pixel8pro-a17-cp3a261005",
+  "image": "water-army/redroid:14.0.0-240527-w1b",
+  "profile": {
+    "androidRelease": "17",
+    "brand": "google",
+    "manufacturer": "Google",
+    "model": "Pixel 8 Pro",
+    "device": "husky",
+    "productName": "husky",
+    "buildId": "CP3A.261005.005",
+    "displayId": "CP3A.261005.005",
+    "fingerprint": "google/husky/husky:17/CP3A.261005.005/16271449:user/release-keys",
+    "serial": "G551834511",
+    "locale": "ko-KR",
+    "timezone": "Asia/Jakarta",
+    "carrierName": "Verizon",
+    "carrierMcc": "311",
+    "carrierMnc": "480",
+    "securityPatch": "2026-06-22",
+    "templateId": "pixel8pro-a17-cp3a261005"
+  },
+  "roOverrides": {
+    "ro.product.brand": "google",
+    "ro.product.manufacturer": "Google",
+    "ro.product.model": "Pixel%208%20Pro",
+    "ro.product.device": "husky",
+    "ro.product.name": "husky",
+    "ro.build.id": "CP3A.261005.005",
+    "ro.build.display.id": "CP3A.261005.005",
+    "ro.build.fingerprint": "google/husky/husky:17/CP3A.261005.005/16271449:user/release-keys",
+    "ro.serialno": "G551834511"
+  },
+  "cmd": [
+    "androidboot.redroid_width=720",
+    "androidboot.redroid_height=1280",
+    "androidboot.redroid_dpi=320",
+    "androidboot.redroid_fps=30",
+    "androidboot.redroid_gpu_mode=host",
+    "androidboot.oem_ro_build_display_id=CP3A.261005.005",
+    "androidboot.oem_ro_build_fingerprint=google/husky/husky:17/CP3A.261005.005/16271449:user/release-keys",
+    "androidboot.oem_ro_build_id=CP3A.261005.005",
+    "androidboot.oem_ro_product_brand=google",
+    "androidboot.oem_ro_product_device=husky",
+    "androidboot.oem_ro_product_manufacturer=Google",
+    "androidboot.oem_ro_product_model=Pixel%208%20Pro",
+    "androidboot.oem_ro_product_name=husky",
+    "androidboot.oem_ro_serialno=G551834511"
+  ]
+}

@@ -1,0 +1,7 @@
+== R0-4 egress preflight (from s2) ==
+2 packets transmitted, 0 received, 100% packet loss, time 1049ms
+
+2 packets transmitted, 0 received, 100% packet loss, time 1026ms
+
+2 packets transmitted, 2 received, 0% packet loss, time 1000ms
+rtt min/avg/max/mdev = 199.486/199.658/199.831/0.478 ms

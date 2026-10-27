@@ -1,0 +1,19 @@
+2026-10-27T09:32:55Z
+boot_secs=4
+== partitions ==
+/product/priv-app/GmsCore:
+GmsCore.apk
+
+/product/priv-app/Phonesky:
+Phonesky.apk
+
+/system_ext/priv-app/GoogleServicesFramework:
+GoogleServicesFramework.apk
+== packages ==
+package:com.mtg.gmsoverlay
+package:com.google.android.gsf
+package:com.android.vending
+package:com.mtg.gmssettingsoverlay
+package:com.google.android.gms
+package:com.mtg.gmssetupwizardoverlay
+package:com.mtg.gmssettingsprovideroverlay

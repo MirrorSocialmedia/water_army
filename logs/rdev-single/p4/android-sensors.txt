@@ -1,0 +1,3 @@
+== X2 sensors ==
+No Sensors on the device
+devInitCheck : -19

@@ -1,0 +1,2 @@
+androidboot.oem_ro_product_model=Bad%2XModel
+androidboot.oem_ro_product_brand=googlered

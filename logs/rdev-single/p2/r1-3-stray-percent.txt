@@ -1,0 +1,17 @@
+case=stray-percent ts=2026-10-27T09:29:50Z boot_completed=1 boot_secs=8
+ro.product.model=redroid14_x86_64
+ro.build.fingerprint=redroid/redroid_x86_64/redroid_x86_64:14/UD2A.240505.001.W1/eng.frank.20240527.141332:userdebug/test-keys
+oem_carrier_count=2
+10-27 09:29:42.594     0     0 I init    : Parsing file /vendor/etc/init/oem-ro-map.rc...
+brand=googlered
+model=redroid14_x86_64
+10-27 09:30:06.199     0     0 I init    : Service 'exec 23 (/bin/rm -rf /data/per_boot)' (pid 1101) exited with status 0 waiting took 0.015000 seconds
+10-27 09:30:06.204     0     0 I init    : Service 'exec 24 (/system/bin/bootstat --record_boot_complete --record_boot_reason --record_time_since_factory_reset -l)' (pid 1130) exited with status 0 oneshot service took 0.004000 seconds in background
+10-27 09:30:06.205     0     0 I init    : Service 'logd-auditctl' (pid 1148) exited with status 0 oneshot service took 0.002000 seconds in background
+10-27 09:30:06.206     0     0 I init    : Service 'exec 25 (/system/bin/perfetto -c /data/misc/perfetto-configs/stopboottracetrigger.pbtxt --txt)' (pid 1149) exited with status 1 waiting took 0.002000 seconds
+10-27 09:30:06.245     0     0 I init    : Service 'dmesgd' (pid 1261) exited with status 0 oneshot service took 0.008000 seconds in background
+10-27 09:30:19.560   187   187 W android.hardware.media.omx@1.0-service: libminijail[187]: compile_file: /system/etc/seccomp_policy/crash_dump.x86.policy(3): syscall exit redefined here
+10-27 09:30:19.560   187   187 W android.hardware.media.omx@1.0-service: libminijail[187]: compile_file: /system/etc/seccomp_policy/crash_dump.x86.policy(6): syscall exit_group redefined here
+10-27 09:30:24.197   734   862 E bluetooth: packages/modules/Bluetooth/system/gd/hal/hci_hal_android_hidl.cc:65 serviceDied: Bluetooth HAL service died. Calling exit(0);
+10-27 09:30:24.562   786   786 D extservices: BootCompletedReceiver not enabled in config, exiting
+10-27 09:30:25.371  1609  1642 E bluetooth: packages/modules/Bluetooth/system/gd/hal/hci_hal_android_hidl.cc:65 serviceDied: Bluetooth HAL service died. Calling exit(0);

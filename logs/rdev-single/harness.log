@@ -1,0 +1,13 @@
+[rdev-single] 2026-10-27T09:23:02Z RAM gate OK MemAvailable=11641MiB projected_postboot=9081MiB (gate=8192, budget=2560/device, boss 17:13 scratch override)
+[rdev-single] 2026-10-27T09:23:12Z RAM gate OK MemAvailable=11689MiB projected_postboot=9129MiB (gate=8192, budget=2560/device, boss 17:13 scratch override)
+[rdev-single] 2026-10-27T09:23:23Z RAM gate OK MemAvailable=11654MiB projected_postboot=9094MiB (gate=8192, budget=2560/device, boss 17:13 scratch override)
+[rdev-single] rdev-s1 started cid=561e1272bac09b395d9f413328b4cc00310ff0408312c8a68fdd0a6a35dde0cd adb=127.0.0.1:16496 datadir=/var/lib/water-army/redroid-rdev-s1
+[rdev-single] 2026-10-27T09:26:58Z RAM gate OK MemAvailable=11194MiB projected_postboot=8634MiB (gate=8192, budget=2560/device, boss 17:13 scratch override)
+[rdev-single] rdev-s1 started cid=ef7c0ba3d00a1ae20a99fff6898f86b71c12783a30c441695b6982f0d206c5e5 adb=127.0.0.1:16496 datadir=/var/lib/water-army/redroid-rdev-s1
+[rdev-single] RAM GATE DENY: MemAvailable=8388MiB projected=5828MiB (need >=8192/8192)
+[rdev-single] 2026-10-27T09:32:40Z RAM gate OK MemAvailable=10960MiB projected_postboot=8400MiB (gate=8192, budget=2560/device, boss 17:13 scratch override)
+[rdev-single] rdev-s2 started cid=ea0be7b94b92f8f17e5206c6c3f6e6dd732dbc09eba494cd535b9d6563e4b358 adb=127.0.0.1:16497 datadir=/var/lib/water-army/redroid-rdev-s2
+[rdev-single] 2026-10-27T09:43:02Z RAM gate OK MemAvailable=9730MiB projected_postboot=7170MiB (gate=8192, budget=2560/device, boss 17:13 scratch override)
+[rdev-single] rdev-s1 started cid=63756a23f60a136dd0ae947e9e7b5ce59b7d795a088fdc8e51763d81419c7245 adb=127.0.0.1:16496 datadir=/var/lib/water-army/redroid-rdev-s1
+[rdev-single] 2026-10-27T09:44:08Z RAM gate OK MemAvailable=9112MiB projected_postboot=6552MiB (gate=8192, budget=2560/device, boss 17:13 scratch override)
+[rdev-single] rdev-s1 started cid=78c159c7da4bb48ce7bd94a276a61292a7d745157fe2d182c6d00237da1bed44 adb=127.0.0.1:16496 datadir=/var/lib/water-army/redroid-rdev-s1

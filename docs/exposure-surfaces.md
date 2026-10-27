@@ -119,3 +119,26 @@
 **一句話總結 [推論]**：今日開機，**web 端（Meta）最先死喐 #1/#5/#7**（一行 JS 齊），**app 端（Google）死喐 #2/#3/#6**（prop 即穿，W1b 收口解一半）。**跨層一致性（B7）係所有修復嘅驗收標準** — 單點修復唔會自動產生自洽故事。
 
 — 完（本檔 = 情報快照；每項修復立項時引用返對應 D/S/N/B/A 編號）
+
+## 附錄 A — rdev-single 真機實採（2026-10-27，Phase-1 單機批，Kairo mvqgmpfasbh6p）
+
+證據目錄 = `logs/rdev-single/`（probe dumps / web-probe-host.json / android-*.txt / 截圖）。環境 = 本機 redroid 14 x86_64，host AMD Ryzen 9700X + Mesa 24.0.8（**唔係**生產機組 — 絕對值只作形態參考，穿透行為本身與 host 型號無關）。
+
+| 紅旗 | 實測欄（rdev-single 2026-10-27） | 等級 |
+|---|---|---|
+| D1 | W1b 定制 image + `androidboot.oem_*` 注入 → probe `SystemProperties` ground truth **9/9 == template**（含 "Pixel 8 Pro" %20 解碼；fingerprint=google/husky/...:user/release-keys）= **VERIFIED**；mapping 早於 zygote 5.4 s（rc import 實錄）。注意：映射前 image 默認仲見 `userdebug/test-keys`（未注入機照爆） | 修=已驗證 |
+| D2 | `ro.hardware`/`ro.boot.hardware`=`redroid`、`ro.kernel.qemu` 空 — probe context 實錄照爆（範圍外確認） | 實測 |
+| D4 | **兩路徑要分開**：Android 面 `dumpsys SurfaceFlinger` GL = `AMD Radeon Graphics (radeonsi, ...), OpenGL ES 3.2 Mesa`（host GPU 穿透實證，行為同前 RTX 3090 記錄一致 = 跟 host 顯卡走）；**web 面** Bromite WebGL = `ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device...))` — 軟渲染，睇唔到 radeonsi（Bromite 預設唔用 host GLES）。**真 Chrome 會見邊個 = 待 Chrome 實裝重測**（B4 「待 probe 實採確定邊個」喺 Android 面已答：見 host GPU） | 實測 |
+| D8 | `dumpsys sensorservice` = **0 sensors**（`No Sensors on the device`，devInitCheck -19）— 真 Pixel 30+ 支；app SensorManager 即穿 | 實測 |
+| D9 | `/sys/class/power_supply/` 存在但 `dumpsys battery` 只 fake 值（charging=1/level=100）— 截圖見「充電中 100%」；無 temp/voltage 真欄 | 實測 |
+| D10 | 容器 `/proc/meminfo` MemTotal = **96,439,460 kB**（host 92GB 原樣穿透）；`/proc/cpuinfo` = `AMD Ryzen 7 9700X` + 16 核真名；`uname` = `6.8.0-117-generic ... Ubuntu SMP` — 三件套全穿 | 實測 |
+| D10-存儲 | `df` = `nvme0n1p2 1.9TB / 已用 40%`（host 盤原樣）— 「Pixel」講緊 1.9TB NVMe | 實測 |
+| S2 | probe settings：timezone=`GMT`、locale=`en-US`、deviceName=`redroid14_x86_64`（deviceName 都係 prop 級穿底）；web 面 Intl timeZone = host `Asia/Hong_Kong`（未注入態跟 host）— profile 池值未落機 = 推斷證實 | 實測 |
+| B2 | web `navigator.hardwareConcurrency=16`、`deviceMemory=32`（host 真值）、`webdriver=true`（headless 態）— 設備宣稱 vs JS 值量級矛盾實錄 | 實測 |
+| B3 | canvas pngHash / audio hash 兩 context（host-chromium / android-ua 偽裝）**完全一致** = UA 改寫唔影響 canvas/audio — 同質性假設嘅直接佐證（同引擎同 host = 同 hash） | 實測 |
+| B4 | 見 D4 web 面 = ANGLE/SwANGLE 串（真機 Chrome+真 GPU = ANGLE(Vulkan, Adreno/Mali...) 形態唔同）；`vendor="Google Inc."` | 實測 |
+| B1 | android-ua 偽裝 context 組合實錄：UA=Pixel 8 Pro/Android 14 但 `maxTouchPoints=0`、`ontouchstart=false`、`matchMediaCoarse=false`、screen 1280x720 dpr1、plugins=PDF — 「宣稱手機行 desktop 能力組合」= 交叉 tell 標準件 | 實測 |
+| N5 | WebRTC ICE：headless 見 `e:xxxx`（外部地址雜湈）；機上 Bromite 見候選清單含 `192.168.250.16` 內網段（截圖實錄）— Docker/lan 段暴露形態 | 實測 |
+| S5 | probe context：`ro.debuggable=1`、`ro.adb.secure=0`（scratch 態；生產 image 口徑另計）| 實測 |
+
+**方法學記錄**：web 面 = host headless chromium（`tools/exposure-probe/run-headless.cjs`，默認+android-ua 雙 context）+ 機上 Bromite 108 x64（Chrome 真 APK 公共源全部不可達：apkmirror/apkpure 403 CF、f-droid 404 = 記錄後以 Chromium 系 Bromite 代替，UA 帶 Bromite 尾綴 = 誠實標注）；Android 面 = 定制 w1b-f1 image probe dump + shell 補集。生產機組（不同 host 規格）數值會唔同，**穿透結構**（邊個欄位穿、穿到邊層）即係本附錄結論。

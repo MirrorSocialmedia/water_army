@@ -1,0 +1,25 @@
+== checkin/androidId sweep 2026-10-27T09:35:58Z ==
+10-27 09:32:46.929   253  1095 D SystemServerInitThreadPool: Started executing Update app-ops uidState in case package com.android.adservices.api changed
+10-27 09:32:46.929   253  1097 D SystemServerInitThreadPool: Started executing Update app-ops uidState in case package com.android.ext.adservices.api changed
+10-27 09:32:46.930   253  1095 D SystemServerInitThreadPool: Finished executing Update app-ops uidState in case package com.android.adservices.api changed
+10-27 09:32:46.930   253  1097 D SystemServerInitThreadPool: Finished executing Update app-ops uidState in case package com.android.ext.adservices.api changed
+10-27 09:32:47.581  1269  1295 I SystemConfig: Reading permissions from /system/etc/permissions/privapp_allowlist_com.android.adservices.api.xml
+10-27 09:32:47.581  1269  1295 I SystemConfig: Reading permissions from /system/etc/permissions/com.android.adservices.sdksandbox.xml
+10-27 09:32:47.583  1269  1269 D CompatConfig: No directory /apex/com.android.adservices/etc/compatconfig, skipping
+10-27 09:32:47.585  1269  1295 I SystemConfig: Reading permissions from /apex/com.android.adservices/etc/permissions/privapp_allowlist_com.android.adservices.api.xml
+10-27 09:32:47.730  1269  1269 D PackageManager: Directories scanned as system partitions: [/system:0, /vendor:524288, /odm:4194304, /oem:262144, /system/product:1048576, /system/system_ext:2097152, /apex/com.android.wifi:41943040, /apex/com.android.vndk.v34:41943040, /apex/com.android.virt:41943040, /apex/com.android.uwb:41943040, /apex/com.android.tzdata:41943040, /apex/com.android.tethering:41943040, /apex/com.android.sdkext:41943040, /apex/com.android.scheduling:41943040, /apex/com.android.runtime:41943040, /apex/com.android.rkpd:41943040, /apex/com.android.resolv:41943040, /apex/com.android.permission:41943040, /apex/com.android.os.statsd:41943040, /apex/com.android.ondevicepersonalization:41943040, /apex/com.android.neuralnetworks:41943040, /apex/com.android.mediaprovider:41943040, /apex/com.android.media.swcodec:41943040, /apex/com.android.media:41943040, /apex/com.android.ipsec:41943040, /apex/com.android.i18n:41943040, /apex/com.android.healthfitness:41943040, /apex/com.android.extservices:41943040, /apex/com.android.devicelock:41943040, /apex/com.android.conscrypt:41943040, /apex/com.android.configinfrastructure:41943040, /apex/com.android.btservices:41943040, /apex/com.android.art:41943040, /apex/com.android.appsearch:41943040, /apex/com.android.adservices:41943040, /apex/com.android.adbd:41943040]
+10-27 09:32:47.763  1269  1320 W PackageCacher: Failed to find APEX file backing /apex/com.android.adservices/priv-app/AdServicesApk@UD2A.240505.001.W1
+10-27 09:32:47.763  1269  1321 W PackageCacher: Failed to find APEX file backing /apex/com.android.adservices/app/SdkSandbox@UD2A.240505.001.W1
+10-27 09:32:47.789  1269  1269 V UserSystemPackageInstaller: Checking that all system packages are whitelisted.
+10-27 09:32:47.861  1269  1269 D ActivityManager: Checking cgroup freezer: /sys/fs/cgroup/uid_0/pid_1179/cgroup.freeze
+10-27 09:32:47.861  1269  1269 D ActivityManager: Checking binder freezer ioctl
+10-27 09:32:51.695  1269  1511 D SystemServerInitThreadPool: Started executing Update app-ops uidState in case package com.android.adservices.api changed
+== gservices recheck ==
+17
+== accounts ==
+User UserInfo{0:Owner:4c13}:
+  Accounts: 0
+  
+  AccountId, Action_Type, timestamp, UID, TableName, Key
+  Accounts History
+  

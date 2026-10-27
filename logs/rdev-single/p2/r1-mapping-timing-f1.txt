@@ -1,0 +1,13 @@
+2026-10-27T09:27:24Z
+10-27 09:26:58.599     0     0 I init    : Parsing file /vendor/etc/init/oem-ro-map.rc...
+Segmentation fault (core dumped) 
+== getprop all oem ==
+[ro.boot.oem_ro_build_display_id]: [CP3A.261005.005]
+[ro.boot.oem_ro_build_fingerprint]: [google/husky/husky:17/CP3A.261005.005/16271449:user/release-keys]
+[ro.boot.oem_ro_build_id]: [CP3A.261005.005]
+[ro.boot.oem_ro_product_brand]: [google]
+[ro.boot.oem_ro_product_device]: [husky]
+[ro.boot.oem_ro_product_manufacturer]: [Google]
+[ro.boot.oem_ro_product_model]: [Pixel%208%20Pro]
+[ro.boot.oem_ro_product_name]: [husky]
+[ro.boot.oem_ro_serialno]: [G551834511]

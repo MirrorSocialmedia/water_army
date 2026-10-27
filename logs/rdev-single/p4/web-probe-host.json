@@ -1,0 +1,186 @@
+{
+  "host-chromium": {
+    "schema": "wa-exposure-probe/1",
+    "ts": "2026-10-27T09:41:42.536Z",
+    "ua": {
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
+      "userAgentData": {
+        "brands": [
+          {
+            "brand": "Not:A-Brand",
+            "version": "8"
+          },
+          {
+            "brand": "Chromium",
+            "version": "156"
+          }
+        ],
+        "mobile": false,
+        "platform": "Linux"
+      },
+      "appVersion": "5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
+      "platform": "Linux x86_64",
+      "vendor": "Google Inc."
+    },
+    "navigator": {
+      "hardwareConcurrency": 16,
+      "deviceMemory": 32,
+      "languages": [
+        "en-US",
+        "en"
+      ],
+      "language": "en-US",
+      "maxTouchPoints": 0,
+      "webdriver": true,
+      "plugins": [
+        "PDF Viewer",
+        "Chrome PDF Viewer",
+        "Chromium PDF Viewer",
+        "Microsoft Edge PDF Viewer",
+        "WebKit built-in PDF"
+      ]
+    },
+    "screen": {
+      "width": 1280,
+      "height": 720,
+      "availWidth": 1280,
+      "availHeight": 720,
+      "dpr": 1,
+      "orientation": "landscape-primary",
+      "colorDepth": 24
+    },
+    "intl": {
+      "timeZone": "Asia/Hong_Kong",
+      "locale": "en-US",
+      "tzOffsetMin": -480
+    },
+    "webgl": {
+      "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+      "shading": "WebGL GLSL ES 3.00 (OpenGL ES GLSL ES 3.0 Chromium)",
+      "vendor": "Google Inc. (Google)",
+      "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+      "extCount": 30,
+      "extHash": "EXT_clip_control|EXT_color_buffer_float|EXT_color_buffer_half_float|EXT_conservative_depth|EXT_depth_clamp|EXT_disjoint_timer_query_webgl2|EXT_float_blend|EXT_polygon_offset_clamp|EXT_texture_compression_bptc|EXT_texture_compression_rgtc|EXT_texture_filter_anisotropic|EXT_texture_mirror_clamp_to_edge|NV_shader_noperspective_interpolation|OES_draw_buffers_indexed|OES_sample_variables|OES_shader_multisample_interpolation|OES_texture_float_linear|OVR_multiview2|WEBGL_clip_cull_distance|WEBGL_compressed_texture_astc|WEBGL_compressed_texture_etc|WEBGL_compressed_texture_etc1|WEBGL_compressed_texture_s3tc|WEBGL_compressed_texture_s3tc_srgb|WEBGL_debug_renderer_info|WEBGL_debug_shaders|WEBGL_lose_context|WEBGL_multi_draw|WEBGL_polygon_mode|WEBGL_stencil_texturing"
+    },
+    "canvas": {
+      "pngHash": "hhtrwPg3XwP/AgAA///zLNJ1AAAABklEQVQDAJftuPHRaRe6AAAAAElFTkSuQmCC"
+    },
+    "audio": {
+      "hash": "0fce11a1b06f4ccd8804d5bfc1a62f8d7eeb44046d4925953bc08396f304c388",
+      "energy": 4.989510642
+    },
+    "webrtc": {
+      "ips": [
+        "e:1381391368"
+      ],
+      "done": true
+    },
+    "battery": {
+      "charging": true,
+      "level": 1
+    },
+    "media": {
+      "any-pointer": "fine",
+      "any-hover": "fine",
+      "pointer": "fine",
+      "hover": "fine"
+    },
+    "perfMemory": 4395630592,
+    "touch": {
+      "ontouchstart": false,
+      "matchMediaCoarse": false
+    }
+  },
+  "android-ua": {
+    "schema": "wa-exposure-probe/1",
+    "ts": "2026-10-27T09:41:42.851Z",
+    "ua": {
+      "userAgent": "Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.6478.122 Mobile Safari/537.36",
+      "userAgentData": {
+        "brands": [
+          {
+            "brand": "Not:A-Brand",
+            "version": "8"
+          },
+          {
+            "brand": "Chromium",
+            "version": "156"
+          }
+        ],
+        "mobile": false,
+        "platform": "Android"
+      },
+      "appVersion": "5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.6478.122 Mobile Safari/537.36",
+      "platform": "Linux armv8l",
+      "vendor": "Google Inc."
+    },
+    "navigator": {
+      "hardwareConcurrency": 16,
+      "deviceMemory": 32,
+      "languages": [
+        "en-US",
+        "en"
+      ],
+      "language": "en-US",
+      "maxTouchPoints": 0,
+      "webdriver": true,
+      "plugins": [
+        "PDF Viewer",
+        "Chrome PDF Viewer",
+        "Chromium PDF Viewer",
+        "Microsoft Edge PDF Viewer",
+        "WebKit built-in PDF"
+      ]
+    },
+    "screen": {
+      "width": 1280,
+      "height": 720,
+      "availWidth": 1280,
+      "availHeight": 720,
+      "dpr": 1,
+      "orientation": "landscape-primary",
+      "colorDepth": 24
+    },
+    "intl": {
+      "timeZone": "Asia/Hong_Kong",
+      "locale": "en-US",
+      "tzOffsetMin": -480
+    },
+    "webgl": {
+      "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+      "shading": "WebGL GLSL ES 3.00 (OpenGL ES GLSL ES 3.0 Chromium)",
+      "vendor": "Google Inc. (Google)",
+      "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+      "extCount": 30,
+      "extHash": "EXT_clip_control|EXT_color_buffer_float|EXT_color_buffer_half_float|EXT_conservative_depth|EXT_depth_clamp|EXT_disjoint_timer_query_webgl2|EXT_float_blend|EXT_polygon_offset_clamp|EXT_texture_compression_bptc|EXT_texture_compression_rgtc|EXT_texture_filter_anisotropic|EXT_texture_mirror_clamp_to_edge|NV_shader_noperspective_interpolation|OES_draw_buffers_indexed|OES_sample_variables|OES_shader_multisample_interpolation|OES_texture_float_linear|OVR_multiview2|WEBGL_clip_cull_distance|WEBGL_compressed_texture_astc|WEBGL_compressed_texture_etc|WEBGL_compressed_texture_etc1|WEBGL_compressed_texture_s3tc|WEBGL_compressed_texture_s3tc_srgb|WEBGL_debug_renderer_info|WEBGL_debug_shaders|WEBGL_lose_context|WEBGL_multi_draw|WEBGL_polygon_mode|WEBGL_stencil_texturing"
+    },
+    "canvas": {
+      "pngHash": "hhtrwPg3XwP/AgAA///zLNJ1AAAABklEQVQDAJftuPHRaRe6AAAAAElFTkSuQmCC"
+    },
+    "audio": {
+      "hash": "0fce11a1b06f4ccd8804d5bfc1a62f8d7eeb44046d4925953bc08396f304c388",
+      "energy": 4.989510642
+    },
+    "webrtc": {
+      "ips": [
+        "e:1141210022"
+      ],
+      "done": true
+    },
+    "battery": {
+      "charging": true,
+      "level": 1
+    },
+    "media": {
+      "any-pointer": "fine",
+      "any-hover": "fine",
+      "pointer": "fine",
+      "hover": "fine"
+    },
+    "perfMemory": 4395630592,
+    "touch": {
+      "ontouchstart": false,
+      "matchMediaCoarse": false
+    }
+  }
+}
