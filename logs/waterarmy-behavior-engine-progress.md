@@ -76,3 +76,13 @@
   1. 麥理浩徑的踩單車體驗：場地要早訂。
   2. 將軍澳呢間疫苗接種幫到手，價錢合理，分享俾同樣掙扎嘅家長。
   3. 第一次去大埔海濱玩睇戲，風景療癒，仲有無其他地方推薦？
+- 05:4x S4 完成：ADR-035（§35 + index 行）、user-manual §9「日常運行」、register-aid.sh EXP-1 加固（`aid-page-check.py` 像素級 non-blank + 頁面轉換硬核判據、checker 壞 exit 4 fail-closed、checks.log 留數；checker 6 case 驅動驗證全中）、`scripts/behavior/dryrun-stats.mjs`。full suite **1565/1559/0/6**（基線 1534/1528/0/6，+31 零回歸）。commit 49592bd。
+- **COMPLETE**：S1 83f8c03 / S2 fdb2d45 / S3 cbe668b / S4 49592bd（全部已 push main）。殘缺見下面「已知殘缺」。
+
+## 已知殘缺（誠實列）
+1. register-aid 像素判據 hermetic 驗證（6 case 驅動）+ dry-run OK；**真機腿未跑**（零 boot 紀律；下次開機順手驗 exit 4/白屏路徑）。
+2. 「似人」最終裁決 = 平台風控 — 代碼只能証明「非 metronome / 帳號間獨立」。
+3. mobile 端 micro 行為（滑動軌跡/停留時長/具體 post 選擇）屬 Mobile Console 職責，本引擎只出時間+類型+話題 contract。
+4. 人審 ledger = 檔案級（JSONL）；抽樣回庫紀律目前係 CLI 手動流程，無自動化巡檢。
+5. HK 假期表內裝至 2027-12-31，超出 loud fail（有測試鎖）— 2028 年初要補表。
+6. mem0 工具本 session 不可用（工具未注入）— 教訓暫記 progress/TOOLS，日後補寫 mem0：(a) Kairo PUT subtasks_done 陷阱已喺 TOOLS.md；(b) write 工具 >8KB 截斷、exec preflight 對 heredoc+鏈式复合命令嘅規避法。
