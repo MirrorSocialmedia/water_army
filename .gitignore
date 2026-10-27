@@ -27,3 +27,7 @@ prisma/generated/
 # R2 spike tools (build via make -C tests/tools)
 tests/tools/probe
 tests/tools/tproxy-mini
+
+# L3-C arm translator large binaries (hashes pinned in vendor/arm-translator/SOURCE.md)
+vendor/arm-translator/*.zip
+images/*/vendor/*.zip
