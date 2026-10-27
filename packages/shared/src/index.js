@@ -402,3 +402,21 @@ export * from './fingerprint-profile.js';
 export * from './w1b-profiles.js';
 export * from './w1b-image-mapping.js';
 export * from './w1b-consistency.js';
+
+/**
+ * T5 (ADR-030) — Gmail account lifecycle: matrix (authoritative), throttle
+ * evaluator, deterministic realism profile, masking. Web mirror lives in
+ * batch-ui.js ACCOUNT_TRANSITIONS_UI (three-way sync discipline, ADR-029 §3).
+ */
+export {
+  ACCOUNT_STATES,
+  ACCOUNT_TRANSITIONS,
+  ACCOUNT_RESUMABLE,
+  isLegalAccountTransition,
+  deriveAccountProfile,
+  maskEmail,
+  dayKey,
+  evaluateThrottle,
+  throttleScopeKeys,
+  pickRecoveryEmail,
+} from './gmail-provision.js';

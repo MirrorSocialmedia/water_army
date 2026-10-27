@@ -444,6 +444,10 @@ model Identity {
   // T2 (ADR-029): login-state transition audit trail + dataDir ownership claim.
   loginAudits     IdentityLoginAudit[]
   dataDirClaim    IdentityDataDirClaim?
+  // T5 (ADR-030): Gmail account lifecycle (sibling machine — orthogonal axis
+  // to loginState; see ADR-030 bridge rules) + encrypted credential vault.
+  accountLifecycle AccountLifecycle?
+  gmailAccount     GmailAccount?
 
   @@index([status])
   @@index([identityType])
@@ -493,6 +497,99 @@ model IdentityDataDirClaim {
   identity Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
 
   @@map("identity_data_dir_claims")
+}
+
+// ------------------------------------------- account lifecycle (T5, ADR-030)
+// The Gmail-account creation/health pipeline state, hung NEXT TO the identity
+// as a SIBLING machine to login_state (ADR-029). Orthogonal axes: login_state
+// is the human-only truth about the app being logged in; this row tracks the
+// machine-driven + operator-overridable account creation pipeline
+// (準備中→開號驅動中→待人工驗證→建立成功→恢復設置中→就緒 / 死亡).
+// Transitions are fail-closed (matrix in @water-army/shared gmail-provision)
+// and every accepted one writes ONE account_lifecycle_audits row.
+model AccountLifecycle {
+  id          String    @id @default(uuid()) @db.Uuid
+  identityId  String    @unique @map("identity_id") @db.Uuid
+  state       String    @default("PREPARING") // ACCOUNT_STATES (shared) — never invent values here
+  stateSince  DateTime? @map("state_since")
+  // Observability for the driver (step names are opaque slugs, zero PII):
+  currentStep String?   @map("current_step")
+  // Deadline set when entering AWAITING_HUMAN (CAPTCHA human gate). While an
+  // EXTERNAL_VERIFICATION intervention is unresolved past this instant, the
+  // next driver touch marks the account DEAD (CAPTCHA_TIMEOUT).
+  awaitingDeadlineAt DateTime? @map("awaiting_deadline_at")
+  // Open CAPTCHA intervention ticket (P4 ManualIntervention) while AWAITING_HUMAN.
+  interventionId String? @map("intervention_id") @db.Uuid
+  failureCode String?   @map("failure_code") // machine-readable reason when DEAD
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  identity Identity              @relation(fields: [identityId], references: [id], onDelete: Cascade)
+  audits   AccountLifecycleAudit[]
+
+  @@index([state])
+  @@map("account_lifecycles")
+}
+
+// One row per lifecycle transition (who / when / why). actorUserId = human
+// override; NULL = system (driver). detailsJson is scrubbed reason codes —
+// NEVER credentials / emails / recovery addresses (canary-tested, ADR-030).
+model AccountLifecycleAudit {
+  id           String   @id @default(uuid()) @db.Uuid
+  lifecycleId  String   @map("lifecycle_id") @db.Uuid
+  identityId   String   @map("identity_id") @db.Uuid
+  fromState    String   @map("from_state")
+  toState      String   @map("to_state")
+  actorUserId  String?  @map("actor_user_id") @db.Uuid
+  actorKind    String   @default("system") @map("actor_kind") // system | human
+  reasonCode   String?  @map("reason_code")
+  detailsJson  Json     @default("{}") @map("details_json")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  lifecycle AccountLifecycle @relation(fields: [lifecycleId], references: [id], onDelete: Cascade)
+
+  @@index([identityId, createdAt])
+  @@map("account_lifecycle_audits")
+}
+
+// ------------------------------------------- credential vault (T5, ADR-030)
+// Gmail credentials + recovery address at rest: AES-256-GCM ciphertexts
+// (APP_ENCRYPTION_KEY, same crypto as W3 egress / provider keys). Plaintext
+// NEVER lands here; masked shapes are the only storable readable columns.
+// profileJson = the synthetic realism profile (name/birthday) — synthetic
+// pool data, zero real-person linkage, safe to store/log.
+model GmailAccount {
+  id                  String   @id @default(uuid()) @db.Uuid
+  identityId          String   @unique @map("identity_id") @db.Uuid
+  emailMasked         String?  @map("email_masked") // ab***@gmail.com (never the local part)
+  emailCipher         String?  @map("email_cipher") // v1:<iv>:<tag>:<cipher>
+  passwordCipher      String?  @map("password_cipher")
+  recoveryEmailCipher String?  @map("recovery_email_cipher")
+  recoveryEmailMasked String?  @map("recovery_email_masked")
+  profileJson         Json     @default("{}") @map("profile_json")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  identity Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+
+  @@map("gmail_accounts")
+}
+
+// ------------------------------------------- provisioning throttle (T5)
+// Daily attempt counters per scope (id:<identityId> | ip:<egressIp>) keyed by
+// UTC day, plus the global last-attempt stamp that drives the randomized
+// minimum interval. Rows are inert metadata — zero PII beyond an IP literal.
+model GmailProvisionCounter {
+  id            String    @id @default(uuid()) @db.Uuid
+  scopeKey      String    @map("scope_key") // id:… | ip:… | global
+  day           String    // YYYY-MM-DD (UTC); 'global' rows use '-'
+  count         Int       @default(0)
+  lastStartedAt DateTime? @map("last_started_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  @@unique([scopeKey, day])
+  @@map("gmail_provision_counters")
 }
 
 // ------------------------------------------------- identity fingerprints (W1)
