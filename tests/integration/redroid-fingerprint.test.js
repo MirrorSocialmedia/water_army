@@ -116,11 +116,25 @@ test('switch ON: recreate for the SAME identity replays the identical profile (3
   t.after(close);
   const ident = await db.identity.create({ data: { id: randomUUID(), displayName: 'w1-stable' } });
   const cmds = [];
+  // T2 (ADR-029) claim contract: one identity = one data home, so the
+  // stability flow is the REAL rebuild flow — remove (data kept) then
+  // re-create under the SAME name (the surviving /data + claim are
+  // re-adopted by the same identity — that is the point of the contract).
+  const NAME = 'redroid-w1-st';
   for (const n of ['a', 'b', 'c']) {
+    if (cmds.length > 0) {
+      const del = await app.inject({
+        method: 'DELETE', url: `/api/devices/redroid/${NAME}`,
+        headers: { cookie: cookies.admin },
+        payload: { confirm: NAME },
+      });
+      assert.equal(del.statusCode, 200, `rebuild teardown failed: ${del.body}`);
+      assert.equal(del.json().claimReleased, false, 'data-retaining delete must keep the claim (ADR-029)');
+    }
     const res = await app.inject({
       method: 'POST', url: '/api/devices/redroid',
       headers: { cookie: cookies.operator },
-      payload: { name: `redroid-w1-st-${n}`, templateName: 'redroid-14-swiftshader', idempotencyKey: `w1-st-${n}-0001`, identityId: ident.id },
+      payload: { name: NAME, templateName: 'redroid-14-swiftshader', idempotencyKey: `w1-st-${n}-0001`, identityId: ident.id },
     });
     assert.equal(res.statusCode, 201, res.body);
     cmds.push(lastCreateBody(redroidMock).Cmd.filter((a) => a.startsWith('androidboot.oem_')));
@@ -128,6 +142,9 @@ test('switch ON: recreate for the SAME identity replays the identical profile (3
   }
   assert.deepEqual(cmds[1], cmds[0], 'recreate 2 must match recreate 1');
   assert.deepEqual(cmds[2], cmds[0], 'recreate 3 must match recreate 1');
+  // Same identity, same name, three rebuilds → exactly ONE claim row, still owned.
+  const claims = await db.identityDataDirClaim.findMany({ where: { identityId: ident.id } });
+  assert.equal(claims.length, 1, 'rebuilds must not fork claims (one identity, one data home)');
 });
 
 test('switch ON fail-closed: unknown identityId → 404 with NO side effects (no row, no container)', async (t) => {
