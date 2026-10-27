@@ -36,6 +36,7 @@ sg docker -c 'docker compose up -d --build'     # 三個 image 重 build（npm c
 sg docker -c 'docker compose ps'                # 等 5/5 healthy
 ```
 - schema 改動：image build 時 `prisma generate`，啟動時 `migrate deploy` — 要 `--build`，唔係淨係 restart。
+- **W1 ro.* 注入開關（2026-10-27 默認翻 ON）**：一般部署**唔使 set 任何 env**（默認即 ON，`WA_REDROID_RO_OVERRIDES_ENABLED` 唔喺 `.env.example`/compose 都照樣生效）；需要落閘呢部機嘅指紋注入（真機除錐/回退）先喺 `.env` 顯式設 `WA_REDROID_RO_OVERRIDES_ENABLED=0`（kill-switch，重啟 api 生效）。下級 `WA_TEMPLATE_PROFILES_ENABLED` 仍默認 OFF，要 template profile 先顯式 set true。
 - 部署後核對：`curl -s 127.0.0.1:3012/api/health/ready` + E2E 截圖（`e2e/p6-e2e.mjs`）。
 
 ---

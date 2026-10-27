@@ -41,6 +41,11 @@ export async function makeRedroidTestApp({ redroidMockOpts = {}, configOverride 
   const config = {
     ...testConfig,
     redroidAdapter: 'mock',
+    // W1 switch explicit-injection discipline (default flipped to ON in prod
+    // config on 2026-10-27): test apps never ride the production default —
+    // suites that want injection OFF (the pre-flip behaviour) get it pinned
+    // here; W1/W1b suites override to true via configOverride.
+    redroidRoOverridesEnabled: false,
     redroidDataRoot: dataRoot,
     redroidAdbRangeStart: 15000,
     redroidAdbRangeEnd: 15999,

@@ -133,11 +133,13 @@ export function loadConfig(env = process.env, opts = {}) {
     redroidAdapter = 'real'; // the mock must never run a production host
   }
 
-  // W1 (ADR-025): identity fingerprint ro.* injection — OFF by default. Until
-  // the V3 real-device matrix passes, flipping this ON is an explicit operator
-  // opt-in (WA_REDROID_RO_OVERRIDES_ENABLED=true) — devices booted with it are
-  // experimental by definition.
-  const redroidRoOverridesEnabled = ['1', 'true', 'yes', 'on'].includes(String(e.WA_REDROID_RO_OVERRIDES_ENABLED ?? 'false').toLowerCase());
+  // W1 (ADR-025): identity fingerprint ro.* injection — ON by DEFAULT since
+  // 2026-10-27 (老細拍板: finalize.sh 已入 build 流水線 6bf179a，翻轉條件成立).
+  // Devices are still experimental-by-definition until the V3 real-device
+  // matrix passes — the flip moves the opt-OUT, not the verification status.
+  // Kill-switch semantics preserved: any explicit 0/false/no/off (or garbage —
+  // positive-list, fail-safe like the W1 original) turns injection off.
+  const redroidRoOverridesEnabled = ['1', 'true', 'yes', 'on'].includes(String(e.WA_REDROID_RO_OVERRIDES_ENABLED ?? 'true').toLowerCase());
 
   // W1b (ADR-028): REAL build-profile templates for NEW fingerprint rows —
   // OFF by default (byte-inert W1 semantics). Subordinate to

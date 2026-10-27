@@ -3,8 +3,10 @@
  * adapter + fingerprint routes.
  *
  * Hard assertions:
- *  1. Switch OFF (default): identityId is accepted and INERT — container Cmd
- *     byte-identical to the no-W1 shape (5 base args), device row unbound.
+ *  1. Switch OFF (explicit kill-switch injection; the production default was
+ *     flipped to ON on 2026-10-27 — 老細拍板): identityId is accepted and
+ *     INERT — container Cmd byte-identical to the no-W1 shape (5 base args),
+ *     device row unbound.
  *  2. Switch ON: create with identityId → the recorded docker createContainer
  *     body carries the deterministic profile's androidboot.oem_* args (Cmd
  *     carrier, never Env), device row snapshots identityId + merged map.
@@ -49,9 +51,10 @@ function lastCreateBody(redroidMock) {
 }
 
 const ON = { configOverride: { redroidRoOverridesEnabled: true } };
+const OFF = { configOverride: { redroidRoOverridesEnabled: false } };
 
-test('switch OFF (default): identityId accepted but INERT — Cmd byte-identical, row unbound', async (t) => {
-  const { app, db, cookies, redroidMock, close } = await makeApp(); // no configOverride = OFF
+test('switch OFF (explicit kill-switch): identityId accepted but INERT — Cmd byte-identical, row unbound', async (t) => {
+  const { app, db, cookies, redroidMock, close } = await makeApp(OFF); // explicit OFF injection
   t.after(close);
   const ident = await db.identity.create({ data: { id: randomUUID(), displayName: 'w1-off' } });
 
@@ -166,7 +169,7 @@ test('switch ON fail-closed: unknown identityId → 404 with NO side effects (no
 
 test('template roOverrides: write-validated (400 on junk), merged under identity profile when ON, inert when OFF', async (t) => {
   // 400 at template write (schema propertyNames + service validator)
-  const off = await makeApp();
+  const off = await makeApp(OFF);
   t.after(off.close);
   const bad = await off.app.inject({
     method: 'POST', url: '/api/redroid/templates',

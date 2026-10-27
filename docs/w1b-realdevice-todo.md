@@ -1,7 +1,7 @@
 # W1b 真機段待辦清單（ADR-028 · NV-W1b 收口單）
 
 > 前提：本清單 = 代碼段（COMPLETE，2026-10-27）之後、生產開關解鎖之前嘅唯一閘口。
-> 執行環境 = 真機（qwen27B 段 / RAM gate 解除後）。**跑晒之前 `WA_TEMPLATE_PROFILES_ENABLED` 同 `WA_REDROID_RO_OVERRIDES_ENABLED` 生產保持 OFF。**
+> 執行環境 = 真機（qwen27B 段 / RAM gate 解除後）。**跑晒之前 `WA_TEMPLATE_PROFILES_ENABLED` 生產保持 OFF。**（2026-10-27 更新：`WA_REDROID_RO_OVERRIDES_ENABLED` 已老細拍板默認翻 ON — kill-switch = env 顯式設 `0`/`false`，見 ADR-025 開關節標；本單真機斷言口徑不變。）
 > 紀律：每步落 evidence 到 `logs/realdevice-w1b/`；失敗 = 記錄 + 停，唔好繞過斷言。
 
 ## R0 前置

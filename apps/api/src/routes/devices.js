@@ -42,9 +42,9 @@ const CREATE_BODY = {
     // the response exposes only presence + port + state, never the URL.
     proxyUrl: { type: 'string', maxLength: 512 },
     // W1 (ADR-025): boot this device AS the given identity (fingerprint
-    // profile injection). Only EFFECTIVE when WA_REDROID_RO_OVERRIDES_ENABLED
-    // is on — with the switch off the field is accepted and inert (zero
-    // behaviour change, by design until V3 real-device verification).
+    // profile injection). Effective while WA_REDROID_RO_OVERRIDES_ENABLED is
+    // on — DEFAULT ON since 2026-10-27 (kill-switch: explicit env 0/false keeps
+    // the field accepted-and-inert, the pre-flip behaviour, on hosts that opt out).
     identityId: { type: 'string', pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' },
   },
 };
