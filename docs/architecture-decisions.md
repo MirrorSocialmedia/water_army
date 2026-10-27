@@ -20,6 +20,7 @@
 | ADR-028 | W1b 真實 build profile + 定制 image init 期映射（oem_* carrier + %20 契約 + 生成器黏性） | 已實裝（代碼段全綠）、真機 **NOT VERIFIED**（NV-W1b 成單） | §28 |
 | ADR-029 | T2 identity 登入狀態機（人工專用寫入路徑）+ test-identity provisioning + identity↔dataDir 歸屬契約 | 已實裝（代碼 + unit 6/6 + integration 3/3 + UI + full suite 1438/1432/0/6）；真機 E2E **NOT VERIFIED**（待辦成單，見 progress 檔） | §29 |
 | ADR-030 | T5 Gmail 帳號生命週期狀態機（login_state 嘅兄弟機）+ 開號驅動器（CAPTCHA 永久人肉口）+ 節流 + 加密保管庫 | 已實裝（代碼 + unit 8/8 + integration 5/5 + full suite 1451/1445/0/6）；真機試產 **NOT VERIFIED**（RAM gate + T1 真機裝機為前置） | §30 |
+| ADR-031 | L2 波次1：時區落機（persist.sys.timezone 經 post-fs-data）+ ro.hardware/ro.boot.hardware 聲稱層補洞 + build.sh fail-closed | 已實裝（代碼段全綠，full suite 1458/1452/0/6）；真機 **NOT VERIFIED**（複測清單見 progress 檔） | §31 |
 
 ---
 
@@ -1505,3 +1506,32 @@ MD §13.2 嘅 per-actor 寫 budget（20/60s）係為**人工誤操作**設嘅；
 - **Gmail App（redroid 內）= 長期登入錨點**：帳號嘅 Google 帳號本身係資產（SSO），日後其他平台可用同一 Google 帳號直接登入 — 所以「App 登入仲生唔生存在」係帳號價值嘅核心事實。呢個語義正正由 **login_state 軸（ADR-029，人工專用事實源）** 承載：錨點確立（首次登入）同錨點失守（RELOGIN_REQUIRED/LOGGED_OUT）都係人工確認嘅真相，系統永遠唔越權寫。試產觀察期「登入存活」口徑（§30 驗證段）即係錨點存活監測。
 - **瀏覽器（Chrome — 已拍板）= 日常操作面**：開號 UI 步驟機（open-signup→…→recovery-setup）同日後日常操作都行瀏覽器/設備 UI；account lifecycle 軸（本 ADR）記錄嘅係操作面嘅管線進度，機器可寫、全部審計。
 - 界線不變：瀏覽器操作成功（lifecycle READY）**唔斷言** App 登入錨點已立（橋接規則 (a) 照守）；反之 App 登入軸變動亦唔改寫 lifecycle。兩軸正交 = 錨點語義嘅直接推論，唔需要任何狀態機改動。
+
+## 31. L2 波次1 — 時區落機 + ro.hardware 聲稱層補洞 + build 流程 fail-closed（ADR-031，2026-10-27 — 來源 = CEO 工單 `mvqgmpgjbpju4` 波次1；老細 17:04 拍板按 l2-l3-proposal 序施工）
+
+**背景**：exposure-surfaces 紅旗表 #6/#7 + rdev-single 真機批（verdict：rc 0664 → init「Skipping insecure file」= 映射靜默死；`ro.hardware/ro.boot.hardware=redroid`；`ro.kernel.qemu` 實測為空；propCount 586）。波次1 口徑 = **平貴快、只做聲稱層、唔碰行為層**。
+
+**決策 1 — 承載鏈擴充（唔另起爐灶）**：`PROFILE_PROP_MAP` 加兩欄，全部沿用 W1b androidboot carrier + 生成 rc + probe 斷言三邊紀律：
+- `timezone → persist.sys.timezone`：per-identity 值早已喺 profile（POOL_TIMEZONES，老細實測 fleet 16 區全落住 DB）——就差落機。carrier 值不編碼（IANA `Asia/Hong_Kong` 形状過 `SAFE_PROFILE_VALUE_RE`）。
+- `hardware → [ro.hardware, ro.boot.hardware]`：**一欄兩 target**（真機上兩個 prop 都出自 bootloader 嘅 `androidboot.hardware=<board>` 抄寫 —— redroid 自己嘅 `redroid` 值正係呢條鏈嘅產物，機制即係機制，唔係諗出來的對齊）。每個 target 一個 carrier（`androidboot.oem_ro_hardware` + `androidboot.oem_ro_boot_hardware`），維持 carrier↔target 1:1 不變式（rc sim harness 嘅 target↔carrier 推導規則零特例）。
+- 所有 consumer（overrides / rc 生成器 / consistency kernel / probe-assert）統一經 `profilePropEntries()` flatten 迭代 —— 多 target 欄**結構上無法接一半線**。
+
+**決策 2 — persist.* 映射放 post-fs-data，唔係 early-init**：init 喺 fs 階段先由 /data/property 重載 persistent props；early-init 寫入會畀舊存值打贏（競態）。post-fs-data 係首個確定性寫入點，且照樣早於 zygote（所有 process 首次讀 persist.sys.timezone 已在 identity 值下）。rc parser 將 phase 變成**被斷言嘅契約**（ro.* 放 post-fs-data、persist.* 放 early-init 嘅篡改都 red）；unit + sim harness 雙向釘死。
+
+**決策 3 — hardware 值 provenance 分兩級（誠實口徑）**：5 個 verified Pixel template = board token 用 codename（husky/shiba/akita/panther/bluejay；Pixel 板名==device 代號慣例，源自 AOSP 機制）；3 個 unverified template（qcom×2、s5e7880x）= SoC/board token 慣例。兩級都已喺 template `source` 欄逐個標明出處與「真機複測 pending」——**冇宣稱實測過**。真機複測斷言 = probe 12-row 全 PASS（hardware 兩行而家喺斷言面，紅即 FAIL，唔再係 context NOTE）。
+
+**決策 4 — 聲稱層邊界（波次1 唔做嘅嘢）**：
+| 洞 | 口徑 | 修復前 → 修復後 |
+|---|---|---|
+| `ro.hardware`/`ro.boot.hardware`=redroid | 修（決策 1） | 恆 `redroid` → per-identity board token（代碼段） |
+| `persist.sys.timezone` 默認值 | 修（決策 1） | 全艦隊同一默認 → per-identity IANA 區 |
+| `ro.kernel.qemu` | **免修（實測為空）** | verdict 實採 `=`空 → 紅旗唔成立；probe-assert note 保留防回歸 |
+| abilist 自相矛盾 | **接受+記錄**（proposal 原口徑，評估照錄 D6） | 改字串會改 PackageManager 過濾行為 = 行為層，非純聲稱層；誠實化歸 L3 ARM 路線 |
+| propCount 586（真機 ~1500+） | **defer（數據活）** | backfill 需真機 prop diff 表逐項填；機制現成（template roOverrides，≤32 上限已標注），唔預支爛數 |
+| rc 0664 靜默死 | **修（決策 5）** | build 出口無人管 → post-build 斷言 fail-closed |
+
+**決策 5 — build.sh 係唯一出口（finalize 唔再可选）**：`images/redroid-w1b/build.sh` = drift check → docker build(pre) → finalize.sh → **post-build 導出層 tar 斷言**（rc 0644 + 兩 binary 0755 + 全部 uid/gid=0；缺項/錯 mode/非 root = exit 1）。負-path 實測：未 finalize 嘅 raw build 復現事故原樣（rc 0664、real 0775）→ 斷言 red。呢類 bug 由「開機後靜默」升級為「build 即死」。檢查唔開 container（RAM 紀律）。
+
+**向後兼容**：`hardware` 喺 W1 core validator 係 **optional** key（舊庫存 profile 照過驗證、照生成 10 個 carrier 參數少一個 hardware —— 降回 image 默認，語義正確）；template 池 **required**（新機必帶故事）。`checkProfileConsistency` 對「profile 無呢欄」出 **SKIP**（非阻塞）——W1 時代庫存行唔會因為 device 顯示 image 默認而誤紅；SKIP 必須有行（vacuous guard：斷言 SKIP 恰好 2 行，唔係靜默消失）。W1 生成器新 profile 一律帶 `hardware = device slug`（合成機嘅 board==device 同一慣例）。
+
+**驗證**：unit 33/33 + full suite **1458/1452/0/6**（基線 1455/1449/0/6 + 新增 3，零回歸）；rc drift green；test-mapping.sh sim 12/12 GREEN；build.sh 正/負路徑實跑存證（final image `sha256:bfa6a160a371...`，post-build assertion GREEN）。**狀態：已實裝（代碼段全綠）；真機 NOT VERIFIED** —— 複測清單見 `logs/waterarmy-l2w1-progress.md`（persist.sys.timezone 落地 + TimeDetector 覆寫行為、post-fs-data exec SELinux 語義、probe APK 重裝後 12-row 斷言、board token 真機對照）。
