@@ -521,6 +521,21 @@ Identity 批次輪換：一組 identity（例如 200 個）排入 cycle，每批
 - `scripts/br-b6-e2e/fault-driver.mjs` — 跨組件故障注入：Redis 斷 15s / PG 斷 15s / worker kill + Redis 斷（組合）；斷言 = 每 identity 一個終態 + `attempt_started` 全局 unique + 零殘留容器（`bash scripts/br-b6-e2e/fault-run.sh`）
 - `scripts/br-b6lt/` — 真機階梯壓測（165xx scratch、`br-b6lt-*` 前綴、pinned digest `matrixa-r3`、`gpu_mode=host`）：1→5→10→25→50，每階段 5s VRAM+host sampler + SGLang 共卡 halt monitor（衝突先縮 batch/等）— `logs/br-b6-loadtest/`（plan + 每階段 report）
 
+## Host-RAM 准入 Gate（RAM-G1 — 已實施，2026-10-22/23 live 實測）
+
+產品级 host-RAM 准入 gate：**每次 boot（redroid device create/start、batch container start）都先經一個原子、fail-closed 嘅准入決策** — 唔夠 RAM 就拒絕開機，唔存在「盲 boot」第二條路。完整設計/數學/lease 語義 = `docs/ram-gate.md`（單一事实源）；本節係公開摘要。
+
+**行為**：准入前讀 fresh `/proc/meminfo` `MemAvailable`，同 live RAM leases（每 live device/run 一份租約，Redis Lua 原子寫入）計projection：`ADMIT ⟺ (live+1) ≤ maxParallel ∧ current ≥ hardFloorMiB ∧ projected ≥ postBootTargetMiB`。拒絕 = **fail-closed**（無「預設放行」）：metrics 缺失/過期（>30s）、Redis 故障、config 非法，一律 DENY。拒絕時**零副作用**（唔建 container、唔燒 port、唔碰數據）；batch 路徑拒絕 = pending 保留、worker 跟 RETRY_WAIT 再試。
+
+**錯誤碼（穩定 machine-readable）**：
+- device create/start 拒絕 = **`409 RAM_GATE_DENIED`**（message 帶 reason + current/projected MiB；`details` 帶 `{reason, currentMiB, projectedMiB, liveCount}`；reason ∈ `MAX_PARALLEL` / `BELOW_HARD_FLOOR` / `PROJECTED_BELOW_TARGET` / `METRICS_UNAVAILABLE` / `METRICS_STALE` / `STORE_UNAVAILABLE` / `CONFIG_INVALID` / `INVALID_INPUT`）
+- batch start 拒絕 = **`503 RAM_GATE_DENIED`**（retryable — 同上 reason 詞彙）
+- gate 無法構造（hermetic test fake 無 Redis eval）= `503 RAM_GATE_UNAVAILABLE`；`RAM_GATE_ENABLED=false` = 明示 bypass（決策標 `GATE_DISABLED`，dev/test 逃生口）
+
+**配置**（每決策 live 重讀；優先級 env `RAM_GATE_*` > AppSetting `ram_gate.config`（UI 可改）> 默認 constants）：`RAM_GATE_ENABLED`／`RAM_GATE_MAX_PARALLEL`（默認 10）／`RAM_GATE_HARD_FLOOR_MIB`（16384 = 16 GiB 紅線）／`RAM_GATE_POST_BOOT_TARGET_MIB`（18432，保守起始值）／`RAM_GATE_PER_BOOT_BUDGET_MIB`（1200）／`RAM_GATE_METRICS_MAX_AGE_MS`（30000）／`RAM_GATE_LEASE_TTL_MS`（24h backstop）。管理面：`GET/PUT /api/system/ram-gate*`（admin，狀態/決策日志/政策/強制 reconcile）+ UI「RAM Gate」頁（純展示，server 權威）。**安全底線（代碼編碼，非口頭）**：拒絕/壓力只 stop 新 boot — 永不刪 identity dataDir、永不殺其他容器、永不碰 SGLang。
+
+**實測證據**：G1 八場景存證 `docs/audits/ramgate-scenarios.md`（+ 基線 `docs/audits/ramgate-baseline.md`）；G2 gate-live 10 機 ladder + batch 503 真路徑 + 回歸 `docs/audits/ramgate-g2-report.md`（均喺 repo，實檔）。測試：`tests/unit/ramgate-*.test.js` + `tests/integration/ramgate-*.test.js`（HTTP 級准入/拒絕零副作用、lease 生命週期、RBAC、fail-closed 原因面）。
+
 ## 功能清單（MD §18 三類分列 — 交付誠實項）
 
 ### A. 實際可用（真環境實測過，非 mock）

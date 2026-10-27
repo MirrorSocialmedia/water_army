@@ -182,10 +182,25 @@ proxy.network = null（無 proxy 綁定）或：
 | `CANARY_FAIL` / `CANARY_TIMEOUT` | `checks.tcpCanary` + `netLastErrorCode` | data plane canary 失敗 / 超時（MD `DATA_PLANE_CHECK_FAILED` 嘅機器可讀形） |
 | `ADB_UNAVAILABLE` / `ADB_TIMEOUT` | refresh `adbError` / diagnostics adb 區 `error`（HTTP 200 欄位） | adb **engine** 本身跑唔到（binary 缺失/spawn 失敗）/ 超時 — **唔係** device offline（`adbState` 誠實報 `unknown`） |
 | `DATA_DIR_PERM_DENIED` / `DATA_DIR_REMOVAL_FAILED` / `DATA_DIR_REFUSED` | DELETE `dataRemoveErrorCode`（HTTP 200 欄位） | data dir 清除：權限失敗（root-owned dir，R5 實測形狀）／其他失敗／安全拒決（path 越界/symlink escape/非目錄） |
+| `RAM_GATE_DENIED` | **409** device create/start；**503** batch start（retryable → worker RETRY_WAIT，pending 保留） | RAM-G1 准入 gate 拒絕 boot（fail-closed）：message 帶穩定 reason（`MAX_PARALLEL`／`BELOW_HARD_FLOOR`／`PROJECTED_BELOW_TARGET`／`METRICS_UNAVAILABLE`／`METRICS_STALE`／`STORE_UNAVAILABLE`／`CONFIG_INVALID`／`INVALID_INPUT`）+ current/projected MiB；`details` 帶 `{reason, currentMiB, projectedMiB, liveCount}`；拒絕 = **零副作用**（未建 container/未燒 port/未碰數據）；設計 `docs/ram-gate.md`，證據 `docs/audits/ramgate-scenarios.md` + `ramgate-g2-report.md` |
+| `RAM_GATE_UNAVAILABLE` | 503 create/start/batch start | gate 無法構造（hermetic fake 無 Redis `eval`；生產不會出現 — 除非真 ioredis）；見「System — RAM 准入 Gate」節 |
 | preflight item `id` + `status:'FAIL'` | preflight / diagnostics kernel 區 | host 先決條件缺失（MD `HOST_PREREQUISITE_MISSING` = item id 詞彙：binder module、device nodes、docker、data root…） |
 | `network.stale: true` | `proxy.network` 欄位 | 健康檢查過期（MD `HEALTHCHECK_STALE` — 穩定**布林欄位**，非獨立錯誤碼：佢係狀態投影，唔係事件） |
 
 **錯誤回應鐵律（§8.3）**：error message 永遠唔包含內部憑證、完整 proxy URL、宿主機敏感路徑以外嘅秘密；host path（data dir、log path）允許出現。上表碼全部喺 `redroid-service.js`（`fail(...)`）／`redroid-health.js`（`NET_ERRORS`）／`docker-service.js`（`classifyDockerError`）定死，測試用詞彙斷言鎖定（drift = test 爆）。
+
+## System — RAM 准入 Gate（RAM-G1 — admin only）
+
+Host-RAM 准入 gate：所有 boot 路徑（device create/start、batch start）經同一個原子、fail-closed 決策（數學/lease/恢復語義 = `docs/ram-gate.md` 單一事实源）。拒絕海面 = `409`（device）／`503`（batch，retryable）`RAM_GATE_DENIED`，見上錯誤碼契約。
+
+| Method | Path | Role | 參數 | 錯誤碼 / 備註 |
+|--------|------|------|------|--------------|
+| GET | `/system/ram-gate` | **admin** | — | 200：`enabled`／有效 `config`／`metrics`（fresh sample + age + `stale` flag）／`counts`（`liveLeases`/`running`/`inProgress`/`reservedMiB`）／`wouldAdmitNext`（`{admitted, reason, projectedMiB}`，dry-run 零副作用）／`store.redis` |
+| GET | `/system/ram-gate/decisions` | **admin** | query `limit`（≤30 建議） | 200 決策軌跡（admit/deny/release/recover，帶 reason、current/projected MiB、source；ring buffer 300） |
+| PUT | `/system/ram-gate/config` | **admin** | body = partial（`maxParallel`/`hardFloorMiB`/`postBootTargetMiB`/`perBootBudgetMiB`/`metricsMaxAgeMs`/`leaseTtlMs`/`enabled`） | 200（驗證 + partial merge 入 AppSetting `ram_gate.config`，audited）；非法值 400（fail-closed：生效 config 非法 = 全 DENY `CONFIG_INVALID`，唔會默默用默認值）；env `RAM_GATE_*` 優先於 AppSetting |
+| POST | `/system/ram-gate/reconcile` | **admin** | — | 200 `{released, renewed, recovered, errors}`（強制對帳：殭屍 lease 釋放 / live 續期 / redis 清空後補回 — 自動每 5 分鐘都會跑） |
+
+**配置優先級**（每決策 live 重讀）：env `RAM_GATE_*` > AppSetting `ram_gate.config` > 默認 constants（maxParallel 10 / hardFloor 16384 MiB / target 18432 MiB / budget 1200 MiB / metrics maxAge 30s / lease TTL 24h）。`RAM_GATE_ENABLED=false` = 明示 bypass（決策標 `GATE_DISABLED`，只作 dev/test 逃生口）。**底線**：拒絕只 stop 新 boot；永不刪 dataDir／永不殺其他容器／永不碰 SGLang。
 
 ## Dashboard（P6）
 
@@ -217,6 +232,8 @@ proxy.network = null（無 proxy 綁定）或：
 **冪等**：同 `idempotencyKey` 重複 create → 200 + 同一 `cycleId`（replay flag，無第二個 cycle）。`POST /api/batches/:id/start` 冪等：batch 已 RUNNING → 200 `{started:false, reason:'already-running'}`（唔會雙派工）。
 
 **Rate budget（MD §13.2）**：人工 operator 嘅 batch 寫操作（create/start/stop/remove 等）限 20/60s/actor，超 = 429 `RATE_LIMITED`；**service lane**（`x-wa-service-token`，worker→API 內部調用）豁免呢個人 budget — 佢受 global container cap 支配（B6 修復：單一 service actor 唔再同 4 個 batch 搶同一個 20-req budget 導致派工被 429 誤判為永久失敗；429 亦已改為 retryable，park RETRY_WAIT 等下個 scheduler tick）。purge 另有獨立 admin+human 門（service token 一律拒）。
+
+**RAM-G1 准入**：batch container start 前過 RAM gate（port lease 之前）— 不足 = **`503 RAM_GATE_DENIED`**（retryable：worker RETRY_WAIT，pending 保留、零創建；reason 詞彙同 device 路徑統一，見 Redroid 錯誤碼契約 + `docs/ram-gate.md`）。
 
 | Method | Path | Role | 參數 | 錯誤碼 / 備註 |
 |--------|------|------|------|--------------|
@@ -263,4 +280,4 @@ proxy.network = null（無 proxy 綁定）或：
 
 ## 端點總計
 
-**110 條路由**（逐檔案計；P5 2026-10-24 實核 = P4-MC 105 條 + **stream console 5**）：health 2 + auth 3 + containers 15（含 5 個 action + exceptions 3 條 + create-from-template）+ container templates 2 + dashboard 1 + tasks 15（runs 6 + approvals 3 + tools 1 + providers 4 + audit 1）+ task definitions 1 + schedules 10（含 POST preview）+ schedule notifications 4 + manual interventions 9（P4-MC）+ **stream console 5（MC P1–P3：create/list/heartbeat/reconnect/close；另有 1 條 WS upgrade path 唔計入 REST 路由）** + redroid templates/preflight 5 + redroid devices 11（含 3 個 action + proxy/retry）+ batch monitor 5（BR-B5）+ batch control 21（BR-B2）。所有寫操作（POST/PATCH/PUT/DELETE，`/auth/login` 除外）：RBAC + audit row（actor、request_id、IP、status、details scrub）+ Origin 檢查（browser mutating 請求）。
+**114 條路由**（逐檔案計；P5 2026-10-24 實核 = P4-MC 105 條 + **stream console 5**；2026-10-27 補 **system ram-gate 4**）：health 2 + auth 3 + containers 15（含 5 個 action + exceptions 3 條 + create-from-template）+ container templates 2 + dashboard 1 + tasks 15（runs 6 + approvals 3 + tools 1 + providers 4 + audit 1）+ task definitions 1 + schedules 10（含 POST preview）+ schedule notifications 4 + manual interventions 9（P4-MC）+ **stream console 5（MC P1–P3：create/list/heartbeat/reconnect/close；另有 1 條 WS upgrade path 唔計入 REST 路由）** + redroid templates/preflight 5 + redroid devices 11（含 3 個 action + proxy/retry）+ batch monitor 5（BR-B5）+ batch control 21（BR-B2）+ system ram-gate 4（RAM-G1）。所有寫操作（POST/PATCH/PUT/DELETE，`/auth/login` 除外）：RBAC + audit row（actor、request_id、IP、status、details scrub）+ Origin 檢查（browser mutating 請求）。
