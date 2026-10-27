@@ -31,3 +31,8 @@ tests/tools/tproxy-mini
 # L3-C arm translator large binaries (hashes pinned in vendor/arm-translator/SOURCE.md)
 vendor/arm-translator/*.zip
 images/*/vendor/*.zip
+
+# --- attest-app local caches (pinned Google Maven jars fetched by build.sh; APK force-added) ---
+attest-app/build/
+attest-app/libs/
+attest-app/debug.keystore
