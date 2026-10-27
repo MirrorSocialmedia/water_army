@@ -262,3 +262,16 @@ JS 頁提取受限 — 標 **[文檔-待核]**；落實驗時用自製 demo 採 
 ---
 
 — 完（拍板欄：④ 2e 常態口徑 ___ / ⑥ ARM 翻譯層觸發器 = **已拍板「ARM 先試吧」2026-10-27 19:40，代碼段完，真機段待 RAM 窗口（見 §6.2）** / ⑤ keybox 採購預案 ___ / EXP 排期 ___）
+
+### 6.3 CEO 真機補位實錄（2026-10-27 20:3x–20:4x，RAM 窗口 12Gi 重開；機械步驟 CEO 直跑 arm-exp.sh）
+
+| 層 | 判定 | 實證（logs/l3c-arm/p6/） |
+|---|---|---|
+| L-i 裝機（install-multiple ×4 split） | **passed** | `Success` + pm path（install.txt/pm-path.txt） |
+| L-ii 進程 | **passed** | `com.android.chrome` S 態 RSS 371MB（ps.txt）= **houdini 翻譯層下 ARM 進程運行中** |
+| L-iii UI | **passed** | 首啟登入頁完整渲染（screen-launch.png，720×1280 全內容量級）；binfmt arm64 處理器 enabled、`ro.dalvik.vm.isa.arm=x86`、native.bridge=libhoudini.so（props/binfmt） |
+| L-iv 開頁 | **blocked（根因已锁定）** | Android 14 **`DeprecatedAbiDialog`**（logcat：`AppWarnings: Showing DeprecatedAbiDialog for package com.android.chrome`）彈窗壓住意圖鏈 — 根因 = 老細檔係 **armeabi-v7a（32-bit ARM）**，A14 標「不兼容」-warning 級（App 其實照跑，OK 可續） |
+
+**結論一句**：**ARM 翻譯層本身驗證通過（裝/起/UI 三關全綠）**；L-iv 唔係翻譯層問題，係 (a) 32-bit ABI 在 A14 有兼容彈窗 + (b) 彈窗需要 OK 撳過先到瀏覽鏈。
+**下一步（兩條都平）**：① 換 **arm64-v8a** 變體 Chrome（無 deprecated 彈窗，一氣呵成）② 或在 arm-exp.sh browse 步前加 dialog-OK 自動撳（uiautomator 已可读 dialog bounds：OK 在 [462,715][702,779]）= 32-bit 老 app 兼容路徑都要（日後 ARM-only app 未必有 64 位版）。
+teardown：container residue=0、datadir removed、窗口還返 12Gi。full suite 未跑（本輪零碰代碼，純實驗執行）。

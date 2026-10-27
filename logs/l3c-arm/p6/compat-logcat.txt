@@ -1,0 +1,8 @@
+10-27 12:36:03.883   254   274 W InputManager-JNI: Input channel object '27d6529 DeprecatedAbiDialog (client)' was disposed without first being removed with the input manager!
+10-27 12:36:09.897   254   274 W AppWarnings: Showing DeprecatedAbiDialog for package com.android.chrome
+10-27 12:36:09.901   254   274 W InputManager-JNI: Input channel object '9b04a85 DeprecatedAbiDialog (client)' was disposed without first being removed with the input manager!
+10-27 12:36:09.902   254   274 W AppWarnings: Showing DeprecatedAbiDialog for package com.android.chrome
+10-27 12:36:09.963   254   274 D CoreBackPreview: Window{a03643a u0 DeprecatedAbiDialog}: Setting back callback OnBackInvokedCallbackInfo{mCallback=android.window.WindowOnBackInvokedDispatcher$OnBackInvokedCallbackWrapper@eabd3de, mPriority=0, mIsAnimationCallback=false}
+10-27 12:36:11.361  3848  3848 D nativeloader: Configuring clns-4 for other apk /data/app/~~y_DhFKK9h1D_aVnkDjUi0g==/com.android.chrome-Fhome-z86df9rybv2udp3A==/base.apk. target_sdk_version=36, uses_libraries=, library_path=/data/app/~~y_DhFKK9h1D_aVnkDjUi0g==/com.android.chrome-Fhome-z86df9rybv2udp3A==/lib/arm:/data/app/~~y_DhFKK9h1D_aVnkDjUi0g==/com.android.chrome-Fhome-z86df9rybv2udp3A==/base.apk!/lib/armeabi-v7a, permitted_path=/data:/mnt/expand
+10-27 12:36:47.297   254   274 D CoreBackPreview: Window{a03643a u0 DeprecatedAbiDialog}: Setting back callback null
+10-27 12:36:47.298   254   274 W InputManager-JNI: Input channel object 'a03643a DeprecatedAbiDialog (client)' was disposed without first being removed with the input manager!

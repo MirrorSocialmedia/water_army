@@ -1,0 +1,7 @@
+-rwxr-xr-x 1 root root    9260 2026-10-27 11:46 /system/bin/houdini
+-rwxr-xr-x 1 root root    9784 2026-10-27 11:46 /system/bin/houdini64
+-rw-r--r-- 1 root root    1635 2026-10-27 11:46 /system/etc/init/houdini.rc
+-rw-r--r-- 1 root root 7688252 2026-10-27 11:46 /system/lib/libhoudini.so
+-rw-r--r-- 1 root root 9421784 2026-10-27 11:46 /system/lib64/libhoudini.so
+318
+325

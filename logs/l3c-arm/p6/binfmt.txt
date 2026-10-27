@@ -1,0 +1,8 @@
+enabled
+arm64_dyn
+arm64_exe
+arm_dyn
+arm_exe
+python3.12
+register
+status

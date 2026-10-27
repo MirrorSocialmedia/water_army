@@ -1,0 +1,7 @@
+[arm-exp] rdev-a1 booted, adb=127.0.0.1:16511
+[arm-exp] evidence: props files binfmt logcat -> p6/
+[arm-exp] launch evidence -> p6/ (check ps.txt = L-ii, screen-launch.png = L-iii)
+[arm-exp] browse evidence -> p6/ (marker=WA-ARM-EXP6-6038; check screen-browse.png / marker-uia.txt = L-iv)
+[arm-exp] container removed
+[arm-exp] datadir removed (root-shim)
+[arm-exp] teardown check: container residue=0
