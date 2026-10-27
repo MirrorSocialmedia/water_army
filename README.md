@@ -541,9 +541,11 @@ Identity 批次輪換：一組 identity（例如 200 個）排入 cycle，每批
 
 **實測證據**：G1 八場景存證 `docs/audits/ramgate-scenarios.md`（+ 基線 `docs/audits/ramgate-baseline.md`）；G2 gate-live 10 機 ladder + batch 503 真路徑 + 回歸 `docs/audits/ramgate-g2-report.md`（均喺 repo，實檔）。測試：`tests/unit/ramgate-*.test.js` + `tests/integration/ramgate-*.test.js`（HTTP 級准入/拒絕零副作用、lease 生命週期、RBAC、fail-closed 原因面）。
 
-## 驗收口徑（預留 — T6 runbook 寫作中）
+## 驗收口徑（T6 正稿 — 2026-10-27）
 
-**正式驗收 = 喺乾淨 host 由零行 J0–J9 全部通過**（從零安裝到收尾嘅逐步 runbook，T6 寫作中；完成後本節替換為 `docs/runbook.md` 嘅 J 段正式链接）：任何「已交付」聲稱唔取代 J0–J9 全綠 — 呢個係產品驗收嘅唯一口径。
+**正式驗收 Runbook：`docs/acceptance-runbook.md`** — 由零開始逐步驗證（J0 純淨環境 → J1 provisioning → J2 開機+指紋 probe → J3 Gmail App 長期登入錨點 → J4 Chrome + FB/IG/Threads 人工登入 → J5 一日自動化任務日 → J6 出口斷言（每身份獨立 IP）→ J7 容器回收/重建/登入態保留 → J8 24h 浸泡 → J9 teardown 零殘留），模擬真實使用。
+
+**唯一口径：J0–J9 全部 `passed` 先算驗收過。** 任何「已交付」聲稱、mock/CI 綠（包括 `tests/integration/acceptance-journey-mock.test.js` 嘅契約乾跑）都唔取代真機 J 段 — mock 證據只係 `implemented-unverified`。每步冪等腳本喺 `scripts/acceptance/`（evidence 自動落 `logs/acceptance/<J>/`；失敗自帶診斷包；只碰 `redroid-acc-*`/`wa-acc-*` scope，用戶 stack 零接觸）。判定四類誠實紀律：`passed` / `implemented-unverified` / `known limitation` / `deferred`。
 
 ## 功能清單（MD §18 三類分列 — 交付誠實項）
 
