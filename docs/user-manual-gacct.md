@@ -135,3 +135,37 @@ bash scripts/rdev-single/egress-proxy.sh stop
 ```
 
 帳號本身**唔會隨機死** — 佢哋喺 vault 入面；機係消耗品，賬本係資產。
+
+## 9. 日常運行（行為引擎，ADR-035）
+
+帳號開好、入庫之後嘅日常循環 = **生內容 → 人審 → 睇今日清單**。全部純代碼、可重放、零真機：
+
+```bash
+# 1) 生成內容候選（離線模板模式，無 LLM 都得；--seed 決定可重放）
+node apps/worker/src/content-cli.js generate \
+  --accounts acct-XXXXXXXXXX,acct-YYYYYYYYYY --per 6 --seed batch-20261101
+
+# LLM 模式（可選）：endpoint/model 一率 env 注入，代碼零硬碼
+CONTENT_LLM_ENDPOINT=http://<你嘅本地model>/v1 CONTENT_LLM_MODEL=<model名> \
+node apps/worker/src/content-cli.js generate --accounts ... --per 6 --seed batch-2 --mode llm
+# LLM 掛咗會逐條 loud fallback 回模板（輸出 RELAXED 行 + reason），唔會靜默
+
+# 2) 人審（抽樣回庫紀律：唔好全批，定期用 stats 睇話題/風格熵有冇塌縮）
+node apps/worker/src/content-cli.js review list
+node apps/worker/src/content-cli.js review approve cc-<id>
+node apps/worker/src/content-cli.js review reject cc-<id>
+node apps/worker/src/content-cli.js stats
+
+# 3) 今日每帳號做乜（dry-run；只食 approved 內容）
+node apps/worker/src/daily-cli.js today --accounts acct-XXXXXXXXXX --seed day1
+node apps/worker/src/daily-cli.js today --accounts ... --date 2026-11-09 --seed day1 --json out.json
+```
+
+要點：
+
+- **時間表由引擎話事**：每帳號嘅活躍窗、動作分佈、出行沉默期全部由 persona + seed 推導，同 seed 重放 byte-equal（審計/复盘用）。唔好手動改 out.json 再餽執行端 —— 改紀律就改 seed/persona。
+- **內容斷糧會講出嚟**：清單入面 `⚠ 無內容可用 (needsContent)` = 該話題/風格嘅 approved 池空咗，返 step 1 補貨；`REUSED` = 池太細被迫重用，同樣係補貨信號。
+- **真執行未接**：`daily-cli` 係 dry-run（收口係 `Executor` 契約，Mobile Console 係日後單）。而家嘅輸出 = 操作清單/JSON。
+- **內容 ledger**：`.dev/content/ledger.jsonl`（gitignored、零 PII —— 全部合成文本）。後備： copy 去你嘅備份位。
+- **AID 註冊加固（EXP-1）**：`register-aid.sh` 成功判據已升做像素級硬核檢查（白屏/停留原頁 = fail + `checks.log` 留數）；跑之前確保宿主 `python3 -c "import PIL"` 通過，否則 exit 4 fail-closed。
+- 乾跑統計（驗收/巡檢用，seeded 可重放）：`node scripts/behavior/dryrun-stats.mjs <seed>`。

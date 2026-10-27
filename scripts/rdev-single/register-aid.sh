@@ -30,12 +30,31 @@
 #      operator-retained success-page capture (loud failure otherwise).
 #   ③ KEYCODE_BACK walks back MULTIPLE steps at once — never used here.
 #
-# Exit codes: 0=registered (success page captured) 1=usage/adb error
-#             2=form load timeout (evidence saved, operator decides)
-#             3=post-submit success page not detected (evidence saved)
+# Exit codes: 0=registered (success page CAPTURED AND pixel-verified:
+#                non-blank AND transitioned vs pre-submit frame — EXP-1
+#                hardening: white screens passed the old size heuristic)
+#             1=usage/adb error
+#             2=form load timeout OR form frame blank (evidence saved)
+#             3=post-submit success page not CONFIRMED by hard checks
+#               (non-blank + real page transition; evidence + check lines saved)
+#             4=page checker unavailable/broken (fail CLOSED — heuristics
+#               alone are never trusted as success, EXP-1)
 #
 # Secrets: AID is device-identifying, NOT credential-grade; evidence dir is
 # gitignored. URL carries no query string (plain uncertified URL).
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PY="${PYTHON_BIN:-python3}"
+CHECKER="${AID_PAGE_CHECK:-$SCRIPT_DIR/aid-page-check.py}"
+CHECKLOG=""
+hard_check() { # hard_check <args…> — pixel evidence gate; 0=pass, 1=fail, ≥4 broken checker
+  if [ ! -f "$CHECKER" ]; then S "FAIL: page checker missing ($CHECKER) — fail closed"; return 4; fi
+  local out rc
+  out="$("$PY" "$CHECKER" "$@" 2>&1)"; rc=$?
+  if [ -n "$CHECKLOG" ]; then printf '%s\n' "$out" >> "$CHECKLOG"; fi
+  S "check: $out"
+  if [ "$rc" -ge 2 ]; then return 4; fi   # python/traceback → broken checker
+  return "$rc"
+}
 set -u
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 ADB="${ADB_BIN:-$HOME/.local/share/platform-tools/adb}"
@@ -72,11 +91,14 @@ act_tap() { # act_tap <x> <y> — abstracted click (gotcha ① escape hatch)
 
 if [ "$DRY" = 1 ]; then
   S "DRY-RUN serial=$SERIAL url=$URL evidence=$RUN_EVID tap=$TAP_METHOD"
-  S "DRY plan: WAKEUP+dismiss-keyguard -> VIEW intent -> poll screencap (ceil ${WAIT_SECS}s, rendered-frame >=30KB + stable) -> tick (50,1165@720x1280 scaled) -> SUBMIT (630,1206@720x1280 scaled) -> poll success page (>=20KB) -> 019/099 evidence"
+  S "DRY plan: WAKEUP+dismiss-keyguard -> VIEW intent -> poll screencap (ceil ${WAIT_SECS}s, rendered-frame >=30KB + stable) -> HARD non-blank check (aid-page-check.py; white screen = exit 2) -> tick (50,1165@720x1280 scaled) -> SUBMIT (630,1206@720x1280 scaled) -> poll success page (>=20KB + stable) -> HARD success check: non-blank AND transitioned vs 003-ticked frame -> 019/099 evidence + checks.log"
   exit 0
 fi
 
 mkdir -p "$RUN_EVID"
+CHECKLOG="$RUN_EVID/checks.log"
+[ -f "$CHECKER" ] || { S "FAIL: page checker missing ($CHECKER) — fail closed"; exit 4; }
+"$PY" -c "import PIL" >/dev/null 2>&1 || { S "FAIL: python3 + PIL required by $CHECKER — fail closed, no heuristic-only success"; exit 4; }
 S "serial=$SERIAL evidence=$RUN_EVID url=$URL wait=${WAIT_SECS}s tap=$TAP_METHOD"
 $ADB start-server >/dev/null 2>&1
 $ADB connect "$SERIAL" >/dev/null 2>&1 || true
@@ -116,26 +138,37 @@ if [ "$FORM" != 1 ]; then
   S "FAIL: form not detected after ${WAIT_SECS}s (evidence: $RUN_EVID/002-form.png) — check egress (EGRESS_PROXY/gost) and connectivity; operator review"
   exit 2
 fi
-S "form frame rendered (rendered_kb=$KB) — NOTE: heuristics cannot OCR; operator eyeballs 002-form.png if in doubt"
+# HARD check (EXP-1): a rendered-size heuristic passes white screens — demand
+# actual content pixels before we tap blind into the page.
+hard_check nonblank "$RUN_EVID/002-form.png" || { rc=$?; [ "$rc" = 4 ] && { S "FAIL: checker broken (exit 4)"; exit 4; }; S "FAIL: form frame is BLANK (white page — e.g. cookie-consent redirect wall); evidence: $RUN_EVID/002-form.png + checks.log"; exit 2; }
+S "form frame rendered + non-blank (rendered_kb=$KB)"
 
 # 4. Tick "I understand" + SUBMIT (baseline coords scaled).
 act_tap "$X_TICK" "$Y_TICK"; sleep 1
 CAP 003-ticked >/dev/null
 act_tap "$X_SUB" "$Y_SUB"; sleep 2
 
-# 5. Success detection (heuristic): stable rendered frame >= 20KB within 30s.
+# 5. Success detection HARD (EXP-1): stable frame is necessary but NOT
+#    sufficient — success also requires (a) non-blank pixels and (b) a real
+#    page transition vs the pre-submit frame (003-ticked). White screen or
+#    still-on-form both keep polling, then exit 3 with evidence.
 OK=0; PREV=""
 for i in $(seq 1 30); do
   sleep 1
   KB=$(cap_kb)
-  if [ "$KB" -ge 20 ] && [ "$KB" = "$PREV" ]; then OK=1; break; fi
+  if [ "$KB" -ge 20 ] && [ "$KB" = "$PREV" ]; then
+    CAP 099-success >/dev/null
+    hard_check changed "$RUN_EVID/003-ticked.png" "$RUN_EVID/099-success.png" && { OK=1; break; }
+    rc=$?; [ "$rc" = 4 ] && { S "FAIL: checker broken mid-flight (exit 4)"; exit 4; }
+    S "candidate frame stable but NOT confirmed (white/still-form); keep polling t=${i}s"
+  fi
   PREV="$KB"
 done
 if [ "$OK" = 1 ]; then
   CAP 099-success >/dev/null
-  S "DONE: registration flow completed; success page retained at $RUN_EVID/099-success.png — fleet discipline: this datadir's AID is now registered; NEVER reflash without re-registration"
+  S "DONE: registration flow completed + pixel-verified (non-blank, page transitioned); evidence: $RUN_EVID/099-success.png checks.log — fleet discipline: this datadir's AID is now registered; NEVER reflash without re-registration"
   exit 0
 fi
 CAP 098-no-success >/dev/null
-S "FAIL: post-submit success page NOT detected (evidence: $RUN_EVID/098-no-success.png) — operator review (risk-control wall? coordinate drift? set AID_TAP_METHOD=micro-swipe and retry)"
+S "FAIL: post-submit success page NOT confirmed by hard checks (non-blank + transition; evidence: $RUN_EVID/098-no-success.png + checks.log) — operator review (risk-control wall? coordinate drift? set AID_TAP_METHOD=micro-swipe and retry)"
 exit 3

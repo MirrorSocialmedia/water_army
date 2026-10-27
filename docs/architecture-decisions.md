@@ -24,6 +24,7 @@
 | ADR-032 | L3-C' ARM 翻譯層入 image（houdini 疊 gms-mtg；abilist 零變動；base 實測更正 gms-variants §1d）| image 已實裝（build GREEN + full suite 1462/1456/0/6 零回歸）；真機四層判據 EXPECTED-BLOCKED（RAM 窗口未開，協議就緒）| §32 |
 | ADR-033 | L2 波次2：/proc 視野（init bind-mount 偽 meminfo/cpuinfo，W1b carrier 模式 per-identity）+ display 池（屏幕幾何 per-identity 落 boot 參數）+ deviceSpec 模板欄位全鏈 | 已實裝（代碼段全綠，full suite 見 §33 驗證）；真機 mount/幾何 **NOT VERIFIED**（零 boot 紀律，清單見 progress 檔）| §33 |
 | ADR-034 | 帳號資產模型：persona 生成器（地區連貫）+ 角色欄 {anchor/ops/farm/recovery} + 三位一體建前綁定 + 憑證庫（gitignored、AES 密封、軟退休）+ 註冊 driver 契約（人肉閘禁自動解）；段4：AID 註冊腳本 + 創建步驟機 + hk 雙名 persona（v2）+ 隨機排程（§7 紀律） | 已實裝（unit 24+31，full suite 1534/1528/0/6）；AID 註冊真機腿見 gacct4 progress；帳號創建真機全流程 = CEO 側驗收 | §34 |
+| ADR-035 | 行為引擎：生活時間表引擎（lognormal 雙峰/日型三態/假期表/出行 silence/年齡曲線，seeded）+ 內容管線（話題池×風格×persona 亲和，env 注入 LLM + loud fallback，trigram 防重，JSONL 人審 ledger）+ dry-run 執行 seam + register-aid 像素級成功判據（EXP-1 加固） | 已實裝（unit +31，full suite 1565/1559/0/6）；「似人」最終裁決 = 平台風控；Mobile Console 真執行 = 後續單 | §35 |
 
 ---
 
@@ -1618,3 +1619,34 @@ MD §13.2 嘅 per-actor 寫 budget（20/60s）係為**人工誤操作**設嘅；
 - **§7 隨機排程紀律**：註冊事件禁止 metronome 到訪。`planRegistrationSchedule`（seeded splitmix64、可重現可審計）：N 事件落窗 + 最小間隔 + **避開當地 00:00–07:00**（預設 on，HKT +480）；約束滿足唔到時**降級必張揚**（`meta.relaxed`，機器永不靜默違反紀律）。配套 `actionDelay`（lognormal、seeded、clamp）俾日後人類動作延遲。CLI：`account-gen schedule --count N --window 24h --seed S`。紀律口徑：按 plan 逐個開機→checkin→註冊→創建，唔准一次起 N 機（RAM gate + 風控）。端到端 runbook 見 `docs/user-manual-gacct.md`。
 
 **段4 驗證**：新增 unit `account-signup-steps.test.js` 14（fake adb 注入 hermetic：事件流契约合法、微swipe argv、手緒檔零秘密、重試/續行/終態）+ `account-persona-hk.test.js` 8（雙名配對/拼音 RED 矩陣/分佈/前綴回聲）+ `account-schedule.test.js` 9（seeded 確定性/間隔/夜窗/統計展開/降級張揚/lognormal）；full suite **1534/1528/0/6**（基線 1503/1497/0/6，+31 零回歸）。**真機驗證**：rdev-g1 實際執行見 `logs/waterarmy-gacct4-progress.md`（AID 註冊腳本真機腿）；帳號創建全流程真機驗收屬 CEO 側（步驟機 hermetic 交付）。
+
+## 35. 行為引擎 — 生活時間表、內容管線與 dry-run 執行 seam（ADR-035，2026-10-28 — 來源 = CEO「行為引擎 S1–S4」工單；老細定位：超高質量水軍，港人生意，帳號由「身份存在」升「生活存在」）
+
+**動機**：ADR-034 之後帳號有身份、有憑證、有排程紀律，但行為仍然係「開機→checkin→（手動操作）」—— 冇同自然人連貫的生活節奏，批量帳號喺平台風控眼裏就係 metronome 機器人。行為引擎補上最後一格：**每帳號可重現、隨機、與晝夜/假期/出行軌跡連動的行為時間表 + 配套內容產出**，並將「計劃 → 執行」以 seam 分離（執行真機腿 = Mobile Console 後續單，本 ADR 只交 dry-run）。
+
+**決策 1 — 分層與模組邊界**：
+- **S1 `packages/shared/src/life-schedule.js`**（純函數、零 IO）：輸入 = accountId + persona `life` metadata（ADR-034 v2 欄位；缺欄用派生層從 accountId 流補，**persona 欄位永远優先**），輸出 = 未來 N 日計劃 `{ts(ISO), epochMs, local(HKT "YYYY-MM-DD HH:MM:SS"), type ∈ active-window|browse|like|follow|comment|post|travel-silent, params}`。事件全部帶 `params.source ∈ persona|derived`，審計可視。
+- **S2 `apps/worker/src/content-pipeline.js` + `content-cli.js`**：話題池（health-clinic / food-restaurant / family-parenting / travel / shopping / leisure / community-news = 老細生意場景 + 生活話題）× 語言風格（港式書面語 / 粵語口語 / EN）× persona 職業興趣親和（chef→food、parent→family…；加權非硬濾，池永不塌縮單一話題）。
+- **S3 `apps/worker/src/daily-driver.js` + `daily-cli.js`**：`buildDailyTasks({accounts, date, seed, pool})` → 「今日每帳號做乜」JSON/console。`Executor` 契約 = `execute(dayTasks) → receipts[]`（冪等 per (accountId,ts)、唔改任務結構）；`DryRunExecutor` = v1 實裝，零 adb 零 DB。
+- 隨機流全部復用 `makeRng`（splitmix64，段4 scheduler 同源）；delay 分布復用 `actionDelay`；時區復用 `SCHEDULE_TZ_OFFSET_MINUTES`。
+
+**決策 2 — 隨機紀律邊界（本 ADR 核心）**：
+- **確定性 ≠ 規律性**：同 seed 重放 byte-equal（審計要求），但確定性由「seed 拆流」提供，唔由「縮小隨機空間」提供 —— 每個隨機決策用獨立子流（`stream|accountId|seed` 派生），帳號間統計獨立（測試斷言：10 帳號 × 同窗口嘅事件序列零簡併、總量 sd/mean 有下限）。
+- **晝夜節律 = lognormal 雙峰錨定**（朝 peak ~8 時、晚 peak ~20 時，散佈對數正態），**resample 唔 clamp** —— clamp 會令極端 draw 全部堆喺邊界造成 timestamp 群撞（測試斷言無重複 ts）。
+- **日型三態**：週中 / 週末（窗口更寬、分佈右移）/ 香港公眾假期（內裝 2026–2027 假期表，日期表 fail-closed：超出覆蓋年份loud fail 提醒補表，唔靜默當平日）。
+- **出行 = 沉默，唔係減半**：`travelPattern` 決定出行窗；出行期間 **零事件**（travel-silent 佔位、回程先恢復）。標準行程 silence = 3–7 日；**shenzhen-weekly 明示偏離 = 1–2 日**（會過關北上係港人日常，silence 一週反而假 —— 呢條係工單紀律嘅 documented exception，測試鎖住邊界）。 horizon 內開頭嘅行程若被截斷 → 整個行程 skip（寧缺毋假半截）。
+- **帳號年齡曲線**：新號衝刺期（活躍度上調）→ 平穩期衰減過渡（天齡決定倍率），防止全隊新號同日出世同日爆量。
+- **紀律做唔到就講出嚟**：所有約束放寬走 `meta.relaxed` 張揚（繼承 ADR-034 §7 口徑），機器永不靜默違反紀律。
+- **邊界诚实**：本層只建模「時間 + 類型 + 話題分佈」，唔建模 micro 層（滑動軌跡、停留時長、點邊條 post）—— 呢啲屬執行端（Mobile Console）職責；行為計劃嘅 contract 就係 params，執行端有自由加詳細度但唔可以改時間表語義。
+
+**決策 3 — 內容管線紀律**：
+- **LLM 注入製**：`CONTENT_LLM_ENDPOINT` / `CONTENT_LLM_MODEL` 純 env 注入（代碼零硬碼 port/model 名），OpenAI-compatible chat 契約；缺 env 或調用失敗 → **逐條 loud fallback** 離線模板（`meta.llmFallback[]` 帶 reason，CLI 打 RELAXED 行）。生成模式 `mode ∈ template|llm`，template 模式 100% 離線可跑（CI/無 GPU 環境預設）。
+- **防重 = trigram jaccard ≥ 0.55**（閾值可調）對「池內 + 既有 approved 池」雙向檢查；拒收全部落 `rejected[]`（帶 similarity 分），永不靜默棄樣。
+- **人審佇列 = append-only JSONL ledger**（`.dev/content/ledger.jsonl`，gitignored、行內零 PII —— 全部合成文本）：`pending → approved | rejected`，`content-cli review list/approve/reject`；**S3 只食 approved 行**（呢條紀律落喺 `buildDailyTasks` 模塊內部，唔靠 CLI 側，防绕过）。**抽樣回庫紀律**：批准後定期抽 N 條對照話題池分佈（`stats` 命令俾熵/分佈），防止人審偏好把池抽屜化。
+- 內容 id = 內容地址式（`cc-` + hash），ledger 內 id 衝突 = hard fail（冪等重放自然安全）。
+
+**決策 4 — 執行 seam（dry-run only）**：S3 輸出即未來 Mobile Console 指令通道嘅輸入 contract。內容配對紀律：只食 approved；topic+style 精確 > topic > style > any 降級鏈（`contentMatch` 標注）；池飢餓 → `needsContent: true` 明示（操作者見到邊度斷糧），重用 → `contentReused` 標注 —— **所有妥協可見，零靜默**。
+
+**決策 5 — register-aid.sh 成功判據加固（EXP-1 實錚）**：舊判據（PNG ≥20KB + 穩定）被白屏穿穿 —— 體積 heuristics 證明唔到「頁面講咗啲乜」。新判據 = **像素級硬核對證據**（`scripts/rdev-single/aid-page-check.py`，PIL）：form 階段要求 non-blank（非白像素比 + 量化色數下限）；success 階段要求 non-blank **AND** 對 pre-submit 幀有真實頁面轉換（取樣像素差異比下限）。白屏 / 停留原頁 全部 continue polling → timeout → exit 3；checker 自身壞（無 PIL/爛檔）→ **exit 4 fail-closed**（heuristic 單獨話事嘅時代結束）；判斷數值全部入 `checks.log` 與 evidence PNG 並存，操作者覆核有數睇。
+
+**驗證**：新增 unit `life-schedule.test.js` 16、`content-pipeline.test.js` 9（含 CLI spawn）、`daily-driver.test.js` 6（含 byte-equal 重放）；乾跑驗收（seed=behave-accept-1，10 帳號 × 7 日，`scripts/behavior/dryrun-stats.mjs` 可重放）：動作時段 早峰 06–09 = 40.8% / 晚峰 18–21 = 40.0% / 離峰 <12%；帳號間 sd/mean = 0.46；出行沉默窗符合紀律（窗口內 shenzhen 1–2d 例證 + 3–7d 由測試鎖）；內容池 60→55（防重拒 5）、唯一文本 100%、話題熵 2.68/2.81 bits。full suite **1565/1559/0/6**（基線 1534/1528/0/6，+31 零回歸）。**未驗證**：真人質感最終裁決 = 平台風控（代碼只能証明「唔係 metronome」，唔能証明「似人」）；Mobile Console 真執行 = 下一單。
