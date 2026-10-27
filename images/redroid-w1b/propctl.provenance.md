@@ -51,6 +51,17 @@
 | Base image | `redroid/redroid:14.0.0-240527` = `sha256:a3e654caad74faed03cd5ead057a989e06f507778cda678e5d3b9772e0092f1c` |
 | Build note | stock redroid image has **no /bin/sh** — no RUN layer possible (Dockerfile uses COPY + context modes only); wrapper stage rebuilt 2026-10-27 after `-Wformat` cleanup |
 
+### Reproducibility rebuild (2026-10-27 12:21, relay CTO — docker build + export, no boot)
+
+| Item | Value |
+|---|---|
+| Image ID (rebuild) | `sha256:9b0c697c310689c094698fffad8b168b4e43fed5d596afd256c22b81211add33` (tag moved to this ID) |
+| Wrapper binary | sha256 `d7bb0779cc6599be44b722c0fec870bda9f64f0380ebe00f07b20710444403ee`, 956,312 B — **NOT bit-identical** to `b1abf8a8…` above: `gcc:13-bookworm` is a moving tag; point-release drift changes code/build-id. Byte-pin the wrapper only if R0 demands it (build in a sha-pinned gcc image). Functional equivalence: `test/test-mapping.sh` GREEN (real compile + decode/fail-closed matrix). |
+| Real binary (baked) | sha256 `ea647e1b…` — bit-identical to vendored `vendor/oem-propctl-x86_64` ✓ (COPY-only, pinned file) |
+| Baked modes (export) | `oem-propctl` 0755 / `oem-propctl-real` **0775** / `oem-ro-map.rc` **0664** — group-write bits come from working-tree fs (git tracks exec-bit only); functionally irrelevant inside the container (init runs as root), recorded honestly. Earlier 0755/0755/0644 row reflects that build's context files. |
+| rc baked vs repo | sha256 match (`c8c6df15…`) ✓ no drift |
+
+
 ## Real-device verification (deferred — code segment cannot boot)
 
 - [ ] `oem-propctl ro.test hello%20world` → `getprop ro.test` = `hello world` (wrapper decode)

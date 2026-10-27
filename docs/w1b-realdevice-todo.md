@@ -5,7 +5,7 @@
 > 紀律：每步落 evidence 到 `logs/realdevice-w1b/`；失敗 = 記錄 + 停，唔好繞過斷言。
 
 ## R0 前置
-- [ ] R0-1 `docker pull`/build 定制 image：確認 digest == `sha256:100ba08ac6cd63ba7e91bfb3994d045a793d7b7e80bc50f1cd93a6eb07761780`（代碼段 build 產物；不一致 = 重建並記錄新 digest）
+- [ ] R0-1 `docker pull`/build 定制 image：预期 digest == `sha256:9b0c697c3106…add33`（2026-10-27 12:21 重建實證；舊代碼段 build = `100ba08a…`，wrapper 層因 gcc:13-bookworm moving tag 漂移 **唔保證 bit-同** — 見 propctl.provenance.md「Reproducibility rebuild」；核實口徑 = real binary `ea647e1b…` + rc sha + test-mapping GREEN，唔係 image ID）。不一致 = 重建並記錄新 digest
 - [ ] R0-2 校驗 `oem-propctl-real` sha256 == `ea647e1b6cafb2a639bd213e8dc33daaa73a7f8afadd2ee3116e4acd0b049c2b`（對 image 內實物，唔係對 repo 檔）
 - [ ] R0-3 記錄 host RAM gate 狀態 + 用戶 stack（water-army-*）健康快照（開工前基線）
 
