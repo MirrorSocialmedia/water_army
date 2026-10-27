@@ -17,6 +17,8 @@
 | ADR-025 | W1 identity 級 device fingerprint profile | 已實裝（代碼段）、真機 V3 待 RAM | §25 |
 | ADR-026 | W2 App 層基礎（adb-whitelist 擴容 + ui-tree + app-service + device-apps routes） | 已實裝（代碼 + unit + mock integration 全綠）；**真機矩陣已完成**（2026-10-27 總測試 run7：19 PASS + 2 EXPECTED-FAIL env-limit；實錚中修 2 個真機產品 bug F12/F13） | §26 |
 | ADR-027 | W3 身份↔出口 IP 強綁定（identity egress binding + boot 核對 + drift watchdog + credential 零洩漏） | 已實裝（代碼 + unit + mock integration 全綠；canary 零洩漏實錚）、live egress **NOT VERIFIED**（真機矩陣成單） | §27 |
+| ADR-028 | W1b 真實 build profile + 定制 image init 期映射（oem_* carrier + %20 契約 + 生成器黏性） | 已實裝（代碼段全綠）、真機 **NOT VERIFIED**（NV-W1b 成單） | §28 |
+| ADR-029 | T2 identity 登入狀態機（人工專用寫入路徑）+ test-identity provisioning + identity↔dataDir 歸屬契約 | 已實裝（代碼 + unit 6/6 + integration 3/3 + UI + full suite 1438/1432/0/6）；真機 E2E **NOT VERIFIED**（待辦成單，見 progress 檔） | §29 |
 
 ---
 
@@ -1425,3 +1427,39 @@ MD §13.2 嘅 per-actor 寫 budget（20/60s）係為**人工誤操作**設嘅；
 - **Full suite：1429 tests / 1423 pass / 0 fail / 6 skip**（基線 1408/1402/6 skip + 新增 21，零回歸；skip 同舊：RAM-G1 real-redis ×5 + P4 scheduler ×1）。
 
 **真機段 = NOT VERIFIED（NV-W1b）待辦成單** → `docs/w1b-realdevice-todo.md`（定制 image boot → probe 裝機 → 逐字段斷言 → V1–V7 重跑 → recreate → 早期映射 race 實證 → L2 情報採集）。**跑完之前 `WA_TEMPLATE_PROFILES_ENABLED` 生產保持 OFF**；`WA_REDROID_RO_OVERRIDES_ENABLED` 同樣繼續 OFF（ADR-025 V3 未過 — w1b image 先至係佢嘅過關路徑）。
+
+---
+
+## 29. T2 identity 登入狀態機 + provisioning + dataDir 歸屬契約（ADR-029，2026-10-27 — 來源 = CEO W1b 後 T 序列工單 `mvq6ruq1zktgg`）
+
+**背景**：農場 identity 嘅「個 App 登入咗未」一直係口頭知識，冇系統事實源。批量 provisioning（建 N 個測試身份）又冇工具 — 人手逐個 create 會漏 fingerprint/egress/dataPath 任何一环。同時 device 重建（stop→remove→recreate）嘅 `/data` 繼承一直係**隱式副作用**（dataDir = dataRoot/<name>，換名即棄、同名靜默inherit），跨身份錯配（B 身份開住 A 嘅 /data）冇任何攔截 — 正正係身份農場嘅致命污染模式。
+
+**決策（四件事）**：
+
+1. **登入狀態機（四態、fail-closed、人工專用）**：`PENDING_LOGIN`（待登入，新身份初始態）→ `CONFIRMED_LOGGED_IN`（使用者已確認登入）→ `RELOGIN_REQUIRED`（需重新驗證：人類睇到 credential challenge/2FA/session 過期；自動化必須停喺呢度）→ `LOGGED_OUT`（已登出；唯一出路返 `PENDING_LOGIN`）。轉移矩陣（`login-state-service.js` 為唯一權威，unit 6/6 鎖死）：
+   - `PENDING_LOGIN → {CONFIRMED_LOGGED_IN, LOGGED_OUT}`
+   - `CONFIRMED_LOGGED_IN → {RELOGIN_REQUIRED, LOGGED_OUT}`
+   - `RELOGIN_REQUIRED → {CONFIRMED_LOGGED_IN, PENDING_LOGIN, LOGGED_OUT}`
+   - `LOGGED_OUT → {PENDING_LOGIN}`
+   - **矩陣以外全 409 fail-closed，包括 self-transition**（重複 click = bug 唔係 no-op，要收到噪音）。每次成功轉移 = 同一請求內寫一條 audit（who/when/evidence）。
+   - **`CONFIRMED_LOGGED_IN` 只可以由人類 operator+ session 進入** — route 係 `requireRole('operator')`（cookie session），service 冇第二個寫入 caller（grep 可證：無 worker/queue import）。任何 probe/worker/AI 都**唔准**斷言登入真相 — 呢個係本 ADR 嘅存在理由，唔係實作細節。
+   - evidence = 一條 ≤500 字 operator 備註；credential 形狀字樣（password/token/cookie/secret/otp/session_id）直接 400（MD §9.1 零 secrets 紀律延伸至呢度）。
+2. **生命週期界線（邊個唔准郁呢個狀態）**：登入狀態屬 **identity 軸**，唔係 device 軸。device 可以被移除/重建/換名（T2 provisioning 流程）而**完全唔碰** loginState；反之 batch runtime 嘅 `Identity.status`（READY/RUNNING/…）亦**永遠唔讀唔寫** loginState — 兩軸刻意正交，誰把它們耦合邊度邊壞。表層驗證：`login-state-service` 冇 docker/runtime import；redroid create/delete 冇 touch loginState。
+3. **T5 帳號生命週期擴展位（預留，唔預先建表）**：T5（banned/retired/養號期等帳號生命週期）**擴充呢部機** — 新狀態（例 `BANNED`/`RETIRED`）+ 新矩陣行 + 新 audit，而**唔係**起平行表。理由：登入真相同帳號生老病死係同一條時間線，拆兩張表必然出現兩個事實源打架。migration `20261027130000` 全 additive；T5 加狀態 = 再一条 additive migration + 矩陣行，舊行默認態不受影響。**約束：T5 新增狀態時必須同步改 admin UI 按鈕集 + client 鏡像矩陣（`batch-ui.js LOGIN_TRANSITIONS_UI`）+ 矩陣 unit test，三處一個都唔可以漏。**
+4. **identity↔dataDir 歸屬契約（explicit claim，取代隱式繼承）**：新表 `identity_data_dir_claims`（`dataDir` UNIQUE + `identityId` UNIQUE = DB 層「一身份一數據家、一家一身份」）。規則：
+   - **綁咗身份嘅 create**：他身份 claim 住同名 dir → 409（跨身份 /data 繼承 = 污染，fail-closed）；同身份 re-claim 同 dir → 放行且 refresh（stop→remove→rebuild 保留 /data 正正係契約嘅用途）；同身份想開**第二個** dir → 409「one identity, one data home」（split-brain 換名 fail-closed；rename 唔搬數據）。
+   - **未綁身份嘅 device**：完全唔碰 claim（行為 byte-identical 於 pre-T2）。
+   - **delete**：預設（唔除數據）→ dir + claim **保留**（`claimReleased:false` 如實上報）；`removeData=true` 且實際刪除成功 → claim 釋放。create 回滾且 dir 係本次新建 → claim 連 dir 一齊撤（唔留孤兒）。
+   - TOCTOU：pre-check 之後嘅競態落 DB unique guard → P2002 → 409，永遠唔會靜默認領。
+   - **已知契約變更（老細知情範圍內）**：pre-T2 允许一身份同時有多個 live device（各自 dir）；T2 契約收緊為一身份一家。受影響舊測試 `redroid-fingerprint.test.js`「3× rebuild stability」已改照真實 rebuild 流（remove→同 name recreate ×3 + 單 claim 斷言）— 語義唔減反加（e363ca7）。真機過渡期若存在「一身份多機」存量部署，上線前要先清 claim 衝突（E2E 待辦 T2-E6）。
+5. **provisioning（批量、決定性、冪等）**：`POST /api/identities/provision`（admin）— `names[]`（1..100，必須匹配 device-name pattern `^redroid-[a-z0-9][a-z0-9_-]{0,39}$`，pool entry = externalRef = device name = dataRoot 下嘅 dir 名，全程眼可推導）；`identityType` allowlist（qa_device/staging_user）；可選 `egressIps[]`（平行陣列，寫入前**全批 pre-check**：批內重複 + fleet 全局唯一，任何碰撞 = 成批 409 零部分寫入；真正 binding 仍歸 PUT /egress，本服務永不碰 proxy credential）；`dryRun` 純驗證。冪等 = 既有 externalRef → `replayed`（永不重複建行）；fingerprint 走 `ensureProfile()`（per-identity 決定性、生成器黏性、開關翻轉唔 drift — ADR-028 §5 語義直接繼承）。新身份初始 `loginState=PENDING_LOGIN`。
+6. **API / RBAC（對齊 MD §12 級別模型）**：讀（login state / audit）= viewer+；`POST …/login/transition` = operator+（人工專用，見 §1）；`POST /api/identities/provision` = admin（同 egress binding 同級 — 佢造 fleet 行 + fingerprint 行）。T2 表缺失（未 migrate）→ 503 `LOGIN_STATE_DISABLED` fail-closed（W3 stub 紀律同款），UI 老實顯示「未 provision」而唔係彈錯誤。
+7. **管理頁人工流 UI**：identity 詳情頁（`IdentityDetail.jsx`）加 login_state 徽章（detail head）+ 登入狀態卡：按鏡像矩陣渲染「已確認登入／需重新驗證／標記待登入／標記已登出」按鈕（operator+ 先見到；viewer 老實 read-only 文案）+ 審計表（newest first）；30s 靜默輪詢唔閃 UI；server 永遠係權威（409 照實顯示，唔吞）。UI 鏡像矩陣註明「只驅動按鈕可見性」，唔係第二事實源。
+
+**零 secrets**：全部 surface（狀態/審計/provision 回應）只含 allow-listed 元數據；evidence 有 credential 形狀過濾器；claim 表只有路徑/名字/UUID — 冇任何 token/cookie/password 可以經呢單入庫。
+
+**驗證（代碼段，2026-10-27）**：
+- unit `t2-login-state.test.js`（6/6）：矩陣全綠/全紅面（合法逐條 + 非法含 self 全部 409）、evidence 過濾、審計行、getLoginState 投影。
+- integration `t2-login-provision.test.js`（3/3）：RBAC 矩陣（viewer 讀 200/寫 403、operator 寫 200、provision admin-only）+ 審計落行；provision 冪等 replay + dryRun + egress pre-check 成批 fail-closed；claim 生命週期（stamp → 預設 delete 保留 → 同身份 rebuild 放行 → 他身份 409 → removeData 釋放 → 第二 dir 409 → 未綁身份唔碰）。
+- **Full suite：1438 tests / 1432 pass / 0 fail / 6 skip**（基線 1429/1423/0/6 + T2 新增 9，零回歸；skip 同舊：RAM-G1 real-redis ×5 + P4 scheduler ×1；存證 `logs/w1b-t2-full-suite.log`）。web build 綠。
+- 真機 E2E = **NOT VERIFIED**：待辦清單見 `logs/waterarmy-t2-progress.md` §真機段（重建保留 /data 實證 + 登入人工流演練）；RAM gate 封鎖期內未開任何 redroid。
