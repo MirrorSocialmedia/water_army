@@ -44,6 +44,8 @@ WANT = {
     'vendor/etc/init/oem-ro-map.rc':   0o644,
     'vendor/bin/oem-propctl':          0o755,
     'vendor/bin/oem-propctl-real':     0o755,
+    'vendor/etc/init/oem-proc-view.rc': 0o644,
+    'vendor/bin/oem-proc-view.sh':     0o755,
 }
 tar = tarfile.open(sys.argv[1])
 seen = {}

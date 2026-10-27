@@ -12,6 +12,8 @@ STAGE=$(mktemp -d /tmp/w1b-finalize.XXXX)
 trap 'rm -rf "$STAGE"; docker rm -f w1b-finalize >/dev/null 2>&1' EXIT
 
 cp "$DIR/oem-ro-map.rc" "$STAGE/oem-ro-map.rc"; chmod 0644 "$STAGE/oem-ro-map.rc"
+cp "$DIR/oem-proc-view.rc" "$STAGE/oem-proc-view.rc"; chmod 0644 "$STAGE/oem-proc-view.rc"
+cp "$DIR/oem-proc-view.sh" "$STAGE/oem-proc-view.sh"; chmod 0755 "$STAGE/oem-proc-view.sh"
 cp "$DIR/vendor/oem-propctl-x86_64" "$STAGE/oem-propctl-real"; chmod 0755 "$STAGE/oem-propctl-real"
 
 docker rm -f w1b-finalize >/dev/null 2>&1 || true
@@ -22,10 +24,14 @@ chmod 0755 "$STAGE/oem-propctl"
 # prove staged real binary bit-identical to vendored source (fail closed)
 sha256sum -c <(printf '%s  %s\n' "$(sha256sum "$DIR/vendor/oem-propctl-x86_64" | cut -d' ' -f1)" "$STAGE/oem-propctl-real")
 sha256sum -c <(printf '%s  %s\n' "$(sha256sum "$DIR/oem-ro-map.rc" | cut -d' ' -f1)" "$STAGE/oem-ro-map.rc")
+sha256sum -c <(printf '%s  %s\n' "$(sha256sum "$DIR/oem-proc-view.rc" | cut -d' ' -f1)" "$STAGE/oem-proc-view.rc")
+sha256sum -c <(printf '%s  %s\n' "$(sha256sum "$DIR/oem-proc-view.sh" | cut -d' ' -f1)" "$STAGE/oem-proc-view.sh")
 
 docker cp "$STAGE/oem-propctl-real" w1b-finalize:/vendor/bin/oem-propctl-real
 docker cp "$STAGE/oem-propctl"      w1b-finalize:/vendor/bin/oem-propctl
 docker cp "$STAGE/oem-ro-map.rc"    w1b-finalize:/vendor/etc/init/oem-ro-map.rc
+docker cp "$STAGE/oem-proc-view.rc" w1b-finalize:/vendor/etc/init/oem-proc-view.rc
+docker cp "$STAGE/oem-proc-view.sh" w1b-finalize:/vendor/bin/oem-proc-view.sh
 # docker cp preserves HOST uid (1000) — init's insecure-file check demands
 # root:root ownership (base-image rc files are all 0/0). Rewrite the three
 # entries in the committed layer tar: uid/gid=0, mode 0644 (rc) / 0755 (bins).
@@ -36,7 +42,7 @@ final = sys.argv[1]
 cid = subprocess.check_output(['docker','create','--name','w1b-reown',f'{final}-stage']).decode().strip()
 export = subprocess.check_output(['docker','export',cid])
 subprocess.run(['docker','rm','-f','w1b-reown'], capture_output=True)
-WANT = {'vendor/bin/oem-propctl':0o755,'vendor/bin/oem-propctl-real':0o755,'vendor/etc/init/oem-ro-map.rc':0o644}
+WANT = {'vendor/bin/oem-propctl':0o755,'vendor/bin/oem-propctl-real':0o755,'vendor/etc/init/oem-ro-map.rc':0o644,'vendor/etc/init/oem-proc-view.rc':0o644,'vendor/bin/oem-proc-view.sh':0o755}
 src = tarfile.open(fileobj=io.BytesIO(export)); out = io.BytesIO()
 dst = tarfile.open(fileobj=out, mode='w')
 hit = 0
@@ -59,8 +65,8 @@ if conf.get('ExposedPorts'): change += ['EXPOSE ' + ' '.join(conf['ExposedPorts'
 for e in (conf.get('Volumes') or {}): change += ['VOLUME ' + e]
 out.seek(0)
 tag = subprocess.run(['docker','import',*sum([['--change',c] for c in change],[]),'-',final], input=out.read(), capture_output=True, check=True)
-assert hit == 3, f'only {hit}/3 entries rewritten'
-print('re-own rewrote 3 entries ->', final)
+assert hit == 5, f'only {hit}/5 entries rewritten'
+print('re-own rewrote 5 entries ->', final)
 PYEOF
 docker rmi "${FINAL}-stage" >/dev/null 2>&1
 docker rm -f w1b-finalize >/dev/null
@@ -68,4 +74,7 @@ echo "finalize done: $FINAL"
 # verify baked modes through a fresh export (no container run)
 docker export $(docker create --name w1b-verify "$FINAL" true) 2>/dev/null | tar -tv 2>/dev/null | grep -E "oem-propctl|oem-ro-map" | tee /dev/stderr | grep -q "\-rwxr-xr-x.*oem-propctl-real"
 docker rm -f w1b-verify >/dev/null 2>&1 || true
-docker export $(docker create --name w1b-verify2 "$FINAL" true) 2>/dev/null | tar -tv 2>/dev/null | grep "oem-ro-map.rc" | grep -q "\-rw-r--r--" && echo "finalize OK modes normalized: $FINAL"
+# wave-2 additions: rc 0644 both + script 0755
+docker export $(docker create --name w1b-verify2 "$FINAL" true) 2>/dev/null | tar -tv 2>/dev/null > /tmp/w1b-verify-modes.txt
+docker rm -f w1b-verify2 >/dev/null 2>&1 || true
+grep "oem-ro-map.rc" /tmp/w1b-verify-modes.txt | grep -q "\-rw-r--r--" && grep "oem-proc-view.rc" /tmp/w1b-verify-modes.txt | grep -q "\-rw-r--r--" && grep "oem-proc-view.sh" /tmp/w1b-verify-modes.txt | grep -q "\-rwxr-xr-x" && rm -f /tmp/w1b-verify-modes.txt && echo "finalize OK modes normalized: $FINAL"

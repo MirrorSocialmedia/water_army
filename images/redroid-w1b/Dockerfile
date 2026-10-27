@@ -9,6 +9,13 @@
 #                                 ro.boot.oem_* -> real ro.* props
 #                                 (source of truth:
 #                                  packages/shared/src/w1b-image-mapping.js)
+#   /vendor/etc/init/oem-proc-view.rc L2 wave-2 (ADR-033): GENERATED init hook
+#                                 for the per-identity /proc view renderer
+#   /vendor/bin/oem-proc-view.sh    toybox-sh renderer+bind-mount of fake
+#                                 /proc/meminfo + /proc/cpuinfo from the
+#                                 androidboot.oem_mem_* carriers
+#                                 (source of truth:
+#                                  packages/shared/src/device-spec.js)
 #
 # Build (network only; negligible RAM — NOT a redroid boot):
 #   bash images/redroid-w1b/build.sh
@@ -39,3 +46,5 @@ FROM redroid/redroid:14.0.0-240527
 COPY vendor/oem-propctl-x86_64 /vendor/bin/oem-propctl-real
 COPY --from=wrapper /oem-propctl /vendor/bin/oem-propctl
 COPY oem-ro-map.rc /vendor/etc/init/oem-ro-map.rc
+COPY oem-proc-view.rc /vendor/etc/init/oem-proc-view.rc
+COPY oem-proc-view.sh /vendor/bin/oem-proc-view.sh

@@ -1,28 +1,38 @@
 #!/usr/bin/env node
 /**
- * Regenerate images/redroid-w1b/oem-ro-map.rc from the single source of truth
- * (packages/shared/src/w1b-image-mapping.js). CI diff = unit drift test.
- * Usage: node scripts/w1b/generate-wa-ro-map-rc.mjs [--check]
- *   --check: exit 1 if the committed file differs (no write).
+ * Regenerate the image init artifacts from the single source of truth:
+ *   images/redroid-w1b/oem-ro-map.rc    <- w1b-image-mapping.js (ADR-028/031)
+ *   images/redroid-w1b/oem-proc-view.rc <- device-spec.js (L2 wave-2, ADR-033)
+ * CI diff = unit drift test. Usage: node scripts/w1b/generate-wa-ro-map-rc.mjs [--check]
+ *   --check: exit 1 if any committed file differs (no write).
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { generateWaRoMapRc } from '../../packages/shared/src/w1b-image-mapping.js';
+import { generateProcViewRc } from '../../packages/shared/src/device-spec.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const TARGET = join(ROOT, 'images', 'redroid-w1b', 'oem-ro-map.rc');
-const rc = generateWaRoMapRc();
+const TARGETS = [
+  [join(ROOT, 'images', 'redroid-w1b', 'oem-ro-map.rc'), generateWaRoMapRc()],
+  [join(ROOT, 'images', 'redroid-w1b', 'oem-proc-view.rc'), generateProcViewRc()],
+];
 
 if (process.argv.includes('--check')) {
-  let current = '';
-  try { current = readFileSync(TARGET, 'utf8'); } catch { /* missing counts as drift */ }
-  if (current !== rc) {
-    console.error('oem-ro-map.rc is DRIFTED from w1b-image-mapping.js — run: node scripts/w1b/generate-wa-ro-map-rc.mjs');
-    process.exit(1);
+  let drift = false;
+  for (const [target, want] of TARGETS) {
+    let current = '';
+    try { current = readFileSync(target, 'utf8'); } catch { /* missing counts as drift */ }
+    if (current !== want) {
+      console.error(`${target.split('/').pop()} is DRIFTED from its generator — run: node scripts/w1b/generate-wa-ro-map-rc.mjs`);
+      drift = true;
+    }
   }
-  console.log('oem-ro-map.rc in sync');
+  if (drift) process.exit(1);
+  console.log('image rc artifacts in sync (oem-ro-map.rc, oem-proc-view.rc)');
 } else {
-  writeFileSync(TARGET, rc);
-  console.log('wrote', TARGET);
+  for (const [target, content] of TARGETS) {
+    writeFileSync(target, content);
+    console.log('wrote', target);
+  }
 }

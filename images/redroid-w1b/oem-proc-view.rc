@@ -1,0 +1,12 @@
+# water_army L2 wave-2 — /proc view spoof (GENERATED — do not hand-edit)
+# regenerate: node scripts/w1b/generate-wa-ro-map-rc.mjs (writes BOTH rc files)
+# source of truth: packages/shared/src/device-spec.js (unit-diffed in CI)
+#
+# post-fs-data: render per-identity fake /proc/meminfo + /proc/cpuinfo from
+# the androidboot.oem_mem_* carriers and bind-mount them over the host-
+# penetrating originals (D10/D11: containers share the host kernel view —
+# appendix A measured host RAM/x86 CPU names straight through). The script
+# is self-guarded: absent carriers = exit 0, image default untouched.
+
+on post-fs-data && property:ro.boot.oem_mem_total_kb=*
+    exec -- /vendor/bin/oem-proc-view.sh
