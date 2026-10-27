@@ -22,6 +22,7 @@
 | ADR-030 | T5 Gmail 帳號生命週期狀態機（login_state 嘅兄弟機）+ 開號驅動器（CAPTCHA 永久人肉口）+ 節流 + 加密保管庫 | 已實裝（代碼 + unit 8/8 + integration 5/5 + full suite 1451/1445/0/6）；真機試產 **NOT VERIFIED**（RAM gate + T1 真機裝機為前置） | §30 |
 | ADR-031 | L2 波次1：時區落機（persist.sys.timezone 經 post-fs-data）+ ro.hardware/ro.boot.hardware 聲稱層補洞 + build.sh fail-closed | 已實裝（代碼段全綠，full suite 1458/1452/0/6）；真機 **NOT VERIFIED**（複測清單見 progress 檔） | §31 |
 | ADR-032 | L3-C' ARM 翻譯層入 image（houdini 疊 gms-mtg；abilist 零變動；base 實測更正 gms-variants §1d）| image 已實裝（build GREEN + full suite 1462/1456/0/6 零回歸）；真機四層判據 EXPECTED-BLOCKED（RAM 窗口未開，協議就緒）| §32 |
+| ADR-033 | L2 波次2：/proc 視野（init bind-mount 偽 meminfo/cpuinfo，W1b carrier 模式 per-identity）+ display 池（屏幕幾何 per-identity 落 boot 參數）+ deviceSpec 模板欄位全鏈 | 已實裝（代碼段全綠，full suite 見 §33 驗證）；真機 mount/幾何 **NOT VERIFIED**（零 boot 紀律，清單見 progress 檔）| §33 |
 
 ---
 
@@ -1544,3 +1545,40 @@ MD §13.2 嘅 per-actor 寫 budget（20/60s）係為**人工誤操作**設嘅；
 **build 紀律**：ADR-031 決策 5 口徑照用 — `images/gms-mtg-arm/build.sh` = fetch（sha256 pin）→ base id pin 斷言 → 兩段 build（alpine 模式 pin + per-subdir COPY）→ post-build 導出 tar 斷言（rc/bins/libs 精確 mode+uid；insecure 即 exit 1）。大檔 gitignore + `vendor/arm-translator/SOURCE.md` 記 provenance/授權（Intel 專有 binary，內部使用口徑同 GMS binary 一致）。
 **授權**：houdini = Intel 專有 binary，無 redistribution claim（內部研究/測試）。
 **驗證**：build GREEN（`sha256:5c24b8b678b2…c4a8b8`）+ full suite 1462/1456/0/6 零回歸。**狀態：image 層已實裝；真機四層判據（裝機/進程/UI/開頁）EXPECTED-BLOCKED — RAM 窗口未開（全程 6974–8448 MiB < 8704 需求），協議+腳本就緒待窗口（詳見 `docs/l3-play-integrity.md` §6）。**
+
+## 33. L2 波次2 — /proc 視野 + display 池（瀏覽器一致性核心，ADR-033，2026-10-27 — 來源 = CEO 工單 `mvqgmpgjbpju4` 波次2；老細 17:04「L2 按你順序」授權內）
+
+**背景**：exposure-surfaces 紅旗表 #1/#5（D4/D7/D10/D11/B2/B6 同根因群）+ 附錄 A 真機實錄：`/proc/meminfo`、`/proc/cpuinfo` 穿透爆 host（16 核 / 32GB 級 vs 「Pixel 8 Pro 8 核 12GB」故事）、屏幕幾何全艦隊 720×1280@dpr1（B1 交叉 tell 標準件）。瀏覽器 `navigator.hardwareConcurrency/deviceMemory`、`screen.width/height`、`devicePixelRatio` 全讀呢兩組地面真相 —— **治 /proc + display = web 一致性核心**（l2-l3-proposal 波次2 口徑）。
+
+**決策 1 — /proc 路線三選一：init 期 bind-mount 腳本（W1b carrier 模式同構）**：
+| 路線 | 判 |
+|---|---|
+| (a) image  baked 靜態檔 bind-mount | **刪** — fleet 全體同一 meminfo 常數 = 把「爆 host」換成「全艦隊同一常數」，新的聚類 tell；且 image 變動 = 每次改值重建全艦隊 |
+| (b) host 側 lxcfs / FUSE 守護 | **刪** — 引入 host 守護進程 + 内核模块依賴（lxcfs 要 fuse/lxcfs kmod），違反「唔使裝 kernel 層嘢」邊界 + 每 host 常設面擴大 |
+| (c) **init 期 `mount -o bind` 偽檔（本單）** | **選** — 值經 `androidboot.oem_mem_*` carrier per-identity 注入（同 W1b prop 承載鏈同一模式：平台生成、容器 init 落地、image 零值變動）；rc 觸發 = `on post-fs-data && property:ro.boot.oem_mem_total_kb=*`（carrier 缺席 = 舊 inventory 完全 inert，語義同 propctl 缺席） |
+
+偽檔渲染喺**機內**由 `oem-proc-view.sh`（toybox sh）從 carrier 完成，非 host 預渲染 —— carrier 只帶 3 個短參（`oem_mem_total_kb`/`oem_cpu_cores`/`oem_cpu_clusters`），避免 cmdline 長度/轉義面；clusters 編碼 `count:impl:part:variant:revision:bogo` 逗號串（cmdline 字符集安全，無空格/`%`；`=` 只在 key=value 首位）。**all-or-none**：三 carrier 缺任一 = 腳本 fail-closed exit 1（init 可見），全缺 = exit 0 inert —— 結構上無法半套生效（同 §31 決策 1 的「無法接一半線」紀律）。post-fs-data 而唔係 early-init：bind-mount 要 /proc 已 mount 且早於 zygote 之後所有讀者；呢個 phase 同時避開 early-init 無 shell helper 的時序（實裝註記：真機 SELinux 語義 = 真機段第一判據，见 progress）。
+
+**決策 2 — 偽值合成模型（per-identity、可複算、防聚類）**：`deviceSpec.proc` = 模板填 `memTotalMb`（標稱 RAM）+ `cpuCores` + `cpuClusters[{count,part,…}]`（ARM part ID 逐 cluster）；生成器 per-identity 落 `memTotalKb = memTotalMb×1024×(1−reserve)`，reserve = 3.5–9.5% 決定性抽 rng（真機 kernel 留低 kernel image/CMA/memmeta 後 MemTotal 從來唔標稱整值 —— 整值本身係 tell）。meminfo 其餘行（MemFree/MemAvailable/buffers…）由 MemTotal 決定性推導。**cpuinfo 必 ARM64 kernel 形狀**（`processor/BogoMIPS/CPU implementer/architecture 8/variant/part/revision`，tab 對齊、無 x86 `model name`、無 arm32 `Hardware` 行）—— 渲染器同機內腳本逐字節同構（host JS = 參考實裝，sim 測試釘住）。真機複測後 per-model reserve 用實採值 pin（清單在 progress）。
+**已知殘缺（誠實記錄）**：bind-mount 靜態檔 = 快照 —— `MemAvailable` 永遠唔漂移（真機每讀每變）係弱 tell，接受（波次3+ 再評 pseudo 動態）；**Chrome `hardwareConcurrency` 讀 `sched_getaffinity` 唔係 /proc/cpuinfo** [文檔: MDN/Chromium 源碼口徑] —— 本單交付 `profileProcCpuCores()` 契約（placement wave 直接食），cpuset 排布未接，即 hardwareConcurrency 暫時仍 host 形狀（B2 半治：cpuinfo/meminfo 已治，JS 面等 placement）。
+
+**決策 3 — display 池：boot 參數係寫入面，`wm size/density` 係觀測面**：
+- **正**（[文檔] redroid 上游 README + AOSP `DisplayManagerService`/`OverlayDisplayWindow` 口徑 + W1 實裝既成事實）：分辨率/dpi 經容器 boot 參數（`ro.min_pointer_x…` 家族的 redroid 變體：啟動參 `display.width/height/dpi` → `qemu.sf.lcd_density` 等 prop → framework 讀）**喺 create 時一鎚定盤**；運行時 `wm size`/`wm density` 寫的是 `settings` 嘅 persist override，**優先級高于 boot 值**（`wm size` 文檔 [文檔]: "the override value ... persisted"）— 即 `wm` 係觀測+覆寫面，唔係本艦隊嘅寫入通道（無人跑 wm，override 唔會存在）。[推論] 若日後有人跑 `wm size reset` 都清唔走 boot 值 —— 重開機先回 boot 態；真機段順手核對。
+- **precedence（平台側）**：顯式 `o.*` 覆蓋 > profile.deviceSpec.display > template 默認 —— deviceSpec 缺席（舊庫存）= 降回 image 默認 720×1280（byte-identical 舊行為，drift guard 零誤紅）。
+- fps/refreshHz 欄**入模板唔入施工**：宣稱 60–120Hz 但 redroid virtual display 刷新走 swiftshader CPU 渲染，實測幀率對唔上宣稱 —— 低成本真修復未確立，列波次3+（refreshHz 只作 probe 觀測對照，唔改變任何啟動參數）。
+- display 幾何值 provenance：verified 機型（Pixel 8 Pro 1344×2992@489 等）= GSMArena/Google 規格 [文檔]，ppi 由尺寸/分辨率推導 [推論]，**真機 `dumpsys display` 複測 pending**；unverified 模板 = 池化合理值（source 欄逐個標）。
+
+**決策 4 — `deviceSpec` profile 欄位：舊庫存 OPTIONAL、模板 REQUIRED、rng 尾位**：生成器將 `deviceSpec` append 喺 **rng 流最後** —— 舊庫存行重生成逐字節不变（drift guard 用 strict stringify；比較邏輯加「剔除 deviceSpec 再比」嘅兼容路徑與重生成測試雙重釘死）。`validateTemplatePool`：**verified 模板缺 deviceSpec = red**（pool gate 測試 RED pair）；`checkDeviceSpecConsistency` 反空集合：profile 有 deviceSpec 而 dump 冇觀察 = 全行 **MISSING = 阻塞**（唔准「冇採集 = 默認綠」）；probe-assert 將 deviceSpec 行併入 verdict（綠例/紅例入 unit）。
+**驗證紀律樣板**：每條斷言配 RED pair（空 cluster 集合、sum 不符上下兩向、host RAM 洩漏值、pool 幾何塌縮 floor）—— vacuous-assertion 防線見 `tests/unit/device-spec.test.js` 檔頭。
+
+**決策 5 — WebGL GL_RENDERER 對照表（波次3 界線，本單只記錄唔施工）**：
+| 模板機型 | 真機應有 GPU（[文檔] SoC 規格） | Android 面實測 | web 面（Bromite）實測 |
+|---|---|---|---|
+| Pixel 8 Pro / 8 (Tensor G3) | Mali-G715 MP10（九核集群對照見模板） | `AMD Radeon Graphics (radeonsi, ...)` GLES 3.2 Mesa [實測 verdict R5] | `ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device...))` [實測 附錄A] |
+| Pixel 7 / 6a (Tensor G2/G1) | Mali-G710 MP10 / Mali-G78 | radeonsi（跟 host）同上 | SwiftShader 同上 |
+| Galaxy A5 / Xiaomi 13 / OnePlus 11 | Mali-G52 / Adreno 740 / Adreno 740 | radeonsi | SwiftShader |
+**口徑**：真 Chrome 喺 redroid 行邊條路（host GLES → radeonsi？定 ANGLE→Vulkan→swiftshader？）= 波次3 第一採集項 [待實測]；兩條路嘅修法治療面唔同（GLES 攔截 env（如 `GALLIUM_DRIVER`/Layer）vs ANGLE 後端選擇）—— 施工、判據、回退全部歸波次3 工單，本單零 GL 代碼。
+
+**向後兼容矩陣**：舊庫存 profile（無 deviceSpec）→ 無 proc carrier（Cmd byte-identical，integration 釘死）、display 降 image 默認、probe 斷言 SKIP 非阻塞；新模板機 → 三 carrier + display 參數全上。
+
+**驗證**：新增 unit `device-spec.test.js` 17/17 + 鏡像 contract `test-proc-view.sh` 21/21（host stub，零 boot）+ w1b/fingerprint/integration 更新全綠；full suite **1479/1473/0/6**（基線 1462/1456/0/6）。**狀態：已實裝（代碼段全綠）；真機 NOT VERIFIED** —— mount 生效、SELinux bind 語義、`dumpsys display` 幾何、reserve 實採、真 Chrome GL 路線，清單見 `logs/waterarmy-l2w2-progress.md`。

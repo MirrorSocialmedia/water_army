@@ -268,10 +268,23 @@ test('consistency: fingerprint mismatch / missing prop -> FAIL/MISSING + blockin
 test('probe-assert runner: fixture dump -> per-field lines + VERDICT semantics', () => {
   const p = generateTemplateProfile('w1bassert00aaaaaaaaa');
   const props = devicePropsFrom(p);
-  const dump = { schema: 'wa-probe/1', props, context: { 'ro.build.type': 'user', 'ro.build.tags': 'release-keys' }, propCount: 900 };
+  // L2 wave-2 (ADR-033): a probe dump for a deviceSpec profile must carry the
+  // geometry/proc observations — anti-vacuous: without them the verdict FAILs
+  // (device-spec.test.js pins that direction); here we feed the truthful set.
+  const ds = p.deviceSpec;
+  const dump = {
+    schema: 'wa-probe/1',
+    props: { ...props, 'ro.sf.lcd_density': String(ds.display.densityDpi) },
+    context: { 'ro.build.type': 'user', 'ro.build.tags': 'release-keys', 'qemu.sf.main_display_size': `${ds.display.widthPx},${ds.display.heightPx}` },
+    deviceSpec: { proc: { memTotalKb: ds.proc.memTotalKb, cpuinfoCores: ds.proc.cpuCores } },
+    propCount: 900,
+  };
   const good = runAssert({ dump, expected: p });
   assert.equal(good.pass, true, good.lines.join('\n'));
-  assert.ok(good.lines.filter((l) => l.startsWith('PASS')).length === 12);
+  assert.ok(good.lines.filter((l) => l.startsWith('PASS') && l.includes('(')).length === 12);
+  assert.ok(good.lines.filter((l) => l.startsWith('PASS') && l.includes('deviceSpec.')).length === 5, 'wave-2 deviceSpec rows all observed');
+  const noObs = runAssert({ dump: { ...dump, deviceSpec: undefined, context: { 'ro.build.type': 'user', 'ro.build.tags': 'release-keys' }, props }, expected: p });
+  assert.equal(noObs.pass, false, 'deviceSpec profile without observations = MISSING = blocking (never vacuous green)');
 
   const legacyProbe = { ...dump, context: { ...dump.context, 'ro.hardware': 'redroid' } }; // pre-L2 probe APK kept hardware in context only
   const withTell = runAssert({ dump: legacyProbe, expected: null });
