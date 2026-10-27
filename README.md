@@ -541,6 +541,10 @@ Identity 批次輪換：一組 identity（例如 200 個）排入 cycle，每批
 
 **實測證據**：G1 八場景存證 `docs/audits/ramgate-scenarios.md`（+ 基線 `docs/audits/ramgate-baseline.md`）；G2 gate-live 10 機 ladder + batch 503 真路徑 + 回歸 `docs/audits/ramgate-g2-report.md`（均喺 repo，實檔）。測試：`tests/unit/ramgate-*.test.js` + `tests/integration/ramgate-*.test.js`（HTTP 級准入/拒絕零副作用、lease 生命週期、RBAC、fail-closed 原因面）。
 
+## 驗收口徑（預留 — T6 runbook 寫作中）
+
+**正式驗收 = 喺乾淨 host 由零行 J0–J9 全部通過**（從零安裝到收尾嘅逐步 runbook，T6 寫作中；完成後本節替換為 `docs/runbook.md` 嘅 J 段正式链接）：任何「已交付」聲稱唔取代 J0–J9 全綠 — 呢個係產品驗收嘅唯一口径。
+
 ## 功能清單（MD §18 三類分列 — 交付誠實項）
 
 ### A. 實際可用（真環境實測過，非 mock）
