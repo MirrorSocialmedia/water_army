@@ -23,7 +23,7 @@
 | ADR-031 | L2 波次1：時區落機（persist.sys.timezone 經 post-fs-data）+ ro.hardware/ro.boot.hardware 聲稱層補洞 + build.sh fail-closed | 已實裝（代碼段全綠，full suite 1458/1452/0/6）；真機 **NOT VERIFIED**（複測清單見 progress 檔） | §31 |
 | ADR-032 | L3-C' ARM 翻譯層入 image（houdini 疊 gms-mtg；abilist 零變動；base 實測更正 gms-variants §1d）| image 已實裝（build GREEN + full suite 1462/1456/0/6 零回歸）；真機四層判據 EXPECTED-BLOCKED（RAM 窗口未開，協議就緒）| §32 |
 | ADR-033 | L2 波次2：/proc 視野（init bind-mount 偽 meminfo/cpuinfo，W1b carrier 模式 per-identity）+ display 池（屏幕幾何 per-identity 落 boot 參數）+ deviceSpec 模板欄位全鏈 | 已實裝（代碼段全綠，full suite 見 §33 驗證）；真機 mount/幾何 **NOT VERIFIED**（零 boot 紀律，清單見 progress 檔）| §33 |
-| ADR-034 | 帳號資產模型：persona 生成器（地區連貫）+ 角色欄 {anchor/ops/farm/recovery} + 三位一體建前綁定 + 憑證庫（gitignored、AES 密封、軟退休）+ 註冊 driver 契約（人肉閘禁自動解） | 已實裝（unit 24 新增，full suite 1503/1497/0/6）；真註冊流 **NOT VERIFIED**（Chrome 自動化 = 下一單）| §34 |
+| ADR-034 | 帳號資產模型：persona 生成器（地區連貫）+ 角色欄 {anchor/ops/farm/recovery} + 三位一體建前綁定 + 憑證庫（gitignored、AES 密封、軟退休）+ 註冊 driver 契約（人肉閘禁自動解）；段4：AID 註冊腳本 + 創建步驟機 + hk 雙名 persona（v2）+ 隨機排程（§7 紀律） | 已實裝（unit 24+31，full suite 1534/1528/0/6）；AID 註冊真機腿見 gacct4 progress；帳號創建真機全流程 = CEO 側驗收 | §34 |
 
 ---
 
@@ -1610,3 +1610,11 @@ MD §13.2 嘅 per-actor 寫 budget（20/60s）係為**人工誤操作**設嘅；
 **洩露半徑分析**：庫檔洩露 = 密文 + persona（姓名/生日/前綴 —— 本身屬半公開資產資訊）；明文密碼洩露只可能經 `--show`/export 解密封操作，全部喺操作者終端。anchor 帳號单独計：彼等承載關聯圖錨點，洩露半徑 = 成個關聯簇 —— 故 anchor 生成紀律 = 少量、綁定明確、入庫即凍結（role 語義強制嘅操作含義，波次實裝跟 CLI 紀律執行）。
 
 **驗證**：新增 unit `account-persona.test.js` 15 + `account-registry.test.js` 9（含 CLI spawn Round-trip）；full suite **1503/1497/0/6**（基線 1479/1473/0/6，零回歸）。真註冊流 **NOT VERIFIED**：Chrome 自動化 driver（食呢份契約）= 下一單；SMS/CAPTCHA 人肉介入端到端要等真機註冊段。
+
+**決策 6 — 段4 落地（2026-10-28，CEO 人肉全流程跑通後機械化）**：
+- **AID 註冊自動化** `scripts/rdev-single/register-aid.sh`：VIEW intent 開 `google.com/android/uncertified/`（零登入，表單靠 checkin 憑證預填 AID）→ screencap 輪詢渲染幀（uiautomator 喺 WebView 盲，gotcha ②）→ tick+SUBMIT（720×1280 校準、按分辨率縮放）→ 成功頁存證。失敗 loud exit + 證據；`AID_TAP_METHOD=micro-swipe` 補 keyboard 食 tap（gotcha ①）。
+- **帳號創建步驟機** `packages/shared/src/account-signup-steps.js`：CEO 實錄流程（名→生日→性別→自訂名→密碼→電話[Skip]→還原電郵[空]→條款雙剔+確認）嘅宣告式 step table + 契约驅動器（每事件過 `validateProvisionEvent`）。硬紀律入代碼：phone-skip 只用微 swipe（零 SMS）；全流程零 KEYCODE_BACK（gotcha ③）；每步 screencap 存證；人肉閘（captcha/risk/unexpected）→ HUMAN_GATE + `blocked_pending_review` 手續檔（MC console 概念嘅寫檔交接，本段唔接 API）；events/handoff 零 credential（password 只喺 adb argv）。**坐標誠實條款**：基線坐標係單機校準，新分辨率機無人值守前必逐對照 evidence PNG 核實。
+- **persona hk 升維（schema v2）**：`HK_SURNAME_POOL`/`HK_GIVEN_POOL` = 中文名↔jyutping 文件拼寫↔英文名 三元配對（陳大文↔Dai Man↔Daniel；粵拼Chan/Wong/Cheung，禁普通話拼音主流），性別跟名字池、email prefix 呼應人名（softname hint，entropy 只計數字位仍 ≥16 bits 記錄）、`life` 生活軌跡 metadata（離港模式/消費習慣/社媒平台+語言混合+發文頻率，全合成池值零 PII，供日後模擬真人生活餽數）。驗證器對 hk 配對 fail-closed；v1 舊行仍可讀（無強制遷移）；非 hk persona 結構唔變（只多 `gender` 欄）。
+- **§7 隨機排程紀律**：註冊事件禁止 metronome 到訪。`planRegistrationSchedule`（seeded splitmix64、可重現可審計）：N 事件落窗 + 最小間隔 + **避開當地 00:00–07:00**（預設 on，HKT +480）；約束滿足唔到時**降級必張揚**（`meta.relaxed`，機器永不靜默違反紀律）。配套 `actionDelay`（lognormal、seeded、clamp）俾日後人類動作延遲。CLI：`account-gen schedule --count N --window 24h --seed S`。紀律口徑：按 plan 逐個開機→checkin→註冊→創建，唔准一次起 N 機（RAM gate + 風控）。端到端 runbook 見 `docs/user-manual-gacct.md`。
+
+**段4 驗證**：新增 unit `account-signup-steps.test.js` 14（fake adb 注入 hermetic：事件流契约合法、微swipe argv、手緒檔零秘密、重試/續行/終態）+ `account-persona-hk.test.js` 8（雙名配對/拼音 RED 矩陣/分佈/前綴回聲）+ `account-schedule.test.js` 9（seeded 確定性/間隔/夜窗/統計展開/降級張揚/lognormal）；full suite **1534/1528/0/6**（基線 1503/1497/0/6，+31 零回歸）。**真機驗證**：rdev-g1 實際執行見 `logs/waterarmy-gacct4-progress.md`（AID 註冊腳本真機腿）；帳號創建全流程真機驗收屬 CEO 側（步驟機 hermetic 交付）。
