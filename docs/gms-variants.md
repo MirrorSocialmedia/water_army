@@ -5,6 +5,8 @@
 > **紅線**：變體全部基於 stock pin `redroid/redroid:14.0.0-240527` 建造，W1b 定制 image 嘅
 > carrier/`ro.*` 映射層**未合併**（兩層合併 = PoC 有結論後嘅獨立決策，避免將兩個未驗證變數疊埋）。
 > 真機段 R 清單（自足成單）：`docs/t1-gms-realdevice-todo.md`；evidence → `logs/t1-gms/`。
+>
+> **拍板記錄（老細 2026-10-27，T3 文檔對齊成文）**：① **OG（OpenGApps）永久跳過** — 線已死（§1c：x86_64 停喺 2022-05/Android 12.1，無 13/14），真機段唔再為佢入料/測試，變體目錄保留作記錄；② **MTG 先行 + 鑑別診斷邏輯照守** — MTG 紅 = 根因歸 redroid base（其他變體唔使再試）；MTG 綠 microG 紅 = 根因歸 GMS 簽名/spoof 面（§2）；③ **GMS × W1b 指紋層合併 = PoC 通過後先傾** — R1–R6 出正面結論前，兩層維持零交集（§3）。
 
 ## 0. 變體現況總覽（代碼段產物，2026-10-27 實測）
 
@@ -55,11 +57,11 @@
 
 1. **MTG 先行**（R1→R5）：版本匹配 + Google 原簽 + x86_64 正經出身 → 單一變體將「GMS 進程就緒 + Gmail 登入」兩個核心問題以最高成功概率證明；若 MTG 都唔得，問題喺 redroid 本身（base/kernel/GMS 依賴面），其他變體無須再試。
 2. **microG 次之**：MTG 成功 → microG 作為低依賴備胎驗證 WhatsApp 組合（R4-2）；MTG 失敗 → microG 驗證「無 GMS 簽名路线」定「redroid 容器本身」邊個係根因（鑑別診斷）。
-3. **OG 最後 / 可跳過**：已知停擺 + 版本錯配，只喺需要向持份者展示「第三條路都試過」時先做（缺料手動入料成本另計）。
+3. **OG = 永久跳過（老細拍板 2026-10-27）**：已知停擺 + 版本錯配，真機段唔再安排 OG 測試/入料；`images/gms-opengapps` 目錄連構建口徑保留作記錄，重開需新拍板。
 4. 四類判定（PASS/FAIL/PARTIAL/INCONCLUSIVE）口徑 + 步驟 → `docs/t1-gms-realdevice-todo.md`（R0–R6，evidence `logs/t1-gms/`）。
 
-## 3. 兩層合併留待 PoC 後嘅決策點（預留，唔預設）
+## 3. 兩層合併留待 PoC 後嘅決策點（老細已拍板：PoC 通過後先倾）
 
 W1b 映射層（`/vendor/etc/init/oem-ro-map.rc` + `oem-propctl`）同 GMS 層目前零交集：
 GMS 變體用 stock ro.*（redroid 默認指紋）。合併順序、GMS 對偽裝指紋嘅反應（GservicesChecks
-對 build fingerprint 嘅校驗面）、同 to 老細拍板後先做。本代碼段刻意將兩個變數隔离。
+對 build fingerprint 嘅校驗面）、待老細逐項拍板後先做；**前置條件已拍板（2026-10-27）= 真機 PoC（R1–R6）通過後先立项**。本代碼段刻意將兩個變數隔离。

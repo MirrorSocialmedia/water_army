@@ -2,7 +2,7 @@
 
 > 前提：代碼段 COMPLETE（2026-10-27，本文檔配套 `docs/gms-variants.md`）。
 > 執行環境 = 真機（RAM gate 解除 + qwen27B 段後）。**只准隔離設備（`rdev-gms-*`），零碰生產設備/生產 image；RAM gate 封鎖期間唔准開 redroid。**
-> 紀律：每步 evidence 落 `logs/t1-gms/`；失敗 = 記錄 + 停，唔好繞過斷言；順序 = MTG → microG（鑑別診斷邏輯見 gms-variants.md §2）；OG 默認跳過。
+> 紀律：每步 evidence 落 `logs/t1-gms/`；失敗 = 記錄 + 停，唔好繞過斷言；順序 = MTG → microG（鑑別診斷邏輯見 gms-variants.md §2：MTG 紅 = 根因歸 redroid base；MTG 綠 microG 紅 = 根因歸 GMS 簽名/spoof 面）；**OG = 永久跳過（老細 2026-10-27 拍板，見 gms-variants.md 拍板記錄 — 唔使再為 OG 入料/排期，R 清單全部步驟只適用 MTG/microG 兩變體）**。
 > 判定四類（每個 R 段收口都要落）：**PASS** / **FAIL**（根因寫明）/ **PARTIAL**（邊度得邊度唔得）/ **INCONCLUSIVE**（環境缺料，列重跑條件）。
 
 ## R0 前置（環境 + 物料）
@@ -42,6 +42,6 @@
 ## R6 收口 + 四類判定報告
 - [ ] R6-1 判定表：每變體 ×（開機/GMS 就緒/Gmail/WhatsApp/Integrity）× 四類判定，根因+evidence 路徑逐格填；報告落 `logs/t1-gms/t1-verdict.md`
 - [ ] R6-2 根因歸屬判定：若 MTG 全紅 → 斷言根因喺 redroid base（引用具体 R 步 FAIL 證據）；若 MTG 綠 microG 紅 → 歸屬 GMS 簽名/spoof 面；兩綠 → 兩條路都可選，餵 T2
-- [ ] R6-3 情報餵下游：T2（登入狀態機輸入：登入可行性/時延/人工介入點）、T5（Gmail 批量建立可行性）、老細（OG 係咪永久跳過；兩層合併（GMS×W1b 指紋層）立项與否）
+- [ ] R6-3 情報餵下游：T2（登入狀態機輸入：登入可行性/時延/人工介入點）、T5（Gmail 批量建立可行性）。**已拍板唔使再問（2026-10-27）**：OG = 永久跳過（R 段唔使再產 OG 情報）；GMS×W1b 指紋層合併 = **本 PoC（R1–R6）通過後先立项** — R6 報告需畀出合併決策所需情報（GservicesChecks 對 build fingerprint 嘅反應、R2 checkin 實證），但唔預設立项
 - [ ] R6-4 隔離設備 teardown：`rdev-gms-*` 全部刪除 + 數據目錄清理（「唔准碰全部設備/正式映像」紀律嘅物理收尾）；用戶 stack 零波動覆核
 - [ ] R6-5 失敗路徑：任何 R 段紅 = 圖文並茂 report，唔好自行放寬斷言（斷言口徑改動要過 ADR 修訂）
