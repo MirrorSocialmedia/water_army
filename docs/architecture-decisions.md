@@ -19,6 +19,7 @@
 | ADR-027 | W3 身份↔出口 IP 強綁定（identity egress binding + boot 核對 + drift watchdog + credential 零洩漏） | 已實裝（代碼 + unit + mock integration 全綠；canary 零洩漏實錚）、live egress **NOT VERIFIED**（真機矩陣成單） | §27 |
 | ADR-028 | W1b 真實 build profile + 定制 image init 期映射（oem_* carrier + %20 契約 + 生成器黏性） | 已實裝（代碼段全綠）、真機 **NOT VERIFIED**（NV-W1b 成單） | §28 |
 | ADR-029 | T2 identity 登入狀態機（人工專用寫入路徑）+ test-identity provisioning + identity↔dataDir 歸屬契約 | 已實裝（代碼 + unit 6/6 + integration 3/3 + UI + full suite 1438/1432/0/6）；真機 E2E **NOT VERIFIED**（待辦成單，見 progress 檔） | §29 |
+| ADR-030 | T5 Gmail 帳號生命週期狀態機（login_state 嘅兄弟機）+ 開號驅動器（CAPTCHA 永久人肉口）+ 節流 + 加密保管庫 | 已實裝（代碼 + unit 8/8 + integration 5/5 + full suite 1451/1445/0/6）；真機試產 **NOT VERIFIED**（RAM gate + T1 真機裝機為前置） | §30 |
 
 ---
 
@@ -1463,3 +1464,38 @@ MD §13.2 嘅 per-actor 寫 budget（20/60s）係為**人工誤操作**設嘅；
 - integration `t2-login-provision.test.js`（3/3）：RBAC 矩陣（viewer 讀 200/寫 403、operator 寫 200、provision admin-only）+ 審計落行；provision 冪等 replay + dryRun + egress pre-check 成批 fail-closed；claim 生命週期（stamp → 預設 delete 保留 → 同身份 rebuild 放行 → 他身份 409 → removeData 釋放 → 第二 dir 409 → 未綁身份唔碰）。
 - **Full suite：1438 tests / 1432 pass / 0 fail / 6 skip**（基線 1429/1423/0/6 + T2 新增 9，零回歸；skip 同舊：RAM-G1 real-redis ×5 + P4 scheduler ×1；存證 `logs/w1b-t2-full-suite.log`）。web build 綠。
 - 真機 E2E = **NOT VERIFIED**：待辦清單見 `logs/waterarmy-t2-progress.md` §真機段（重建保留 /data 實證 + 登入人工流演練）；RAM gate 封鎖期內未開任何 redroid。
+
+---
+
+## 30. T5 Gmail 帳號生命週期 + 開號驅動器 + 節流 + 保管庫（ADR-030，2026-10-27 — 來源 = CEO T 序列工單 `mvq6ruqaxoo5h` 代碼段；拍板口径 12:26：自動化 + 人肉兜底 + 抗關聯）
+
+**決策 1 — 兄弟機split，唔係 login_state 加欄**：帳號開號生命週期係獨立狀態機（`account_lifecycle` 表，掛 identity 旁），語義 `PREPARING(準備中) → PROVISIONING(開號驅動中) → AWAITING_HUMAN(待人工驗證) → CREATED(建立成功) → RECOVERY_SETUP(恢復設置中) → READY(就緒)`，任何非終態可 `→ DEAD(死亡)`（DEAD 終態）。**點解要split**：ADR-029 嘅核心保證係「login_state 只准人寫」— 而開號驅動器係 *系統寫入者*；塞入同一機等於用後門拆 ADR-029 嘅牆。界線契約：
+
+| 軸 | login_state（T2/ADR-029） | account lifecycle（T5） |
+|----|---------------------------|--------------------------|
+| 語義 | app 登入真相（人先知道） | 開號流水線進度（機器驅動） |
+| 寫入者 | **只准人**（operator/admin） | 驅動器（system）+ operator 人工覆蓋 |
+| 狀態集 | PENDING_LOGIN / CONFIRMED_LOGGED_IN / RELOGIN_REQUIRED / LOGGED_OUT | PREPARING / PROVISIONING / AWAITING_HUMAN / CREATED / RECOVERY_SETUP / READY / DEAD |
+| 轉換 | 人工審計流 | 矩陣 4xx + 轉換審計（照 T2 模式） |
+
+**橋接規則**：(a) 開號成功（READY）唔自動改 login_state — 新帳號首次登入仍係人工確認（ADR-029 牆完整）；(b) login 軸 RELOGIN_REQUIRED/LOGGED_OUT 唔觸碰 lifecycle（帳號照就緒，登入問題照 T2 人工流）；(c) lifecycle DEAD（被封/死亡）→ 建議動作由人決定點樣 mark login_state，系統唔越權。(d) ban/死亡喺 lifecycle 軸以 DEAD+failureCode 承載，**login 四態零變動**。矩陣權威 = `packages/shared/src/gmail-provision.js`；**三處同步紀律照 ADR-029 §3**：shared 矩陣（權威）+ `batch-ui.js ACCOUNT_TRANSITIONS_UI`（UI 鏡像）+ matrix unit（釘死兩處同步，drift 即紅）。非法轉換（含 self）= 409 `INVALID_ACCOUNT_TRANSITION`；未知狀態 = 400；全部轉換落 append-only 審計（actorKind system/human 分列，details 零 PII）。
+
+**決策 2 — 開號驅動器 + adapter 介面**：UI 步驟機 `open-signup → fill-profile → captcha-gate → [人工口] → detect-created → vault-credentials → recovery-setup`。device adapter 介面（`openSignupForm / fillProfile / awaitCaptcha / detectAccountCreated(ref,{gateCleared}) / setRecoveryEmail`，ref = identity device name）— 代碼段用 deterministic fake；**真機段實現同一介面於 W2 uiautomator 探針 + tap 基建之上**（ADR-026），步驟探針語義 = ui-tree 斷言。**CAPTCHA 唔准自動解（拍板）**：行到 gate → 開 P4 干預工單（`EXTERNAL_VERIFICATION` / `blocked_pending_review`，dedupe 照 ADR-021）+ 停 `AWAITING_HUMAN`；resume 只認工單 RESOLVED/DISMISSED；死線（默認 2h）過而工單未清 → DEAD `CAPTCHA_TIMEOUT`（FR-07 精神：唔好留半成品）。Adapter 硬失敗 → DEAD `ADAPTER_FAILURE`（重跑半成品 = 關聯風險，唔重試）。resume 係免費（唔食節流配額）；半成品偵測（`ACCOUNT_NOT_DETECTED` 409 retry）留真機段校準。
+
+**決策 3 — 節流**：fresh start 前檢查（顺序：identity 日配額 → IP 日配額 → 全局隨機間隔窗）；counter 表 `gmail_provision_counter`（scopeKey `id:<uuid>` / `ip:<egress>` / `global`，UTC day key；配額消耗 = 同寫事務級前置，429 零消耗）。間隔 = `[MIN,MAX]` 均勻隨機（anti-bot 節奏），deny 帶 `retryAfterMs`。IP 來源 = W3 egress binding（未綁 = IP scope 跳過，identity scope 照守）。**每 IP 每日配額（默認 2）係抗關聯嘅主槓桿 — 老細拍板日產量後改 env 即生效，代碼零改**。
+
+**決策 4 — 保管庫 + 零 secret**：`gmail_account` 一 identity 一行：email/password/恢復郵箱 = AES-256-GCM 密文（同 provider key，W3/ADR-027 模式），mask 欄（`ab***@domain`）先係可读面；profile（名/生日/性別）= 決定性派生（`deriveAccountProfile(identityId)` 冪等、identity 間不同 = 抗關聯），存明文（本身係「真實感假料」，非 credential）。**Canary 紀律**：明文只行 adapter→vault；任何 API response / audit details / lifecycle 行 / log 零洩漏 — integration canary 斷言釘死（明文 + pool 本地段 fragments 喺所有海面 0 出現）。
+
+**決策 5 — 三項後補輸入嘅參數契約**（老細 12:26：全部參數化 + 缺料 fail-closed；env 表見 README「T5」節）：
+1. **恢復郵箱池** `WA_GMAIL_RECOVERY_POOL`：空池 = fresh start 503 `ACCOUNT_INPUT_MISSING`（*先於*配額/狀態變更 — 零燒配額）+ flow 中途空池 = 卡 RECOVERY_SETUP（fail-closed：**冇恢復郵箱 = 唔准入「就緒」**，拍板原文）。池 entries 按 identityId 決定性分配（冪等、唔搶同一個）。
+2. **proxy 來源** = W3 egress binding（已交付）— 未綁 identity 只有 identity-scope 節流；真機段部署口徑：每 identity 独立 proxy 先至准開號（ADR-027 強綁定 + 本節 IP 配額 = 雙層）。
+3. **日產量** = `WA_GMAIL_PER_IP_DAILY` × 綁定 IP 數（+ 間隔窗兜底）；拍板前默認保守值（2/IP/日、1/identity/日、5–15 分鐘窗）。
+
+**損耗率記錄要求**：試產期每個 DEAD 帳號必有 `failureCode`（CAPTCHA_TIMEOUT / ADAPTER_FAILURE / 人工標記 OPERATOR_OVERRIDE→DEAD + reasonCode）+ 審計鏈完整可回放；損耗率 = DEAD ÷（READY+DEAD），按 failureCode 分組出表（試產清單見 progress 檔）。缺 failureCode 嘅死亡 = 記錄缺損，視為驗收未夠。
+
+**驗證（代碼段，2026-10-27）**：
+- unit `t5-gmail-provision.test.js`（8/8）：矩陣全綠/全紅面（含 self 非法、DEAD 終態、死路可達性）、三處同步鏡像釘、throttle evaluator（IP/identity/間隔 jitter/skip）、profile 決定性 + 形狀、pool 決定性 + 空池 null、mask 形狀。
+- integration `t5-gmail-provision.test.js`（5/5）：① 成功流全流程（fresh→CAPTCHA 工單 RESOLVED→READY；audit 六步鏈；vault 解密 round-trip；canary 零洩漏於全部海面）② 卡死超時→DEAD `CAPTCHA_TIMEOUT`（終態 409）③ 空池 fail-closed 503 零消耗 + 對照組放行 ④ 節流三面（IP 超額 429 零消耗 / identity counter 恰一 / 間隔窗 429 帶 retryAfterMs）⑤ RBAC + 人工覆蓋（human 審計）+ 400/404 + 驅動 OFF = 503 + **login 軸零觸碰實錚**。
+- 附帶 additive 修復：error handler 429 保留 service apiCode（唔再吞成 RATE_LIMITED）+ error 載體帶 `details`（retryAfterMs 等）— 純 additive，舊海面不變。
+- **Full suite：1451 / 1445 pass / 0 fail / 6 skip**（基線 1438/1432/0/6 + T5 新增 13，零回歸；skip 同舊 = RAM-G1 ×5 + P4 scheduler ×1）。web build 綠（batch-ui 鏡像入面）。
+- 真機試產 = **NOT VERIFIED**。前置：① RAM gate 解除 ② T1 GMS 變體 image 真機裝機+開機驗證通過（MTG 14 x86_64 變體，ADR 見 §29/變體單）③ W1 指紋層合併決策（老細未拍板 — 開號防關聯依賴佢）④ rdev-* 隔離命名沿用。試產清單（代碼段收口時定）：2 個帳號 → 48–72h 觀察期 → 按上文損耗率口徑出表；全綠先至傾放量。
