@@ -28,9 +28,12 @@ RUN sha256sum /src/propctl-wrapper.c \
 FROM redroid/redroid:14.0.0-240527
 
 # NOTE: the stock redroid image has NO usable /bin/sh (RUN is impossible in
-# this image — discovered empirically at build time). File modes therefore come
-# from the build context (vendor blob + wrapper stage outputs are 0755; the rc
-# is 0644) and COPY preserves them.
+# this image — discovered empirically at build time). File modes come from the
+# build context — and init's "insecure file" check REJECTS group-writable
+# config (real-device 2026-10-27: 0664 rc → "Skipping insecure file", mapping
+# silently dead). This host builds with classic builder (no BuildKit/buildx),
+# so COPY cannot --chmod; run finalize.sh after docker build to normalize the
+# modes init requires (rc 0644, binaries 0755) via docker cp + commit.
 COPY vendor/oem-propctl-x86_64 /vendor/bin/oem-propctl-real
 COPY --from=wrapper /oem-propctl /vendor/bin/oem-propctl
 COPY oem-ro-map.rc /vendor/etc/init/oem-ro-map.rc
