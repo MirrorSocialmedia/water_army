@@ -190,6 +190,14 @@ JS 頁提取受限 — 標 **[文檔-待核]**；落實驗時用自製 demo 採 
 **萬無一失對齊**：口號 = 唔輸喺未知。本收斂將「未知」全部轉成 3 個平價實驗（①②③）+ 2 個明確
 觸發器（⑤⑥），冇「而家唔做、將來執死節」嘅懸空項。每個實驗都有「得/唔得都要寫」嘅判定出口。
 
+### 3.0 EXP 執行狀態（2026-10-27 回填）
+
+| 實驗 | 狀態 | 判定出口 |
+|---|---|---|
+| **EXP-2** | ✅ 完成（rdev-c1，MTG image；證據 `logs/l3c-arm/exp2/`） | 落「**timeout**」格：GMS 22.21.16 checkin URL = `android.googleapis.com/checkin`，POST 從未送達（egress tcp443 到 172.217/142.250/74.125 段全部 timeout；只係 checkin.gstatic.com 58.254 HK edge 可達，raw POST=400 屬我嘅 hand-crafted proto 非鑑別訊號）。**伺服器鑑別（403 vs 200）INCONCLUSIVE — 白名單槍未開之因 = 網絡可達性，唔係認證層**；android_id 表從未建立（pm clear 亦不逆转）。解套槓桿待拍板：容器出口 proxy（`settings put global http_proxy`）再跑先轮到 2f/2b 二分。 |
+| **EXP-3** | ✅ 完成（代碼段 `attest-app/`，apk sha256 8f94c32…；真機訊號已順手採） | bind 矩陣 atom.attest/safetynet/zinzi = NO_RESOLVER；legacy IntegrityApi absent；Standard prepare = **-9（bind Play Store service 失敗）**；SafetyNet handshake 成立但離線無 verdict。結論：**MTG 22.21.16 喺 A14 redroid Integrity 全徑不可用**（binder 無 + vending 2022 太舊 + 網絡唔達三重）；網絡解套後用同一支 APK 重採即可落真 verdict。 |
+| EXP-1 | 未排（本單範圍外） | — |
+
 ### 3.1 實驗最小方案細則
 
 * **EXP-1（microG 開機批）**：用現成 image `sha256:08b7be141cf7…` [實測: gms-variants §0]；採集項 =
