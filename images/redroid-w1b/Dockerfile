@@ -11,7 +11,9 @@
 #                                  packages/shared/src/w1b-image-mapping.js)
 #
 # Build (network only; negligible RAM — NOT a redroid boot):
-#   docker build -t water-army/redroid:14.0.0-240527-w1b images/redroid-w1b
+#   bash images/redroid-w1b/build.sh
+#   (THE entry point: build + finalize + post-build insecure-file assertion.
+#    Raw `docker build` alone is NOT shippable — see NOTE below and ADR-031.)
 #
 # SELinux note (real-device stage item): actions rely on redroid's container
 # SELinux posture (permissive/label-disabled); if a strict policy is enabled,
