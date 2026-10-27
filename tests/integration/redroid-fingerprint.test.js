@@ -6,7 +6,7 @@
  *  1. Switch OFF (default): identityId is accepted and INERT — container Cmd
  *     byte-identical to the no-W1 shape (5 base args), device row unbound.
  *  2. Switch ON: create with identityId → the recorded docker createContainer
- *     body carries the deterministic profile's androidboot.wa_* args (Cmd
+ *     body carries the deterministic profile's androidboot.oem_* args (Cmd
  *     carrier, never Env), device row snapshots identityId + merged map.
  *  3. Fail-closed: unknown identity → 404 BEFORE any side effect (no device
  *     row, no container create); template invalid roOverrides → 400 at write.
@@ -201,7 +201,7 @@ test('template roOverrides: write-validated (400 on junk), merged under identity
   assert.equal(snap['persist.w1.marker'], 'on', 'template-only props survive the merge');
   assert.equal(snap['ro.product.brand'], expected.brand, 'identity profile must WIN over the template baseline');
   const cmd = lastCreateBody(on.redroidMock).Cmd;
-  assert.ok(cmd.includes('androidboot.wa_persist_w1_marker=on'), 'merged map must reach the Cmd');
+  assert.ok(cmd.includes('androidboot.oem_persist_w1_marker=on'), 'merged map must reach the Cmd');
 });
 
 test('fingerprint routes: ensure idempotent (same profile on repeat), RBAC, fleet collision audit clean', async (t) => {

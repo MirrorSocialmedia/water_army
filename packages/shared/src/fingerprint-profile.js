@@ -65,10 +65,13 @@ export const PROFILE_FIELDS = Object.freeze([
  * Transport-safe value pattern. Values reach the container through docker Cmd
  * array entries `androidboot.<key>=<value>` → kernel cmdline → init. The
  * kernel androidboot parser is stricter than Android itself: ASCII subset, no
- * space, no '=', no quotes/backslash, no control chars. AOSP build-fingerprint
+ * space, no '=', no quotes/backslash, no control chars. '%' is admitted ONLY
+ * for W1b's %20 carrier encoding of spaces in ro.product.model (wa-propctl
+ * decodes %20; template validation forbids any other '%' — ADR-028).
+ * AOSP build-fingerprint
  * format (`brand/device/product:15/BUILD/NUM:userdebug/keys`) fits.
  */
-export const SAFE_PROFILE_VALUE_RE = /^[A-Za-z0-9][A-Za-z0-9._:/+,-]{0,127}$/;
+export const SAFE_PROFILE_VALUE_RE = /^[A-Za-z0-9][A-Za-z0-9._:/,+%-]{0,127}$/;
 
 const FIELD_MAX_LEN = Object.freeze({
   androidRelease: 8,
@@ -89,7 +92,8 @@ const FIELD_MAX_LEN = Object.freeze({
 });
 
 const FIELD_RE = Object.freeze({
-  androidRelease: /^\d+(\.\d+)?$/,
+  // W1b: real builds ship multi-part releases ("8.0.0") — widen from one dot to two.
+  androidRelease: /^\d+(\.\d+){0,2}$/,
   carrierMcc: /^\d{3,4}$/,
   carrierMnc: /^\d{1,4}$/,
 });
@@ -121,10 +125,10 @@ const POOL_MODEL_LINES = Object.freeze([
   'Zenfone', 'Xperia', 'Nova', 'Magic', 'GT', 'Legion', 'Z-Pro',
 ]);
 
-const POOL_LOCALES = Object.freeze(['en-US', 'zh-HK', 'zh-CN', 'zh-TW', 'en-GB', 'ja-JP', 'ko-KR', 'fr-FR', 'de-DE', 'es-ES', 'pt-BR', 'ru-RU', 'id-ID', 'th-TH', 'vi-VN', 'en-IN']);
-const POOL_TIMEZONES = Object.freeze(['Asia/Hong_Kong', 'Asia/Shanghai', 'Asia/Taipei', 'Asia/Tokyo', 'Asia/Seoul', 'Asia/Bangkok', 'Asia/Jakarta', 'Asia/Singapore', 'America/New_York', 'America/Los_Angeles', 'Europe/London', 'Europe/Berlin', 'Europe/Paris', 'Australia/Sydney', 'Asia/Kolkata', 'America/Sao_Paulo']);
+export const POOL_LOCALES = Object.freeze(['en-US', 'zh-HK', 'zh-CN', 'zh-TW', 'en-GB', 'ja-JP', 'ko-KR', 'fr-FR', 'de-DE', 'es-ES', 'pt-BR', 'ru-RU', 'id-ID', 'th-TH', 'vi-VN', 'en-IN']);
+export const POOL_TIMEZONES = Object.freeze(['Asia/Hong_Kong', 'Asia/Shanghai', 'Asia/Taipei', 'Asia/Tokyo', 'Asia/Seoul', 'Asia/Bangkok', 'Asia/Jakarta', 'Asia/Singapore', 'America/New_York', 'America/Los_Angeles', 'Europe/London', 'Europe/Berlin', 'Europe/Paris', 'Australia/Sydney', 'Asia/Kolkata', 'America/Sao_Paulo']);
 /** Carrier pool: name + home MCC/MNC (real registry values). */
-const POOL_CARRIERS = Object.freeze([
+export const POOL_CARRIERS = Object.freeze([
   { name: 'HKT', mcc: '454', mnc: '00' },
   { name: 'CMHK', mcc: '454', mnc: '06' },
   { name: '3HK', mcc: '454', mnc: '03' },
@@ -149,7 +153,7 @@ const BASE32 = '23456789ABCDEFGHJKMNPQRSTVWXYZ'; // Crockford: no I/L/O/U
  * 64-bit splitmix64 stream over sha256(domainTag + seed). Deterministic:
  * the same identityId always replays the same stream.
  */
-function makeRng(seedStr) {
+export function makeRng(seedStr) {
   const digest = createHash('sha256').update(`wa-w1|${seedStr}`).digest();
   let state = digest.readBigUInt64LE(0);
   return {
@@ -177,6 +181,12 @@ function makeRng(seedStr) {
     },
     letter() {
       return String.fromCharCode(65 + (this.u32() % 26));
+    },
+    /** W1b: n uppercase letters (real-device serial prefixes) */
+    upper(n) {
+      let out = '';
+      for (let i = 0; i < n; i++) out += String.fromCharCode(65 + (this.u32() % 26));
+      return out;
     },
   };
 }
@@ -268,18 +278,25 @@ export function validateFingerprintProfile(profile) {
     if (v.length > max) problems.push(`${field} exceeds ${max} chars`);
     if (FIELD_RE[field]) {
       if (!FIELD_RE[field].test(v)) problems.push(`${field} "${v.slice(0, 40)}" does not match expected format`);
+    } else if (field === 'model') {
+      // W1b: REAL models contain spaces ("Pixel 8 Pro"). model is NOT a carrier
+      // field (it never rides the kernel-cmdline injection — ADR-028), so the
+      // transport-safe constraint does not apply; keep charset + length bounds.
+      if (!/^[A-Za-z0-9][A-Za-z0-9 .+_-]{0,39}$/.test(v)) problems.push(`model "${v.slice(0, 40)}" contains invalid characters`);
     } else if (!SAFE_PROFILE_VALUE_RE.test(v)) {
       problems.push(`${field} "${v.slice(0, 40)}" contains unsafe chars (androidboot/cmdline carrier)`);
     }
   }
   for (const key of Object.keys(profile)) {
-    if (!PROFILE_FIELDS.includes(key) && key !== 'securityPatch') {
+    // securityPatch: W1 metadata; templateId: W1b provenance metadata (ADR-028)
+    if (!PROFILE_FIELDS.includes(key) && key !== 'securityPatch' && key !== 'templateId') {
       problems.push(`unknown profile field "${key}"`);
     }
   }
   // fingerprint must self-consistently reference brand/device (platforms cross-check)
   if (!problems.length) {
-    const prefix = `${profile.brand.toLowerCase()}/${profile.device}/`;
+    // real builds keep brand casing (Xiaomi/fuxi/…); W1 values were already lowercase
+    const prefix = `${profile.brand}/${profile.device}/`;
     if (!profile.fingerprint.startsWith(prefix)) {
       problems.push('fingerprint must start with "<brand>/<device>/" (AOSP cross-check consistency)');
     }
@@ -326,15 +343,21 @@ export function findProfileCollisions(entries, fields = PROFILE_FIELDS) {
 
 /**
  * androidboot key encoding for a dotted Android prop: `ro.build.fingerprint`
- * → `androidboot.wa_ro_build_fingerprint`. The `wa_` prefix namespaces our
- * carrier keys away from redroid's own `redroid_*` keys (and ro.boot.* stays
- * collision-free); V3 verifies which of these the runtime actually consumes.
+ * → `androidboot.oem_ro_build_fingerprint` (→ ro.boot.oem_ro_build_fingerprint
+ * on the device). W1b rename: the W1 `wa_` prefix named the farm itself —
+ * /proc/cmdline is world-readable, so `wa_*` was a self-branding correlation
+ * risk (ADR-028 §naming). `oem_` mimics plausible vendor bootloader variables
+ * and carries no water_army signature. Carrier keys stay collision-free vs
+ * redroid's own `redroid_*` keys. V3 verifies which of these the runtime
+ * actually consumes (w1b image maps them; stock image leaves them inert).
  */
+export const CARRIER_KEY_PREFIX = 'androidboot.oem_';
+
 export function propToAndroidbootKey(prop) {
   if (typeof prop !== 'string' || !/^[a-z0-9_.]+$/.test(prop)) {
     throw new Error(`propToAndroidbootKey: invalid prop "${String(prop).slice(0, 60)}"`);
   }
-  return `androidboot.wa_${prop.replace(/[.]/g, '_')}`;
+  return `${CARRIER_KEY_PREFIX}${prop.replace(/[.]/g, '_')}`;
 }
 
 /**

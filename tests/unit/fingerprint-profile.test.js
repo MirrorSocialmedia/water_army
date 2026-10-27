@@ -72,8 +72,16 @@ test('validator: fail-closed on unsafe values, missing fields, unknown keys, inc
   const good = generateFingerprintProfile('w1-unit-identity-0001');
   assert.deepEqual(validateFingerprintProfile(good), []);
 
-  // space / '=' / quotes are kernel-cmdline killers
+  // space / '=' / quotes are kernel-cmdline killers (checked on a CARRIER field;
+  // W1b: model itself may contain spaces — "Pixel 8 Pro" — it is %20-encoded for
+  // the carrier, see ADR-028 / templateProfileToRoOverrides)
   for (const bad of ['has space', 'has=equals', 'has"quote', "has'quote", 'back\\slash', 'has\nnewline', '']) {
+    const p = { ...good, brand: bad };
+    assert.ok(validateFingerprintProfile(p).length > 0, `must reject brand="${bad}"`);
+  }
+  // W1b: model accepts real-world spaces but NOT '=' / quotes / % (reserved)
+  assert.deepEqual(validateFingerprintProfile({ ...good, model: 'Pixel 8 Pro' }), []);
+  for (const bad of ['has=equals', 'has"quote', 'pct%20sign']) {
     const p = { ...good, model: bad };
     assert.ok(validateFingerprintProfile(p).length > 0, `must reject model="${bad}"`);
   }
@@ -126,7 +134,7 @@ test('collision checker: detects planted pairwise collisions; blocking only on u
 });
 
 test('carrier: propToAndroidbootKey namespacing + encoding', () => {
-  assert.equal(propToAndroidbootKey('ro.build.fingerprint'), 'androidboot.wa_ro_build_fingerprint');
+  assert.equal(propToAndroidbootKey('ro.build.fingerprint'), 'androidboot.oem_ro_build_fingerprint');
   assert.throws(() => propToAndroidbootKey('Bad Prop'), /invalid prop/);
   assert.throws(() => propToAndroidbootKey(''), /invalid prop/);
 });
@@ -163,8 +171,8 @@ test('carrier: validateRoOverridesMap + mergeRoOverrides fail-closed', () => {
 test('carrier: buildRoCmdArgs deterministic order + throws on invalid (never partial)', () => {
   const args = buildRoCmdArgs({ 'ro.serialno': 'S1', 'ro.build.fingerprint': 'a/b/c:15/A/1:userdebug/dev-keys' });
   assert.deepEqual(args, [
-    'androidboot.wa_ro_build_fingerprint=a/b/c:15/A/1:userdebug/dev-keys',
-    'androidboot.wa_ro_serialno=S1',
+    'androidboot.oem_ro_build_fingerprint=a/b/c:15/A/1:userdebug/dev-keys',
+    'androidboot.oem_ro_serialno=S1',
   ]);
   assert.deepEqual(buildRoCmdArgs({}), []);
   assert.throws(() => buildRoCmdArgs({ 'ro.bad': 'has space' }), /invalid roOverrides/);
