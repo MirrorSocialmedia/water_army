@@ -607,3 +607,22 @@ Identity 批次輪換：一組 identity（例如 200 個）排入 cycle，每批
 | P6 | UX 收尾 + 安全（audit 清零/redaction 實打/threat-model 最終）+ E2E 14/14 + docs（README/runbook/API 總表/ADR §15）+ 5 flag 收結 + clean install 實跑 | ✅（2026-10-15；證據 `docs/evidence/p6-*/`） |
 | 2026-10-19 | Security patch（SSRF guard / per-account 登入限流 / proxy anti-spoof + trustProxy）+ Redroid 實機矩陣：Stage A（real-host boot + binderfs wrapper + host setup script）+ Stage B（per-device egress proxy：gost + tun2socks，runbook §10） | ✅（27cc558；f8e2986/cf6b2d9；18f8139/ffe800f/bd88571/351983a；實機證據 2026-10-19） |
 | 修復鏈 R0–R7（2026-10-19/21） | 網絡模組 P0–P7 修復：基線盤點（R0）→ binary 可重現性 pin+sha256 fail-fast（R1）→ TCP data-plane 根因矩陣（R2）→ netState 7 狀態機 + watchdog + fail-closed（R3）→ 狀態一致性單一權威（R4）→ 實機 host 驗收 + 資源限制 + patch-clobber 修復（R5）→ 錯誤契約 + 40min boot-timeout 校準 + patch-default guard（R6）→ 文檔/ADR/CI/release gate（R7） | ✅（6fdcf27 → e3b9c75…；實錚證據 `docs/live-evidence/r3|r4|r5-20261020/` + `docs/audits/` 4 審計檔 + CI run 39499318028 全綠） |
+
+### T2 測試身分 Provisioning（代碼段交付 — 深度文檔由 T3 單負責）
+
+批量建立測試身分，全鏈名稱 1:1 可推導：`externalRef = pool 名稱 = device name = <dataRoot>/<名稱>`。API：`POST /api/identities/provision`（admin）。
+
+| 參數 | 類型 | 必填 | 說明 |
+|------|------|------|------|
+| `names` | `string[]`（1–100） | ✅ | pool 名稱；每個必匹配 `^redroid-[a-z0-9][a-z0-9_-]{0,39}$`（即 device name 契約）；批內重複 = 400 |
+| `identityType` | `string` | ✗ | allowlist：`qa_device`（預設）/ `staging_user` |
+| `egressIps` | `(string\|null)[]` | ✗ | 與 `names` 平行嘅預期出口 IP；寫入前全批 pre-check（批內重複 + fleet 全局唯一），任何碰撞 = 成批 409 `EGRESS_IP_PRECHECK_FAILED` 零部分寫入；真正 binding 仍用 `PUT /api/identities/:id/egress` |
+| `dryRun` | `boolean` | ✗ | 只驗證 + 回報 `would_create`/`replayed`，零寫入 |
+
+**冪等**：已存在嘅 `externalRef` → `replayed`（永不重複建行）；fingerprint 自動 `ensureProfile()`（per-identity 決定性，ADR-028 生成器黏性）。新身分初始 `loginState=PENDING_LOGIN`；登入狀態人工流（「已確認登入／需重新驗證」按鈕，operator+）見 identity 詳情頁，語義 ADR-029（`docs/architecture-decisions.md` §29）。
+
+```bash
+curl -s -b /tmp/c.txt -X POST http://127.0.0.1:3012/api/identities/provision \
+  -H 'content-type: application/json' \
+  -d '{"names":["redroid-qa-tk-001","redroid-qa-tk-002"],"identityType":"qa_device","dryRun":true}'
+```
