@@ -34,6 +34,22 @@ export const identities = {
   detail: (id) => api.get(`/api/identities/${encodeURIComponent(id)}`),
 };
 
+/**
+ * T2 (ADR-029) — identity login-state (manual-only write path).
+ * Reads are viewer+; transitions are operator+ HUMAN sessions only —
+ * no machine caller exists for this surface by design. Zero secrets:
+ * state + audit metadata only, evidence is a short scrubbed note.
+ */
+export const identityLogin = {
+  /** current login state (viewer+). */
+  get: (id) => api.get(`/api/identities/${encodeURIComponent(id)}/login`),
+  /** transition audit, newest first (viewer+). */
+  audit: (id, limit = 50) => api.get(`/api/identities/${encodeURIComponent(id)}/login/audit?limit=${limit}`),
+  /** manual transition (operator+) — the ONLY write path (ADR-029). */
+  transition: (id, to, evidence) =>
+    api.post(`/api/identities/${encodeURIComponent(id)}/login/transition`, { to, ...(evidence ? { evidence } : {}) }),
+};
+
 export const reports = {
   /** MD §11.4 — completed/in-progress cycles (viewer+). */
   list: () => api.get('/api/batch-reports'),

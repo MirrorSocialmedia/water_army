@@ -46,6 +46,35 @@ export const IDENTITY_PILL = {
   DISABLED: 'pill-down',
 };
 
+/** T2 (ADR-029) — identity login-state pill colours (client mirror). */
+export const LOGIN_STATE_PILL = {
+  PENDING_LOGIN: 'pill-disabled',
+  CONFIRMED_LOGGED_IN: 'pill-up',
+  RELOGIN_REQUIRED: 'pill-down',
+  LOGGED_OUT: 'pill-disabled',
+};
+
+/**
+ * Client-side mirror of the fail-closed transition matrix in
+ * apps/api/src/services/login-state-service.js — keep the two in sync
+ * (unit tests pin the server matrix; this map only drives button
+ * visibility, the server is always the authority and 409s anything else).
+ */
+export const LOGIN_TRANSITIONS_UI = {
+  PENDING_LOGIN: ['CONFIRMED_LOGGED_IN', 'LOGGED_OUT'],
+  CONFIRMED_LOGGED_IN: ['RELOGIN_REQUIRED', 'LOGGED_OUT'],
+  RELOGIN_REQUIRED: ['CONFIRMED_LOGGED_IN', 'PENDING_LOGIN', 'LOGGED_OUT'],
+  LOGGED_OUT: ['PENDING_LOGIN'],
+};
+
+/** Operator-facing labels for manual login transitions (ADR-029 manual flow). */
+export const LOGIN_TRANSITION_LABELS = {
+  CONFIRMED_LOGGED_IN: '已確認登入',
+  RELOGIN_REQUIRED: '需重新驗證',
+  PENDING_LOGIN: '標記待登入',
+  LOGGED_OUT: '標記已登出',
+};
+
 /** Cycle status (derived by the API) → pill class. */
 export const CYCLE_STATUS_PILL = {
   PLANNED: 'pill-disabled',

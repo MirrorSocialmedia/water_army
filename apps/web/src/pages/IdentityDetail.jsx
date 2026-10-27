@@ -1,12 +1,15 @@
-import { Fingerprint, ShieldOff } from 'lucide-react';
+import { Fingerprint, ShieldOff, LogIn } from 'lucide-react';
 import { useState } from 'react';
 import { useApi } from '../hooks/useApi';
 import { StateFrame } from '../components/StateFrame';
-import { identities, purge } from '../services/batches';
+import { identities, purge, identityLogin } from '../services/batches';
 import {
   IDENTITY_PILL,
   RUN_STATUS_PILL,
   BATCH_STATUS_PILL,
+  LOGIN_STATE_PILL,
+  LOGIN_TRANSITIONS_UI,
+  LOGIN_TRANSITION_LABELS,
   pillClass,
   fmtTime,
   fmtDateTime,
@@ -31,6 +34,7 @@ export function IdentityDetail({ identityId, user }) {
   const [purgeBusy, setPurgeBusy] = useState(false);
   const [purgeErr, setPurgeErr] = useState(null);
   const isAdmin = user?.role === 'admin';
+  const login = useLoginState(identityId);
 
   async function runPurge(dryRun) {
     setPurgeBusy(true);
@@ -71,6 +75,11 @@ export function IdentityDetail({ identityId, user }) {
               <p className="muted mono">{data.identity.id}</p>
             </div>
             <div className="row-actions">
+              {login.state ? (
+                <span className={`pill ${pillClass(LOGIN_STATE_PILL, login.state.loginState)}`} title="T2 登入狀態（ADR-029）— 僅人工可寫入">
+                  <LogIn size={12} style={{ verticalAlign: '-2px' }} /> {login.state.loginState}
+                </span>
+              ) : null}
               <span className={`pill ${pillClass(IDENTITY_PILL, data.identity.status)}`}>{data.identity.status}</span>
               <button type="button" className="btn btn-ghost" onClick={reload}>
                 Refresh
@@ -127,6 +136,8 @@ export function IdentityDetail({ identityId, user }) {
               <p className="muted">{data.lastHealthCheckAt ? fmtDateTime(data.lastHealthCheckAt) : 'no heartbeat recorded'}</p>
             </div>
           </div>
+
+          <LoginStatePanel identityId={identityId} login={login} user={user} />
 
           {data.lastError ? (
             <div className="state state-error" role="alert">
@@ -302,6 +313,151 @@ function PurgePanel({ identityId, dataDir, out, confirmText, onConfirmText, busy
           Purge identity data
         </button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * T2 (ADR-029) login-state view state: state + audit loads silently-polling
+ * (badge must not flicker), 503 LOGIN_STATE_DISABLED is an honest "not
+ * provisioned" frame (pre-migration API), never an error banner.
+ */
+function useLoginState(identityId) {
+  const state = useApi(() => identityLogin.get(identityId), [identityId], { intervalMs: 30000 });
+  const audit = useApi(() => identityLogin.audit(identityId, 50), [identityId], { intervalMs: 30000 });
+  const disabled = (state.error?.status === 503 && state.error?.code === 'LOGIN_STATE_DISABLED')
+    || (audit.error?.status === 503 && audit.error?.code === 'LOGIN_STATE_DISABLED');
+  return {
+    state,
+    audit,
+    disabled,
+    view: state.data?.login ?? null,
+    reload: () => { state.reload(); audit.reload(); },
+  };
+}
+
+/**
+ * Manual login-flow panel (ADR-029): the ONLY way login truth changes is a
+ * human operator+ clicking here. Buttons are rendered per the (mirrored)
+ * fail-closed matrix; the server remains the authority and 409s anything
+ * illegal — a rejected click shows the server's message, it is never swallowed.
+ */
+function LoginStatePanel({ identityId, login, user }) {
+  const [evidence, setEvidence] = useState('');
+  const [busyTo, setBusyTo] = useState(null);
+  const [err, setErr] = useState(null);
+  const canOperate = user?.role === 'operator' || user?.role === 'admin';
+
+  if (login.disabled) {
+    return (
+      <div className="card" role="region" aria-label="Login state">
+        <div className="card-head"><strong>登入狀態 (Login state)</strong></div>
+        <p className="muted">Not available on this API build (T2 tables missing — run prisma migrate deploy).</p>
+      </div>
+    );
+  }
+  const view = login.view;
+  const allowed = view ? LOGIN_TRANSITIONS_UI[view.loginState] ?? [] : [];
+
+  async function doTransition(to) {
+    setBusyTo(to);
+    setErr(null);
+    try {
+      await identityLogin.transition(identityId, to, evidence.trim() || undefined);
+      setEvidence('');
+      login.reload();
+    } catch (e) {
+      setErr(`${e.code ?? 'ERROR'}: ${e.message}`);
+      login.reload(); // the state may have moved under us (another operator) — resync
+    } finally {
+      setBusyTo(null);
+    }
+  }
+
+  return (
+    <div className="card" role="region" aria-label="Login state">
+      <div className="card-head">
+        <strong><LogIn size={14} style={{ verticalAlign: '-2px' }} /> 登入狀態 (Login state — ADR-029)</strong>
+        <span className="muted">僅人工可寫入 — no probe/worker/AI may assert login truth</span>
+      </div>
+      {login.state.loading && !view ? (
+        <p className="muted">Loading…</p>
+      ) : view ? (
+        <>
+          <dl className="kv">
+            <dt>login state</dt>
+            <dd><span className={`pill ${pillClass(LOGIN_STATE_PILL, view.loginState)}`}>{view.loginState}</span></dd>
+            <dt>since</dt>
+            <dd>{view.loginStateSince ? fmtDateTime(view.loginStateSince) : '—'}</dd>
+          </dl>
+          {canOperate ? (
+            <div className="stack" style={{ gap: 8 }}>
+              <div className="row-actions">
+                {allowed.map((to) => (
+                  <button
+                    key={to}
+                    type="button"
+                    className={`btn ${to === 'CONFIRMED_LOGGED_IN' ? 'btn-ghost' : ''}`}
+                    disabled={busyTo !== null}
+                    onClick={() => doTransition(to)}
+                  >
+                    {busyTo === to ? 'Saving…' : LOGIN_TRANSITION_LABELS[to] ?? to}
+                  </button>
+                ))}
+                <input
+                  type="text"
+                  className="input"
+                  style={{ maxWidth: 320 }}
+                  placeholder="備註（可選，≤500字；禁 password/token 等凭證字樣）"
+                  maxLength={500}
+                  value={evidence}
+                  onChange={(e) => setEvidence(e.target.value)}
+                />
+              </div>
+              {err ? <code className="dep-error">{err}</code> : null}
+            </div>
+          ) : (
+            <p className="muted">Read-only role ({user?.role}). 確認登入／需重新驗證 需要 operator 以上權限。</p>
+          )}
+        </>
+      ) : (
+        <p className="muted">Login state unavailable{login.state.error ? ` (${login.state.error.code ?? login.state.error.message})` : ''}.</p>
+      )}
+
+      <div className="card-head" style={{ marginTop: 12 }}>
+        <strong>審計記錄 (Transition audit)</strong>
+        <span className="muted">newest first (max 50)</span>
+      </div>
+      {login.audit.error && !login.audit.data ? (
+        <p className="muted">Audit unavailable ({login.audit.error.code ?? login.audit.error.message}).</p>
+      ) : login.audit.data?.items?.length ? (
+        <div className="table-wrap">
+          <table className="list-table">
+            <thead>
+              <tr>
+                <th>when</th>
+                <th>from</th>
+                <th>to</th>
+                <th>actor</th>
+                <th>note</th>
+              </tr>
+            </thead>
+            <tbody>
+              {login.audit.data.items.map((r) => (
+                <tr key={r.id}>
+                  <td>{fmtDateTime(r.createdAt)}</td>
+                  <td><span className={`pill ${pillClass(LOGIN_STATE_PILL, r.fromState)}`}>{r.fromState}</span></td>
+                  <td><span className={`pill ${pillClass(LOGIN_STATE_PILL, r.toState)}`}>{r.toState}</span></td>
+                  <td className="mono">{r.actorUserId ? shortId(r.actorUserId) : '—'}</td>
+                  <td className="cell-clip" title={r.evidence?.note ?? ''}>{r.evidence?.note ?? '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="muted">no transitions recorded yet</p>
+      )}
     </div>
   );
 }
