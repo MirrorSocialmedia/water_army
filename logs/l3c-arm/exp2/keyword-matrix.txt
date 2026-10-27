@@ -1,0 +1,5 @@
+Checkin              p1=75    p2=75   
+android_id           p1=1     p2=3    
+consistency token    p1=2     p2=2    
+Phenotype            p1=249   p2=560  
+29504                p1=4     p2=14   

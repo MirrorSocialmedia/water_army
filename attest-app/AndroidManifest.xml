@@ -13,6 +13,9 @@
     <uses-sdk android:minSdkVersion="29" android:targetSdkVersion="34" />
     <uses-permission android:name="android.permission.INTERNET" />
     <application android:label="WA Attest">
+        <!-- required by the GMS client handshake (status=10 without it); value mirrors
+             play-services-basement 18.x @integer/google_play_services_version -->
+        <meta-data android:name="com.google.android.gms.version" android:value="12451000" />
         <activity
             android:name=".AttestActivity"
             android:exported="true">

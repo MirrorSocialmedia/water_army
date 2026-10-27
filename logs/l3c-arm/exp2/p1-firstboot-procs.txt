@@ -1,0 +1,6 @@
+u0_a59        1648   172   14136752 224212 0                   0 S com.google.android.gms.persistent
+u0_a59        1679   172   14535104 327452 0                   0 S com.google.android.gms
+u0_a59        2435   172   14077160 146096 0                   0 S com.google.android.gms.unstable
+u0_a56        2949   172   14155492 185092 0                   0 S com.android.vending
+u0_a56        3014   172   14003384 132812 0                   0 S com.android.vending:instant_app_installer
+u0_a56        3101   172   14004008 135980 0                   0 S com.android.vending:background

@@ -1,0 +1,14 @@
+# p3 — forced CHECKIN_NOW with verbose tags (recovered capture; live logcat ring rolled over before file export)
+# Method: setprop log.tag.Checkin VERBOSE; am force-stop gms; am broadcast com.google.android.gms.checkin.CHECKIN_NOW
+# Observed live at 2026-10-27 13:03:39-40Z in container logcat (verbatim lines):
+
+10-27 13:03:39.994  3825  3893 W Checkin : [CheckinRequestProcessor] Default Task : Checkin failed: https://android.googleapis.com/checkin (fragment #0) failed to connect to android.googleapis.com/172.217.117.4 (port 443) from /172.38.223.2 (port 53256) after 30000ms
+10-27 13:03:39.994  3825  3893 W Checkin : java.net.SocketTimeoutException: failed to connect to android.googleapis.com/172.217.117.4 (port 443) from /172.38.223.2 (port 53256) after 30000ms
+10-27 13:03:39.994  3825  3893 W Checkin : 	at com.android.okhttp.internal.Platform.connectSocket(Platform.java:182)
+10-27 13:03:40.003  3825  3893 I Checkin : [CheckinOperation] Checkin Operation finished with result: RESCHEDULED finish time: 37624617.
+
+# KEY: GMS 22.21.16 (MTG build) checkin endpoint = https://android.googleapis.com/checkin
+#      failure mode = TCP connect timeout (30s), i.e. request NEVER reached Google servers.
+#      legacy hostnames android-checkin.google.com / android-checkin.l.google.com = global NXDOMAIN
+#      (Google DoH Status:3) — dead names, not our resolver.
+# See reachability-matrix.txt + raw-checkin-post-probe.txt for egress corroboration.

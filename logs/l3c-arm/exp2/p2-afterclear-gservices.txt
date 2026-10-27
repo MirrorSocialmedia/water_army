@@ -1,0 +1,18 @@
+Error while accessing provider:com.google.android.gsf.gservices
+java.lang.SecurityException: Permission Denial: opening provider com.google.android.gsf.gservices.GservicesProvider from (null) (pid=4187, uid=2000) requires com.google.android.providers.gsf.permission.READ_GSERVICES or com.google.android.providers.gsf.permission.WRITE_GSERVICES
+	at android.os.Parcel.createExceptionOrNull(Parcel.java:3057)
+	at android.os.Parcel.createException(Parcel.java:3041)
+	at android.os.Parcel.readException(Parcel.java:3024)
+	at android.os.Parcel.readException(Parcel.java:2966)
+	at android.app.IActivityManager$Stub$Proxy.getContentProviderExternal(IActivityManager.java:7775)
+	at com.android.commands.content.Content$Command.execute(Content.java:516)
+	at com.android.commands.content.Content.main(Content.java:735)
+	at com.android.internal.os.RuntimeInit.nativeFinishInit(Native Method)
+	at com.android.internal.os.RuntimeInit.main(RuntimeInit.java:359)
+Caused by: android.os.RemoteException: Remote stack trace:
+	at com.android.server.am.ContentProviderHelper.checkAssociationAndPermissionLocked(ContentProviderHelper.java:691)
+	at com.android.server.am.ContentProviderHelper.getContentProviderImpl(ContentProviderHelper.java:287)
+	at com.android.server.am.ContentProviderHelper.getContentProviderExternalUnchecked(ContentProviderHelper.java:162)
+	at com.android.server.am.ContentProviderHelper.getContentProviderExternal(ContentProviderHelper.java:156)
+	at com.android.server.am.ActivityManagerService.getContentProviderExternal(ActivityManagerService.java:6860)
+

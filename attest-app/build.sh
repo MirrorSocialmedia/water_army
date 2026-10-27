@@ -32,15 +32,24 @@ ARTIFACTS=(
   "com/google/android/gms/play-services-base/18.0.1/play-services-base-18.0.1.aar"
   "com/google/android/gms/play-services-basement/18.9.0/play-services-basement-18.9.0.aar"
   "com/google/android/gms/play-services-tasks/18.2.0/play-services-tasks-18.2.0.aar"
+  # plain JAR (not AAR): safetynet client runtime dep (androidx.collection.ArraySet)
+  "androidx/collection/collection/1.0.0/collection-1.0.0.jar"
 )
 mkdir -p libs
 for a in "${ARTIFACTS[@]}"; do
-  f="libs/$(basename "${a%.aar}").jar"
+  base="$(basename "$a")"
+  f="libs/${base%.aar}"; f="${f%.jar}"
+  f_ext="${a##*.}"
+  [ "$f_ext" = "aar" ] && f="$f.jar" || f="$f.$f_ext"
   [ -f "$f" ] && continue
   tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' RETURN
-  curl -sf --max-time 120 -o "$tmp/pkg.aar" "$M/$a" || { echo "fetch failed: $a" >&2; exit 1; }
-  unzip -q -o "$tmp/pkg.aar" classes.jar -d "$tmp"
-  cp "$tmp/classes.jar" "$f"
+  curl -sf --max-time 120 -o "$tmp/pkg" "$M/$a" || { echo "fetch failed: $a" >&2; exit 1; }
+  if [ "$f_ext" = "aar" ]; then
+    unzip -q -o "$tmp/pkg" classes.jar -d "$tmp"
+    cp "$tmp/classes.jar" "$f"
+  else
+    cp "$tmp/pkg" "$f"
+  fi
 done
 trap - RETURN
 

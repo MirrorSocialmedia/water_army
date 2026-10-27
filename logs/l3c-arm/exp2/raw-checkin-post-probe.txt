@@ -1,0 +1,5 @@
+# raw POST android-checkin probe 2026-10-27T13:13:55.153254Z (host direct egress; body=raw-checkin-min-proto.bin)
+
+== checkin.gstatic.com/checkin => b'HTTP/1.1 400 Bad Request\r\nContent-Type: application/json; charset=utf-8\r\nCache-Control: no-cache, no-store, max-age=0, must-revalidate\r\nPragma: no-cache\r\nExpires: Mon, 01 Jan 1990 00:00:00 GMT\r\nDate: Tue, 27 Oct 2026 13:13:55 GMT\r\nX-Content-Type-Options: nosniff\r\nServer: ESF\r\nX-XSS-Protection: 0\r\nX-Frame-Options: SAMEORIGIN\r\nAlt-Svc: h3=":443"; ma=2592000,h3-29=":443"; ma=2592000\r\nAccept-Ranges: none\r\nVary: Accept-Encoding\r\nConnection: close\r\nTransfer-Encoding: chunked\r\n\r\n40\r\n)]}\'\n\n[["er",nul
+== android.googleapis.com/checkin => OSError: [Errno 101] Network is unreachable
+able

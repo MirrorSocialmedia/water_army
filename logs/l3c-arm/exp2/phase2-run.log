@@ -1,0 +1,6 @@
+[exp2] 2026-10-27T12:57:38Z pm clear com.google.android.gms -> re-checkin observation
+Success
+[exp2] 2026-10-27T12:57:38Z waiting 120s for re-checkin attempts
+[exp2] 2026-10-27T12:59:38Z collect phase=p2-afterclear
+[exp2] 2026-10-27T12:59:39Z collect done phase=p2-afterclear checkin_lines=643 secure_android_id=c8a1062761000946
+[exp2] 2026-10-27T12:59:39Z post-clear secure_android_id=c8a1062761000946
