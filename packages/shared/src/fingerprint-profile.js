@@ -24,6 +24,7 @@
  */
 
 import { createHash } from 'node:crypto';
+import { validateDeviceSpec, memTotalKbForIdentity, SYNTHETIC_DEVICE_SPECS } from './device-spec.js';
 
 
 // ---------------------------------------------------------------------------
@@ -133,6 +134,19 @@ const FIELD_RE = Object.freeze({
 // ---------------------------------------------------------------------------
 // Deterministic generator
 // ---------------------------------------------------------------------------
+
+/** Generic real-phone geometry/SoC pool for the W1 synthetic story. */
+function syntheticDeviceSpec(rng) {
+  const base = SYNTHETIC_DEVICE_SPECS[rng.u32() % SYNTHETIC_DEVICE_SPECS.length];
+  return {
+    display: { ...base.display },
+    proc: {
+      cpuCores: base.proc.cpuCores,
+      cpuClusters: base.proc.cpuClusters.map((c) => ({ ...c })),
+      memTotalKb: memTotalKbForIdentity(rng, base.proc.memTotalMb),
+    },
+  };
+}
 
 const POOL_BRANDS = Object.freeze([
   { brand: 'google', manufacturer: 'Google' },
@@ -283,6 +297,10 @@ export function generateFingerprintProfile(identityId) {
     carrierMnc: carrier.mnc,
     securityPatch,
   };
+  // L2 wave-2 (ADR-033): synthetic deviceSpec — appended LAST so the splitmix
+  // stream consumed by every pre-existing field is byte-identical to wave 1
+  // (generator-sticky drift: stored W1 rows keep regenerating identically).
+  profile.deviceSpec = syntheticDeviceSpec(rng);
   const problems = validateFingerprintProfile(profile);
   if (problems.length) {
     // generator bug — fail closed loudly, never emit a half-valid profile
@@ -329,10 +347,16 @@ export function validateFingerprintProfile(profile) {
   }
   for (const key of Object.keys(profile)) {
     // securityPatch: W1 metadata; templateId: W1b provenance metadata (ADR-028);
-    // hardware: L2 wave-1 optional carrier field (see PROFILE_PROP_MAP)
-    if (!PROFILE_FIELDS.includes(key) && key !== 'securityPatch' && key !== 'templateId' && key !== 'hardware') {
+    // hardware: L2 wave-1 optional carrier field (see PROFILE_PROP_MAP);
+    // deviceSpec: L2 wave-2 optional geometry/proc metadata (ADR-033) — when
+    // present it must validate (a malformed spec would render a broken /proc
+    // or a wrong Cmd geometry on-device)
+    if (!PROFILE_FIELDS.includes(key) && key !== 'securityPatch' && key !== 'templateId' && key !== 'hardware' && key !== 'deviceSpec') {
       problems.push(`unknown profile field "${key}"`);
     }
+  }
+  if (profile.deviceSpec !== undefined) {
+    problems.push(...validateDeviceSpec(profile.deviceSpec, 'deviceSpec'));
   }
   // hardware: optional, but when present it must be board-name shaped and
   // transport-safe (a malformed value would ride the carrier and fail closed
