@@ -89,17 +89,18 @@ api admin GET "/device-streams" > "$(ev_path leases-after.json)"
 # ---- 5) manual intervention closed loop + dedupe --------------------------------
 dev1="$(jq -r '.devices[0].id // empty' "$(ev_path devices.json)")"
 if [ -n "$dev1" ]; then
-  ib="$(jq -nc --arg d "$dev1" '{source:"operator_report", category:"acceptance", title:"J5 acceptance drill", deviceId:$d, evidence:"manual drill — no secrets here"}')"
+  ib="$(jq -nc --arg d "$dev1" '{source:"operator_report", category:"MANUAL_REVIEW", title:"J5 acceptance drill", deviceId:$d, evidence:{note:"manual drill \u2014 no secrets here"}}')"
   api op POST "/manual-interventions" "$ib" > "$(ev_path mi-1.json)"
   mi="$(jq -r '.intervention.id // empty' "$(ev_path mi-1.json)")"
   if [ -n "$mi" ]; then
     api op POST "/manual-interventions" "$ib" > "$(ev_path mi-dedupe.json)"
     assert_eq "dedupe: repeat signal created=false" "false" "$(jq -r .created "$(ev_path mi-dedupe.json)")"
-    api op POST "/manual-interventions/$mi/acknowledge" "" >/dev/null; echo "ack HTTP $HTTP_CODE" > "$(ev_path mi-ack.txt)"
+    assert_eq "dedupe: coalesces to same intervention" "$mi" "$(jq -r '.intervention.id' "$(ev_path mi-dedupe.json)")"
+    api op POST "/manual-interventions/$mi/acknowledge" '{"summary":"seen \u2014 J5 acceptance drill"}' >/dev/null; echo "ack HTTP $HTTP_CODE" > "$(ev_path mi-ack.txt)"
     api op POST "/manual-interventions/$mi/assign" '{}' >/dev/null; echo "assign HTTP $HTTP_CODE" > "$(ev_path mi-assign.txt)"
-    api op POST "/manual-interventions/$mi/resolve" '{"note":"J5 drill closed"}' >/dev/null; echo "resolve HTTP $HTTP_CODE" > "$(ev_path mi-resolve.txt)"
+    api op POST "/manual-interventions/$mi/resolve" '{"summary":"J5 drill closed"}' >/dev/null; echo "resolve HTTP $HTTP_CODE" > "$(ev_path mi-resolve.txt)"
     api admin GET "/manual-interventions/$mi" > "$(ev_path mi-final.json)"
-    assert_eq "intervention closed = resolved" "resolved" "$(jq -r .status "$(ev_path mi-final.json)")"
+    assert_eq "intervention closed = resolved" "resolved" "$(jq -r '.intervention.status // .status' "$(ev_path mi-final.json)")"
   fi
 fi
 
