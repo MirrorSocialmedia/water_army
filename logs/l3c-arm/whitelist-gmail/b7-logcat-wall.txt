@@ -1,0 +1,15 @@
+10-27 15:03:51.534  2057  2111 I Finsky:background: [34] gpy.run(17): Stats for Executor: BlockingExecutor EMAIL_MASKED[Running, pool size = 0, active threads = 0, queued tasks = 0, completed tasks = 0]
+10-27 15:03:51.575 19999 20017 I Finsky:quick_launch: [31] gpy.run(17): Stats for Executor: bgExecutor EMAIL_MASKED[Running, pool size = 2, active threads = 0, queued tasks = 0, completed tasks = 2]
+10-27 15:03:51.580 19999 20017 I Finsky:quick_launch: [31] gpy.run(17): Stats for Executor: LightweightExecutor EMAIL_MASKED[Running, pool size = 0, active threads = 0, queued tasks = 0, completed tasks = 0]
+10-27 15:03:51.580 19999 20017 I Finsky:quick_launch: [31] gpy.run(17): Stats for Executor: BlockingExecutor EMAIL_MASKED[Running, pool size = 0, active threads = 0, queued tasks = 0, completed tasks = 0]
+10-27 15:03:57.088  1984  1984 I Finsky  : [2] rrt.onStartJob(4): SCH: job service start with id 9029.
+10-27 15:03:57.091  1984 20030 I Finsky  : [171] rqi.a(92): SCH: Satisfied jobs for 9029 are: 1-1337
+10-27 15:03:57.091  1984 20031 I Finsky  : [172] rhu.accept(27): SCH: Job 1-1337 starting
+10-27 15:03:57.091  1984  1984 I Finsky  : [2] RoutineHygieneCoreJob.v(29): DailyHygiene holdoff continue
+10-27 15:03:57.091  1984  1984 I Finsky  : [2] rqb.r(4): SCH: jobFinished: 1-1337. TimeElapsed: 0ms.
+10-27 15:03:57.094  1984  1984 W Finsky  : [2] rqv.j(2): SCH: Controller has no job when job 1-1337 checks state.
+10-27 15:03:57.095  1984  2014 I Finsky  : [38] rpx.a(2): SCH: no pending jobs to schedule.
+10-27 15:03:57.095  1984 20031 I Finsky  : [172] rrt.a(16): SCH: job service finished with id 9029.
+10-27 15:03:57.110  1984  2023 I Finsky  : [47] rjy.accept(45): SCH: Scheduling phonesky job Id: 1-1337, CT: 1793113437093, Constraints: [{ L: 60000, D: 60000, C: 1, I: 1, N: 0 }]
+10-27 15:03:57.111  1984  2023 I Finsky  : [47] rht.apply(84): SCH: Scheduling 1 system job(s)
+10-27 15:03:57.111  1984  2023 I Finsky  : [47] rht.apply(90): SCH: Scheduling system job Id: 9030, L: 59982, D: 59982, C: false, I: false, N: 0
