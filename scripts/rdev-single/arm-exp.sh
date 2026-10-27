@@ -26,6 +26,51 @@ GW=172.38.223.1; MARKER_PORT=8099
 MARKER="WA-ARM-EXP6-$$"
 APKS="/home/kenneth/Downloads/Google+Chrome_156.0.8078.47_APKPure"
 log() { echo "[arm-exp] $*" | tee -a "$EVID/harness.log"; }
+# uiautomator XML dump with 2-mode fallback: exec-out /dev/tty can yield 0
+# bytes on some adb builds (known trap) -> file dump + cat (L-iv marker fix).
+ui_dump() { # $1 = dest file on host
+  local raw
+  raw=$($ADB -s 127.0.0.1:$PORT exec-out uiautomator dump /dev/tty 2>/dev/null | tr -d '\r\n')
+  if [ "${#raw}" -gt 200 ] && echo "$raw" | grep -q "<hierarchy"; then
+    printf '%s\n' "$raw" > "$1"; return 0
+  fi
+  $ADB -s 127.0.0.1:$PORT shell uiautomator dump /sdcard/wa-ui.xml >/dev/null 2>&1 \
+    && $ADB -s 127.0.0.1:$PORT shell cat /sdcard/wa-ui.xml 2>/dev/null | tr -d '\r' > "$1"
+  [ -s "$1" ] && grep -q "<hierarchy" "$1"
+}
+# dismiss-dialogs: tap-away loop for warning dialogs blocking the intent chain
+# (A14 DeprecatedAbiDialog on 32-bit ARM builds — CEO 2026-10-27 evidence:
+# OK button bounds [462,715][702,779], resource-id android:id/button1).
+# Max ROUNDS taps to guarantee loop-exit. Returns 0 always (best-effort).
+dismiss_dialogs() { # $1 = max rounds (default 5)
+  local rounds="${1:-5}" i n=0 xml=/tmp/wa-ui-dump.xml
+  for i in $(seq 1 "$rounds"); do
+    ui_dump "$xml" || { log "dismiss-dialogs: dump failed round $i"; break; }
+    # positive button of AlertDialog (locale-independent) — bounds [l,t][r,b]
+    local bounds
+    bounds=$(python3 - "$xml" <<'PY'
+import re,sys
+xml=open(sys.argv[1],encoding="utf-8",errors="replace").read()
+nodes=re.findall(r'<node\b[^>]*?/>',xml)
+for n in nodes:
+    rid=re.search(r'resource-id="([^"]*)"',n)
+    txt=re.search(r'text="([^"]*)"',n)
+    clk=re.search(r'clickable="([^"]*)"',n)
+    if (rid and rid.group(1) in ("android:id/button1","com.android.systemui:id/button1")) or \
+       (txt and txt.group(1).strip().lower() in ("ok","知道了","確定","确认") and (not clk or clk.group(1)=="true")):
+        b=re.search(r'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"',n)
+        if b: print(" ".join(b.groups())); break
+PY
+)
+    [ -z "$bounds" ] && { log "dismiss-dialogs: no dismissable dialog (round $i) — chain clear"; break; }
+    set -- $bounds; local x=$(( ($1 + $3) / 2 )) y=$(( ($2 + $4) / 2 ))
+    log "dismiss-dialogs: tapping dialog positive button at $x,$y (round $i)"
+    $ADB -s 127.0.0.1:$PORT shell input tap "$x" "$y"
+    n=$((n+1)); sleep 2
+  done
+  log "dismiss-dialogs: done, $n tap(s) used"
+  return 0
+}
 wait_adb() {
   for i in $(seq 1 60); do $ADB connect "127.0.0.1:$PORT" >/dev/null 2>&1 && break; sleep 2; done
   for i in $(seq 1 60); do
@@ -62,6 +107,7 @@ launch)
   log "launch evidence -> p6/ (check ps.txt = L-ii, screen-launch.png = L-iii)"
   ;;
 browse)
+  dismiss_dialogs 5   # A14 DeprecatedAbiDialog (32-bit ARM) otherwise swallows the VIEW intent
   printf '<html><body style="font-size:40px">MARKER %s</body></html>' "$MARKER" > /tmp/wa-arm-marker.html
   nohup python3 -m http.server $MARKER_PORT --bind "$GW" --directory /tmp >/tmp/wa-arm-http.log 2>&1 &
   HTTPID=$!; echo $HTTPID > "$P6/http.pid"
@@ -69,7 +115,14 @@ browse)
   $ADB -s 127.0.0.1:$PORT shell am start -a android.intent.action.VIEW -d "http://$GW:$MARKER_PORT/wa-arm-marker.html" com.android.chrome 2>&1 | tee "$P6/am-view.txt"
   sleep 12
   $ADB -s 127.0.0.1:$PORT exec-out screencap -p > "$P6/screen-browse.png" 2>&1
-  $ADB -s 127.0.0.1:$PORT exec-out uiautomator dump /dev/tty 2>/dev/null | grep -o "MARKER [A-Za-z0-9-]*" > "$P6/marker-uia.txt" || true
+  # L-iv marker via uiautomator (2-mode ui_dump; old single-mode exec-out could yield 0 bytes)
+  if ui_dump "$P6/ui-browse.xml"; then
+    grep -o "MARKER [A-Za-z0-9-]*" "$P6/ui-browse.xml" | sort -u > "$P6/marker-uia.txt" || true
+    log "L-iv marker: $(cat "$P6/marker-uia.txt" 2>/dev/null | tr '\n' ' ') (expected=$MARKER)"
+  else
+    : > "$P6/marker-uia.txt"
+    log "WARN ui_dump failed both modes — rely on screen-browse.png visual evidence"
+  fi
   kill "$HTTPID" 2>/dev/null || true
   log "browse evidence -> p6/ (marker=$MARKER; check screen-browse.png / marker-uia.txt = L-iv)"
   ;;
@@ -80,5 +133,8 @@ teardown)
   n=$(docker ps -aq -f name="^${NAME}$" | wc -l)
   log "teardown check: container residue=$n"; [ "$n" = 0 ]
   ;;
-*) echo "usage: $0 boot|collect|install|launch|browse|teardown"; exit 2;;
+dismiss-dialogs)
+  dismiss_dialogs "${2:-5}"
+  ;;
+*) echo "usage: $0 boot|collect|install|launch|browse|dismiss-dialogs [N]|teardown"; exit 2;;
 esac
