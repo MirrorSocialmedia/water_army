@@ -1,0 +1,17 @@
+# proxy fix retest 2026-10-27T13:42:18Z
+172.38.223.1:18443
+== CONNECT android.googleapis.com:443 via proxy (toybox nc) ==
+HTTP/1.1 200 Connection established
+Proxy-Agent: gost/3.0
+
+== POST http://android.googleapis.com/checkin absolute-form via proxy ==
+HTTP/1.1 400 Bad Request
+Connection: close
+Transfer-Encoding: chunked
+Accept-Ranges: none
+Cache-Control: no-cache, no-store, max-age=0, must-revalidate
+Content-Type: application/json; charset=utf-8
+Date: Tue, 27 Oct 2026 13:42:19 GMT
+Expires: Mon, 01 Jan 1990 00:00:00 GMT
+Pragma: no-cache
+S

@@ -1,0 +1,9 @@
+# host net snapshot 2026-10-27T13:39:35Z
+/bin/bash: line 1: sysctl: command not found
+---
+[{"Subnet":"172.38.223.0/24","IPRange":"","Gateway":"172.38.223.1"}] {}
+---
+---
+---
+---MTU
+2: eno1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP mode DEFAULT group default qlen 1000

@@ -1,0 +1,23 @@
+== size ladder DF -> 8.8.8.8 ==
+-- 500
+rtt min/avg/max/mdev = 219.023/220.315/221.608/1.375 ms
+-- 1000
+rtt min/avg/max/mdev = 208.410/214.764/221.118/6.354 ms
+-- 1300
+rtt min/avg/max/mdev = 210.682/214.230/217.779/3.578 ms
+-- 1400
+rtt min/avg/max/mdev = 216.661/218.290/219.920/1.695 ms
+-- 1450
+rtt min/avg/max/mdev = 218.416/221.700/224.984/3.284 ms
+== size ladder DF -> 58.254.137.226 (gstatic edge, 56B known ok) ==
+-- 1472
+
+== icmp -> 142.250.99.100 (blocked segment? small ICMP) ==
+
+== icmp -> 1.1.1.1 ==
+rtt min/avg/max/mdev = 293.613/293.613/293.613/0.000 ms
+== nc rc semantics: open(gost gw) vs 142.250:80 vs 142.250:443 vs 58.254:443 ==
+gw rc=0
+g80 rc=124
+g443 rc=124
+gs443 rc=0

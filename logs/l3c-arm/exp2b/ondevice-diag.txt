@@ -1,0 +1,29 @@
+# on-device egress diagnostic 2026-10-27T13:40:48Z
+== toybox nc help ==
+nc: bad argument count (see "nc --help")
+/system/bin/nc
+/system/bin/ping
+== dns resolution (device) ==
+PING checkin.gstatic.com (58.254.137.226) 56(84) bytes of data.
+64 bytes from 58.254.137.226: icmp_seq=1 ttl=111 time=9.14 ms
+
+== tcp 443 -> 142.250.99.100 (Google, expect fail) ==
+nc: Unknown option 'z' (see "nc --help")
+rc=1
+== tcp 80 -> 142.250.99.100 ==
+nc: Unknown option 'z' (see "nc --help")
+rc=1
+== dns udp53 -> resolver (expect ok-ish) ==
+PING 8.8.8.8 (8.8.8.8) 56(84) bytes of data.
+64 bytes from 8.8.8.8: icmp_seq=1 ttl=107 time=223 ms
+
+== tcp 443 -> 58.254.137.162 gstatic edge (expect OPEN) ==
+nc: Unknown option 'z' (see "nc --help")
+rc=1
+== MTU: ifconfig wlan0 ==
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+    inet 127.0.0.1/8 scope host lo
+    inet6 ::1/128 scope host 
+2: eth0@if60: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default 
+    inet 172.38.223.2/24 brd 172.38.223.255 scope global eth0
+    inet6 fe80::9b78:6805:c0c2:26a1/64 scope link stable-privacy 

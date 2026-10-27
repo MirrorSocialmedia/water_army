@@ -34,6 +34,15 @@ fi
 docker network inspect "$NET" >/dev/null 2>&1 || docker network create --subnet "$SUBNET" "$NET" >/dev/null
 mkdir -p "$DATADIR"; chmod 700 "$DATADIR"
 
+# Egress proxy (EXP-2b, 2026-10-27): upstream network blackholes Google DC
+# segments (172.217/142.250/74.125) — direct GMS checkin can never leave.
+# EGRESS_PROXY=1 starts the scratch gost sidecar (binds bridge GW only, chains
+# to the user loopback proxy — user stack untouched). Device side after boot:
+#   adb shell settings put global http_proxy <GW>:<port>   e.g. 172.38.223.1:18443
+if [ "${EGRESS_PROXY:-0}" = "1" ]; then
+  bash "$(dirname "$0")/egress-proxy.sh" start || echo "[rdev-single] WARN egress proxy start failed (device egress to Google will time out)" | tee -a "$EVID/harness.log"
+fi
+
 OPTS=(run -d --name "$NAME" --network "$NET" --privileged \
   -v "$DATADIR:/data" \
   --label app.managed=true --label app.created-by=rdev-single \

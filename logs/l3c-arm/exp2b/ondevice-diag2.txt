@@ -1,0 +1,14 @@
+== tcp80 GET -> 142.250.99.100 (Google) ==
+
+rc_done
+== tcp443 hello -> 142.250.99.100 ==
+/system/bin/sh: can't create tmperr: Permission denied
+rc_done
+== tcp80 -> 58.254.137.162 (control) ==
+rc_done
+== ping DF 1472 -> gateway ==
+2 packets transmitted, 2 received, 0% packet loss, time 1047ms
+rtt min/avg/max/mdev = 0.026/0.039/0.052/0.013 ms
+== ping DF 1472 -> 8.8.8.8 ==
+2 packets transmitted, 0 received, +2 errors, 100% packet loss, time 1016ms
+
