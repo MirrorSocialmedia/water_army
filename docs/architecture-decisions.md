@@ -1499,3 +1499,9 @@ MD §13.2 嘅 per-actor 寫 budget（20/60s）係為**人工誤操作**設嘅；
 - 附帶 additive 修復：error handler 429 保留 service apiCode（唔再吞成 RATE_LIMITED）+ error 載體帶 `details`（retryAfterMs 等）— 純 additive，舊海面不變。
 - **Full suite：1451 / 1445 pass / 0 fail / 6 skip**（基線 1438/1432/0/6 + T5 新增 13，零回歸；skip 同舊 = RAM-G1 ×5 + P4 scheduler ×1）。web build 綠（batch-ui 鏡像入面）。
 - 真機試產 = **NOT VERIFIED**。前置：① RAM gate 解除 ② T1 GMS 變體 image 真機裝機+開機驗證通過（MTG 14 x86_64 變體，ADR 見 §29/變體單）③ W1 指紋層合併決策（老細未拍板 — 開號防關聯依賴佢）④ rdev-* 隔離命名沿用。試產清單（代碼段收口時定）：2 個帳號 → 48–72h 觀察期 → 按上文損耗率口徑出表；全綠先至傾放量。
+
+**補錄（老細 14:36 定調 — 帳號使用面分工；核對結論：與本 ADR 設計零衝突）**：
+
+- **Gmail App（redroid 內）= 長期登入錨點**：帳號嘅 Google 帳號本身係資產（SSO），日後其他平台可用同一 Google 帳號直接登入 — 所以「App 登入仲生唔生存在」係帳號價值嘅核心事實。呢個語義正正由 **login_state 軸（ADR-029，人工專用事實源）** 承載：錨點確立（首次登入）同錨點失守（RELOGIN_REQUIRED/LOGGED_OUT）都係人工確認嘅真相，系統永遠唔越權寫。試產觀察期「登入存活」口徑（§30 驗證段）即係錨點存活監測。
+- **瀏覽器（Chrome — 已拍板）= 日常操作面**：開號 UI 步驟機（open-signup→…→recovery-setup）同日後日常操作都行瀏覽器/設備 UI；account lifecycle 軸（本 ADR）記錄嘅係操作面嘅管線進度，機器可寫、全部審計。
+- 界線不變：瀏覽器操作成功（lifecycle READY）**唔斷言** App 登入錨點已立（橋接規則 (a) 照守）；反之 App 登入軸變動亦唔改寫 lifecycle。兩軸正交 = 錨點語義嘅直接推論，唔需要任何狀態機改動。
