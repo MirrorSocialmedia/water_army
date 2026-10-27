@@ -19,3 +19,7 @@
 [rdev-single] rdev-e1 started cid=45ba8cee98d4272079eb1ac52ed115b50aa4169ec1c3a26c4c832f8916e59785 adb=127.0.0.1:16512 datadir=/tmp/rdev-single-state/e1-data
 [rdev-single] 2026-10-27T14:04:31Z RAM gate OK MemAvailable=12163MiB projected_postboot=9603MiB (gate=8192, budget=2560/device, boss 17:13 scratch override)
 [rdev-single] rdev-e1 started cid=8fa99a1c0080c0feab47b5cd3a3864ab1a4b60184d07a1b325db56078183a97c adb=127.0.0.1:16512 datadir=/tmp/rdev-single-state/e1b-data
+[egress-proxy] 2026-10-27T14:34:22Z removed rdev-e1-gost
+[rdev-single] 2026-10-27T14:45:52Z RAM gate OK MemAvailable=9537MiB projected_postboot=6977MiB (gate=8192, budget=2560/device, boss 17:13 scratch override)
+[egress-proxy] 2026-10-27T14:45:53Z started rdev-e1-gost listen=http://172.38.223.1:18443 upstream=http://127.0.0.1:7897
+[rdev-single] rdev-f1 started cid=eecde4304e7d5c3e87faaa3dd17a7813f98ebde96eff2748c1f8b7d0d5645b03 adb=127.0.0.1:16512 datadir=/tmp/rdev-single-state/f1-data

@@ -304,7 +304,7 @@ export function renderCpuinfoText({ cpuCores, cpuClusters } = {}) {
   let core = 0;
   let out = '';
   for (const cl of cpuClusters) {
-    for (let i = 0; i < cl.count && core < cpuCores; i++, core++) {
+    for (let i = 0; i < cl.count; i++, core++) {
       out += `processor\t: ${core}\n`;
       out += `BogoMIPS\t: ${cl.bogoMips ?? '66.66'}\n`;
       out += `Features\t: ${CPUINFO_FEATURES}\n`;

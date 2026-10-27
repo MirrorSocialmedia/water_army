@@ -19,6 +19,32 @@
  */
 import { readFileSync } from 'node:fs';
 import { checkProfileConsistency, checkProbeSelfConsistency } from '../../packages/shared/src/w1b-consistency.js';
+import { checkDeviceSpecConsistency } from '../../packages/shared/src/device-spec.js';
+
+/**
+ * L2 wave-2 (ADR-033): assemble the observed deviceSpec from the dump.
+ * Primary source = probe "deviceSpec" section (probe app + shell harness
+ * capture /proc renders at the real-device stage). display density/geometry
+ * additionally derive from dump props when present (ro.sf.lcd_density = the
+ * framework density — same number `wm density` prints; [docs: AOSP
+ * WindowService reads qemu.sf.lcd_density/ro.sf.lcd_density for density]);
+ * qemu.sf.main_display_size is redroid-only and tagged best-effort.
+ */
+function deviceSpecObservation(dump) {
+  const ctx = { ...dump.props, ...(dump.context ?? {}) };
+  const ds = dump.deviceSpec ?? {};
+  const obs = { display: { ...(ds.display ?? {}) }, proc: { ...(ds.proc ?? {}) } };
+  if (obs.display.densityDpi === undefined && /^\d+$/.test(String(ctx['ro.sf.lcd_density'] ?? ''))) {
+    obs.display.densityDpi = Number(ctx['ro.sf.lcd_density']);
+  }
+  const mds = String(ctx['qemu.sf.main_display_size'] ?? '');
+  if (obs.display.widthPx === undefined && /^\d+,\d+$/.test(mds)) {
+    const [w, h] = mds.split(',').map(Number);
+    obs.display.widthPx = w;
+    obs.display.heightPx = h;
+  }
+  return obs;
+}
 
 export function runAssert({ dump, expected }) {
   const lines = [];
@@ -41,6 +67,16 @@ export function runAssert({ dump, expected }) {
     lines.push(`FAIL    self-consistency: ${p}`);
   }
   pass = pass && selfProblems.length === 0;
+  // L2 wave-2 (ADR-033): /proc view + display geometry truth. Anti-vacuous:
+  // when the profile carries a deviceSpec, observations are REQUIRED —
+  // missing /proc or density capture = MISSING = blocking (no empty-set green).
+  if (exp?.deviceSpec) {
+    const r = checkDeviceSpecConsistency(exp, deviceSpecObservation(dump));
+    for (const row of r.rows) {
+      lines.push(`${row.status.padEnd(7)} deviceSpec.${row.key} expected=${JSON.stringify(row.expected)} observed=${JSON.stringify(row.observed)}`);
+    }
+    pass = pass && r.pass;
+  }
   // L1 informational layer (never blocking): what L2 must close
   const ctx = dump.context ?? {};
   // L2 wave-1 (ADR-031): ro.hardware/ro.boot.hardware moved from the

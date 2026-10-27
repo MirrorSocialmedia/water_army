@@ -402,6 +402,7 @@ export * from './fingerprint-profile.js';
 export * from './w1b-profiles.js';
 export * from './w1b-image-mapping.js';
 export * from './w1b-consistency.js';
+export * from './device-spec.js'; // L2 wave-2 (ADR-033): /proc view + display geometry
 
 /**
  * T5 (ADR-030) — Gmail account lifecycle: matrix (authoritative), throttle

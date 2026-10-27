@@ -50,6 +50,10 @@ public class ProbeActivity extends Activity {
         "ro.product.build.fingerprint", "ro.system.build.fingerprint", "ro.vendor.build.fingerprint",
         "ro.product.cpu.abi", "ro.kernel.qemu",
         "init.svc.zygote", "ro.debuggable", "ro.adb.secure",
+        // L2 wave-2 (ADR-033): display geometry truth (framework density =
+        // what `wm density` reports; main_display_size is redroid-only and
+        // best-effort — the validator derives display claims from these)
+        "ro.sf.lcd_density", "qemu.sf.lcd_density", "qemu.sf.main_display_size",
     };
     // multi-partition product namespaces (Android 14 splits these; a partial
     // mapping across partitions is a fingerprinting surface — dump raw)
