@@ -626,3 +626,26 @@ curl -s -b /tmp/c.txt -X POST http://127.0.0.1:3012/api/identities/provision \
   -H 'content-type: application/json' \
   -d '{"names":["redroid-qa-tk-001","redroid-qa-tk-002"],"identityType":"qa_device","dryRun":true}'
 ```
+
+### T5 Gmail 批量自動開號（代碼段交付 — 2026-10-27，ADR-030）
+
+帳號生命週期狀態機（identity 旁兄弟機，**唔係** login_state 加欄—界線見 ADR-030）+ Gmail 註冊驅動器（CAPTCHA 永久人肉口，複用 P4 干預工單）+ 節流 + 加密保管庫。**驱动默认 OFF**（三項老細輸入未齊：恢復郵箱池 / proxy 來源 / 日產量 — 全部參數化、缺料 fail-closed）。
+
+API（`docs/api-reference.md` 有全表）：
+- `GET /api/identities/:id/account`（viewer+）— 生命週期狀態 + 保管庫 mask 摘要（明文/密文從唔出海面）
+- `GET /api/identities/:id/account/audit`（viewer+）— 轉換審計（新→舊）
+- `POST /api/identities/:id/account/transition`（operator+）— 人工覆蓋（矩陣校驗 + 審計；非法 409 `INVALID_ACCOUNT_TRANSITION`）
+- `POST /api/identities/:id/account/provision`（operator+）— 驅動器推一啖：fresh start（過節流 → 跑到 CAPTCHA 口停 `AWAITING_HUMAN` + 開工單）/ gate resume（工單 RESOLVED 先放行 → CREATED → RECOVERY_SETUP → READY；超時未清 = DEAD `CAPTCHA_TIMEOUT`）
+
+環境參數（`apps/api` — 缺省保守值；老細後補覆蓋就改呢度）：
+
+| env | 缺省 | 說明 |
+|-----|------|------|
+| `WA_GMAIL_PROVISION_ENABLED` | `false` | 驅動器總開關（默認 OFF — 三項輸入未拍板前唔准默默 ON） |
+| `WA_GMAIL_RECOVERY_POOL` | 空（逗號分隔） | 恢復郵箱池；**空池 = fail-closed**：fresh start 429前 503 `ACCOUNT_INPUT_MISSING`、零配額消耗、永遠入唔到「就緒」 |
+| `WA_GMAIL_PER_IP_DAILY` | `2` | 每出口 IP 每日 fresh start 上限（超額 429 `THROTTLE_IP_DAILY_LIMIT`） |
+| `WA_GMAIL_PER_IDENTITY_DAILY` | `1` | 每 identity 每日上限（429 `THROTTLE_IDENTITY_DAILY_LIMIT`） |
+| `WA_GMAIL_MIN_INTERVAL_MS` / `WA_GMAIL_MAX_INTERVAL_MS` | `300000` / `900000` | 全局隨機節流間隔窗（5–15 分鐘；429 `THROTTLE_INTERVAL` 帶 `retryAfterMs`） |
+| `WA_GMAIL_CAPTCHA_TIMEOUT_MS` | `7200000` | CAPTCHA 人工口死線（2h；超時未清工單 = 帳號 DEAD，FR-07 精神） |
+
+零 secret 紀律（W3 canary 模式）：email/password/恢復郵箱明文只行 adapter→vault（AES-256-GCM，同 provider key）；所有 log / audit / API 海面只有 mask 形狀（`ab***@domain`）+ reason codes；canary 測試釘死零洩漏。真機試產清單 + 損耗率口徑 = ADR-030 §試產。
