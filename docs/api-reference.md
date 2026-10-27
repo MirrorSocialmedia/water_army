@@ -278,6 +278,54 @@ Host-RAM 准入 gate：所有 boot 路徑（device create/start、batch start）
 - server：`{t:'state', state:'LIVE'|'DEGRADED'|...}`、`{t:'degraded', source:'screencap', reason}`（scrcpy 失败降級，ADR-020）、`{t:'input-rejected', code}`（`STREAM_READ_ONLY` viewer 寫 / `STREAM_NOT_LIVE` / `STREAM_INPUT_RATE_LIMITED` P5）、`{t:'dead', reason}`、binary = 畫面 frame。
 - viewer lease = **read-only by construction**（sidecar session mode）：LIVE 畫面照常，任何 input → `STREAM_READ_ONLY`（協議層，非 UI 隱藏）。
 
+## Identity 登入狀態機 + Provisioning + dataDir 歸屬（T2 — ADR-029）
+
+**語義定位（外部讀者必讀）**：`loginState` = 「呢個 identity 嘅 App 登入咗未」嘅**唯一系统事实源**，四態、fail-closed、**人工專用寫入路徑** — probe/worker/AI 永遠唔准斷言登入真相（route = session-cookie operator+，service 無第二個寫入 caller，grep 可證）。同 device 軸／batch runtime `Identity.status` 刻意正交：device 移除/重建/換名完全唔碰 loginState。
+
+**轉換矩陣（`login-state-service.js` 唯一權威；矩陣以外全 409，包括 self-transition — 重複 click = bug 唔係 no-op）**：
+- `PENDING_LOGIN`（新身份初始態）→ `CONFIRMED_LOGGED_IN` | `LOGGED_OUT`
+- `CONFIRMED_LOGGED_IN` → `RELOGIN_REQUIRED`（人類睇到 credential challenge/2FA/session 過期 — 自動化必須停喺呢度）| `LOGGED_OUT`
+- `RELOGIN_REQUIRED` → `CONFIRMED_LOGGED_IN` | `PENDING_LOGIN` | `LOGGED_OUT`
+- `LOGGED_OUT` → `PENDING_LOGIN`（唯一出路）
+
+每次成功轉移 = 同一請求內一條 append-only 審計行（`fromState`/`toState`/`actorUserId`/`evidence`/`createdAt`）。`evidence` = ≤500 字 operator 備註；含 credential 形狀字樣（password/token/cookie/secret/otp/session_id）= 400（零 secrets 紀律）。
+
+| Method | Path | Role | 參數 | 錯誤碼 / 備註 |
+|--------|------|------|------|--------------|
+| GET | `/identities/:id/login` | viewer+ | `:id` = identity UUID | 200 `{login:{identityId, externalRef, displayName, loginState, loginStateSince}}`（零 secrets）；404 `IDENTITY_NOT_FOUND`；T2 表未 migrate = 503 `LOGIN_STATE_DISABLED` |
+| GET | `/identities/:id/login/audit` | viewer+ | query `limit`（1–200，默認 50） | 200 `{items:[{id,identityId,fromState,toState,actorUserId,evidence,createdAt}]}`（newest first）；404/503 同上 |
+| POST | `/identities/:id/login/transition` | **operator+**（人工 session，無 system caller） | body `{to: PENDING_LOGIN\|CONFIRMED_LOGGED_IN\|RELOGIN_REQUIRED\|LOGGED_OUT, evidence?}` | 200 新狀態；400 `VALIDATION_ERROR`（未知態/evidence 非字串/credential 形狀）；409 `INVALID_LOGIN_TRANSITION`（矩陣以外含 self）；404/503 同上 |
+| POST | `/identities/provision` | **admin** | body `{names[1–100]（必匹配 `^redroid-[a-z0-9][a-z0-9_-]{0,39}$` — pool entry = device name = dataRoot 目錄名，全程 1:1 可推導）, identityType? qa_device\|staging_user, egressIps?（平行陣列，寫入前全批 pre-check：批內重複 + fleet 全局唯一）, dryRun?}` | 200 `{items:[{name,identityId,action:created\|replayed\|would_create,dataPath,suggestedDeviceName,fingerprint?,egressIp?}], created, replayed, dryRun}`；冪等 = 既有 externalRef → `replayed` 永不重複建行；fingerprint 自動 `ensureProfile()`（per-identity 決定性，ADR-028）；400 `VALIDATION_ERROR`（name 非法/批內重複）；409 `EGRESS_IP_PRECHECK_FAILED`（成批 fail-closed 零部分寫入；真正 binding 仍用 `PUT /identities/:id/egress`） |
+
+**identity↔dataDir 歸屬契約（explicit claim，取代隱式繼承；`identity_data_dir_claims` 表，DB 層「一身份一家、一家一身份」UNIQUE×2）**：
+- 綁咗身份的 device create：他身份 claim 同名 dir → **409 `DATA_DIR_CLAIM_CONFLICT`**（跨身份 /data 繼承 = 污染，fail-closed；出路 = delete 時 removeData=true 或換名）；同身份 re-claim 同 dir → 放行 + refresh（stop→remove→rebuild 保留 /data 正正係契約用途）；同身份想開第二個 dir → 409（one identity, one data home；rename 唔搬數據）。
+- 未綁身份的 device：完全唔碰 claim（行為同 pre-T2 byte-identical）。
+- delete：預設（唔除數據）→ dir + claim **保留**（回應 `claimReleased:false` 如實上報）；`removeData=true` 且實際刪除成功 → `claimReleased:true`。create 回滾且 dir 係本次新建 → claim 連 dir 一齊撤（無孤兒）。
+- TOCTOU：競態落 DB unique guard → P2002 → 409（永遠唔會靜默認領）。
+- 契約收緊提示：pre-T2 允許一身份多 live device（各自 dir）；T2 後一身份一家 — 存量「一身份多機」部署上線前先清 claim 衝突（ADR-029 §4）。
+
+三處同步紀律（ADR-029 §3）：shared 矩陣（權威）+ `batch-ui.js LOGIN_TRANSITIONS_UI`（UI 鏡像，只驅動按鈕可見性）+ 矩陣 unit（drift 即紅）。深度設計 = `docs/architecture-decisions.md` §29。
+
+## Account 生命週期 + Gmail 開號驅動器（T5 — ADR-030）
+
+**語義定位**：`account_lifecycle` 係 login_state 的**兄弟機**（獨立表掛 identity 旁），記「開號流水線進度」（機器驅動）而唔係「App 登入真相」— 寫入者 = 驅動器（system）+ operator 人工覆蓋。**橋接規則（兩軸正交，外部讀者必讀）**：(a) 開號成功（READY）**唔自動**改 loginState — 新帳號首次登入仍係人工確認；(b) login 軸 RELOGIN_REQUIRED/LOGGED_OUT 唔觸碰 lifecycle；(c) lifecycle DEAD（被封/死亡）→ login 軸點 mark 由人決定，系統唔越權；(d) ban/死亡以 DEAD+failureCode 承載，login 四態零變動。（使用面分工 — 老細 14:36 定調：Gmail App = 長期登入錨點（login 軸事實）；瀏覽器 = 日常操作面（lifecycle 軸管線）。）
+
+**狀態機（7 態；矩陣權威 = `packages/shared/src/gmail-provision.js`，三處同步照 T2）**：
+`PREPARING → PROVISIONING → AWAITING_HUMAN（CAPTCHA 人肉口）→ CREATED → RECOVERY_SETUP → READY`；任何非終態可 `→ DEAD`（終態）。非法轉換（含 self）= 409 `INVALID_ACCOUNT_TRANSITION`；未知態 = 400。全部轉換落 append-only 審計（`fromState`/`toState`/`actorKind` system∣human/`actorUserId`/`reasonCode`/`createdAt`；details 零 PII）。
+
+**驅動器步驟機**：`open-signup → fill-profile → captcha-gate → [人工口] → detect-created → vault-credentials → recovery-setup`。CAPTCHA **唔准自動解**（拍板）：行到 gate → 開 P4 干預工單（`EXTERNAL_VERIFICATION`，dedupe 照 ADR-021）+ 停 `AWAITING_HUMAN`；resume 只認工單 RESOLVED/DISMISSED（resume 免費，唔食節流配額）；死線（默認 2h，`WA_GMAIL_CAPTCHA_TIMEOUT_MS`）過而工單未清 → DEAD `CAPTCHA_TIMEOUT`；adapter 硬失敗 → DEAD `ADAPTER_FAILURE`（半成品重試 = 關聯風險，唔重試）。
+
+**節流（fresh start 前檢查，順序：identity 日配額 → IP 日配額 → 全局隨機間隔窗；counter 表 UTC day key；429 零配額消耗，deny 帶 `retryAfterMs`）**：429 `THROTTLE_IDENTITY_DAILY_LIMIT` / `THROTTLE_IP_DAILY_LIMIT` / `THROTTLE_INTERVAL`。IP 來源 = W3 egress binding（未綁 = IP scope 跳過，identity scope 照守）。
+
+| Method | Path | Role | 參數 | 錯誤碼 / 備註 |
+|--------|------|------|------|--------------|
+| GET | `/identities/:id/account` | viewer+ | — | 200 `{account, vault}` — vault = `{emailMasked（`ab***@domain` 形）, hasPassword, recoveryEmailMasked, profile（決定性派生假料，明文存）, createdAt}`；**email/password/恢復郵箱明文同密文從唔出海面**（AES-256-GCM 保管庫，canary 測試釘死零洩漏）；404 `IDENTITY_NOT_FOUND`；503 `ACCOUNT_LIFECYCLE_DISABLED`（T5 表未 migrate） |
+| GET | `/identities/:id/account/audit` | viewer+ | query `limit`（1–200） | 200 `{items:[{id,identityId,fromState,toState,actorUserId,…}]}`（newest first）；404/503 同上 |
+| POST | `/identities/:id/account/transition` | **operator+**（人工覆蓋） | body `{to: PREPARING\|PROVISIONING\|AWAITING_HUMAN\|CREATED\|RECOVERY_SETUP\|READY\|DEAD, reasonCode?（`^[A-Z0-9_]{2,60}$`，默認 `OPERATOR_OVERRIDE`）}` | 200；409 `INVALID_ACCOUNT_TRANSITION`（矩陣以外含 self/終態 DEAD）；審計 `actorKind:human` |
+| POST | `/identities/:id/account/provision` | **operator+**（驅動器推一啖） | — | fresh start（過節流 → 跑到 CAPTCHA 口停 `AWAITING_HUMAN` + 開工單）或 gate resume（工單 RESOLVED 放行 → …→ READY）；429 `THROTTLE_*`（帶 `retryAfterMs`）；503 `ACCOUNT_INPUT_MISSING`（恢復郵箱池空 — **先於**配額/狀態變更，零燒配額；拍板：冇恢復郵箱 = 唔准入「就緒」）；503 `GMAIL_PROVISION_DISABLED`（`WA_GMAIL_PROVISION_ENABLED` 默認 OFF — 三項輸入未拍板前唔准默默 ON）；503 `INTERVENTION_UNAVAILABLE`（CAPTCHA 工單 surface 冇碌）；409 `ACCOUNT_NOT_DETECTED`（半成品偵測，retry — 真機段校準） |
+
+**環境參數契約**（`apps/api`；保守默認值，语義 = ADR-030 §5，全表見 README「T5」節）：`WA_GMAIL_PROVISION_ENABLED`（默認 false）／`WA_GMAIL_RECOVERY_POOL`（逗號分隔；空池 fail-closed 見上；例 `pool-a@example.com,pool-b@example.com` — dev-only 假值）／`WA_GMAIL_PER_IP_DAILY`（2 — 抗關聯主槓桿，改 env 即生效代碼零改）／`WA_GMAIL_PER_IDENTITY_DAILY`（1）／`WA_GMAIL_MIN_INTERVAL_MS`/`WA_GMAIL_MAX_INTERVAL_MS`（300000/900000 = 5–15 分鐘均勻隨機窗）／`WA_GMAIL_CAPTCHA_TIMEOUT_MS`（7200000）。**損耗率紀律**：每個 DEAD 必帶 failureCode + 完整審計鏈；缺碼 = 記錄缺損 = 驗收未夠。
+
 ## 端點總計
 
-**114 條路由**（逐檔案計；P5 2026-10-24 實核 = P4-MC 105 條 + **stream console 5**；2026-10-27 補 **system ram-gate 4**）：health 2 + auth 3 + containers 15（含 5 個 action + exceptions 3 條 + create-from-template）+ container templates 2 + dashboard 1 + tasks 15（runs 6 + approvals 3 + tools 1 + providers 4 + audit 1）+ task definitions 1 + schedules 10（含 POST preview）+ schedule notifications 4 + manual interventions 9（P4-MC）+ **stream console 5（MC P1–P3：create/list/heartbeat/reconnect/close；另有 1 條 WS upgrade path 唔計入 REST 路由）** + redroid templates/preflight 5 + redroid devices 11（含 3 個 action + proxy/retry）+ batch monitor 5（BR-B5）+ batch control 21（BR-B2）+ system ram-gate 4（RAM-G1）。所有寫操作（POST/PATCH/PUT/DELETE，`/auth/login` 除外）：RBAC + audit row（actor、request_id、IP、status、details scrub）+ Origin 檢查（browser mutating 請求）。
+**122 條路由**（逐檔案計；P5 2026-10-24 實核 = P4-MC 105 條 + **stream console 5**；2026-10-27 補 **system ram-gate 4 + identity login/provision 4（T2）+ account lifecycle 4（T5）**）：health 2 + auth 3 + containers 15（含 5 個 action + exceptions 3 條 + create-from-template）+ container templates 2 + dashboard 1 + tasks 15（runs 6 + approvals 3 + tools 1 + providers 4 + audit 1）+ task definitions 1 + schedules 10（含 POST preview）+ schedule notifications 4 + manual interventions 9（P4-MC）+ **stream console 5（MC P1–P3：create/list/heartbeat/reconnect/close；另有 1 條 WS upgrade path 唔計入 REST 路由）** + redroid templates/preflight 5 + redroid devices 11（含 3 個 action + proxy/retry）+ batch control 21（BR-B2）+ system ram-gate 4（RAM-G1）+ identity login/provision 4（T2）+ account lifecycle 4（T5）。註：identity egress binding（W3，4 條）／fingerprint（W1，2 條，另 1 條 list）路由契約照 ADR-027/025 + README P5 表，未併入本總計（待併，老實標注 2026-10-27）。所有寫操作（POST/PATCH/PUT/DELETE，`/auth/login` 除外）：RBAC + audit row（actor、request_id、IP、status、details scrub）+ Origin 檢查（browser mutating 請求）。
