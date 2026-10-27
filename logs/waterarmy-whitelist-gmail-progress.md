@@ -16,6 +16,7 @@ rdev-f1（`water-army/redroid:14.0.0-240527-gms-mtg`，默認 CMD，EGRESS_PROXY
 2. **關鍵發現（whitelist 驗證的結構性障礙）**：EXP-2b teardown 時 e1 datadir 已清，**老細註冊的 AID 3916878313160989068 隨舊機死咗** — 新機 fresh datadir 必派**新 AID**。本機新 AID = `3929395759228143973`（未註冊）。→ 「註冊前後 response 欄位對比」需要（a）將新 AID 都註冊咗，再（b）等 Google 側異步生效後覆檢 checkin response / Play 設備目錄。**觀察點俾之後覆檢**：`Checkin.xml` deviceDataVersionInfo 值 + `last_checkin_ms` + Play Store 可見 app 目錄變化。
 3. **新一輪 checkin 觸發失敗（誠實記錄）**：`docker restart` 後 reason-1 **無自然復發**（EXP-2b「gen-cmd/排程 flaky」觀察第三次重現）；shell 重播 BOOT_COMPLETED = SecurityException（uid 2000 無 permission 發此 broadcast，EXP-2 舊脚本嘅呢步其實從未生效過 — 已記錄）；直接 poke CheckinService = 已知 FGS crash 雷區，冇踩。→ 下一輪 checkin 提議等 boss 登完帳號自然觸發（AccountManager 註冊會 drive gservices/checkin 週期）或第二日覆檢。
 4. token 文件 R2 後 md5 不變（`1cf0c1f9…`）= 無新 checkin 寫入，自洽。
+5. **强制觸發機制窮盡（誠實）**：`dumpsys jobscheduler` 實測 GMS **冇任何 pending checkin job**（dump 內無 gms job 條目）= reason-1 係一次性 boot 排程，shell 層無法安全 force（JobschedulerService poke 都無 handle；FS poke = FGS crash 雷區）。下一輪 checkin = 下次 cold restart / 登帳號後 gservices 週期。
 
 ## B. Gmail/登入機械鏈 — 推到人工牆 **✓ EXPECTED-BLOCKED**
 
@@ -46,6 +47,7 @@ rdev-f1（`water-army/redroid:14.0.0-240527-gms-mtg`，默認 CMD，EGRESS_PROXY
 
 ## D. 收口安排
 
-- **留機**：rdev-f1 開住俾老細（+ sidecar rdev-e1-gost 出口代理）。RAM 實測請見 harness.log 最新行（boot 時 MemAvailable 9537 MiB，容器 --memory 4g 上限，idle redroid 實際 ~1-1.5G）。**CEO 需知：而家成機 + gost 開住**。
-- suite 存證：見本 commit message。
+- **留機**：rdev-f1 開住俾老細（+ sidecar rdev-e1-gost 出口代理）。**收口時 RAM 實測：rdev-f1=1.044GiB（cap 4g）、gost=15.5MiB、宿主 MemAvailable=7285MiB > 6144 規劃線 — 留機唔跌穿**。CEO 需知：呢兩隻 container 開住。
+- suite 存證：`node --test tests/unit/*.test.js tests/integration/*.test.js` → **1462 / pass 1456 / fail 0 / skipped 6 = 基線，零回歸**（SUITE_EXIT=0）。注：`node --test tests/unit`（裸目錄形式）喺 node v22 會報 Cannot find module，要用 package.json 嘅 glob 形式。
+- suite 存證：見上。
 - teardown（boss 用完後）：`bash scripts/rdev-single/teardown.sh rdev-f1`（或 docker rm -f + egress-proxy.sh stop）；datadir /tmp/rdev-single-state/f1-data。
