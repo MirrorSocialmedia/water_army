@@ -66,13 +66,13 @@ test('switch OFF (default): identityId accepted but INERT — Cmd byte-identical
   assert.deepEqual(device.roOverrides, {}, 'switch OFF must snapshot an empty map');
   const cmd = lastCreateBody(redroidMock)?.Cmd ?? [];
   assert.equal(cmd.length, 5, `switch OFF Cmd must stay at the 5 base args, got: ${JSON.stringify(cmd)}`);
-  assert.ok(!cmd.some((a) => a.includes('wa_')), 'no wa_* args may appear with the switch off');
+  assert.ok(!cmd.some((a) => a.startsWith('androidboot.oem_')), 'no oem_* carrier args may appear with the switch off');
 
   // no fingerprint row was generated either (zero profile lookup by design)
   assert.equal(await db.identityFingerprint.findUnique({ where: { identityId: ident.id } }), null);
 });
 
-test('switch ON: identityId → deterministic profile lands in Cmd (wa_* args, never Env) + row snapshot', async (t) => {
+test('switch ON: identityId → deterministic profile lands in Cmd (androidboot.oem_* args, never Env) + row snapshot', async (t) => {
   const { app, db, cookies, redroidMock, close } = await makeApp(ON);
   t.after(close);
   const ident = await db.identity.create({ data: { id: randomUUID(), displayName: 'w1-on' } });
@@ -123,7 +123,8 @@ test('switch ON: recreate for the SAME identity replays the identical profile (3
       payload: { name: `redroid-w1-st-${n}`, templateName: 'redroid-14-swiftshader', idempotencyKey: `w1-st-${n}-0001`, identityId: ident.id },
     });
     assert.equal(res.statusCode, 201, res.body);
-    cmds.push(lastCreateBody(redroidMock).Cmd.filter((a) => a.includes('wa_')));
+    cmds.push(lastCreateBody(redroidMock).Cmd.filter((a) => a.startsWith('androidboot.oem_')));
+    assert.ok(cmds.at(-1).length > 0, 'switch ON recreate must emit oem_* carrier args (non-vacuous)');
   }
   assert.deepEqual(cmds[1], cmds[0], 'recreate 2 must match recreate 1');
   assert.deepEqual(cmds[2], cmds[0], 'recreate 3 must match recreate 1');
