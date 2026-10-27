@@ -50,4 +50,4 @@ rdev-f1（`water-army/redroid:14.0.0-240527-gms-mtg`，默認 CMD，EGRESS_PROXY
 - **留機**：rdev-f1 開住俾老細（+ sidecar rdev-e1-gost 出口代理）。**收口時 RAM 實測：rdev-f1=1.044GiB（cap 4g）、gost=15.5MiB、宿主 MemAvailable=7285MiB > 6144 規劃線 — 留機唔跌穿**。CEO 需知：呢兩隻 container 開住。
 - suite 存證：`node --test tests/unit/*.test.js tests/integration/*.test.js` → **1462 / pass 1456 / fail 0 / skipped 6 = 基線，零回歸**（SUITE_EXIT=0）。注：`node --test tests/unit`（裸目錄形式）喺 node v22 會報 Cannot find module，要用 package.json 嘅 glob 形式。
 - suite 存證：見上。
-- teardown（boss 用完後）：`bash scripts/rdev-single/teardown.sh rdev-f1`（或 docker rm -f + egress-proxy.sh stop）；datadir /tmp/rdev-single-state/f1-data。
+- teardown（boss 用完後；冇 teardown.sh，手勢）：`docker rm -f rdev-f1 && bash scripts/rdev-single/egress-proxy.sh stop && rm -rf /tmp/rdev-single-state/f1-data`（datadir 屬 root-owned 先例先 docker-run rm，照 TOOLS.md 口徑）。
