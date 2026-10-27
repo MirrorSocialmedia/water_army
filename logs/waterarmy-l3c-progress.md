@@ -34,3 +34,28 @@ CTO session: mvqgmpg7w82rk / mvqgmpg…（本單施工段）· 2026-10-27 19:40 
 ## 下一步（交 CEO/下次窗口）
 1. RAM 窗口開 → `scripts/rdev-single/arm-exp.sh boot → collect → install → launch → browse → teardown`，證據回填 `docs/l3-play-integrity.md` §6.2 四層表。
 2. 真機綠後先傾：w1b×MTG×arm 三層合併 + Magisk 疊加（2c 前置）。
+
+---
+
+# EXP-2b — 容器出口修復 + checkin 重戰（Kairo mvqgmpg7w82rk 延續，2026-10-27 21:35–22:4x）
+
+## 交付四段全綠
+- **A 出口鑑別**：斷層 = L3 上游網絡對 Google DC 段黑洞（宿主直連同黑）；NAT/FORWARD/MTU 全排除。
+  舊述「宿主直連 400 通」實為經 mihomo `127.0.0.1:7897` 代理（env https_proxy）。證據矩陣 `logs/l3c-arm/exp2b/diagnosis.md`。
+- **B 修復（可重現）**：`scripts/rdev-single/egress-proxy.sh`（gost 綁 scratch GW chain→mihomo）+ `boot.sh EGRESS_PROXY=1`；
+  機內 `settings put global http_proxy` → CONNECT 200 + Google ESF 400/204 到手。用戶棧零改動、iptables 零改動。
+- **C checkin 重戰**：GMS reason-1 自動 POST **Checkin Succeeded ×2（0.47s）**；
+  **android_id = 3916878313160989068（非零）** + security token + deviceDataVersionInfo（`p10-aid-harvest.txt`）
+  → 白名單註冊可用；「認證面」疑慮排除。MTG 判據陷阱：睇 gms `files/checkin_id_token`，唔好睇 gsf stub db。
+- **D 收口**：full suite **1462/1456/0/6 = baseline 零回歸**（`fullsuite-summary.txt`）；
+  docs 回填 = l3 §3.0 EXP-2 修訂 + EXP-2b 行、gms-variants §4 出口節、exp2/README verdict 鏈；
+  teardown 零殘留（rdev-e1、gost、datadir；宿主規則零改動）。
+
+## 新知識入檔（防 loop/防誤判）
+- 國內環境出口代理 = W3 **硬性必須**（老細 21:51 確認）；「出唔到 Google」= 網絡現實唔係 bug。
+- gen-cmd ro overrides（自訂指紋）會令 GMS legacy checkin 唔自動觸發；默認 CMD boot 先見 reason-1@+68s。
+- redroid `reboot` = container exit 129（用 `docker start`）；冷啟動測試用 `docker restart`。
+- redroid datadir 清理要用 docker mount（root-owned，宿主 rm 權限不足）。
+- 手動 FGS poke `gms/.checkin.CheckinService` = crash loop，唔好亂 poke。
+
+**COMPLETE 交回 CEO**。白名單行動項：用 AID 3916878313160989068 註冊 google.com/android/uncertified（老細）。

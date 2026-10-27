@@ -66,3 +66,20 @@
 W1b 映射層（`/vendor/etc/init/oem-ro-map.rc` + `oem-propctl`）同 GMS 層目前零交集：
 GMS 變體用 stock ro.*（redroid 默認指紋）。合併順序、GMS 對偽裝指紋嘅反應（GservicesChecks
 對 build fingerprint 嘅校驗面）、待老細逐項拍板後先做；**前置條件已拍板（2026-10-27）= 真機 PoC（R1–R6）通過後先立项**。本代碼段刻意將兩個變數隔离。
+
+## 4. 出口（egress）前提 — 2026-10-27 EXP-2b 實測回填
+
+**本宿主/國內上游網絡直接黑洞 Google DC 段**（172.217/142.250/74.125/173.194：ICMP、tcp80、tcp443 全丟；宿主直連都係咁）；
+去 Google **唯一路徑 = 用戶 loopback 代理 mihomo `127.0.0.1:7897`（HTTP CONNECT，Clash Verge，僅綁 loopback）**。
+容器 NAT/轉發/MTU 全部正常（58.254 gstatic edge 機內 OPEN、DF 1450B 到 8.8.8.8 過）——「checkin 出唔到機」
+= 網絡現實，唔係 bug。證據 + 鑑別矩陣：`logs/l3c-arm/exp2b/{diagnosis.md,ondevice-diag*.txt,generate204-proof.txt}`。
+
+**正確姿势（已入腳本）**：
+1. `scripts/rdev-single/egress-proxy.sh start`（或 boot 時 `EGRESS_PROXY=1`）= gost sidecar 綁 scratch bridge GW
+   （172.38.223.1:18443）chain → 127.0.0.1:7897；用戶 mihomo 配置零改動。
+2. 機內 `adb shell settings put global http_proxy <GW>:18443`（Android 全局代理；GMS/vending 食呢個；持久化跨 reboot/pm clear）。
+3. 驗證：機內 CONNECT → `200 Connection established`；GMS reason-1（boot+~68s，默認 CMD 先會自動觸發）→
+   logcat `Checkin Succeeded` + `/data/user/0/com.google.android.gms/files/checkin_id_token` 有 `AID:token`。
+
+**生產含義（老細 21:51 確認）**：W3 出口代理綁定由『設計選項』升級為**硬性必須** — 三條 GMS 路線（MTG/microG/OpenGApps）
+嘅 checkin/register/push/phenotype 全部依賴去得切 Google；出口代理規格要入 W3 設計（綁定方式、fail 偵測、斷線告警）。

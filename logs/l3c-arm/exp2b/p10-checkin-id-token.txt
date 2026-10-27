@@ -1,0 +1,20 @@
+# checkin_id_token raw 2026-10-27T14:32:09Z
+-rw-rw---- 1 u0_a59 u0_a59 39 2026-10-27 14:21 /data/user/0/com.google.android.gms/files/checkin_id_token
+00000000: 3339 3136 3837 3833 3133 3136 3039 3839  3916878313160989
+00000010: 3036 383a 3834 3837 3931 3432 3534 3538  068:848791425458
+00000020: 3936 3137 3231 32                        9617212
+== Checkin.xml (masked) ==
+<?xml version='1.0' encoding='utf-8' standalone='yes' ?>
+<map>
+    <long name="CheckinService_lastCheckinSuccessTime" value="1793111264021" />
+    <long name="CheckinService_last_checkin_ms_unspecified" value="1793111264026" />
+    <long name="CheckinInterval_IntervalSeconds" value="40235" />
+    <long name="aggregation_flex" value="600" />
+    <long name="CheckinService_checkinCompleteBroadcastTime" value="1793111264026" />
+    <long name="CheckinInterval_FlexSec" value="10800" />
+    <string name="android_id">3916878313160989068</string>
+    <string name="CheckinService_versionInfo">Q23fo-sPOU4coOhBO1boBVzFWcrbFxo</string>
+    <string name="CheckinService_deviceDataVersionInfo">ABFEt1XQ7K6zvDQjVoNmtunomY5_CPcTL_azViJWNnh8lkOR-236dIgPNuGgYo4Ymc45TbH53xzTp8d7yS7AbnyV_bSIv1QUlh8WB6LYnNQd-cERhBG0cT3TqikDRL7V_M0VND5qkxD3Ch34quJyfV4L7u_fIqreI8mAQzKcvoqhO6aKZcou9acKLW6CEwZ4ga33xvXFgT4FQHr2JUG9HUMhRDbcAx5LJPQ2kSwtENSc0dMRaQcILGd3A9b4tqRPGUR7YfNdmRwMvVVFVdut4HaTEKF5O6CTEKUvdCvR43JsWSCVkAHKYG6iRRnTky5t1umGOzrouQwdHYWD9yb28CKwxBKqcuXnEVhdJ60gu_ZLl1BTN8yzwHYWSGlhJL94CvYgMbT0sxJwjykU6RPro5YEjxP693JuYmFQ3qAxRpTGuYOlG7JVH3o</string>
+    <long name="CheckinTask_bookmark" value="0" />
+    <long name="aggregation_interval" value="1800" />
+</map>

@@ -1,0 +1,10 @@
+10-27 14:27:42.987  1446  2375 I Checkin : [CheckinOperation] Starting Checkin: Default Task Reason : 1 Force : false UserId : 0 Start time : 42667601
+10-27 14:27:42.995  1446  2375 I Checkin : [AndroidCheckinProtoModule] Checkin reason type: 1 attempt count: 1.
+10-27 14:27:43.452  1446  2375 I Checkin : [CheckinRequestProcessor] updateCheckinIdTokenFileFromResponse, Reading existing AID
+10-27 14:27:43.453  1446  2375 I Checkin : [CheckinRequestProcessor] Default Task : Checkin Succeeded: https://android.googleapis.com/checkin (fragment #1).
+10-27 14:27:43.456  1446  2375 I Checkin : [CheckinOperation] Checkin Operation finished with result: SUCCESS finish time: 42668070.
+10-27 14:27:43.608  1446  2375 I Checkin : [CheckinOperation] Starting Checkin: Default Task Reason : 1 Force : false UserId : 0 Start time : 42668222
+10-27 14:27:43.611  1446  2375 I Checkin : [AndroidCheckinProtoModule] Checkin reason type: 1 attempt count: 1.
+10-27 14:27:44.021  1446  2375 I Checkin : [CheckinRequestProcessor] updateCheckinIdTokenFileFromResponse, Reading existing AID
+10-27 14:27:44.021  1446  2375 I Checkin : [CheckinRequestProcessor] Default Task : Checkin Succeeded: https://android.googleapis.com/checkin (fragment #1).
+10-27 14:27:44.028  1446  2375 I Checkin : [CheckinOperation] Checkin Operation finished with result: SUCCESS finish time: 42668643.

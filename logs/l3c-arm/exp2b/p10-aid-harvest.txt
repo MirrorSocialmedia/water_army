@@ -1,0 +1,21 @@
+# AID harvest 2026-10-27T14:32:00Z
+== checkin files ==
+/data/user/0/com.google.android.gms/shared_prefs/Checkin.xml
+/data/user/0/com.google.android.gms/shared_prefs/com.google.android.gms.checkin.internal.high_frequency_backoff_shared_pref_name.xml
+/data/user/0/com.google.android.gms/shared_prefs/com.google.android.gms.checkin.internal.network_backoff_shared_pref_name.xml
+/data/user/0/com.google.android.gms/shared_prefs/com.google.android.gms.checkin.internal.checkin_scheduled_checkin_storage.xml
+/data/user/0/com.google.android.gms/shared_prefs/com.google.android.gms.checkin.internal.package_rate_limit_backoff_shared_pref_name.xml
+/data/user/0/com.google.android.gms/files/clearcut/0/ANDROID_CHECKIN_METRICS_LOG
+/data/user/0/com.google.android.gms/files/clearcut/0/ANDROID_CHECKIN_EVENT_LOG
+/data/user/0/com.google.android.gms/files/phenotype/shared/com.google.android.gms.checkin.pb
+/data/user/0/com.google.android.gms/files/checkin_id_token
+== latest this-round checkin lines 14:29+ ==
+10-27 14:27:42.987  1446  2375 I Checkin : [CheckinOperation] Starting Checkin: Default Task Reason : 1 Force : false UserId : 0 Start time : 42667601
+10-27 14:27:43.453  1446  2375 I Checkin : [CheckinRequestProcessor] Default Task : Checkin Succeeded: https://android.googleapis.com/checkin (fragment #1).
+10-27 14:27:43.608  1446  2375 I Checkin : [CheckinOperation] Starting Checkin: Default Task Reason : 1 Force : false UserId : 0 Start time : 42668222
+10-27 14:27:44.021  1446  2375 I Checkin : [CheckinRequestProcessor] Default Task : Checkin Succeeded: https://android.googleapis.com/checkin (fragment #1).
+== gservices overrides (root) ==
+== gservices provider dump head ==
+No result found.
+== secure android_id (framework) ==
+d6cd447dfe2fbba

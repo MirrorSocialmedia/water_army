@@ -29,3 +29,9 @@ CEO 批准 scratch 口徑執行；RAM gate boot 前實測 PASS（見 ramgate.log
 
 ## 檔案地圖
 p1-firstboot-* = 首次開機基線；p2-afterclear-* = pm clear 後；p3-* = verbose 強制 checkin + 最終 DB；attest-* = wa-attest.apk（sha256 8f94c32…）採集；raw-checkin-post-probe.txt + reachability-matrix.txt = 出口探針；keyword-matrix.txt = logcat 關鍵字計數。secrets：本目錄無 token 明文（mask 於 exp2-checkin.sh 寫入前執行）。
+
+## 【修訂 2026-10-27 晚 — EXP-2b】
+本 verdict「認證面 INCONCLUSIVE 待出口」嘅深層根因已鑑定：**出口層 = 國內上游網絡需經代理**（非容器 bug、非認證面）。
+出口經 gost→mihomo 修復後 checkin **SUCCESS、android_id=3916878313160989068（非零）到手**，白名單可直接註冊。
+詳見 `logs/l3c-arm/exp2b/README.md`。另外 MTG 變體注意：android_id 判據 = gms `files/checkin_id_token`，
+唔係本單一直盯嘅 gsf `googlesettings.db` stub 表。
