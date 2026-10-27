@@ -29,8 +29,8 @@ rm -rf build && mkdir -p build/gen build/obj build/apk
   --manifest AndroidManifest.xml \
   $( [ -f build/res.zip ] && echo "-R build/res.zip" )
 
-javac -source 11 -target 11 -bootclasspath "$PLATFORM" \
-  -d build/obj $(find src -name '*.java')
+javac -nowarn -source 11 -target 11 -classpath "$PLATFORM" \
+  -d build/obj $(find src stubs -name '*.java')
 
 "$BT/d8" --lib "$PLATFORM" --output build/apk $(find build/obj -name '*.class')
 zip -j build/probe.unsigned.apk build/apk/classes.dex >/dev/null
