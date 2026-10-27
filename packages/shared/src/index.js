@@ -433,6 +433,14 @@ export {
   ACCOUNT_ROLE_SEMANTICS,
   REGION_POOLS,
   PERSONA_REGIONS,
+  HK_SURNAME_POOL,
+  HK_GIVEN_POOL,
+  HK_TRAVEL_PATTERNS,
+  HK_SPENDING_STYLES,
+  HK_SOCIAL_PLATFORMS,
+  HK_SOCIAL_LANG_MIX,
+  HK_SOCIAL_CADENCE,
+  generateHkEnrichment,
   PREFIX_STYLES,
   PREFIX_STYLE_INPUTS,
   PASSWORD_POLICY,
@@ -458,3 +466,23 @@ export {
   createProvisionDriverStub,
   runProvisionStub,
 } from './account-provision-contract.js';
+
+export {
+  SIGNUP_STEPS_VERSION,
+  SIGNUP_COORD_BASE,
+  SIGNUP_FIELDS,
+  CREATE_ACCOUNT_STEPS,
+  SIGNUP_COMPLETION_STEP,
+  deriveSignupValues,
+  resolveStepAction,
+  createSignupDriver,
+} from './account-signup-steps.js';
+
+export {
+  SCHEDULE_TZ_OFFSET_MINUTES,
+  NIGHT_HOURS,
+  DEFAULT_MIN_GAP_MINUTES,
+  parseWindow,
+  planRegistrationSchedule,
+  actionDelay,
+} from './account-schedule.js';
