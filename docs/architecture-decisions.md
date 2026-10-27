@@ -21,6 +21,7 @@
 | ADR-029 | T2 identity 登入狀態機（人工專用寫入路徑）+ test-identity provisioning + identity↔dataDir 歸屬契約 | 已實裝（代碼 + unit 6/6 + integration 3/3 + UI + full suite 1438/1432/0/6）；真機 E2E **NOT VERIFIED**（待辦成單，見 progress 檔） | §29 |
 | ADR-030 | T5 Gmail 帳號生命週期狀態機（login_state 嘅兄弟機）+ 開號驅動器（CAPTCHA 永久人肉口）+ 節流 + 加密保管庫 | 已實裝（代碼 + unit 8/8 + integration 5/5 + full suite 1451/1445/0/6）；真機試產 **NOT VERIFIED**（RAM gate + T1 真機裝機為前置） | §30 |
 | ADR-031 | L2 波次1：時區落機（persist.sys.timezone 經 post-fs-data）+ ro.hardware/ro.boot.hardware 聲稱層補洞 + build.sh fail-closed | 已實裝（代碼段全綠，full suite 1458/1452/0/6）；真機 **NOT VERIFIED**（複測清單見 progress 檔） | §31 |
+| ADR-032 | L3-C' ARM 翻譯層入 image（houdini 疊 gms-mtg；abilist 零變動；base 實測更正 gms-variants §1d）| image 已實裝（build GREEN + full suite 1462/1456/0/6 零回歸）；真機四層判據 EXPECTED-BLOCKED（RAM 窗口未開，協議就緒）| §32 |
 
 ---
 
@@ -1536,3 +1537,10 @@ MD §13.2 嘅 per-actor 寫 budget（20/60s）係為**人工誤操作**設嘅；
 **向後兼容**：`hardware` 喺 W1 core validator 係 **optional** key（舊庫存 profile 照過驗證、照生成 10 個 carrier 參數少一個 hardware —— 降回 image 默認，語義正確）；template 池 **required**（新機必帶故事）。`checkProfileConsistency` 對「profile 無呢欄」出 **SKIP**（非阻塞）——W1 時代庫存行唔會因為 device 顯示 image 默認而誤紅；SKIP 必須有行（vacuous guard：斷言 SKIP 恰好 2 行，唔係靜默消失）。W1 生成器新 profile 一律帶 `hardware = device slug`（合成機嘅 board==device 同一慣例）。
 
 **驗證**：unit 33/33 + full suite **1458/1452/0/6**（基線 1455/1449/0/6 + 新增 3，零回歸）；rc drift green；test-mapping.sh sim 12/12 GREEN；build.sh 正/負路徑實跑存證（final image `sha256:bfa6a160a371...`，post-build assertion GREEN）。**狀態：已實裝（代碼段全綠）；真機 NOT VERIFIED** —— 複測清單見 `logs/waterarmy-l2w1-progress.md`（persist.sys.timezone 落地 + TimeDetector 覆寫行為、post-fs-data exec SELinux 語義、probe APK 重裝後 12-row 斷言、board token 真機對照）。
+
+## 32. L3-C' ARM 翻譯層入 image（ADR-032，2026-10-27 — 來源 = CEO 工單 `mvqgmpg7w82rk`；老細 19:40 拍板「ARM 先試吧」）
+
+**決策**：ARM-only app（D6 ABI 天花板）嘅出路選 **houdini 社群打包**（rote66 兩 repo，md5=redroid-script 上游 pin）疊 `gms-mtg` base → `images/gms-mtg-arm`；唔揀 berberis（base 只有懸空 libnb.so 指向；拆 emulator 件 = API-matched + exec_region 工程，列 follow-up）、唔揀 libndk（redroid-script 自標 A11/12 only）。**abilist 唔改字串**（推翻 §31 決策表「誠實化歸 L3 ARM 路線」嘅隱含含義）：實測 base abilist 本來已含 arm 群（§1d 更正）— 翻譯層入場後宣講自動變誠實，行為層（PackageManager 過濾）零變動。
+**build 紀律**：ADR-031 決策 5 口徑照用 — `images/gms-mtg-arm/build.sh` = fetch（sha256 pin）→ base id pin 斷言 → 兩段 build（alpine 模式 pin + per-subdir COPY）→ post-build 導出 tar 斷言（rc/bins/libs 精確 mode+uid；insecure 即 exit 1）。大檔 gitignore + `vendor/arm-translator/SOURCE.md` 記 provenance/授權（Intel 專有 binary，內部使用口徑同 GMS binary 一致）。
+**授權**：houdini = Intel 專有 binary，無 redistribution claim（內部研究/測試）。
+**驗證**：build GREEN（`sha256:5c24b8b678b2…c4a8b8`）+ full suite 1462/1456/0/6 零回歸。**狀態：image 層已實裝；真機四層判據（裝機/進程/UI/開頁）EXPECTED-BLOCKED — RAM 窗口未開（全程 6974–8448 MiB < 8704 需求），協議+腳本就緒待窗口（詳見 `docs/l3-play-integrity.md` §6）。**

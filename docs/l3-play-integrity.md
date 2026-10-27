@@ -227,4 +227,38 @@ JS 頁提取受限 — 標 **[文檔-待核]**；落實驗時用自製 demo 採 
 4. redroid + Magisk/TrickyStore/houdini 嘅社群先例（redroid-script）= L3-A/L3-C' 可行性嘅最强
    外部證據；全部標 [文檔]，我哋未實證。
 
-— 完（拍板欄：④ 2e 常態口徑 ___ / ⑥ ARM 翻譯層觸發器 ___ / ⑤ keybox 採購預案 ___ / EXP 排期 ___）
+## 6. EXP-6（L3-C' ARM 翻譯層）實錄 — 2026-10-27，老細 19:40 拍板「ARM 先試吧」後提到實驗批最前
+
+### 6.0 定位（澄清照 2d'）
+
+翻譯層解決 **ABI 面**（ARM-only app load 即 crash），**唔係** Integrity 面 — 兩件事唔搭售。成功判據 = 老細個 ARM 版 Chrome 156（armeabi-v7a，base 內 `lib/armeabi-v7a/libchrome.so` 102 MB 實核 = ARM32-only [實測]）喺我哋 image 上「裝得、起得、畫得出、開到頁」四層判據。
+
+### 6.1 代碼段結果（全部完成）
+
+| 項 | 判定 | 證據 |
+|---|---|---|
+| 物料取得 | **passed** | houdini `rote66/vendor_intel_proprietary_houdini@0c149b1`（zip md5 `d9703a9b…` = redroid-script A14 pin；sha256 `41dd445b…78706e`）+ hack `@a2194c5`（md5 `8f71a58f…` = 上游 pin）；落 `vendor/arm-translator/`（大檔 gitignore），版本/授權/ABI 矩陣 = `vendor/arm-translator/SOURCE.md` |
+| berberis 現狀核 | **passed（文檔級，路線暫緩）** | base 只有懸空 `libnb.so` 指向；emulator 拆件需 API-matched + `libberberis_exec_region.so`（redroid-doc #933 [文檔]）= 額外 build 工程，非本 spike |
+| 基礎設施事實修正 | **passed** | `14.0.0-240527` base：`ro.zygote=zygote64_32`、abilist（system+vendor）已含 arm 群、`/system/lib` 有真 i386 運行時（實物 file 核）→ gms-variants §1d「64-bit only」已更正；「abilist 自相矛盾」紅旗實錳 = bridge 庫缺失而非 32-bit 缺失 |
+| image 變體 build | **passed** | `images/gms-mtg-arm`（疊 gms-mtg base，base id pin 斷言）；post-build insecure-file 斷言 GREEN（12 pinned + arm 鏡像 318/325 全 0644 root:root）；image `sha256:5c24b8b678b2…c4a8b8`；commit `7b3bdbb` |
+| full suite 存證 | **passed** | 1462/1456/0/6 = 基線完全一致，零回歸（`logs/l3c-arm/fullsuite.log`） |
+| 外部佐證 | **[文檔]** | redroid-doc #685（2025-03 comment）：A14 + houdini + linkerconfig 允許路徑 patch → Blue Archive 跑得起 — 同我哋 hack init.rc（boot 時 `patch /linkerconfig/ld.config.txt`）同一機制路；#685 嘅 A13 `INSTALL_FAILED_NO_MATCHING_ABIS` 同 base abilist 已含 arm 群嘅情況唔同，預裝失敗風險低 |
+
+### 6.2 真機段：EXPECTED-BLOCKED（RAM 窗口，非代碼/物料失敗）
+
+四層判據協議已就緒（`scripts/rdev-single/arm-exp.sh`：boot → install-multiple（L-i）→ am start+ps（L-ii）→ screencap（L-iii）→ 宿主 marker 頁意圖（L-iv），證據落 `logs/l3c-arm/p6/`），但 **2026-10-27 19:40–20:35 本段施工窗口內 rdev-single RAM gate（MemAvailable ≥6144 MiB 且 M−2560 規劃線 ≥6144，boss 17:31 scratch 口徑）從未開窗**：實際 MemAvailable 全程 6974–8448 MiB 震盪（需 ≥8704 先過 projection；用戶 stack ~84 GiB 常駐，唔准郁），樣本 92 條 = `logs/l3c-arm/ram-watch.log`。boot 一次都未做過 → teardown 零殘留天然成立（docker ps 無 rdev-a1）。
+
+| 層 | 判定 |
+|---|---|
+| L-i 裝機（install-multiple 4 split APK） | **EXPECTED-BLOCKED**（RAM 窗口） |
+| L-ii 進程（ps 有 com.android.chrome） | EXPECTED-BLOCKED |
+| L-iii UI（screencap 渲染） | EXPECTED-BLOCKED |
+| L-iv 開頁（宿主 marker 頁） | EXPECTED-BLOCKED |
+
+**重跑觸發器**：任一 RAM 窗口（watcher `scripts/rdev-single/ram-watch.sh` 見 WINDOW-OPEN 或老細手放 ≥8.7 Gi）→ 照 `arm-exp.sh boot→collect→install→launch→browse→teardown` 順序執行即填本表（預判：#685 佐證下 L-i 高機會綠；L-ii/iii 嘅已知風險 = houdini 同 host kernel/CPU 組合兼容（#685 有 kernel 降級投訴 [文檔]，我哋 AMD 6.8.0-117 未試過）+ Chrome 重 native 經翻譯嘅效能稅；L-iv = 成功最終判據）。
+
+**成敗都有效結論原則**：死 L-i = 裝機面（abilist/pm）問題；死 L-ii = 翻譯器運行時（linkerconfig/kernel/houdini×A14）問題；死 L-iii/iv = 渲染/webstack 面問題 — 根因定位逐層報告。
+
+---
+
+— 完（拍板欄：④ 2e 常態口徑 ___ / ⑥ ARM 翻譯層觸發器 = **已拍板「ARM 先試吧」2026-10-27 19:40，代碼段完，真機段待 RAM 窗口（見 §6.2）** / ⑤ keybox 採購預案 ___ / EXP 排期 ___）

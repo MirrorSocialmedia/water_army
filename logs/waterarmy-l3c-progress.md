@@ -18,10 +18,19 @@ CTO session: mvqgmpg7w82rk / mvqgmpg…（本單施工段）· 2026-10-27 19:40 
 | 19:46 | **base 實測更正**：`14.0.0-240527` build.prop = `ro.zygote=zygote64_32`、abilist 已含 arm 群、`/system/lib` 有真 i386 運行時 → gms-variants §1d「64-bit only」講錯（已更正文檔）；ARM32 結構可行 + 「abilist 講大話」紅旗確認（libnb.so 懸空）| ✅ |
 | 19:47 | `images/gms-mtg-arm` build：兩段式（alpine unpack 模式 pin + per-subdir COPY 疊 gms-mtg base，base id pin 斷言）；post-build insecure-file 斷言 GREEN（12 pinned files + 318/325 arm mirrors 全 0644 root:root）；image `sha256:5c24b8b678b2…c4a8b8` | ✅ |
 | 19:49 | commit `7b3bdbb` + push（checkpoint 1）| ✅ |
-| 19:49– | RAM 窗口觀察：MemAvailable 7.5–8.1Gi 震盪，projected <6144 = gate DENY（需 ≥8704 先開窗）；watcher `scripts/rdev-single/ram-watch.sh` 後台跑，樣本入 ram-watch.log | ⏳ |
-| — | EXP-6 真機四層判據（boot→install→launch→browse）| 待窗口 |
+| 19:49–20:35 | RAM 窗口觀察：MemAvailable 全程 6974–8448 MiB 震盪（trend 向下），gate 需 ≥8704（floor 6144 + 2560 projection）= **從未開窗**，boot 零次；92 樣本存 `logs/l3c-arm/ram-watch.log`；watcher 收口 kill，進程零殘留 | ❌ EXPECTED-BLOCKED |
+| 20:06–20:13 | full suite（純 image/docs 存證亦照跑）：**1462/1456/0/6 = 基線完全一致，零回歸** → `logs/l3c-arm/fullsuite.log` | ✅ |
+| 20:24–35 | 成文：§6 EXP-6 實錄（四層判據 EXPECTED-BLOCKED + 重跑觸發器）、ADR-032、README/gms-variants 同步 | ✅ |
+| 20:35 | 收口：teardown N/A（從未 boot，docker ps 無 rdev-a1）；tmp 物料清理；commit + push | ✅ |
 
-## 下一步（順序）
-1. RAM 窗口開 → `arm-exp.sh boot` → collect → install → launch → browse →（證據齊）teardown。
-2. §6 EXP-6 成文 + verdict 四類判定 + full suite 存證（純 image/docs 都跑一次）。
-3. 收口 commit + push + 交回。
+## 結論（四類判定口徑）
+- **passed**：物料取得（pin 雙驗）、image build（insecure-file 斷言 GREEN，`5c24b8b678b2`）、base 事實更正、full suite 零回歸、文檔/ADR。
+- **implemented-unverified**：EXP-6 四層協議腳本（arm-exp.sh）— 就緒未真機。
+- **EXPECTED-BLOCKED**：真機 L-i/ii/iii/iv（RAM 窗口全程未開，非代碼/物料失敗；重跑 = ram-watch 見 WINDOW-OPEN 即跑 arm-exp.sh）。
+- **deferred**：berberis 路線（需 emulator 拆件工程）；Magisk/Zygisk 疊加（2c 前置，本單未碰 — redroid-script 口徑下同 image 可加）。
+
+**COMPLETE（代碼段）/ 真機段 EXPECTED-BLOCKED-RAM 交回 CEO**。
+
+## 下一步（交 CEO/下次窗口）
+1. RAM 窗口開 → `scripts/rdev-single/arm-exp.sh boot → collect → install → launch → browse → teardown`，證據回填 `docs/l3-play-integrity.md` §6.2 四層表。
+2. 真機綠後先傾：w1b×MTG×arm 三層合併 + Magisk 疊加（2c 前置）。
