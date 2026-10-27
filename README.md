@@ -10,7 +10,7 @@ Docker 容器 + AI 任務自動化平台（**7 階段 MVP 全部完成** — P0�
 
 施工依據：`docs/repo-audit.md`、`docs/architecture-decisions.md`（P0–P6 全 ADR）、`docs/build-checklist.md`、`docs/threat-model.md`（P6 最終版）、`docs/api-reference.md`（全 endpoint 總表）、`docs/runbook.md`（運維；§9.5 = Redroid Stage A 已知行為、§10 = Stage B 出口代理運維）。
 對抗情報：`docs/exposure-surfaces.md`（T7 五層洩漏地圖 + 「今日開機紅旗表」）、`docs/l2-l3-proposal.md`（L2/L3 立項工單草案）、採集工具 `tools/exposure-probe/`。
-GMS/認證面研究：`docs/gms-variants.md`（三變體比較 + 真機整合）、`docs/l3-play-integrity.md`（L3 Play Integrity 暴露面重估 + 六路線評估 + EXP-1/2/3 收斂，2026-10-27；拍板欄喺文檔末）。
+GMS/認證面研究：`docs/gms-variants.md`（三變體比較 + 真機整合）、`docs/l3-play-integrity.md`（L3 Play Integrity 暴露面重估 + 六路線評估 + EXP-1/2/3 收斂，2026-10-27；拍板欄喺文檔末；§6 = EXP-6 ARM 翻譯層實錄）。ARM 翻譯層（L3-C'，2026-10-27 老細拍板先行）：`images/gms-mtg-arm`（houdini native bridge 疊 gms-mtg）+ `vendor/arm-translator/SOURCE.md`（料源/pin/授權）。
 
 **P6 交付摘要**（證據：`docs/evidence/p6-e2e/`、`docs/evidence/p6-security/`、`docs/evidence/p6-cleaninstall/`）：
 - 5 個 P3–P5 留底 flag 全部收結（managed exception 表 / compose label / 排程通知 / flaky 根因 / concurrency gate）

@@ -14,6 +14,7 @@
 |---|---|---|---|---|
 | `images/gms-mtgapps` | MTG `MindTheGapps-14.0.0-x86_64-20250330.zip` sha256 `ea6738b4…990d7f` | ✅ GREEN | `water-army/redroid:14.0.0-240527-gms-mtg` `sha256:02ab5675ba15…a4ecee` | 3.69 GB（base 共享 + ≈0.49 GB delta）|
 | `images/gms-microg` | microG `v0.3.17.252432` 兩 APK（sha 見 `images/gms-microg/SOURCE-PIN.sha256`）| ✅ GREEN | `water-army/redroid:14.0.0-240527-gms-microg` `sha256:08b7be141cf7…1b5c38` | 3.2 GB |
+| `images/gms-mtg-arm`（L3-C' ARM 翻譯層，叠加於 gms-mtg）| houdini `rote66/vendor_intel_proprietary_houdini@0c149b1`（md5=redroid-script A14 pin `d9703a9b…`）+ `redroid_libhoudini_hack@a2194c5`；pin 見 `vendor/arm-translator/SOURCE.md` | ✅ GREEN | `water-army/redroid:14.0.0-240527-gms-mtg-arm` `sha256:5c24b8b678b2…c4a8b8` | gms-mtg + ≈0.35 GB delta |
 | `images/gms-opengapps` | OG `open_gapps-x86_64-12.1-pico-20220503.zip`（最後一個 x86_64 build，2022-05）| ⏸ 缺料（SF WAF 403 擋 datacenter IP；手動入料口徑見 `images/gms-opengapps/SOURCE.md`）| — | — |
 
 整合方法（MTG/OG）：GApps flashable zip 本身已帶扁平分區佈局（`system/product/**`、
@@ -45,8 +46,8 @@
 * **授權**：同 MTG（Google 二进制）。
 
 ### 1d. x86_64 ABI 縮水實情（可能硬伤 — 誠實記錄）
-* redroid x86_64 A14 image 係 **64-bit only**（無 32-bit；亦無 arm 翻譯層 — houdini/libndk 冇預裝）。
-* **後果**：任何「只帶 armeabi-v7a/arm64 native lib」嘅 app 裝得但 load native 即 crash。
+* 【2026-10-27 L3-C' 實測更正】「64-bit only」對 `14.0.0-240527` pin **唔成立**：base build.prop `ro.zygote=zygote64_32` + `/system/lib` 有完整 i386 運行時（libandroid_runtime.so = ELF 32-bit i386，實物核）；abilist（system+vendor 兩層）已如實列 `x86_64,x86,arm64-v8a,armeabi-v7a,armeabi`，`ro.enable.native.bridge.exec=1` 已開，但 `ro.dalvik.vm.native.bridge=libnb.so` 指向**唔存在嘅庫**（redroid-doc #933 同類 bug）= 「宣講 arm 但冇翻譯層」先係真實缺陷，而唔係缺 32-bit。翻译層照舊冇預裝 — 補齊即 `images/gms-mtg-arm`（L3-C'）。
+* **後果（修正版）**：arm-only app 照樣裝得（abilist 已含 arm 群）但 native load 即 crash，直到翻譯層入場；ARM32 app 有 zygote32 可用 = 結構上可行。
 * T1 目標 app 群逐一研判：GMS（MTG=WSA 線 x86_64 ✓）／Play Store（x86_64 ✓）／Gmail（universal，x86_64 ✓ — WSA 常年運行實證）／WhatsApp（x86_64 native lib 存在 — WSA/x86_64 裝置公開可用實證；R4 首跑仍需確認 `adb shell dumpsys package com.whatsapp` nativeLibraryDir 實載）。
 * **真正風險喺目標 app 群以外**：如果後續运营要裝小眾 app（銀行/電商 SDK），arm-only 係結構性天花板 — 屬 T1 結論要餵畀嘅決策情報，唔係 T1 本身 blocker。
 
