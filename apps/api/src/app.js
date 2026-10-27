@@ -597,7 +597,10 @@ export async function buildApp(opts = {}) {
       code = err.code ?? API_ERROR.FORBIDDEN;
       message = err.message || 'Forbidden';
     } else if (status === 429) {
-      code = API_ERROR.RATE_LIMITED;
+      // T5 throttle codes (THROTTLE_IP_DAILY_LIMIT / _IDENTITY_ / _INTERVAL)
+      // carry their own apiCode — only fall back to generic RATE_LIMITED when
+      // the thrower didn't name one (rate limiter itself).
+      code = err.apiCode ?? API_ERROR.RATE_LIMITED;
       message = err.message || 'Too many requests';
     }
 
@@ -612,6 +615,9 @@ export async function buildApp(opts = {}) {
         code,
         message: status >= 500 ? message : message,
         requestId: req.id,
+        // T5: machine-readable verdict details (retryAfterMs, failureCode…).
+        // Additive — appears only when a service attached them.
+        ...(err.details ? { details: err.details } : {}),
       },
     });
   });

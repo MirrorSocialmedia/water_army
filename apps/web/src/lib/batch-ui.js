@@ -75,6 +75,45 @@ export const LOGIN_TRANSITION_LABELS = {
   LOGGED_OUT: '標記已登出',
 };
 
+/**
+ * T5 (ADR-030) — client-side mirror of the account lifecycle matrix in
+ * @water-army/shared gmail-provision.js ACCOUNT_TRANSITIONS (authoritative).
+ * Same three-way sync discipline as LOGIN_TRANSITIONS_UI (ADR-029 §3):
+ * server matrix unit test + this mirror + shared matrix — none may drift.
+ * Drives button visibility only; the server 409s anything else.
+ */
+export const ACCOUNT_TRANSITIONS_UI = {
+  PREPARING: ['PROVISIONING', 'DEAD'],
+  PROVISIONING: ['AWAITING_HUMAN', 'CREATED', 'DEAD'],
+  AWAITING_HUMAN: ['PROVISIONING', 'DEAD'],
+  CREATED: ['RECOVERY_SETUP', 'DEAD'],
+  RECOVERY_SETUP: ['READY', 'DEAD'],
+  READY: ['DEAD'],
+  DEAD: [],
+};
+
+/** Status pill semantics for the account lifecycle badge (T5). */
+export const ACCOUNT_STATUS_PILL = {
+  PREPARING: 'pill-disabled',
+  PROVISIONING: 'pill-up',
+  AWAITING_HUMAN: 'pill-disabled',
+  CREATED: 'pill-up',
+  RECOVERY_SETUP: 'pill-up',
+  READY: 'pill-up',
+  DEAD: 'pill-down',
+};
+
+/** Operator-facing labels for account lifecycle states (T5). */
+export const ACCOUNT_STATE_LABELS = {
+  PREPARING: '準備中',
+  PROVISIONING: '開號驅動中',
+  AWAITING_HUMAN: '待人工驗證',
+  CREATED: '建立成功',
+  RECOVERY_SETUP: '恢復設置中',
+  READY: '就緒',
+  DEAD: '死亡',
+};
+
 /** Cycle status (derived by the API) → pill class. */
 export const CYCLE_STATUS_PILL = {
   PLANNED: 'pill-disabled',

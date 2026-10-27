@@ -258,7 +258,9 @@ export function createGmailProvisionDriver({
     if (!vaultProfile) await upsertVault(identityId, { profileJson: profile });
 
     try {
-      if (resumedFromGate || !(await adapter.detectAccountCreated(deviceRef, { gateCleared: true }))) {
+      if (!resumedFromGate) {
+        // Fresh run: drive the signup UI up to the CAPTCHA gate, open the
+        // human ticket, and PAUSE there (never auto-solve — ADR-030).
         await lifecycleService.setStep(identityId, 'open-signup');
         await adapter.openSignupForm(deviceRef);
         await lifecycleService.setStep(identityId, 'fill-profile');
