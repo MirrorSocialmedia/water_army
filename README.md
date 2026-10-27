@@ -239,7 +239,12 @@ curl -s -b /tmp/c.txt -X POST http://127.0.0.1:3012/api/tasks/runs \
 | 建 intervention（operator_report） | ✗ | ✓ | ✓ |
 | intervention action（ack/assign/resolve/dismiss） | ✗ | ✓ | ✓ |
 
-**設定（env，全部 fail-closed）**：`STREAM_TICKET_SECRET`（HMAC ticket；未設 = console 功能 503 唔啟動）＋ `STREAM_SIDECAR_TOKEN`（API↔sidecar 內網身份；未設 = sidecar 唔啟動）＋ `STREAM_VIDEO_SOURCE=auto|scrcpy|screencap`（預設 auto：scrcpy 失敗降級 screencap，ADR-020）＋ `STREAM_QUALITY=low|medium|high`（預設 medium）＋ `STREAM_MAX_STREAMS=5`／`STREAM_LEASE_TTL_MS=30000`／`SIDECAR_PORT`／`SIDECAR_FWD_RANGE_START/END`（adb forward port 池）＋ `SCRCPY_JAR` + `SCRCPY_JAR_SHA256`（sha256 唔配 = sidecar fail-closed 拒啟）＋ `REDROID_ADB_RANGE_START/END`（ADB allowlist，MD §5.2）。
+**設定（env，全部 fail-closed）**：`STREAM_TICKET_SECRET`（HMAC ticket；未設 = console 功能 503 唔啟動）＋ `STREAM_SIDECAR_TOKEN`（API↔sidecar 內網身份；未設 = sidecar 唔啟動）＋ `STREAM_VIDEO_SOURCE=auto|scrcpy|screencap`（**代碼默認 = `screencap`**，`apps/api/src/config.js` fail-closed 校驗 — 非法值直接拒啟動；`auto` = scrcpy 失敗降級 screencap，係預留升級路徑而**非**默認，ADR-020 §1：H.264 未過測試唔可阻塞 P3）＋ `STREAM_QUALITY=low|medium|high`（預設 medium）＋ `STREAM_MAX_STREAMS=5`／`STREAM_LEASE_TTL_MS=30000`／`SIDECAR_PORT`／`SIDECAR_FWD_RANGE_START/END`（adb forward port 池）＋ `SCRCPY_JAR` + `SCRCPY_JAR_SHA256`（sha256 唔配 = sidecar fail-closed 拒啟）＋ `REDROID_ADB_RANGE_START/END`（ADB allowlist，MD §5.2）。
+
+**部署檢查清單（STREAM_VIDEO_SOURCE — 「實際部署有冇指定？」答案喺呢度）**：代碼默認 `screencap`；`compose.yaml` 同 `.env.example` 目前**都冇**列出 `STREAM_VIDEO_SOURCE` — 即照 repo 標準路徑部署 = 食默認 screencap（誠實、已驗證 tier）。上線前逐項核：
+1. 實際生效值：`docker compose config | grep -i STREAM_VIDEO_SOURCE`（無輸出 = 默認 `screencap` = 預期行為）；或直接睇 api 容器 env。
+2. 要改 `auto`/`scrcpy`（H.264）= **屬於未經真機驗證嘅路徑**（見下方 NV1）：除喺 `.env` / compose 明確指定外，sidecar 必須同時配 `SCRCPY_JAR` + `SCRCPY_JAR_SHA256`（缺/唔配 = fail-closed 拒啟）；降級路徑（`auto` → screencap）嘅 health check 語義見 ADR-020（收到有效 video frame 先算成功，唔係程序啟動成功）。
+3. `.env` 指定咗非法值 = api **啟動即 throw**（config fail-closed，唔會靜默退回默認）— 部署後發現 api 唔 healthy 先查呢條。
 
 **限制（實測邊界）**：畫面 = screencap tier（PNG 幀，非 H.264 — H.264/scrcpy 路徑喺 A10 GPU 上未驗證，見 NOT VERIFIED）；全局同刻 5 路流（Redis resource-lease slot）；每 device 一 lease；lease TTL 30s（斷流重入用 reconnect，唔係重新 acquire）；sidecar 每會話輸入上限 30/s、frame 上限 64KiB（MD §11.9 P5 hardening）；stream create 10/min/user、intervention create 30/min/user（429 + Retry-After）。
 
