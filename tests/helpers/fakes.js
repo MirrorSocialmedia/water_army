@@ -70,6 +70,8 @@ export function makeFakeDb({ users = [] } = {}) {
   const templateRows = new Map(); // redroid_templates, by id
   const deviceRows = new Map(); // devices, by id
   const identityRows = new Map(); // identities, by id (W1 ADR-025)
+  const loginAuditRows = []; // identity_login_audits, append-only (T2 ADR-029)
+  const dataDirClaimRows = new Map(); // identity_data_dir_claims, by dataDir (T2 ADR-029)
   const fingerprintRows = new Map(); // identity_fingerprints, by identityId (W1 ADR-025)
   const identityEgressRows = new Map(); // identity_egress_bindings, by identityId (W3 ADR-027)
   const interventionRows = new Map(); // manual_interventions, by id (MC P4)
@@ -818,7 +820,9 @@ export function makeFakeDb({ users = [] } = {}) {
     // never decrypts it; tests seed via the route, which encrypts for real).
     identityEgress: {
       findUnique: async ({ where }) => {
-        const row = identityEgressRows.get(where.identityId);
+        const row = where.identityId
+          ? identityEgressRows.get(where.identityId)
+          : [...identityEgressRows.values()].find((r) => r.expectedEgressIp === where.expectedEgressIp);
         return row ? { ...row } : null;
       },
       findFirst: async ({ where = {} } = {}) => {
@@ -880,6 +884,9 @@ export function makeFakeDb({ users = [] } = {}) {
           identityType: data.identityType ?? 'qa_device',
           status: data.status ?? 'READY',
           dataPath: data.dataPath ?? `/data/wa/id-${identityRows.size + 1}`,
+          // T2 (ADR-029): login state machine — defaults to 待登入.
+          loginState: data.loginState ?? 'PENDING_LOGIN',
+          loginStateSince: data.loginStateSince ?? null,
           metadataJson: data.metadataJson ?? {},
           createdAt: ts,
           updatedAt: ts,
@@ -887,14 +894,91 @@ export function makeFakeDb({ users = [] } = {}) {
         if ([...identityRows.values()].some((r) => r.dataPath === row.dataPath)) {
           throw Object.assign(new Error('Unique constraint failed on the fields: (dataPath)'), { code: 'P2002' });
         }
+        if (row.externalRef && [...identityRows.values()].some((r) => r.externalRef === row.externalRef)) {
+          throw Object.assign(new Error('Unique constraint failed on the fields: (externalRef)'), { code: 'P2002' });
+        }
         identityRows.set(row.id, row);
         return { ...row };
       },
       findUnique: async ({ where } = {}) => {
-        const row = identityRows.get(where?.id) ?? [...identityRows.values()].find((r) => r.dataPath === where?.dataPath) ?? null;
+        const row = identityRows.get(where?.id)
+          ?? (where?.dataPath ? [...identityRows.values()].find((r) => r.dataPath === where.dataPath) : null)
+          ?? (where?.externalRef ? [...identityRows.values()].find((r) => r.externalRef === where.externalRef) : null)
+          ?? null;
         return row ? { ...row } : null;
       },
+      update: async ({ where, data }) => {
+        const row = identityRows.get(where?.id) ?? [...identityRows.values()].find((r) => r.externalRef === where?.externalRef);
+        if (!row) throw Object.assign(new Error('Identity not found'), { code: 'P2025' });
+        const clean = Object.fromEntries(Object.entries(data).filter(([, v]) => v !== undefined));
+        Object.assign(row, clean, { updatedAt: now() });
+        return { ...row };
+      },
       findMany: async () => [...identityRows.values()].map((r) => ({ ...r })),
+    },
+    // ---- T2 (ADR-029): login audit + dataDir claims -------------------------
+    identityLoginAudit: {
+      create: async ({ data }) => {
+        const row = {
+          id: data.id ?? randomUUID(),
+          identityId: data.identityId,
+          fromState: data.fromState,
+          toState: data.toState,
+          actorUserId: data.actorUserId ?? null,
+          evidenceJson: data.evidenceJson ?? {},
+          createdAt: data.createdAt ?? now(),
+        };
+        loginAuditRows.push(row);
+        row.__seq = loginAuditRows.length; // same-ms createdAt tiebreak (insertion order)
+        return { ...row };
+      },
+      findMany: async ({ where = {}, orderBy, take } = {}) => {
+        let rows = loginAuditRows.filter((r) => Object.entries(where).every(([k, v]) => r[k] === v));
+        if (orderBy?.createdAt === 'desc') rows = [...rows].sort((a, b) => (b.createdAt - a.createdAt) || (b.__seq - a.__seq));
+        if (take) rows = rows.slice(0, take);
+        return rows.map((r) => ({ ...r }));
+      },
+    },
+    identityDataDirClaim: {
+      create: async ({ data }) => {
+        if (dataDirClaimRows.has(data.dataDir)) {
+          throw Object.assign(new Error('Unique constraint failed on the fields: (dataDir)'), { code: 'P2002' });
+        }
+        if ([...dataDirClaimRows.values()].some((r) => r.identityId === data.identityId)) {
+          throw Object.assign(new Error('Unique constraint failed on the fields: (identityId)'), { code: 'P2002' });
+        }
+        const ts = now();
+        const row = {
+          id: data.id ?? randomUUID(),
+          dataDir: data.dataDir,
+          identityId: data.identityId,
+          deviceName: data.deviceName,
+          createdAt: data.createdAt ?? ts,
+          updatedAt: ts,
+        };
+        dataDirClaimRows.set(row.dataDir, row);
+        return { ...row };
+      },
+      findUnique: async ({ where } = {}) => {
+        const row = dataDirClaimRows.get(where?.dataDir)
+          ?? [...dataDirClaimRows.values()].find((r) => r.identityId === where?.identityId)
+          ?? null;
+        return row ? { ...row } : null;
+      },
+      findMany: async () => [...dataDirClaimRows.values()].map((r) => ({ ...r })),
+      update: async ({ where, data }) => {
+        const row = dataDirClaimRows.get(where?.dataDir) ?? [...dataDirClaimRows.values()].find((r) => r.identityId === where?.identityId);
+        if (!row) throw Object.assign(new Error('IdentityDataDirClaim not found'), { code: 'P2025' });
+        const clean = Object.fromEntries(Object.entries(data).filter(([, v]) => v !== undefined));
+        Object.assign(row, clean, { updatedAt: now() });
+        return { ...row };
+      },
+      delete: async ({ where }) => {
+        const row = dataDirClaimRows.get(where?.dataDir) ?? [...dataDirClaimRows.values()].find((r) => r.identityId === where?.identityId);
+        if (!row) throw Object.assign(new Error('IdentityDataDirClaim not found'), { code: 'P2025' });
+        dataDirClaimRows.delete(row.dataDir);
+        return {};
+      },
     },
     identityFingerprint: {
       create: async ({ data }) => {
@@ -1082,6 +1166,7 @@ export function makeFakeDb({ users = [] } = {}) {
       scheduleRows, definitionRows, templateRows, deviceRows,
       interventionRows, historyRows,
       identityRows, fingerprintRows, identityEgressRows,
+      loginAuditRows, dataDirClaimRows,
     },
   };
   return db;
