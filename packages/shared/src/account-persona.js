@@ -307,7 +307,7 @@ export const PERSONA_SCHEMA_VERSION = 1;
  */
 export function generatePersona(accountId, { role, region, style = 'any', bindings } = {}) {
   if (typeof accountId !== 'string' || !/^acct-[0-9A-HJKMNP-TV-Z]{10}$/.test(accountId)) {
-    throw new Error("generatePersona: accountId must be mintAccountId() shape ^acct-[2-9A-HJKMNP-TV-Z]{11}$-ish (got " + String(accountId).slice(0, 40) + ')');
+    throw new Error("generatePersona: accountId must be mintAccountId() shape ^acct-[2-9A-HJKMNP-TV-Z]{10}$ (got " + String(accountId).slice(0, 40) + ')');
   }
   if (!ACCOUNT_ROLES.includes(role)) {
     throw new Error(`generatePersona: role must be one of ${ACCOUNT_ROLES.join('|')}`);

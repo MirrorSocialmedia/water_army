@@ -326,6 +326,23 @@ Host-RAM 准入 gate：所有 boot 路徑（device create/start、batch start）
 
 **環境參數契約**（`apps/api`；保守默認值，语義 = ADR-030 §5，全表見 README「T5」節）：`WA_GMAIL_PROVISION_ENABLED`（默認 false）／`WA_GMAIL_RECOVERY_POOL`（逗號分隔；空池 fail-closed 見上；例 `pool-a@example.com,pool-b@example.com` — dev-only 假值）／`WA_GMAIL_PER_IP_DAILY`（2 — 抗關聯主槓桿，改 env 即生效代碼零改）／`WA_GMAIL_PER_IDENTITY_DAILY`（1）／`WA_GMAIL_MIN_INTERVAL_MS`/`WA_GMAIL_MAX_INTERVAL_MS`（300000/900000 = 5–15 分鐘均勻隨機窗）／`WA_GMAIL_CAPTCHA_TIMEOUT_MS`（7200000）。**損耗率紀律**：每個 DEAD 必帶 failureCode + 完整審計鏈；缺碼 = 記錄缺損 = 驗收未夠。
 
+## Account Generator — 帳號資產註冊表（GAcct — ADR-034）
+
+**語義定位**：帳號 = 資產。`account-registry-service`（`apps/api/src/services/account-registry-service.js`）係 gitignored JSON 賬本（默認 `.dev/accounts/registry.json`，mode 0600、atomic tmp+rename），記 persona（決定性生成、地區連貫）+ `role ∈ {anchor, ops, farm, recovery}`（語義權威 = ADR-034 §1）+ lifecycleState（T5 七態機引用，軟退休 = 遷 DEAD，硬刪唔存在）+ 三位一體綁定（`bindings.fingerprintProfileId`/`egressProfileId`，兩者齊或明確 deferred，半綁定 fail-closed）。密碼 AES-256-GCM 密封（同一 `APP_ENCRYPTION_KEY` 治理面）——明文只准喺進程內瞬時 / CLI `--show` / 操作者終端；庫檔、日誌、repo 零字面。本節零新增 HTTP 端點（註冊表暫只行 CLI/service 面；API 面等下一單連同註冊 driver 併入）。
+
+**記錄欄位**：`{id, role, lifecycleState, email, bindings{fingerprintProfileId, egressProfileId, deferred}, persona（personaForStorage 投影：零密碼 + hasPassword + passwordMeta 熵審計）, passwordCiphertext（`v1:iv:tag:cipher`）, passwordPolicyId, passwordEntropyBits, createdAt, updatedAt, retiredAt, history[]（append-only 狀態軌跡）}`。規則：gmail 地址全艦隊唯一（create 撞名 → 換新 accountId 重生，max 25 attempt）；export/import = 密文可攜（重複 import 冪等、分歧硬衝突 `IMPORT_CONFLICT`）。
+
+**CLI**（`node apps/api/src/cli/account-gen.js`；env：`APP_ENCRYPTION_KEY` 必需、`ACCOUNT_REGISTRY_PATH` 可換庫路徑）：
+
+| 命令 | 語義 | 秘鑰紀律 |
+|------|------|-----------|
+| `create --role <anchor\|ops\|farm\|recovery> [--style softname\|wordnum\|nature\|any] [--region hk\|cn\|tw\|us\|gb\|jp\|kr\|de] [--fp <id> --eg <id>] [--show]` | 生成 + 入庫；印 persona 摘要（maskEmail 掩碼）+ vault 指針 | 密碼只在 `--show`；綁定唔齊即明確 deferred |
+| `list [--role <r>]` / `show <id> [--show]` | 賬本視圖（掩碼） | 同上 |
+| `retire <id> [--note <t>]` | 軟退休（T5 → DEAD，冪等，history append） | — |
+| `export [--out <f>]` / `import <f>` | 密文備份/合併（老細側資產） | 匯出檔零明文 |
+
+**註冊自動化契約預留**（`packages/shared/src/account-provision-contract.js`）：driver 輸入 = persona + credentials（validator fail-closed），輸出 = 封閉事件集（`STATE_TRANSITION`/`STEP_PROGRESS`/`HUMAN_GATE`/`CREDENTIALS_SEALED`/`TERMINAL_FAILURE`）；狀態事件逐條過 T5 矩陣；SMS 牆/CAPTCHA 閘一律 `HUMAN_GATE` → 現有介入 console（category `EXTERNAL_VERIFICATION`），**AUTO-SOLVE = 契約違規**（禁自動解，同 ADR-030 CAPTCHA 同口徑）；憑證形狀欄位禁入事件。stub 驅動器已交付（行合法序列、泊人肉閘）；Chrome 自動化實裝 = 下一單。
+
 ## 端點總計
 
 **122 條路由**（逐檔案計；P5 2026-10-24 實核 = P4-MC 105 條 + **stream console 5**；2026-10-27 補 **system ram-gate 4 + identity login/provision 4（T2）+ account lifecycle 4（T5）**）：health 2 + auth 3 + containers 15（含 5 個 action + exceptions 3 條 + create-from-template）+ container templates 2 + dashboard 1 + tasks 15（runs 6 + approvals 3 + tools 1 + providers 4 + audit 1）+ task definitions 1 + schedules 10（含 POST preview）+ schedule notifications 4 + manual interventions 9（P4-MC）+ **stream console 5（MC P1–P3：create/list/heartbeat/reconnect/close；另有 1 條 WS upgrade path 唔計入 REST 路由）** + redroid templates/preflight 5 + redroid devices 11（含 3 個 action + proxy/retry）+ batch control 21（BR-B2）+ system ram-gate 4（RAM-G1）+ identity login/provision 4（T2）+ account lifecycle 4（T5）。註：identity egress binding（W3，4 條）／fingerprint（W1，2 條，另 1 條 list）路由契約照 ADR-027/025 + README P5 表，未併入本總計（待併，老實標注 2026-10-27）。所有寫操作（POST/PATCH/PUT/DELETE，`/auth/login` 除外）：RBAC + audit row（actor、request_id、IP、status、details scrub）+ Origin 檢查（browser mutating 請求）。

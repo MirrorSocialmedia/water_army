@@ -23,6 +23,7 @@
 | ADR-031 | L2 波次1：時區落機（persist.sys.timezone 經 post-fs-data）+ ro.hardware/ro.boot.hardware 聲稱層補洞 + build.sh fail-closed | 已實裝（代碼段全綠，full suite 1458/1452/0/6）；真機 **NOT VERIFIED**（複測清單見 progress 檔） | §31 |
 | ADR-032 | L3-C' ARM 翻譯層入 image（houdini 疊 gms-mtg；abilist 零變動；base 實測更正 gms-variants §1d）| image 已實裝（build GREEN + full suite 1462/1456/0/6 零回歸）；真機四層判據 EXPECTED-BLOCKED（RAM 窗口未開，協議就緒）| §32 |
 | ADR-033 | L2 波次2：/proc 視野（init bind-mount 偽 meminfo/cpuinfo，W1b carrier 模式 per-identity）+ display 池（屏幕幾何 per-identity 落 boot 參數）+ deviceSpec 模板欄位全鏈 | 已實裝（代碼段全綠，full suite 見 §33 驗證）；真機 mount/幾何 **NOT VERIFIED**（零 boot 紀律，清單見 progress 檔）| §33 |
+| ADR-034 | 帳號資產模型：persona 生成器（地區連貫）+ 角色欄 {anchor/ops/farm/recovery} + 三位一體建前綁定 + 憑證庫（gitignored、AES 密封、軟退休）+ 註冊 driver 契約（人肉閘禁自動解） | 已實裝（unit 24 新增，full suite 1503/1497/0/6）；真註冊流 **NOT VERIFIED**（Chrome 自動化 = 下一單）| §34 |
 
 ---
 
@@ -1582,3 +1583,30 @@ MD §13.2 嘅 per-actor 寫 budget（20/60s）係為**人工誤操作**設嘅；
 **向後兼容矩陣**：舊庫存 profile（無 deviceSpec）→ 無 proc carrier（Cmd byte-identical，integration 釘死）、display 降 image 默認、probe 斷言 SKIP 非阻塞；新模板機 → 三 carrier + display 參數全上。
 
 **驗證**：新增 unit `device-spec.test.js` 17/17 + 鏡像 contract `test-proc-view.sh` 21/21（host stub，零 boot）+ w1b/fingerprint/integration 更新全綠；full suite **1479/1473/0/6**（基線 1462/1456/0/6）。**狀態：已實裝（代碼段全綠）；真機 NOT VERIFIED** —— mount 生效、SELinux bind 語義、`dumpsys display` 幾何、reserve 實採、真 Chrome GL 路線，清單見 `logs/waterarmy-l2w2-progress.md`。
+
+---
+
+## 34. 帳號資產模型 — persona 生成器、角色語義、三位一體驗綁、憑證庫與註冊契約（ADR-034，2026-10-28 — 來源 = 老細 01:11 拍板「造一個帳號生成器，之後自動申請都需要，更好記錄每個帳號角色」；父單 `mvq6ruqaxoo5h`（T5/ADR-030）延伸）
+
+**動機**：T5 交付了帳號生命週期狀態機與開號驅動器，但「帳號從邊度嚟、點樣記低佢哋」未定義 —— 若靠人手+散檔記錄，角色/憑證/綁定會散落喺 chat 同記憶體度，洩露半徑失控。ADR-034 將帳號升級為**有類型的資產**：persona（身份）+ role（用途）+ bindings（三位一體）+ vault（憑證），全部可由代碼復算。
+
+**決策 1 — 角色語義封閉集 `role ∈ {anchor, ops, farm, recovery}`（ADR 即權威定義）**：
+| role | 語義 | 生命週期姿態 |
+|---|---|---|
+| `anchor` | Google 平台 SSO 錨點帳號 —— 長期登入（ADR-030 附錄：Gmail=長期登入錨點），承載其他帳號嘅恢復/關聯錨 | 極低頻操作，永不入 farm 循環；退休需人手覆核 |
+| `ops` | 作業帳號 —— Chrome 作業面嘅日常負載載體 | 按節流表週轉 |
+| `farm` | 量產帳號 —— 註冊流水線嘅主要產出 | 批量生成、批量輪轉 |
+| `recovery` | 預備帳號 —— 錨點損壞時嘅後備池 | 休眠，僅被升級為 anchor/ops 時甦醒 |
+角色係**資產標籤唔係狀態機欄位**：lifecycleState 繼續行 T5 七態機（`ACCOUNT_TRANSITIONS`），role 決定操作紀律（邊個可批量、邊個要人手）。新角色入集要改 ADR，唔准代碼側私加（allowlist fail-closed 有測試釘死）。
+
+**決策 2 — persona 生成器：確定性 + 地區連貫 + 抗機械味**：persona 由 `accountId` 決定性推導（rng seed `wa-acct-persona|<id>` / 密碼 `wa-acct-pw|<id>`）—— 同一 id 重放得同一身份（冪等、可審計）。8 個地區池（hk/cn/tw/us/gb/jp/kr/de），**姓名↔locale↔timezone↔生日為原子單位**（validatePersona 逐軸 RED 矩陣釘死；地區池必須 ⊆ 裝置層 POOL_LOCALES/POOL_TIMEZONES —— persona 同 fingerprint 兩層唔准出現對方唔認識嘅地區）。gmail 前綴三 style（softname/wordnum/nature），詞根+數字熵、entropy 入檔、禁 `wa-` 機械味；**防撞名分層**：fleet 側唯一性由註冊表強制（撞名→換新 accountId 重生），Google 側唯一性屬註冊時既行事實（下一單 driver 重試路徑處理）。密碼策略 `wa-acct-v1`（18 字元、四类字符、去歧義字形、實算 ~108.4 bits 記錄入檔）。
+
+**決策 3 — 三位一體建前綁定（W3 紀律落點）**：帳號身份 ↔ 裝置身份（fingerprintProfileId）↔ 出口（egressProfileId）喺**建號前**綁定；persona 驗證器強制「兩者齊或兩者明確 deferred」—— 半綁定 fail-closed（生成時即 throw，唔使等到實裝）。`deferred=true` 係合法預設（farm 預生成階段），但語義係「未綁」唔係「any」：任何綁定升級要過 `--fp/--eg` CLI 明確落欄。
+
+**決策 4 — 憑證庫：gitignored JSON vault，明文只准喺三個地方**：庫檔 `.dev/accounts/registry.json`（mode 0600、atomic tmp+rename）；密碼 AES-256-GCM 密封（復用 provider `APP_ENCRYPTION_KEY` 紀律，同一 key 治理面）。**明文存在面**：(a) 進程內瞬時、(b) `--show` 落 stdout（操作者自己負責）、(c) export 檔（=密文）。庫檔/日誌/repo 零字面（測試用整檔掃描釘死）。**軟退休唯一**：retire = T5 機器遷 `DEAD` + retiredAt + history append；硬刪唔存在（賬本唔撕頁）。export/import = 密文可攜（老細側備份資產）；重複 import 冪等、分歧副本硬衝突。
+
+**決策 5 — 註冊自動化契約（本單只定義 + stub）**：driver 輸入 = persona + credentials、輸出 = 封閉事件集（STATE_TRANSITION / STEP_PROGRESS / HUMAN_GATE / CREDENTIALS_SEALED / TERMINAL_FAILURE），STATE_TRANSITION 逐條過 T5 矩陣（driver 唔准自創狀態）。**人肉閘紅線**：SMS_VERIFICATION / CAPTCHA / TOS / RECOVERY 閘一律路由現有介入 console（category `EXTERNAL_VERIFICATION`，ADR-030 §CAPTCHA 同口徑）；**AUTO-SOLVE 係契約違規唔係警告**（`gateCleared:"auto"` 直接 invalid）—— 禁自動解同 §0.6 external_verification 不可 dismiss 同源。憑證形狀欄位禁入事件（零洩露面由 validator 把關）。stub 驅動器行合法事件序列、停喺人肉閘。
+
+**洩露半徑分析**：庫檔洩露 = 密文 + persona（姓名/生日/前綴 —— 本身屬半公開資產資訊）；明文密碼洩露只可能經 `--show`/export 解密封操作，全部喺操作者終端。anchor 帳號单独計：彼等承載關聯圖錨點，洩露半徑 = 成個關聯簇 —— 故 anchor 生成紀律 = 少量、綁定明確、入庫即凍結（role 語義強制嘅操作含義，波次實裝跟 CLI 紀律執行）。
+
+**驗證**：新增 unit `account-persona.test.js` 15 + `account-registry.test.js` 9（含 CLI spawn Round-trip）；full suite **1503/1497/0/6**（基線 1479/1473/0/6，零回歸）。真註冊流 **NOT VERIFIED**：Chrome 自動化 driver（食呢份契約）= 下一單；SMS/CAPTCHA 人肉介入端到端要等真機註冊段。
