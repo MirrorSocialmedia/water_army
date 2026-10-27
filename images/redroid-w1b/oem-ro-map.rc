@@ -1,0 +1,28 @@
+# water_army W1b — carrier -> ro.* mapping (GENERATED — do not hand-edit)
+# regenerate: node scripts/w1b/generate-wa-ro-map-rc.mjs
+# source of truth: packages/shared/src/w1b-image-mapping.js (unit-diffed in CI)
+#
+# early-init: for every androidboot.oem_* carrier present on the kernel
+# cmdline (init exposes them as ro.boot.oem_*), rewrite the REAL ro.* prop via
+# oem-propctl (resetprop-rs writes the property area directly, bypassing the
+# ro.* one-time-write rule; ro.build.* are already loaded from build.prop
+# before early-init). Absent carrier = no action.
+
+on early-init && property:ro.boot.oem_ro_product_brand=*
+    exec -- /vendor/bin/oem-propctl ro.product.brand ${ro.boot.oem_ro_product_brand}
+on early-init && property:ro.boot.oem_ro_build_id=*
+    exec -- /vendor/bin/oem-propctl ro.build.id ${ro.boot.oem_ro_build_id}
+on early-init && property:ro.boot.oem_ro_product_device=*
+    exec -- /vendor/bin/oem-propctl ro.product.device ${ro.boot.oem_ro_product_device}
+on early-init && property:ro.boot.oem_ro_build_display_id=*
+    exec -- /vendor/bin/oem-propctl ro.build.display.id ${ro.boot.oem_ro_build_display_id}
+on early-init && property:ro.boot.oem_ro_build_fingerprint=*
+    exec -- /vendor/bin/oem-propctl ro.build.fingerprint ${ro.boot.oem_ro_build_fingerprint}
+on early-init && property:ro.boot.oem_ro_product_manufacturer=*
+    exec -- /vendor/bin/oem-propctl ro.product.manufacturer ${ro.boot.oem_ro_product_manufacturer}
+on early-init && property:ro.boot.oem_ro_product_model=*
+    exec -- /vendor/bin/oem-propctl ro.product.model ${ro.boot.oem_ro_product_model}
+on early-init && property:ro.boot.oem_ro_product_name=*
+    exec -- /vendor/bin/oem-propctl ro.product.name ${ro.boot.oem_ro_product_name}
+on early-init && property:ro.boot.oem_ro_serialno=*
+    exec -- /vendor/bin/oem-propctl ro.serialno ${ro.boot.oem_ro_serialno}

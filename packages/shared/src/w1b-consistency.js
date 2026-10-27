@@ -76,9 +76,10 @@ export function checkProbeSelfConsistency(props) {
   else {
     const buildId = props?.['ro.build.id'];
     if (buildId && seg[1] !== buildId) problems.push(`fingerprint buildId segment "${seg[1]}" != ro.build.id "${buildId}"`);
-    const type = seg[2]?.split(':')[1];
-    if (type && type !== 'user') problems.push(`build type "${type}" is not "user" (farm tell)`);
   }
+  // type/keys is the segment AFTER the second colon: .../incremental:type/keys
+  const type = fp.split(':')[2]?.split('/')[0];
+  if (type && type !== 'user') problems.push(`build type "${type}" is not "user" (farm tell)`);
   // uniqueness fields observed must not be empty
   for (const f of UNIQUE_PROFILE_FIELDS) {
     const prop = PROFILE_PROP_MAP[f];

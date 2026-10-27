@@ -1,16 +1,17 @@
 /**
  * W1b P1/P2 — the carrier→ro.* mapping contract for the w1b image.
  *
- * The w1b redroid image boots with an init hook (/vendor/etc/init/wa-ro-map.rc
+ * The w1b redroid image boots with an init hook (/vendor/etc/init/oem-ro-map.rc
  * — auto-imported by Android init because it lives in /vendor/etc/init/) that
  * maps the cmdline carrier props (androidboot.oem_* → ro.boot.oem_*) onto
- * their real ro.* targets using resetprop, bypassing init's one-time-write
- * ro.* rule (ro.build.* are already populated from build.prop long before
- * early-init, so plain `setprop` would silently no-op — that is exactly why
- * Magisk resetprop is baked into the image; see images/redroid-w1b/).
+ * their real ro.* targets using oem-propctl (resetprop-rs — direct property
+ * area write), bypassing init's one-time-write ro.* rule (ro.build.* are
+ * already populated from build.prop long before early-init, so plain `setprop`
+ * would silently no-op — that is exactly why resetprop-rs is baked into the
+ * image; see images/redroid-w1b/propctl.provenance.md).
  *
  * THIS MODULE IS THE SINGLE SOURCE OF TRUTH for the mapping table. The .rc
- * file is a GENERATED artifact (images/redroid-w1b/wa-ro-map.rc); a unit test
+ * file is a GENERATED artifact (images/redroid-w1b/oem-ro-map.rc); a unit test
  * re-runs generateWaRoMapRc() and diffs it against the committed file — the
  * platform side (Cmd injection) and the image side (init mapping) cannot
  * drift apart silently.
@@ -19,11 +20,16 @@
  *  - one `on early-init && property:<carrier>=*` action per prop: the action
  *    only runs when THAT carrier is actually present (partial maps legal,
  *    absent props leave the image default untouched);
- *  - `${ro.boot.oem_*}` expansion happens inside init (no shell in the image —
- *    /system/bin/sh needs the APEX linker which is not mounted until early-fs);
+ *  - `${ro.boot.oem_*}` expansion happens inside init (no usable shell at
+ *    early-init in the stock image — /system/bin/sh needs the APEX linker
+ *    which is not mounted until early-fs);
  *  - values are word-expanded by init: profile values are validated to
  *    contain no spaces/globs before they can reach the Cmd line
  *    (SAFE_PROFILE_VALUE_RE), so expansion is single-word by construction.
+ *    ro.product.model carries spaces as %20 — oem-propctl decodes %20 back
+ *    to spaces when writing the prop (ADR-028);
+ *  - CLI: `oem-propctl NAME VALUE` positional set (resetprop-rs v0.6.0 —
+ *    NOT `--set`; NOT named `resetprop` to avoid Magisk/KSU applet shadowing).
  */
 
 import { PROFILE_PROP_MAP, propToAndroidbootKey } from './fingerprint-profile.js';
@@ -32,6 +38,9 @@ import { PROFILE_PROP_MAP, propToAndroidbootKey } from './fingerprint-profile.js
 export function propToCarrierRoKey(prop) {
   return propToAndroidbootKey(prop).replace(/^androidboot\./, 'ro.boot.');
 }
+
+/** Path the resetprop-rs binary is baked to inside the image. */
+export const PROPCTL_BIN = '/vendor/bin/oem-propctl';
 
 /**
  * The 9-entry mapping table: carrier ro.boot key → real ro.* target.
@@ -52,8 +61,6 @@ export function carrierMappingTable() {
 
 /**
  * Generate the committed init rc artifact. Byte-deterministic.
- * The resetprop binary lands at /vendor/bin/wa-propctl (baked, sha256-pinned
- * from the official Magisk release — provenance in images/redroid-w1b/resetprop.provenance.md).
  */
 export function generateWaRoMapRc() {
   const rows = carrierMappingTable();
@@ -64,12 +71,13 @@ export function generateWaRoMapRc() {
   out.push('#');
   out.push('# early-init: for every androidboot.oem_* carrier present on the kernel');
   out.push('# cmdline (init exposes them as ro.boot.oem_*), rewrite the REAL ro.* prop via');
-  out.push('# resetprop (bypasses the ro.* one-time-write rule; ro.build.* are already');
-  out.push('# loaded from build.prop before early-init). Absent carrier = no action.');
+  out.push('# oem-propctl (resetprop-rs writes the property area directly, bypassing the');
+  out.push('# ro.* one-time-write rule; ro.build.* are already loaded from build.prop');
+  out.push('# before early-init). Absent carrier = no action.');
   out.push('');
   for (const r of rows) {
     out.push(`on early-init && property:${r.carrier}=*`);
-    out.push(`    exec -- /vendor/bin/wa-propctl --set ${r.target}=\${${r.carrier}}`);
+    out.push(`    exec -- ${PROPCTL_BIN} ${r.target} \${${r.carrier}}`);
   }
   out.push('');
   return out.join('\n');
@@ -91,7 +99,7 @@ export function parseWaRoMapRc(text) {
       pending = { carrier: trig[1] };
       continue;
     }
-    const exec = line.match(/^ {4}exec -- \/vendor\/bin\/wa-propctl --set ([A-Za-z0-9_.]+)=\$\{([A-Za-z0-9_.]+)\}$/);
+    const exec = line.match(/^ {4}exec -- \/vendor\/bin\/oem-propctl ([A-Za-z0-9_.]+) \$\{([A-Za-z0-9_.]+)\}$/);
     if (exec) {
       if (!pending) { problems.push(`line ${i}: exec without trigger`); continue; }
       if (exec[2] !== pending.carrier) problems.push(`line ${i}: exec carrier ${exec[2]} does not match trigger ${pending.carrier}`);
