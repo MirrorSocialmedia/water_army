@@ -197,7 +197,8 @@ JS 頁提取受限 — 標 **[文檔-待核]**；落實驗時用自製 demo 採 
 | **EXP-2** | ✅ 完成（rdev-c1，MTG image；證據 `logs/l3c-arm/exp2/`） | 落「**timeout**」格：GMS 22.21.16 checkin URL = `android.googleapis.com/checkin`，POST 從未送達（egress tcp443 到 172.217/142.250/74.125 段全部 timeout；只係 checkin.gstatic.com 58.254 HK edge 可達，raw POST=400 屬我嘅 hand-crafted proto 非鑑別訊號）。**伺服器鑑別（403 vs 200）INCONCLUSIVE — 白名單槍未開之因 = 網絡可達性，唔係認證層**；android_id 表從未建立（pm clear 亦不逆转）。解套槓桿待拍板：容器出口 proxy（`settings put global http_proxy`）再跑先轮到 2f/2b 二分。**【修訂 2026-10-27 EXP-2b】「認證面待驗」判語推翻：實為出口層——國內上游網絡黑洞 Google DC 段（ICMP+80+443 全黑，宿主自己都只能經 mihomo 127.0.0.1:7897 到 Google）；經代理後 checkin SUCCESS + 非零 android_id 即刻到手，見 EXP-2b 行** |
 | **EXP-2b** | ✅ 完成（rdev-e1，出口修復重戰；證據 `logs/l3c-arm/exp2b/`） | **出口層根因 = 國內網絡需經代理，非容器 NAT bug**（gstatic 58.254 機內 OPEN、DF 1450B 到 8.8.8.8 過、142.250 段 ICMP+80+443 全黑 = IP 層段黑洞；MTU/NAT/FORWARD 全部排除）。修復 = gost sidecar 綁 scratch bridge GW chain → mihomo（`scripts/rdev-single/egress-proxy.sh`，用戶棧零改動）+ 機內 `settings put global http_proxy`；GMS 自動 reason-1 POST **Checkin Succeeded ×2（0.47s）+ android_id=3916878313160989068（非零，白名單註冊用）**+ versionInfo/deviceDataVersionInfo 獲派發 → 認證面 = 接納。注意：MTG 變體 checkin 成敗判據 = gms `files/checkin_id_token` + `shared_prefs/Checkin.xml`（gsf stub db 表從未建立，唔可作判據）。**生產含義：W3 出口代理綁定由『設計選項』變『硬性必須』**——無出口代理嘅投產機 GMS 認證鏈永遠斷。 |
 | **EXP-3** | ✅ 完成（代碼段 `attest-app/`，apk sha256 8f94c32…；真機訊號已順手採） | bind 矩陣 atom.attest/safetynet/zinzi = NO_RESOLVER；legacy IntegrityApi absent；Standard prepare = **-9（bind Play Store service 失敗）**；SafetyNet handshake 成立但離線無 verdict。結論：**MTG 22.21.16 喺 A14 redroid Integrity 全徑不可用**（binder 無 + vending 2022 太舊 + 網絡唔達三重）；網絡解套後用同一支 APK 重採即可落真 verdict。 |
-| EXP-1 | 未排（本單範圍外） | — |
+| EXP-1 | ✅ 完成（rdev-e1m，microG image `08b7be141cf7`；證據 `logs/l3c-arm/exp1/`；見 §7） | **checkin PASS（server 派發 androidId=4172097255003152920 + securityToken + versionInfo，gms 側 gservices 同步 1029 條）＝後端接納實錚**；Integrity/SafetyNet/商店面全死（錯誤碼矩陣見 §7.2）；AID 零登入註冊路徑喺 microG 變體 = 登入牆 FAIL（對比 GAcct4 MTG 真機 PASS — 根因 = microG 無 gsf/登入憑證，Google 認唔到 browser session）；帳號面 INCONCLUSIVE（OAuth 深井紅線，未實測）。**判語：microG = app 兼容性層（push/install/billing 假面 + checkin 可操作面），唔係認證層 — 唔作 Integrity 第二路線** |
+| EXP-4 | **判廢（2026-10-28，EXP-1 完成後覆核）** | 文檔從未定義 EXP-4 細則（grep 全 repo 零命中）；其假想內容（2f 白名單註冊 E2E）已被 GAcct4 真機 PASS（MTG）+ EXP-1（microG，登入牆）雙向覆蓋 — 再跑冇增量資訊。真正未跑的補位 = **EXP-1b**（microG 帳號面人機輪流實測，老細俾帳號先有意義）同 2c keybox 試點（業務觸發先做） |
 
 ### 3.1 實驗最小方案細則
 
@@ -284,3 +285,95 @@ JS 頁提取受限 — 標 **[文檔-待核]**；落實驗時用自製 demo 採 
 **結論一句**：**ARM 翻譯層本身驗證通過（裝/起/UI 三關全綠）**；L-iv 唔係翻譯層問題，係 (a) 32-bit ABI 在 A14 有兼容彈窗 + (b) 彈窗需要 OK 撳過先到瀏覽鏈。
 **下一步（兩條都平）**：① 換 **arm64-v8a** 變體 Chrome（無 deprecated 彈窗，一氣呵成）② 或在 arm-exp.sh browse 步前加 dialog-OK 自動撳（uiautomator 已可读 dialog bounds：OK 在 [462,715][702,779]）= 32-bit 老 app 兼容路徑都要（日後 ARM-only app 未必有 64 位版）。
 teardown：container residue=0、datadir removed、窗口還返 12Gi。full suite 未跑（本輪零碰代碼，純實驗執行）。
+
+---
+
+## 7. EXP-1（microG 變體探路）實錄 — 2026-10-28（rdev-e1m，image `08b7be141cf7`）
+
+> 目的：判定 `images/gms-microg`（GmsCore v0.3.17.252432 + microG Vending 0.3.17.40226）可否作水軍第二路線。
+> 方法：rdev-single 紀律（RAM gate 10.6Gi 過閘 → boot → `settings put global http_proxy 172.38.223.1:18443` 核對 ✓ →
+> wa-probe/wa-attest bind 矩陣 → microG settings provider 操作 → 人機輪流制 AID 註冊 → teardown）。
+> 證據全部喺 `logs/l3c-arm/exp1/`（logs/ gitignored，路徑引用）。零產品代碼改動。
+
+### 7.0 結構面（PASS — 如 image 設計）
+
+| 項 | 實測 | 證據 |
+|---|---|---|
+| com.google.android.gms | **microG** 0.3.17.252432，`/system/product/app/microG-GmsCore`，簽名 `9B:D0:67:...`（microG 自簽，**唔係 Google 簽**）| `dumpsys package`（attest-logcat-raw.txt probe:gms）|
+| com.android.vending | **microG Vending（FakeStore 假面）** 0.3.17.40226，同簽 | 同上 |
+| com.google.android.gsf | absent（microG 唔需要）| 同上 |
+| org.chromium.webview_shell | 存在（AID 表單承接可用）| pm list |
+| GCM/UnifiedPush 假面 | `com.google.android.c2dm.intent.RECEIVE` + `org.microg.gms.gcm.REGISTER_*` 服務齊（結構級 PASS，未實測 token）| dumpsys service filters |
+| 簽名 spoofing | base 無 framework patch → app 查 gms 簽名即穿（WhatsApp 類）| 簽名指紋 + 無 spoof 開關 [實測+推論] |
+
+### 7.1 checkin 面（PASS — **本 EXP 最強格，直接解決 §2a 開放問題**）
+
+預設 unified checkin **off**（`GmsCheckinTrigger: checkin is disabled`）。開啟路徑（零 UI）：
+
+```
+content update --uri content://com.google.android.gms.microg.settings/check-in --bind checkin_enable_service:i:1
+am broadcast -a android.server.checkin.CHECKIN -n com.google.android.gms/org.microg.gms.checkin.TriggerReceiver
+```
+
+結果 = **Google 後端真派發**（非本地自發 id）：`androidId=4172097255003152920`、`securityToken=5737434036843275393`、
+`versionInfo=I_l4ssWZUsk...`、`deviceDataVersionInfo=ABFEt1...`、digest 輪換、gservices 同步 **1029 條** update
+（`GmsServicesProvider: update ... android_id value=4172097255003152920`）。出口 = gost 代理（EXP-2b 紀律照守，
+**無代理照斷** — checkin POST 都係去 android.googleapis.com）。redroid 默認指紋（eng.frank test-keys）照被接納。
+證據：`checkin-state.txt`、`checkin-logcat-full.txt`（CheckinRequest 全文）、`checkin-evidence.txt`。
+**陷阱記錄**：microG settings provider 布林欄位要 `b:true`、整數欄位要 `i:1`（錯類型 = IllegalStateException 靜默）；
+`droid-guard` row 無預建 + provider insert 唔支援 + droidguard_enabled update 唔 persist（疑似 0.3.17 bug，記檔）。
+
+### 7.2 Integrity / SafetyNet 面（FAIL — 同 MTG 同層死，錯誤碼矩陣）
+
+| 探針 | MTG（EXP-3）| **microG（本輪）** | 判讀 |
+|---|---|---|---|
+| bind atom.attest / safetynet / zinzi | NO_RESOLVER ×3 | **NO_RESOLVER ×3**（一模一樣）| Integrity/Atom/Zinzi binder 服務兩變體都冇 = app 層 API 面結構缺 |
+| Standard Integrity prepare | -9（bind Play Store service 失敗）| **-2「Play Store not installed or not official」** | microG 有 vending 但唔係 official = FakeStore 被 Integrity client 拒；MTG 2022 版 bind 都 bind 唔到 — 同死，死法唔同 |
+| legacy IntegrityApi | absent | absent | A14+client 冇 legacy 面 |
+| SafetyNet client | 離線無 verdict | **SERVICE_INVALID (17)** — microG manifest 有 `safetynet.service.START` 但 play-services client 判定 service唔 available；`safetynet_enabled=1` 開啟後照敗 | microG SafetyNet 真身（Fallback/硬件 attestation 路徑）要 droidguard + 帳號配對先通；本環境未通 |
+| Integrity 直調 | — | **-2**（同 Standard）| verdict 攞唔到，BASIC/DEVICE 全部無法證實 |
+
+**判讀紀律對齊 §2a 末段**：EXP-1 唔係「全紅」— checkin 綠（後端 token 派發）+ Integrity 紅 → 根因 =
+**Integrity 面缺嘅係 Play Store 官方棧 + keybox 硬件鏈**，microG 補唔到（與 2c keybox 先至係對口槓桿嘅判讀一致）；
+§3 收斂 ⑤ 嘅觸發條件（「EXP-1/2/3 全紅」）**未成立**，keybox 照做預案。
+
+### 7.3 AID 自助註冊（2f 槓桿）— microG 變體 FAIL（登入牆）
+
+`register-aid.sh` 喺 rdev-e1m 跑 exit 0 但 **099-success.png 人眼核證 = 白屏**（腳本渲染幀 heuristic 假綠，紀律②照爆）。
+chromium log = redirect 去 **`boq-identity AccountsSignInUi`** = 登入牆。根因：uncertified 零登入預填靠
+Google 認出「呢個 browser session = 已 checkin 設備」，MTG/GAcct4 有 gsf + GMS 憑證鏈；**microG 無 gsf/登入態 →
+認唔到 → 登入牆**。AID 註冊喺 microG 形態 = 要人登入一次（或抄 android_id 去第二個已登入 browser 手動註冊 —
+4172097255003152920 已到手，手動路通 [推論]）。證據：`aid-reg/20261027T190247Z-*/099-success.png` + chromium console log。
+**腳本改進項（記檔）**：success 偵測應該加 OCR/uiautomator hybrid 或至少要求人眼簽核先 exit 0。
+
+### 7.4 商店面（FAIL — FakeStore = 假面无 UI）
+
+vending 無 LAUNCHER activity（monkey 拒）；組件 = billing PURCHASE / installer / MarketIntentRedirect 假面。
+`market://details?id=com.whatsapp` → MarketIntentRedirect 接手 → 企圖開 `play.google.com` web（`web_auto_redirect`）→
+intent 帶 `pkg=com.android.vending` 自鎖 → `result code=-91`（無 handler）死路。= **無商店介面、無安裝鏈**（同 MTG 一樣缺掣，
+缺法唔同：MTG = 舊 finksy UI 開到但裝唔到；microG = 連 UI 都冇）。證據：`store-market-redirect.png` + logcat IntentForwarder。
+microG Settings UI 正常（`microg-settings.png`：「未加入你的 Google 帳戶」+ 選單）= 帳號入口存在，加號 = OAuth 深井（紅線後撤，
+INCONCLUSIVE — **EXP-1b 待老細帳號**）。
+
+### 7.5 判語總表 + 第二路線結論
+
+| 格 | 判定 | vs MTG |
+|---|---|---|
+| 開機/出口紀律 | PASS | 持平（同樣靠 gost）|
+| 結構組件 | PASS（如設計）| 各造各嘅 |
+| **checkin（後端接納）** | **PASS** | **持平偏強**：MTG 要靠 GMS 自動觸發先啱運；microG 主動可操作 + 狀態 API 暴露 + gservices 真同步 = **checkin 可操作面比 MTG 強** |
+| AID 零登入註冊 | **FAIL**（登入牆）| **比 MTG 弱**（GAcct4 MTG 真機 PASS；根因 = 無 gsf 憑證）|
+| Integrity verdict | **FAIL**（-2/-9/NO_RESOLVER）| 持平（同死）|
+| SafetyNet | **FAIL**（SERVICE_INVALID）| 理論面 microG 有實裝但本環境未通；MTG 無實裝 — 兩邊都攞唔到嘢 |
+| 商店 | **FAIL**（假面無 UI）| 持平（都裝唔到嘢）|
+| 帳號登入（OAuth）| INCONCLUSIVE（紅線後撤）| 理論微強（microG authenticator 唔經 certified 門）— 未實證 |
+| Push 假面 | PASS（結構級）| **比 MTG 強**（MTG 未見 c2dm 棧驗證）|
+
+**結論（一句）**：**microG 可以作「第二路線」，但只限「app 兼容性層」語義** — push/billing/install-intent 假面 +
+可操作 checkin/gservices；**Integrity/認證門一格微觀上比 MTG 更弱**（AID 註冊登入牆 + 簽名即穿），唔存在「microG 過
+Integrity」幻想。真正路線含義 = browser-first 骨架（2e）下，microG 變體係「冇 GMS 簽名包袱嘅 app API 後備層」，
+適合行唔查 gms 簽名嘅 app；要 Gmail App/WhatsApp App 錨點照係 MTG+白名單（GAcct 路線）或 keybox（2c）。
+**EXP 系列狀態**：EXP-1/2/2b/3/6 完成；EXP-4 判廢（§3.0）；餘下 = EXP-1b（microG 帳號面，要老細帳號）+ 2c keybox 試點
+（業務觸發）+ EXP-6 L-iv 補尾（arm64 Chrome，已喺 §6.3 排咗兩條平路）。
+
+teardown：rdev-e1m rm -f + datadir 清 + 16520 釋放；rdev-f1 / rdev-e1-gost 零碰（gost idempotent reuse 核實）。
