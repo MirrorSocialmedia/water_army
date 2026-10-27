@@ -109,7 +109,17 @@ export function createFingerprintService({ db, log = { info() {}, warn() {}, err
       // profile.
       const expected = regen(identityId, template);
       if (template) {
-        if (JSON.stringify(existing.profileJson) !== JSON.stringify(expected)) {
+        // L2 wave-2 (ADR-033) compatibility: template rows stored BEFORE this
+        // wave carry no deviceSpec — compare against regeneration minus that
+        // field (legacy rows degrade to image defaults instead of failing the
+        // strict-equality drift gate; deleting the row lets a fresh regen pick
+        // the wave-2 shape up). deviceSpec is appended LAST by the generator,
+        // so stripping it preserves byte-exact key order for the comparison.
+        const expectedForCompare =
+          expected.deviceSpec !== undefined && existing.profileJson.deviceSpec === undefined
+            ? (({ deviceSpec: _omit, ...rest }) => rest)(expected)
+            : expected;
+        if (JSON.stringify(existing.profileJson) !== JSON.stringify(expectedForCompare)) {
           throw fail('FINGERPRINT_PROFILE_DRIFT', 500, `Stored fingerprint profile for ${identityId} diverges from deterministic regeneration — refusing to guess (fix or delete the row)`);
         }
       } else {

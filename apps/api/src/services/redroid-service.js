@@ -23,7 +23,7 @@ import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 
-import { DOCKER_ERROR, encryptSecret, decryptSecret, resolveProviderKey, buildRoCmdArgs, profileToRoOverrides, templateProfileToRoOverrides, mergeRoOverrides, validateRoOverridesMap } from '@water-army/shared';
+import { DOCKER_ERROR, encryptSecret, decryptSecret, resolveProviderKey, buildRoCmdArgs, profileToRoOverrides, templateProfileToRoOverrides, mergeRoOverrides, validateRoOverridesMap, deviceDisplayArgs, profileProcCmdArgs } from '@water-army/shared';
 
 import { DockerServiceError, classifyDockerError } from './docker-service.js';
 import { GOST_HOST_BIND, deviceNetwork, withDeviceNetwork, ensureDeviceNetwork } from './device-network.js';
@@ -554,7 +554,7 @@ export function validateRedroidTemplate(t) {
  * (MD §2.1 — androidboot.* as container start args, redroid-doc official
  * method). Returns a pure string array; nothing here touches a shell.
  */
-export function buildRedroidCmd({ width, height, dpi, fps, gpuMode, roOverrides }) {
+export function buildRedroidCmd({ width, height, dpi, fps, gpuMode, roOverrides, procViewArgs }) {
   const base = [
     `androidboot.redroid_width=${width}`,
     `androidboot.redroid_height=${height}`,
@@ -568,6 +568,18 @@ export function buildRedroidCmd({ width, height, dpi, fps, gpuMode, roOverrides 
   // Fail-closed inside buildRoCmdArgs (invalid map → throw, never partial).
   if (roOverrides && Object.keys(roOverrides).length) {
     base.push(...buildRoCmdArgs(roOverrides));
+  }
+  // L2 wave-2 (ADR-033): per-identity /proc view carriers (mem_total_kb /
+  // cpu_cores / cpu_clusters) ride the same Cmd contract; the image's init
+  // post-fs-data hook renders + bind-mounts them over the host-penetrating
+  // /proc files. Empty/undefined = byte-identical (legacy profiles).
+  if (procViewArgs && procViewArgs.length) {
+    for (const a of procViewArgs) {
+      if (!/^androidboot\.oem_(mem_total_kb|cpu_cores|cpu_clusters)=[0-9a-zA-Z:,.]+$/.test(a)) {
+        throw new Error(`buildRedroidCmd: malformed proc-view carrier arg "${a}"`);
+      }
+    }
+    base.push(...procViewArgs);
   }
   return base;
 }
@@ -2020,12 +2032,12 @@ export function createRedroidService({
     };
     dim('width', o.width);
     dim('height', o.height);
-    const dpi = o.dpi ?? template.dpi;
+    let dpi = o.dpi ?? template.dpi; // L2w2: re-assigned from profile deviceSpec below (ADR-033)
     if (o.dpi !== undefined && (!Number.isInteger(o.dpi) || o.dpi < 100 || o.dpi > 1200)) throw fail('VALIDATION_ERROR', 400, 'overrides.dpi must be an integer between 100 and 1200');
     const fps = o.fps ?? template.fps;
     if (o.fps !== undefined && (!Number.isInteger(o.fps) || o.fps < 1 || o.fps > 120)) throw fail('VALIDATION_ERROR', 400, 'overrides.fps must be an integer between 1 and 120');
-    const width = o.width ?? template.width;
-    const height = o.height ?? template.height;
+    let width = o.width ?? template.width; // L2w2: re-assigned from profile deviceSpec below
+    let height = o.height ?? template.height;
 
     // W1 (ADR-025): identity fingerprint injection — switch-controlled, OFF by
     // default (V3 real-device verification is open). Switch OFF → identityId
@@ -2037,6 +2049,7 @@ export function createRedroidService({
     //   effect (no data dir, no DB row, no RAM-gate lease on a rejection).
     let roOverridesMerged = null;
     let identityIdForDevice = null;
+    let identityProfile = null; // L2 wave-2: deviceSpec carrier (display + /proc story)
     if (config?.redroidRoOverridesEnabled) {
       const baseProblems = validateRoOverridesMap(template.roOverrides ?? {});
       if (baseProblems.length) {
@@ -2048,6 +2061,7 @@ export function createRedroidService({
           throw fail('FINGERPRINT_SERVICE_UNAVAILABLE', 500, 'identityId supplied but the fingerprint service is unavailable — cannot inject a verified profile');
         }
         const profile = await fingerprintService.resolveForDeviceCreate(input.identityId);
+        identityProfile = profile;
         // W1b (ADR-028): template-backed profiles carry REAL models with
         // spaces -> %20 carrier encoding (decoded on-device by oem-propctl).
         // W1 synthetic profiles keep the byte-identical legacy path.
@@ -2059,6 +2073,25 @@ export function createRedroidService({
         throw fail('FINGERPRINT_RO_OVERRIDES_INVALID', 500, `merged roOverrides invalid: ${merged.problems.join('; ')}`);
       }
       roOverridesMerged = merged.overrides;
+    }
+    // L2 wave-2 (ADR-033): the profile's deviceSpec drives display geometry
+    // (browser must see the claimed model's panel, not the fleet default) and
+    // the /proc view carriers. Precedence: explicit create override > profile
+    // deviceSpec > template default. Legacy rows (no deviceSpec) degrade to
+    // today's exact Cmd (byte-identical). Invalid spec = 500 (fail closed).
+    let procViewArgs = null;
+    if (identityProfile?.deviceSpec !== undefined) {
+      try {
+        const disp = deviceDisplayArgs(identityProfile);
+        if (disp) {
+          if (o.width === undefined) width = disp.width;
+          if (o.height === undefined) height = disp.height;
+          if (o.dpi === undefined) dpi = disp.dpi;
+        }
+        procViewArgs = profileProcCmdArgs(identityProfile);
+      } catch (e) {
+        throw fail('FINGERPRINT_RO_OVERRIDES_INVALID', 500, `profile deviceSpec invalid: ${e.message}`);
+      }
     }
     // W3 (ADR-027): the identity binding column is EGRESS ground truth — it
     // must be stored whenever an identity is requested while the W3 switch
@@ -2273,7 +2306,7 @@ export function createRedroidService({
         ExposedPorts: { [`${REDROID_ADB_CONTAINER_PORT}/tcp`]: {} },
         // MD §2.1: androidboot.* as START ARGS. Env is deliberately empty —
         // redroid reads these from the kernel cmdline, not from Env.
-        Cmd: buildRedroidCmd({ width, height, dpi, fps, gpuMode: template.gpuMode, roOverrides: roOverridesMerged ?? undefined }),
+        Cmd: buildRedroidCmd({ width, height, dpi, fps, gpuMode: template.gpuMode, roOverrides: roOverridesMerged ?? undefined, procViewArgs: procViewArgs ?? undefined }),
         Env: [],
         Labels: {
           'app.managed': 'true',

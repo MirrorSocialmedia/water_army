@@ -65,13 +65,23 @@ test('template mode ON: real-build profile in Cmd (oem_* + %20 model), row schem
   assert.deepEqual(device.roOverrides, templateProfileToRoOverrides(expected), 'snapshot = template overrides');
 
   const cmd = lastCreateBody(redroidMock).Cmd;
+  // L2 wave-2 (ADR-033): display geometry follows the profile's deviceSpec
+  // (browser-visible panel == claimed model); fps/gpu stay template-driven.
   assert.deepEqual(cmd.slice(0, 5), [
-    'androidboot.redroid_width=720',
-    'androidboot.redroid_height=1280',
-    'androidboot.redroid_dpi=320',
+    `androidboot.redroid_width=${expected.deviceSpec.display.widthPx}`,
+    `androidboot.redroid_height=${expected.deviceSpec.display.heightPx}`,
+    `androidboot.redroid_dpi=${expected.deviceSpec.display.densityDpi}`,
     'androidboot.redroid_fps=20',
     'androidboot.redroid_gpu_mode=swiftshader_indirect',
-  ], 'base args untouched');
+  ], 'base args follow deviceSpec geometry (fps/gpu untouched)');
+  // wave-2 /proc view carriers ride the same Cmd (all-or-none, fixed key order)
+  const PROC_KEYS = ['androidboot.oem_mem_total_kb', 'androidboot.oem_cpu_cores', 'androidboot.oem_cpu_clusters'];
+  const procArgs = cmd.filter((a) => PROC_KEYS.includes(a.split('=')[0]));
+  assert.deepEqual(procArgs, [
+    `androidboot.oem_mem_total_kb=${expected.deviceSpec.proc.memTotalKb}`,
+    `androidboot.oem_cpu_cores=${expected.deviceSpec.proc.cpuCores}`,
+    `androidboot.oem_cpu_clusters=${procArgs.find((a) => a.startsWith('androidboot.oem_cpu_clusters='))?.split('=')[1]}`,
+  ], 'proc view carriers present (ADR-033)');
   assert.ok(cmd.includes(`${propToAndroidbootKey('ro.build.fingerprint')}=${expected.fingerprint}`), 'real fingerprint rides the Cmd');
   const modelArg = cmd.find((a) => a.startsWith(propToAndroidbootKey('ro.product.model') + '='));
   assert.equal(modelArg, `${propToAndroidbootKey('ro.product.model')}=${expected.model.replaceAll(' ', '%20')}`, 'model %20-encoded (no raw spaces on the cmdline)');

@@ -95,14 +95,18 @@ test('switch ON: identityId → deterministic profile lands in Cmd (androidboot.
   const body = lastCreateBody(redroidMock);
   const cmd = body.Cmd;
   // 5 base args + the registered props (PROFILE_PROP_MAP, expanded — ADR-031), sorted tail
-  assert.equal(cmd.length, 5 + Object.keys(profileToRoOverrides(expected)).length, `unexpected Cmd: ${JSON.stringify(cmd)}`);
+  // + 3 wave-2 proc-view carriers (ADR-033: mem_total_kb/cpu_cores/cpu_clusters)
+  assert.equal(cmd.length, 5 + Object.keys(profileToRoOverrides(expected)).length + 3, `unexpected Cmd: ${JSON.stringify(cmd)}`);
+  // L2 wave-2 (ADR-033): display geometry follows the profile deviceSpec
   assert.deepEqual(cmd.slice(0, 5), [
-    'androidboot.redroid_width=720',
-    'androidboot.redroid_height=1280',
-    'androidboot.redroid_dpi=320',
+    `androidboot.redroid_width=${expected.deviceSpec.display.widthPx}`,
+    `androidboot.redroid_height=${expected.deviceSpec.display.heightPx}`,
+    `androidboot.redroid_dpi=${expected.deviceSpec.display.densityDpi}`,
     'androidboot.redroid_fps=20',
     'androidboot.redroid_gpu_mode=swiftshader_indirect',
-  ], 'base args must be untouched (prefix stability)');
+  ], 'base args: geometry from deviceSpec, fps/gpu template-stable');
+  assert.ok(cmd.includes(`androidboot.oem_mem_total_kb=${expected.deviceSpec.proc.memTotalKb}`), 'proc meminfo carrier');
+  assert.ok(cmd.includes(`androidboot.oem_cpu_cores=${expected.deviceSpec.proc.cpuCores}`), 'proc cpuinfo carrier');
   for (const [field, prop] of Object.entries({ fingerprint: 'ro.build.fingerprint', model: 'ro.product.model', serial: 'ro.serialno', brand: 'ro.product.brand' })) {
     assert.ok(cmd.includes(`${propToAndroidbootKey(prop)}=${expected[field]}`), `Cmd must carry ${prop}=${expected[field]}`);
   }
