@@ -421,3 +421,40 @@ export {
   throttleScopeKeys,
   pickRecoveryEmail,
 } from './gmail-provision.js';
+
+/**
+ * Account Generator (ADR-034) — persona generator (roles, region-consistent
+ * name pools, gmail prefix styles, password policy + entropy), and the
+ * registration-automation driver contract (human gates → intervention
+ * console; AUTO-SOLVE FORBIDDEN by contract).
+ */
+export {
+  ACCOUNT_ROLES,
+  ACCOUNT_ROLE_SEMANTICS,
+  REGION_POOLS,
+  PERSONA_REGIONS,
+  PREFIX_STYLES,
+  PREFIX_STYLE_INPUTS,
+  PASSWORD_POLICY,
+  PERSONA_SCHEMA_VERSION,
+  BINDING_PENDING,
+  generateGmailPrefix,
+  generatePassword,
+  validatePasswordAgainstPolicy,
+  mintAccountId,
+  generatePersona,
+  validatePersona,
+  personaForStorage,
+  summarizePersona,
+} from './account-persona.js';
+
+export {
+  PROVISION_CONTRACT_VERSION,
+  PROVISION_EVENT_KINDS,
+  PROVISION_GATES,
+  PROVISION_GATE_INTERVENTION_CATEGORY,
+  validateProvisionInput,
+  validateProvisionEvent,
+  createProvisionDriverStub,
+  runProvisionStub,
+} from './account-provision-contract.js';
