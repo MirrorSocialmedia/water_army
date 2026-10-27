@@ -1,0 +1,34 @@
+# L2 wave-1 build pipeline evidence (2026-10-27, code-segment CTO run)
+
+## Positive path — bash images/redroid-w1b/build.sh (real run, 18:2x HKT)
+oem-ro-map.rc in sync
+[docker build -> water-army/redroid:14.0.0-240527-w1b-pre, rc COPY layer rebuilt for the 12-row map]
+/tmp/w1b-finalize.Id3P/oem-propctl-real: OK
+/tmp/w1b-finalize.Id3P/oem-ro-map.rc: OK
+re-own rewrote 3 entries -> water-army/redroid:14.0.0-240527-w1b
+finalize done: water-army/redroid:14.0.0-240527-w1b
+-rwxr-xr-x 0/0          956312 2026-10-27 12:21 vendor/bin/oem-propctl
+-rwxr-xr-x 0/0          496600 2026-10-27 18:22 vendor/bin/oem-propctl-real
+-rw-r--r-- 0/0            2559 2026-10-27 18:22 vendor/etc/init/oem-ro-map.rc
+finalize OK modes normalized: water-army/redroid:14.0.0-240527-w1b
+[w1b-build] post-build assertion GREEN: vendor/etc/init/oem-ro-map.rc 0644 0/0; vendor/bin/oem-propctl 0755 0/0; vendor/bin/oem-propctl-real 0755 0/0
+[w1b-build] final image: water-army/redroid:14.0.0-240527-w1b (sha256:bfa6a160a3719ce3a4537ac2d1b275385cd02e936f28be92c8ba3ec958b635b7)
+[w1b-build] build done: water-army/redroid:14.0.0-240527-w1b
+
+## Negative path — unfinalized raw build MUST fail the assertion (real run)
+Reproduces the rdev-single incident conditions exactly:
+unfinalized image defects:
+  vendor/etc/init/oem-ro-map.rc: mode 0664 != 0644
+  vendor/bin/oem-propctl-real: mode 0775 != 0755
+negative-path assertion exit=1 (expect 1 = would have caught the incident)
+
+## rc simulation harness (images/redroid-w1b/test/test-mapping.sh, host)
+# wrapper %20 decode
+  ok - spaces decoded from %20 in single argv slot
+  ok - no-op passthrough for %20-free values
+  ok - stray percent token rejected fail-closed (exit 2, nothing written)
+# oem-ro-map.rc simulation (init semantics: property present -> action)
+  mapped lines executed: 12
+  ok - rc contains exactly 12 exec lines
+  ok - all 12 target/value pairs land correctly (incl. model decode, timezone, hardware)
+# result: GREEN
