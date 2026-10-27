@@ -48,7 +48,7 @@ const PROVISION_BODY = {
   properties: {
     names: { type: 'array', minItems: 1, maxItems: 100, items: { type: 'string', minLength: 3, maxLength: 40 } },
     identityType: { type: 'string', enum: ['qa_device', 'staging_user'] },
-    egressIps: { type: 'array', maxItems: 100, items: { type: 'string', minLength: 7, maxLength: 15 } },
+    egressIps: { type: 'array', maxItems: 100, items: { anyOf: [{ type: 'string', minLength: 7, maxLength: 15 }, { type: 'null' }] } },
     dryRun: { type: 'boolean' },
   },
 };

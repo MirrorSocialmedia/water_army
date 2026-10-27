@@ -50,6 +50,7 @@ function fail(code, status, message, details) {
   const err = new Error(message);
   err.apiCode = code;
   err.httpStatus = status;
+  err.statusCode = status; // app.js error envelope reads statusCode (RedroidServiceError shape)
   if (details) err.details = details;
   throw err;
 }

@@ -22,13 +22,14 @@
  */
 
 const IDENTITY_TYPES = new Set(['qa_device', 'staging_user']);
-const NAME_RE = /^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/; // lowercase, readable, device-name safe
+const NAME_RE = /^redroid-[a-z0-9][a-z0-9_-]{0,39}$/; // MUST match the device-name pattern (device 1:1 with the pool entry)
 const IPV4_RE = /^(\d{1,3}\.){3}\d{1,3}$/;
 
 function fail(code, status, message, details) {
   const err = new Error(message);
   err.apiCode = code;
   err.httpStatus = status;
+  err.statusCode = status; // app.js error envelope reads statusCode (RedroidServiceError shape)
   if (details) err.details = details;
   throw err;
 }
@@ -51,7 +52,7 @@ export function createIdentityProvisionService({ db, config, log = { info() {}, 
     const seen = new Set();
     for (const n of names) {
       if (typeof n !== 'string' || !NAME_RE.test(n)) {
-        fail('VALIDATION_ERROR', 400, `name '${n}' invalid (^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$ — lowercase, readable, device-name safe)`);
+        fail('VALIDATION_ERROR', 400, `name '${n}' invalid (must match the device-name pattern ^redroid-[a-z0-9][a-z0-9_-]{0,39}$ — the pool entry IS the device name)`);
       }
       if (seen.has(n)) fail('VALIDATION_ERROR', 400, `duplicate name in pool: '${n}'`);
       seen.add(n);
