@@ -1,0 +1,14 @@
+<?xml version='1.0' encoding='utf-8' standalone='yes' ?>
+<map>
+    <long name="CheckinService_lastCheckinSuccessTime" value="1793112481915" />
+    <long name="CheckinService_last_checkin_ms_unspecified" value="1793112481916" />
+    <long name="CheckinInterval_IntervalSeconds" value="40661" />
+    <long name="aggregation_flex" value="600" />
+    <long name="CheckinService_checkinCompleteBroadcastTime" value="1793112481916" />
+    <long name="CheckinInterval_FlexSec" value="10800" />
+    <string name="android_id">3929395759228143973</string>
+    <string name="CheckinService_versionInfo">8xIw0DUPf5cVoOhBO1boBVzV5VHdFxo</string>
+    <string name="CheckinService_deviceDataVersionInfo">ABFEt1VA8KVsDUttNZCyUQokxhjGrW-FQZNgxSVFtAmRR_EMucIKq4q2hoG5FZR-LoJ0Jd2tbUO621W_3fcHo6JOfc9C_zMe7yz7k0GtUDQVMEKLq15Ig3xwSqlf9OHfEATz142Q3wo3C12IX-Ih05k7Yn_9iK5gY0aKhuIcut9Mts63dQQBcqRXHlBItVdbD2u9BqJLnz69_5QzBiwm3dREPFbfZNqA5EZAacqydjujgiqNaTv-C_3Wbb-RHEt2pO9BMlCEG41SAYaMc-cozmb8IRYIUpSbAtQz9wnrZl-qdcSA5acLFll43FXruUZCdcHXH8Y2jANbyP9OqE8FHOQbDLu3qsOEoeqOMDMm6ecCtisU22tqwDJjM_v0YnjF8rwvEmThd6LinYgE9rmJCJW8DWkmz-410uU2xYotMuTHEYzoi72lPcY</string>
+    <long name="CheckinTask_bookmark" value="0" />
+    <long name="aggregation_interval" value="1800" />
+</map>

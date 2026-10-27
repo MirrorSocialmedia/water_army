@@ -1,0 +1,14 @@
+<?xml version='1.0' encoding='utf-8' standalone='yes' ?>
+<map>
+    <long name="CheckinService_lastCheckinSuccessTime" value="1793112481915" />
+    <long name="CheckinService_last_checkin_ms_unspecified" value="1793112481916" />
+    <long name="CheckinInterval_IntervalSeconds" value="40661" />
+    <long name="aggregation_flex" value="600" />
+    <long name="CheckinService_checkinCompleteBroadcastTime" value="1793112481916" />
+    <long name="CheckinInterval_FlexSec" value="10800" />
+    <string name="android_id">3929395759228143973</string>
+    <string name="CheckinService_versionInfo">8xIw0DUPf5cV…MASKED</string>
+    <string name="CheckinService_deviceDataVersionInfo">ABFEt1VA8KVs…MASKED</string>
+    <long name="CheckinTask_bookmark" value="0" />
+    <long name="aggregation_interval" value="1800" />
+</map>
