@@ -159,6 +159,19 @@ export function loadConfig(env = process.env, opts = {}) {
   // probe go live, and the dispatch gate additionally requires a fresh
   // VERIFIED egress. OFF = byte-identical pre-W3 behaviour (routes 503).
   const egressBindingEnabled = ['1', 'true', 'yes', 'on'].includes(String(e.WA_W3_EGRESS_BINDING_ENABLED ?? 'false').toLowerCase());
+  // T5 (ADR-030): Gmail account provisioning pipeline — OFF by default and
+  // FAIL-CLOSED on inputs: the driver refuses fresh starts without a
+  // recovery-mailbox pool (冇恢復郵箱 = 唔准入「就緒」). The three 老細-pending
+  // inputs (recovery pool / proxy source / daily volume) are exactly these
+  // knobs — README documents the override口径. Defaults are conservative:
+  // 1 account/identity/day, 2 accounts/IP/day, 5–15 min randomized gap.
+  const gmailProvisionEnabled = ['1', 'true', 'yes', 'on'].includes(String(e.WA_GMAIL_PROVISION_ENABLED ?? 'false').toLowerCase());
+  const gmailRecoveryPool = String(e.WA_GMAIL_RECOVERY_POOL ?? '').split(',').map((s) => s.trim()).filter((s) => s.includes('@'));
+  const gmailPerIpDaily = optInt(e, 'WA_GMAIL_PER_IP_DAILY', 2);
+  const gmailPerIdentityDaily = optInt(e, 'WA_GMAIL_PER_IDENTITY_DAILY', 1);
+  const gmailMinIntervalMs = optInt(e, 'WA_GMAIL_MIN_INTERVAL_MS', 5 * 60_000);
+  const gmailMaxIntervalMs = optInt(e, 'WA_GMAIL_MAX_INTERVAL_MS', 15 * 60_000);
+  const gmailCaptchaTimeoutMs = optInt(e, 'WA_GMAIL_CAPTCHA_TIMEOUT_MS', 2 * 3_600_000);
   // Managed APK directory: the ONLY host location install accepts files from.
   const waApkDir = e.WA_APK_DIR ?? '/var/lib/water-army/apk';
   const waApkMaxBytes = optInt(e, 'WA_APK_MAX_BYTES', 524_288_000); // 512 MiB
@@ -218,6 +231,13 @@ export function loadConfig(env = process.env, opts = {}) {
     redroidTemplateProfilesEnabled,
     waAppOpsEnabled,
     egressBindingEnabled,
+    gmailProvisionEnabled,
+    gmailRecoveryPool,
+    gmailPerIpDaily,
+    gmailPerIdentityDaily,
+    gmailMinIntervalMs,
+    gmailMaxIntervalMs,
+    gmailCaptchaTimeoutMs,
     waApkDir,
     waApkMaxBytes,
     waUiaMaxBytes,

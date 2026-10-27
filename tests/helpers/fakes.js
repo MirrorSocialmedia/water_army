@@ -72,6 +72,10 @@ export function makeFakeDb({ users = [] } = {}) {
   const identityRows = new Map(); // identities, by id (W1 ADR-025)
   const loginAuditRows = []; // identity_login_audits, append-only (T2 ADR-029)
   const dataDirClaimRows = new Map(); // identity_data_dir_claims, by dataDir (T2 ADR-029)
+  const accountLifecycleRows = new Map(); // account_lifecycles, by identityId (T5 ADR-030)
+  const accountLifecycleAuditRows = []; // account_lifecycle_audits, append-only (T5)
+  const gmailAccountRows = new Map(); // gmail_accounts vault, by identityId (T5)
+  const provisionCounterRows = new Map(); // gmail_provision_counters, by scopeKey|day (T5)
   const fingerprintRows = new Map(); // identity_fingerprints, by identityId (W1 ADR-025)
   const identityEgressRows = new Map(); // identity_egress_bindings, by identityId (W3 ADR-027)
   const interventionRows = new Map(); // manual_interventions, by id (MC P4)
@@ -163,6 +167,7 @@ export function makeFakeDb({ users = [] } = {}) {
   function matchDeviceWhere(where = {}) {
     return [...deviceRows.values()].filter((d) => {
       if (where.id && d.id !== where.id) return false;
+      if (where.identityId !== undefined && d.identityId !== where.identityId) return false;
       if (where.templateId && d.templateId !== where.templateId) return false;
       if (where.containerState !== undefined && d.containerState !== where.containerState) return false;
       if (where.adbPort !== undefined && d.adbPort !== where.adbPort) return false;
@@ -978,6 +983,113 @@ export function makeFakeDb({ users = [] } = {}) {
         if (!row) throw Object.assign(new Error('IdentityDataDirClaim not found'), { code: 'P2025' });
         dataDirClaimRows.delete(row.dataDir);
         return {};
+      },
+    },
+    // ---- T5 (ADR-030): account lifecycle + vault + throttle ---------------
+    accountLifecycle: {
+      create: async ({ data }) => {
+        if (accountLifecycleRows.has(data.identityId)) {
+          throw Object.assign(new Error('Unique constraint failed on the fields: (identityId)'), { code: 'P2002' });
+        }
+        const ts = now();
+        const row = {
+          id: data.id ?? randomUUID(), identityId: data.identityId, state: data.state ?? 'PREPARING',
+          stateSince: data.stateSince ?? ts, currentStep: data.currentStep ?? null,
+          awaitingDeadlineAt: data.awaitingDeadlineAt ?? null, interventionId: data.interventionId ?? null,
+          failureCode: data.failureCode ?? null, createdAt: data.createdAt ?? ts, updatedAt: ts,
+        };
+        accountLifecycleRows.set(row.identityId, row);
+        return { ...row };
+      },
+      findUnique: async ({ where } = {}) => {
+        const row = accountLifecycleRows.get(where?.identityId)
+          ?? [...accountLifecycleRows.values()].find((r) => r.id === where?.id) ?? null;
+        return row ? { ...row } : null;
+      },
+      findMany: async () => [...accountLifecycleRows.values()].map((r) => ({ ...r })),
+      update: async ({ where, data }) => {
+        const row = accountLifecycleRows.get(where?.identityId) ?? [...accountLifecycleRows.values()].find((r) => r.id === where?.id);
+        if (!row) throw Object.assign(new Error('AccountLifecycle not found'), { code: 'P2025' });
+        const clean = Object.fromEntries(Object.entries(data).filter(([, v]) => v !== undefined));
+        Object.assign(row, clean, { updatedAt: now() });
+        return { ...row };
+      },
+    },
+    accountLifecycleAudit: {
+      create: async ({ data }) => {
+        const row = {
+          id: data.id ?? randomUUID(), lifecycleId: data.lifecycleId, identityId: data.identityId,
+          fromState: data.fromState, toState: data.toState, actorUserId: data.actorUserId ?? null,
+          actorKind: data.actorKind ?? 'system', reasonCode: data.reasonCode ?? null,
+          detailsJson: data.detailsJson ?? {}, createdAt: data.createdAt ?? now(),
+        };
+        accountLifecycleAuditRows.push(row);
+        row.__seq = accountLifecycleAuditRows.length;
+        return { ...row };
+      },
+      findMany: async ({ where = {}, orderBy, take } = {}) => {
+        let rows = accountLifecycleAuditRows.filter((r) => Object.entries(where).every(([k, v]) => r[k] === v));
+        if (orderBy?.createdAt === 'desc') rows = [...rows].sort((a, b) => (b.createdAt - a.createdAt) || (b.__seq - a.__seq));
+        if (take) rows = rows.slice(0, take);
+        return rows.map((r) => ({ ...r }));
+      },
+    },
+    gmailAccount: {
+      create: async ({ data }) => {
+        if (gmailAccountRows.has(data.identityId)) {
+          throw Object.assign(new Error('Unique constraint failed on the fields: (identityId)'), { code: 'P2002' });
+        }
+        const ts = now();
+        const row = {
+          id: data.id ?? randomUUID(), identityId: data.identityId, emailMasked: data.emailMasked ?? null,
+          emailCipher: data.emailCipher ?? null, passwordCipher: data.passwordCipher ?? null,
+          recoveryEmailCipher: data.recoveryEmailCipher ?? null, recoveryEmailMasked: data.recoveryEmailMasked ?? null,
+          profileJson: data.profileJson ?? {}, createdAt: data.createdAt ?? ts, updatedAt: ts,
+        };
+        gmailAccountRows.set(row.identityId, row);
+        return { ...row };
+      },
+      findUnique: async ({ where } = {}) => {
+        const row = gmailAccountRows.get(where?.identityId) ?? null;
+        return row ? { ...row } : null;
+      },
+      findMany: async () => [...gmailAccountRows.values()].map((r) => ({ ...r })),
+      update: async ({ where, data }) => {
+        const row = gmailAccountRows.get(where?.identityId);
+        if (!row) throw Object.assign(new Error('GmailAccount not found'), { code: 'P2025' });
+        const clean = Object.fromEntries(Object.entries(data).filter(([, v]) => v !== undefined));
+        Object.assign(row, clean, { updatedAt: now() });
+        return { ...row };
+      },
+    },
+    gmailProvisionCounter: {
+      create: async ({ data }) => {
+        const key = `${data.scopeKey}|${data.day}`;
+        if (provisionCounterRows.has(key)) {
+          throw Object.assign(new Error('Unique constraint failed on the fields: (scopeKey,day)'), { code: 'P2002' });
+        }
+        const ts = now();
+        const row = {
+          id: data.id ?? randomUUID(), scopeKey: data.scopeKey, day: data.day,
+          count: data.count ?? 0, lastStartedAt: data.lastStartedAt ?? null, createdAt: ts, updatedAt: ts,
+        };
+        provisionCounterRows.set(key, row);
+        return { ...row };
+      },
+      findUnique: async ({ where } = {}) => {
+        const k = where?.scopeKey_day;
+        const row = k ? provisionCounterRows.get(`${k.scopeKey}|${k.day}`) : null;
+        return row ? { ...row } : null;
+      },
+      findMany: async () => [...provisionCounterRows.values()].map((r) => ({ ...r })),
+      update: async ({ where, data }) => {
+        const row = [...provisionCounterRows.values()].find((r) => r.id === where?.id)
+          ?? provisionCounterRows.get(`${where?.scopeKey}|${where?.day}`);
+        if (!row) throw Object.assign(new Error('GmailProvisionCounter not found'), { code: 'P2025' });
+        const clean = Object.fromEntries(Object.entries(data).filter(([, v]) => v !== undefined));
+        if (clean.count?.increment) row.count += clean.count.increment;
+        Object.assign(row, { ...clean, count: clean.count?.increment ? row.count : (clean.count ?? row.count) }, { updatedAt: now() });
+        return { ...row };
       },
     },
     identityFingerprint: {

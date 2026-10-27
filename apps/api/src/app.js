@@ -50,6 +50,9 @@ import { identityEgressRoutes } from './routes/identity-egress.js';
 import { identityLoginRoutes } from './routes/identity-login.js';
 import { createLoginStateService } from './services/login-state-service.js';
 import { createIdentityProvisionService } from './services/identity-provision-service.js';
+import { accountLifecycleRoutes } from './routes/account-lifecycle.js';
+import { createAccountLifecycleService } from './services/account-lifecycle-service.js';
+import { createGmailProvisionDriver } from './services/gmail-provision-driver.js';
 import { deviceAppRoutes } from './routes/device-apps.js';
 import { taskRoutes } from './routes/tasks.js';
 import { batchRoutes } from './routes/batches.js';
@@ -300,6 +303,28 @@ export async function buildApp(opts = {}) {
     app.log.info('identity login-state service ON — T2 (ADR-029) manual login machine + provisioning');
   }
 
+  // T5 (ADR-030): Gmail account lifecycle — SIBLING machine to login_state
+  // (orthogonal axis: pipeline progress vs human login truth). Conditional
+  // wiring (W3/T2 discipline): missing tables → routes 503 fail-closed. The
+  // driver (system writer on this axis) is additionally gated by
+  // WA_GMAIL_PROVISION_ENABLED (default off) and fail-closes on a missing
+  // recovery pool at every fresh start.
+  const hasAccountSurface = Boolean(
+    db?.accountLifecycle && typeof db.accountLifecycle.findUnique === 'function'
+    && db?.accountLifecycleAudit && typeof db.accountLifecycleAudit.create === 'function'
+    && db?.gmailAccount && typeof db.gmailAccount.findUnique === 'function'
+    && db?.gmailProvisionCounter && typeof db.gmailProvisionCounter.findUnique === 'function',
+  );
+  const accountLifecycleService = hasAccountSurface
+    ? createAccountLifecycleService({ db, log: app.log, audit })
+    : null;
+  const gmailProvisionDriver = hasAccountSurface && config?.gmailProvisionEnabled
+    ? createGmailProvisionDriver({ db, config, lifecycleService: accountLifecycleService, log: app.log, audit })
+    : null;
+  if (hasAccountSurface) {
+    app.log.info(`account lifecycle service ON — T5 (ADR-030)${gmailProvisionDriver ? ' + provision driver ENABLED' : ' (driver disabled — WA_GMAIL_PROVISION_ENABLED off)'}`);
+  }
+
   // W3 (ADR-027): identity egress binding service. Conditional wiring (same
   // contract as intervention/stream): a db WITHOUT the identity_egress_bindings
   // table (partial test fakes / pre-migration schemas) keeps buildApp alive —
@@ -470,6 +495,8 @@ export async function buildApp(opts = {}) {
   app.decorate('identityEgressService', identityEgressService);
   app.decorate('loginStateService', loginStateService);
   app.decorate('identityProvisionService', identityProvisionService);
+  app.decorate('accountLifecycleService', accountLifecycleService);
+  app.decorate('gmailProvisionDriver', gmailProvisionDriver);
   app.decorate('appService', appService);
   app.decorate('ramGateService', ramGateService);
   app.decorate('streamLeaseService', streamLeaseService);
@@ -610,6 +637,7 @@ export async function buildApp(opts = {}) {
   identityFingerprintRoutes(app);
   identityEgressRoutes(app);
   identityLoginRoutes(app);
+  accountLifecycleRoutes(app);
   deviceAppRoutes(app);
   taskRoutes(app, { taskQueue });
   batchRoutes(app);
