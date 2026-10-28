@@ -198,7 +198,11 @@ const localClock = (epochMs, offMin) => new Date(epochMs + offMin * 60_000).toIS
 
 function dayKind(dayStartMs, offMin) {
   const dow = new Date(dayStartMs + offMin * 60_000).getUTCDay(); // 0=Sun
-  const hol = holidayFor(localDate(dayStartMs, offMin), { strict: false });
+  // STRICT (adversarial round FIX-1): a plan horizon crossing the table edge
+  // must LOUD fail — strict:false here silently treated 2028-01-01 (New Year)
+  // as a plain Saturday, i.e. the exact silent degradation this module exists
+  // to prevent.
+  const hol = holidayFor(localDate(dayStartMs, offMin));
   if (hol) return { kind: 'holiday', holiday: hol };
   if (dow === 0 || dow === 6) return { kind: 'weekend', holiday: null };
   return { kind: 'weekday', holiday: null };
