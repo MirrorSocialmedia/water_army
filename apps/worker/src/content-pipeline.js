@@ -281,6 +281,24 @@ export function makeLlmClient({ env = process.env, fetchImpl = globalThis.fetch,
 
 const STYLE_LABEL = Object.freeze({ written: '港式書面語', cantonese: '粵語口語（廣東話）', en: 'natural British English' });
 
+/** Hard cap for LLM-returned text (prompt asks 30–120 chars; adversarial
+ *  round FIX-2: a compromised/hallucinating endpoint must never blow up the
+ *  ledger, the dedup gate, or downstream renderers). */
+export const LLM_TEXT_MAX = 300;
+/**
+ * Sanitize hostile LLM output: strip control + format chars (NUL, \n, BOM,
+ * zero-width/LRM injection), unwrap leaked `{slot}` placeholders, collapse
+ * whitespace, hard-cap length. Returns '' when nothing visible survives —
+ * caller treats that as a loud fallback, never ships invisible text.
+ */
+export function sanitizeLlmText(raw) {
+  if (typeof raw !== 'string') return '';
+  let s = raw.replace(/[\p{Cc}\p{Cf}]/gu, ' ');        // control + format (zero-width, BOM, bidi)
+  s = s.replace(/\{([A-Za-z_][\w]*)\}/g, '$1');         // leaked template slots → bare word
+  s = s.replace(/\s+/g, ' ').trim();
+  return s.length > LLM_TEXT_MAX ? s.slice(0, LLM_TEXT_MAX) : s;
+}
+
 export function buildPrompt({ topic, style, profile }) {
   return [
     `以身處香港的普通网民身分，用${STYLE_LABEL[style] ?? style}寫一则社交媒體短帖（30–120字），主題：${topic}。`,
@@ -333,8 +351,14 @@ export async function buildContentPool(p = {}) {
       const cs = `${seed}|${accountId}|${i}`;
       let text = null;
       if (client) {
-        try { text = await client(buildPrompt({ topic, style, profile })); }
-        catch (e) { llmFallback.push({ accountId, i, reason: String(e?.message ?? e).slice(0, 200) }); }
+        try {
+          const raw = await client(buildPrompt({ topic, style, profile }));
+          const clean = sanitizeLlmText(raw);
+          if (clean.length < 4) {
+            // invisible-only / garbage reply: loud fallback, never ship it raw
+            llmFallback.push({ accountId, i, reason: 'LLM output empty or too-short after sanitize (control/zero-width-only?)' });
+          } else text = clean;
+        } catch (e) { llmFallback.push({ accountId, i, reason: String(e?.message ?? e).slice(0, 200) }); }
       }
       if (!text) ({ text } = renderTemplate({ topic, style, seed: cs }));
       attempts++;
