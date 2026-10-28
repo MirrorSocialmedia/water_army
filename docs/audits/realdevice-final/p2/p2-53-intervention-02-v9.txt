@@ -1,0 +1,13 @@
+=== P2.5 intervention 02 (v9) @ 2026-10-28T15:44:44Z (t+1s) ===
+RUN02=dc74542a-0538-4f09-9617-985ff12766a2
+logs/realdevice-final/p2/p2-v9-orchestrator.sh: line 140: CTR: unbound variable
+CTR02=wa-batch-dc74542a-0538-4f09-9617-985ff12766a2-a1 state=
+--- badge BEFORE ---
+{"count":0}
+create HTTP_STATUS=201
+IV9=3ff8aaf1-3e43-44f0-8cdd-70f0b17cf307
+--- badge AFTER create (expect +1) ---
+{"count":1}
+--- console ack (UI flow parity) ---
+ack HTTP_STATUS=200
+logs/realdevice-final/p2/p2-v9-orchestrator.sh: line 157: CTR: unbound variable

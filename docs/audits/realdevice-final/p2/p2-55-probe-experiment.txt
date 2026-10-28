@@ -1,0 +1,145 @@
+=== P2.7 DIAG: ADB health probe experiments @ 2026-10-28T16:01:24Z ===
+diag container: wa-rdfa-diag-probe (MTG, booted: boot_completed=1 ~4s after start)
+
+--- EXP A/B round 1 (host -> 127.0.0.1:16395, ~t+30s after boot_completed) ---
+A (product probe: bare host:version first): ERR NO RESPONSE in 5s (timeout)
+B1 (CNX ack from adbd): ERR NO RESPONSE in 5s (timeout)
+B2 (host:version reply after CNX): ERR NO RESPONSE in 5s (timeout)
+
+--- EXP C (api container -> 127.0.0.1:16395 = the product probe's actual target) ---
+node:internal/modules/cjs/loader:1568
+  throw err;
+  ^
+
+Error: Cannot find module '/tmp/probe-cd.js'
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1564:15)
+    at wrapResolveFilename (node:internal/modules/cjs/loader:1118:27)
+    at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1142:10)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1169:12)
+    at Module._load (node:internal/modules/cjs/loader:1341:5)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:261:19)
+    at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)
+    at node:internal/main/run_main_module:33:47 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+
+Node.js v24.22.1
+
+--- EXP D (api container -> 172.38.200.4:5555 = devices-network IP) ---
+node:internal/modules/cjs/loader:1568
+  throw err;
+  ^
+
+Error: Cannot find module '/tmp/probe-cd.js'
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1564:15)
+    at wrapResolveFilename (node:internal/modules/cjs/loader:1118:27)
+    at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1142:10)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1169:12)
+    at Module._load (node:internal/modules/cjs/loader:1341:5)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:261:19)
+    at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)
+    at node:internal/main/run_main_module:33:47 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+
+Node.js v24.22.1
+--- EXP C (api container -> 127.0.0.1:16395 = the product probe's actual target) @ 2026-10-28T16:02:00Z ---
+node:fs:2872
+      const stats = binding.lstat(base, true, undefined, true /* throwIfNoEntry */);
+                            ^
+
+Error: ENOENT: no such file or directory, lstat '/proc/3975/fd/pipe:[19725264]'
+    at Object.realpathSync (node:fs:2872:29)
+    at toRealPath (node:internal/modules/helpers:67:13)
+    at resolveMainPath (node:internal/modules/run_main:41:16)
+    at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:146:20)
+    at node:internal/main/run_main_module:33:47 {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'lstat',
+  path: '/proc/3975/fd/pipe:[19725264]'
+}
+
+Node.js v24.22.1
+
+--- EXP D (api container -> 172.38.200.4:5555 = devices-network IP) ---
+node:fs:2872
+      const stats = binding.lstat(base, true, undefined, true /* throwIfNoEntry */);
+                            ^
+
+Error: ENOENT: no such file or directory, lstat '/proc/3987/fd/pipe:[19725267]'
+    at Object.realpathSync (node:fs:2872:29)
+    at toRealPath (node:internal/modules/helpers:67:13)
+    at resolveMainPath (node:internal/modules/run_main:41:16)
+    at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:146:20)
+    at node:internal/main/run_main_module:33:47 {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'lstat',
+  path: '/proc/3987/fd/pipe:[19725267]'
+}
+
+Node.js v24.22.1
+--- EXP C (api container -> 127.0.0.1:16395 = the product probe's actual target) @ 2026-10-28T16:02:23Z ---
+node:internal/errors:543
+      throw error;
+      ^
+
+RangeError [ERR_SOCKET_BAD_PORT]: Port should be >= 0 and < 65536. Received type number (NaN).
+    at lookupAndConnect (node:net:1754:5)
+    at Socket.connect (node:net:1649:5)
+    at Object.connect (node:net:261:17)
+    at Object.<anonymous> (/var/lib/water-army/.rdfa-probe-cd.js:5:15)
+    at Module._compile (node:internal/modules/cjs/loader:1929:14)
+    at Object..js (node:internal/modules/cjs/loader:2060:10)
+    at Module.load (node:internal/modules/cjs/loader:1651:32)
+    at Module._load (node:internal/modules/cjs/loader:1443:12)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:261:19)
+    at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5) {
+  code: 'ERR_SOCKET_BAD_PORT'
+}
+
+Node.js v24.22.1
+
+--- EXP D (api container -> 172.38.200.4:5555 = devices-network IP, the correct target) ---
+node:internal/errors:543
+      throw error;
+      ^
+
+RangeError [ERR_SOCKET_BAD_PORT]: Port should be >= 0 and < 65536. Received type number (NaN).
+    at lookupAndConnect (node:net:1754:5)
+    at Socket.connect (node:net:1649:5)
+    at Object.connect (node:net:261:17)
+    at Object.<anonymous> (/var/lib/water-army/.rdfa-probe-cd.js:5:15)
+    at Module._compile (node:internal/modules/cjs/loader:1929:14)
+    at Object..js (node:internal/modules/cjs/loader:2060:10)
+    at Module.load (node:internal/modules/cjs/loader:1651:32)
+    at Module._load (node:internal/modules/cjs/loader:1443:12)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:261:19)
+    at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5) {
+  code: 'ERR_SOCKET_BAD_PORT'
+}
+
+Node.js v24.22.1
+--- EXP C (api container -> 127.0.0.1:16395 = the product probe's actual target) @ 2026-10-28T16:02:42Z ---
+C: TCP ERROR to 127.0.0.1:16395: ECONNREFUSED connect ECONNREFUSED 127.0.0.1:16395
+
+--- EXP D (api container -> 172.38.200.4:5555 = devices-network IP, the correct target) ---
+D: TCP TIMEOUT to 172.38.200.4:5555
+
+--- EXP B (hand-rolled CNX, 2 protocol versions x checksum: NO RESPONSE — hand-rolled variant limitation, superseded by real-client proof below) ---
+NOTE: my hand-crafted CNX never got an ack (byte-level detail unresolvable without wire capture: non-root, no CAP_NET_RAW/ptrace).
+--- DECISIVE CONTROL (same port, same moment, REAL adb client = CNX-based handshake per ADB wire protocol) ---
+already connected to 127.0.0.1:16395
+device
+shell getprop sys.boot_completed: 1
+
+CONCLUSION: adbd is FULLY SERVING (real client) while the product probe's exact bytes (bare host:version, no CNX preamble) get ZERO bytes. ADB wire protocol mandates CNX as the first packet; Android 14 adbd does not answer non-CNX preambles. => product probe protocol is incompatible with real adbd (F-RDFA-2b), independent of the netns bug (F-RDFA-2a, EXP C ECONNREFUSED).
+
+--- diag container teardown @ 2026-10-28T16:11:18Z ---
+disconnected 127.0.0.1:16395
+wa-rdfa-diag-probe
+wa-rdfa-diag-probe
+residual diag containers: 0

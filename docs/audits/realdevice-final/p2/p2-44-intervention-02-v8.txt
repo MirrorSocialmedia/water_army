@@ -1,0 +1,15 @@
+=== P2.5 intervention 02 (v8) @ 2026-10-28T15:33:10Z (t+1s) ===
+RUN02=487ee588-bdd8-4ba0-992a-4a4ea77b278c
+CTR02=? state=
+--- badge BEFORE ---
+{"count":0}
+create HTTP_STATUS=201
+IV8=06d49f8f-c5db-44e7-9231-5653bcf07f91
+--- badge AFTER create (expect +1) ---
+{"count":1}
+--- console ack (UI flow parity) ---
+ack HTTP_STATUS=200
+--- REAL STUCK EVENT: docker stop -t 2 none @ 2026-10-28T15:33:10Z (t+1s) ---
+Error response from daemon: No such container: none
+stop_exit=1
+container state after stop: 

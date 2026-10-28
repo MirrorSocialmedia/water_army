@@ -1,0 +1,22 @@
+=== ground truth DIAG (wa-rdfa-diag-probe, MTG real image, NOT an identity — probe-experiment witness) === 2026-10-28T16:05:17Z
+container start: see p2-55; boot_completed=1 at ~t+4s
+--- [1] egress e2e via gost:18443 (P1-verified method p1-16) ---
+Server: cloudflare
+Vary: Origin
+
+103.194.185.206--- [2] getprop full dump (docker exec) -> p2-52-groundtruth-diag-props.txt ---
+props lines: 570
+--- [3] key props ---
+[ro.build.fingerprint]: [redroid/redroid_x86_64/redroid_x86_64:14/UD2A.240505.001.W1/eng.frank.20240527.141332:userdebug/test-keys]
+[ro.build.id]: [UD2A.240505.001.W1]
+[ro.hardware]: [redroid]
+[ro.hardware.egl]: [angle]
+[ro.hardware.gralloc]: [redroid]
+[ro.hardware.vulkan]: [pastel]
+[ro.product.brand]: [redroid]
+[ro.product.device]: [redroid_x86_64]
+[ro.product.model]: [redroid14_x86_64]
+[sys.boot_completed]: [1]
+--- [4] display ---
+size: Physical size: 720x1280  density: Physical density: 320
+=== done diag 2026-10-28T16:05:18Z ===

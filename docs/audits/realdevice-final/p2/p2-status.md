@@ -58,3 +58,27 @@
 ## 證據索引（logs/realdevice-final/p2/ → docs/audits/realdevice-final/p2/）
 
 p2-00 allowlist · p2-01 provision · p2-02/03 planner UI · p2-04 v1 create(+409) · p2-05 netpolicy internal insert · p2-06 retry 03/04 · p2-07 re-arm ×3 · p2-08 v2 create · p2-09 intervention create+badge · p2-10 allowlist→public zone + re-arm ×3 · p2-11 v3 create · p2-12..15 intervention UI（list/detail/ack/resolved）· p2-16 intervention verify
+
+---
+
+# gen2 接力最終狀態（2026-10-28 22:56–00:20 HKT）
+
+**狀態**: **P2 COMPLETE（with blocking product finding F-RDFA-2）** — batch 成功路線被產品 bug 結構性阻塞；其餘全部真實完成。
+
+## gen2 斷言總表
+
+| 項 | 斷言 | 判定 | 證據 |
+|---|---|---|---|
+| P2.0 v7 RUN_STATE_INVALID 根因 | 定位 | **PASS（finding F-RDFA-1）**：v7 create payload `config.adapter` 係裸 string（v4-v6 係物件）；POST /api/batches joi 只查 `config:{type:'object'}` 無 shape、createCycle 從無 validateBatchConfig call → 201 接受 → dispatch 時 adapterSpecForRun 炸 409。非 re-arm 邊界鏈問題（gen1 假說被推翻，CAS 鏈 9/9 健康） | p2-40..42 + batches.js/batch-lifecycle-service.js 源碼 |
+| P2.1 re-arm（合法邊界鏈） | FAILED_FINAL→RESERVED→CANCELLED→READY ×3 機 | **PASS**（r7: p2-41；r8: p2-50；9/9 CAS + state_events） | p2-41/50 |
+| P2.2 v8 batch 真跑 | 3 容器真起 + 全環 | **真跑 / FAILED_FINAL×3**（實證產品 config gap：worker lifecycle timeout 120s 預設 < 真 boot；304 double-fail） | p2-42..45 + worker log |
+| P2.2b 管理員變更 A7 | worker `CONTAINER_ADAPTER_LIFECYCLE_TIMEOUT_MS=300000` | **DONE**（22:02/22:09 部署授權內；repo+/tmp/wa-head compose 同步、test-config 註釋、P3 還原清單） | p2-48 |
+| P2.3 v9 batch 真跑 | 3 容器真起 + GT + 介入 + monitor | **真跑 / FAILED_FINAL×3（probe 結構性失敗，見下）**；GT 03/04 全捕（egress 103.194.185.206 + 570 行 getprop）、gate 2→5→2、IV9 全環（open→badge→ack→真卡300s→retry 304→terminal→resolve） | p2-51..53/57 |
+| P2.4 三機 ground truth | 每機 getprop + 出口 | **PASS（03/04 全量 docker-exec GT + diag 全量 host-adb GT；02 = connect 級 partial，照實）** | p2-52-* |
+| **P2.4c F-RDFA-2 實驗** | probe 為何永遠不過 | **PASS（決定性，雙因）**：2a netns — api 容器（bridge）探 127.0.0.1:<hostport> = ECONNREFUSED（EXP C，host 同端口通）；2b 協議 — 真 adbd 對裸 `host:version`（無 CNX 首包）零字節（EXP A），同刻真 adb client（CNX）全服務 | p2-55 |
+| P2.5 報告導出 | JSON+CSV 200 + 3 機數據 | **PASS**（v9 cycle d19b13d8；3 identities 真數據 + 真 failure codes） | p2-58-* |
+| P2.6 secret scan | 零命中 | **PASS** | p2-59 |
+| P2.7 5 分鐘穩定觀察 | 無容器復活 / gate 回 baseline / 無新錯誤 | 執行中（16:13Z 起） | p2-60（將補） |
+
+## 結論
+「run 完成→resolve」半環喺現 build 對真機結構性不可達 = **F-RDFA-2（high）**：probe 缺 CNX 握手（2b）+ probe 喺錯誤 netns 探 host-loopback binding（2a）。hermetic probe seam 令測試套件從無真機覆蓋 = 本單 mock/real 分歧核心發現。fix 需產品改代碼（新 ticket）；本單唔改產品代碼（驗收紀律：改碼 = 證據污染）。

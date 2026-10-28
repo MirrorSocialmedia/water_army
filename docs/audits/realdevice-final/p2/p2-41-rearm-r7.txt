@@ -1,0 +1,25 @@
+=== P2-A2 re-arm round 7 (v8 prep): FAILED_FINAL -> RESERVED -> CANCELLED -> READY @ 2026-10-28T15:27:20Z ===
+semantics mirror packages/shared/src/batch-service.js transitionIdentity: edge check (IDENTITY_TRANSITIONS) + CAS UPDATE (where status=from, must affect 1 row) + state_events row per transition.
+--- gen_random_uuid availability check ---
+ t
+
+--- identity 8cc54fa8-27ec-406e-b7f7-3133c15b18be ---
+CAS FAILED_FINAL -> RESERVED : UPDATE 1
+CAS RESERVED -> CANCELLED : UPDATE 1
+CAS CANCELLED -> READY : UPDATE 1
+--- identity f16ef586-f38f-4d20-a464-7187876e4205 ---
+CAS FAILED_FINAL -> RESERVED : UPDATE 1
+CAS RESERVED -> CANCELLED : UPDATE 1
+CAS CANCELLED -> READY : UPDATE 1
+--- identity 9823ddf2-0e3e-4375-96cc-400f9d3b3dbd ---
+CAS FAILED_FINAL -> RESERVED : UPDATE 1
+CAS RESERVED -> CANCELLED : UPDATE 1
+CAS CANCELLED -> READY : UPDATE 1
+loop_exit=0
+--- final identity states ---
+8cc54fa8|redroid-rdfa-02|READY
+f16ef586|redroid-rdfa-03|READY
+9823ddf2|redroid-rdfa-04|READY
+--- state_events written this round (9 expected) ---
+9
+--- @ 2026-10-28T15:27:43Z done ---

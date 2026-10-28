@@ -1,0 +1,14 @@
+=== P2.4f admin deploy change: worker env CONTAINER_ADAPTER_LIFECYCLE_TIMEOUT_MS=300000 @ 2026-10-28T15:39:19Z ===
+authorization: boss 2026-10-28 22:02/22:09 P2 deploy-change go (progress log 22:09 entry)
+root cause (v8 measured): 3 concurrent MTG boots > 120s worker default client timeout -> TOOL_TIMEOUT + 304 double-fail
+--- BEFORE: worker env (no CONTAINER_ADAPTER_* expected) ---
+(none — defaults: lifecycle 120s)
+--- compose grep (after edit, repo + /tmp/wa-head in sync) ---
+201:      CONTAINER_ADAPTER_LIFECYCLE_TIMEOUT_MS: "300000"
+repo+wa-head in sync
+--- in-flight job check (expect none) ---
+jobs completed since 15:35:14Z: 3
+--- AFTER @ 2026-10-28T15:39:36Z ---
+CONTAINER_ADAPTER_LIFECYCLE_TIMEOUT_MS=300000
+water-army-worker-1	Up 16 seconds (healthy)
+--- worker log (fresh boot, no crash) ---

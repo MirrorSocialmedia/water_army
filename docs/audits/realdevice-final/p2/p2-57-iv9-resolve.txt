@@ -1,0 +1,5 @@
+=== IV9 resolve (honest close) @ 2026-10-28T16:06:06Z ===
+{"count":0} <- badge before (0: ack removed)
+resolve HTTP_STATUS=200
+
+status: resolved | resolvedAt: 2026-10-28T16:06:06.244Z

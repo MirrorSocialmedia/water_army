@@ -1,0 +1,8 @@
+=== P2-A1 resolve stale intervention IV6 (v6 window leftover) @ 2026-10-28T15:27:10Z ===
+--- badge BEFORE ---
+{"count":1}
+HTTP_STATUS=200
+--- response ---
+{"id":"9fc89f64-edf1-4096-80de-4f9db01ec9cd","deviceId":null,"deviceNameSnapshot":"redroid-rdfa-02","source":"operator_report","category":"TASK_FAILED","severity":"high","status":"resolved","automationDisposition":"blocked_pending_review","title":"batch rdfa-p2-final-v6: identity 02 intervention — stop container to exercise blocked->resume flow","summary":"Operator intervention during live batch: 02's container is stopped to simulate a stuck device; engine retry (attempt 2) resumes; run expected to complete.","evidence":{"batchId":"71013b53-6e33-4dba-989e-885d00b81791","container":"","taskRunId":"f3d4397e-3f3c-4a10-9782-de5bd7f61302"},"heuristic":false,"signalCount":1,"version":2,"resolutionSummary":"gen2 handover cleanup: v6 window intervention — v6 attempt-1 container was left by the 60s health timeout and attempt-2 hit 304 already-started (both failures = pre-fix config: health window too short). No container was ever stopped by an operator in this cycle (the docker stop had no target). Superseded by v7/v8. Resolving to clear the needs-attention badge before the v8 run window (badge 1->0).","createdAt":"2026-10-28T14:26:35.674Z","updatedAt":"2026-10-28T15:27:10.703Z","acknowledgedAt":null,"resolvedAt":"2026-10-28T15:27:10.701Z","assigneeUserId":null,"dedupeKey":"orphan::TASK_FAILED::operator_report","relatedTaskRunId":null}
+--- badge AFTER ---
+{"count":0}

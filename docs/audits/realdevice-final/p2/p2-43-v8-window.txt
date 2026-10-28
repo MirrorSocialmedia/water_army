@@ -1,0 +1,64 @@
+=== v8 window open 2026-10-28T15:33:09Z (t0=1793201589, BID=91dc97f4-773c-485b-a91a-340c0ef2f484) ===
+--- 3-container check @ t+0s (running=3) ---
+NAMES                                              STATUS         PORTS
+wa-batch-7689affd-b94c-471a-9ff6-6910ee24644f-a1   Up 6 seconds   127.0.0.1:16372->5555/tcp
+wa-batch-b011740c-7cc7-477d-8b3f-31219a6343f6-a1   Up 6 seconds   127.0.0.1:16371->5555/tcp
+wa-batch-487ee588-bdd8-4ba0-992a-4a4ea77b278c-a1   Up 6 seconds   127.0.0.1:16370->5555/tcp
+--- RAM gate @ t+0s (baseline liveCount=2, expect +3 => 5) ---
+{
+ "liveCount": 5,
+ "admitted": true,
+ "memAvailableMiB": 37518.3
+}
+--- run<->container map (after DB bind) ---
+487ee588$'\t'8cc54fa8$'\t'd32068bdaadede75588f76649305b0e32d4a2c2d03d3157c38be701c596bcb66$'\t'running$'\t'1$'\t'2026-10-28 15:33:02.933$'\t'2026-10-28 15:33:02.942
+7689affd$'\t'9823ddf2$'\t'cc9e439bab2f085deb0d5cc608a5153e07c15abb360839025f9884849049b932$'\t'running$'\t'1$'\t'2026-10-28 15:33:02.945$'\t'2026-10-28 15:33:02.956
+b011740c$'\t'f16ef586$'\t'530c36dde93b958892249b84a2d82311d858a5e7825072c7a7f577ba733160f9$'\t'running$'\t'1$'\t'2026-10-28 15:33:02.939$'\t'2026-10-28 15:33:02.95
+map: d32068bdaadede75588f76649305b0e32d4a2c2d03d3157c38be701c596bcb66$'\t'8cc54fa8 ->  port 
+map: cc9e439bab2f085deb0d5cc608a5153e07c15abb360839025f9884849049b932$'\t'9823ddf2 ->  port 
+map: 530c36dde93b958892249b84a2d82311d858a5e7825072c7a7f577ba733160f9$'\t'f16ef586 ->  port 
+CTR02=? CTR03=? CTR04=? (ports ?/?/?)
+=== P2.6 final state @ 2026-10-28T15:33:10Z (t+1s) ===
+--- runs ---
+   iid    | status  | attempt | error_code | result |       started_at        | finished_at 
+----------+---------+---------+------------+--------+-------------------------+-------------
+ 8cc54fa8 | running |       1 |            |        | 2026-10-28 15:33:02.942 | 
+ 9823ddf2 | running |       1 |            |        | 2026-10-28 15:33:02.956 | 
+ f16ef586 | running |       1 |            |        | 2026-10-28 15:33:02.95  | 
+(3 rows)
+
+--- batch ---
+                  id                  | status  |         started_at         | finished_at 
+--------------------------------------+---------+----------------------------+-------------
+ 91dc97f4-773c-485b-a91a-340c0ef2f484 | RUNNING | 2026-10-28 15:33:02.866+00 | 
+(1 row)
+
+--- identities ---
+  display_name   | status  
+-----------------+---------
+ redroid-rdfa-02 | RUNNING
+ redroid-rdfa-03 | RUNNING
+ redroid-rdfa-04 | RUNNING
+(3 rows)
+
+--- docker ps (residual wa-batch running) ---
+NAMES                                              STATUS
+wa-batch-7689affd-b94c-471a-9ff6-6910ee24644f-a1   Up 7 seconds
+wa-batch-b011740c-7cc7-477d-8b3f-31219a6343f6-a1   Up 7 seconds
+wa-batch-487ee588-bdd8-4ba0-992a-4a4ea77b278c-a1   Up 7 seconds
+--- docker ps -a (wa-batch all) ---
+NAMES                                              STATUS
+wa-batch-7689affd-b94c-471a-9ff6-6910ee24644f-a1   Up 7 seconds
+wa-batch-b011740c-7cc7-477d-8b3f-31219a6343f6-a1   Up 7 seconds
+wa-batch-487ee588-bdd8-4ba0-992a-4a4ea77b278c-a1   Up 7 seconds
+wa-batch-7a901895-07f7-4535-b580-a33338a22d06-a1   Exited (0) About an hour ago
+wa-batch-7ecab939-082a-464b-b7fd-aeb7a99e2e95-a1   Exited (0) About an hour ago
+wa-batch-8b0624c9-a03e-4099-924e-bf4022fadf9b-a1   Exited (0) About an hour ago
+--- RAM gate after (expect liveCount back to 2) ---
+{
+ "liveCount": 5,
+ "memAvailableMiB": 37261.7
+}
+--- needs-attention badge (expect still 1: IV8 open, resolved in step 7) ---
+{"count":0}
+=== orchestrator done 2026-10-28T15:33:10Z ===

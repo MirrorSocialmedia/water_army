@@ -1,0 +1,20 @@
+=== v9 window open 2026-10-28T15:44:43Z (t0=1793202283, BID=26885119-1459-45fc-869e-be7adc808ec6) ===
+--- 3-container check @ t+0s (running=3) ---
+NAMES                                              STATUS          PORTS
+wa-batch-d3c0ec7b-8825-4e35-b33f-4905e7f86619-a1   Up 37 seconds   127.0.0.1:16372->5555/tcp
+wa-batch-08c14425-6053-4339-9483-0b2a26fbbd18-a1   Up 37 seconds   127.0.0.1:16371->5555/tcp
+wa-batch-dc74542a-0538-4f09-9617-985ff12766a2-a1   Up 37 seconds   127.0.0.1:16370->5555/tcp
+--- RAM gate @ t+0s (baseline liveCount=2, expect +3 => 5) ---
+{
+ "liveCount": 5,
+ "admitted": true,
+ "memAvailableMiB": 36212.6
+}
+--- run<->container map (after DB bind) ---
+dc74542a-0538-4f09-9617-985ff12766a2|8cc54fa8|50950f19a52371d3e5487c45d17eb8e63d47c2767cb6f7af96a8960e1d6dae9a|running|1|2026-10-28 15:44:06.24|2026-10-28 15:44:06.259
+08c14425-6053-4339-9483-0b2a26fbbd18|9823ddf2|d7d5c3b5da123d2d05a4c03b6bec26cf86d2e3fb04120c4014fb03f0eadd63ee|running|1|2026-10-28 15:44:06.262|2026-10-28 15:44:06.281
+d3c0ec7b-8825-4e35-b33f-4905e7f86619|f16ef586|adc69ea9fc41b025ef6e17780d9b7d28b5c5b35303767b4f456cfad6f7d6f9f6|running|1|2026-10-28 15:44:06.252|2026-10-28 15:44:06.273
+map: 8cc54fa8 -> wa-batch-dc74542a-0538-4f09-9617-985ff12766a2-a1 port 12700116370
+map: 9823ddf2 -> wa-batch-08c14425-6053-4339-9483-0b2a26fbbd18-a1 port 12700116371
+map: f16ef586 -> wa-batch-d3c0ec7b-8825-4e35-b33f-4905e7f86619-a1 port 12700116372
+CTR02=wa-batch-dc74542a-0538-4f09-9617-985ff12766a2-a1 CTR03=wa-batch-d3c0ec7b-8825-4e35-b33f-4905e7f86619-a1 CTR04=wa-batch-08c14425-6053-4339-9483-0b2a26fbbd18-a1 (ports 12700116370/12700116372/12700116371)

@@ -1,0 +1,17 @@
+=== adbd wire availability poll (CNX handshake, 10s interval, up to 12min) @ 2026-10-28T16:01:38Z ===
+poll 1 (2026-10-28T16:01:53Z): CNX still not answered
+poll 2 (2026-10-28T16:02:18Z): CNX still not answered
+poll 3 (2026-10-28T16:02:43Z): CNX still not answered
+poll 4 (2026-10-28T16:03:08Z): CNX still not answered
+poll 5 (2026-10-28T16:03:33Z): CNX still not answered
+poll 6 (2026-10-28T16:03:58Z): CNX still not answered
+poll 7 (2026-10-28T16:04:23Z): CNX still not answered
+poll 8 (2026-10-28T16:04:48Z): CNX still not answered
+poll 9 (2026-10-28T16:05:13Z): CNX still not answered
+poll 10 (2026-10-28T16:05:38Z): CNX still not answered
+poll 11 (2026-10-28T16:06:03Z): CNX still not answered
+poll 12 (2026-10-28T16:06:29Z): CNX still not answered
+poll 13 (2026-10-28T16:06:54Z): CNX still not answered
+poll 14 (2026-10-28T16:07:19Z): CNX still not answered
+poll 15 (2026-10-28T16:07:44Z): CNX still not answered
+poll 16 (2026-10-28T16:08:09Z): CNX still not answered

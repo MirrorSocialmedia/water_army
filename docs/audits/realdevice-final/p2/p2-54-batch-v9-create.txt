@@ -1,0 +1,18 @@
+=== P2.2g API create batch v9 (gen2) @ 2026-10-28T15:44:02Z ===
+--- payload (same v8 shape; worker lifecycle timeout now 300s) ---
+{
+  "name": "WA-RDFA-P2-final-v9",
+  "idempotencyKey": "rdfa-p2-final-v9",
+  "identities": ["8cc54fa8-27ec-406e-b7f7-3133c15b18be","f16ef586-f38f-4d20-a464-7187876e4205","9823ddf2-0e3e-4375-96cc-400f9d3b3dbd"],
+  "batchSize": 3,
+  "maxActiveContainers": 3,
+  "failurePolicy": "continue_and_report",
+  "config": {
+    "adapter": {"type": "container", "image": "water-army/redroid:14.0.0-240527-gms-mtg", "health": {"kind": "adb-tcp", "port": 5555}},
+    "maxAttempts": 2,
+    "timeoutSeconds": 900
+  }
+}
+--- response ---
+HTTP_STATUS=201
+{"replay":false,"cycleId":"d19b13d8-185b-4dfd-a800-1c7f7cbb3ab5","batches":[{"id":"26885119-1459-45fc-869e-be7adc808ec6","batchNo":1}],"plan":{"batchSize":3,"batchCount":1,"batches":[{"batchNo":1,"size":3,"members":[{"identityId":"8cc54fa8-27ec-406e-b7f7-3133c15b18be","position":1,"state":"PENDING","skipReason":null},{"identityId":"f16ef586-f38f-4d20-a464-7187876e4205","position":2,"state":"PENDING","skipReason":null},{"identityId":"9823ddf2-0e3e-4375-96cc-400f9d3b3dbd","position":3,"state":"PENDING","skipReason":null}]}],"stats":{"total":3,"included":3,"skipped":0}}}

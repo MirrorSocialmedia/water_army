@@ -1,0 +1,25 @@
+=== ground truth 04 (wa-batch-08c14425-6053-4339-9483-0b2a26fbbd18-a1 @ 12700116371) === 2026-10-28T15:44:44Z (window t0=1793202283)
+--- [1] egress e2e via gost:18443 (container-level; netns live from container start, P1-verified method p1-16) ---
+Server: cloudflare
+Vary: Origin
+
+103.194.185.206--- [2] wait for Android boot (docker exec getprop, 2s poll, up to 8min) ---
+boot_completed=1 at ~t+2s
+--- [3] getprop full dump (docker exec) -> p2-52-groundtruth-04-props.txt ---
+props lines: 568
+--- [4] key props ---
+[ro.build.fingerprint]: [redroid/redroid_x86_64/redroid_x86_64:14/UD2A.240505.001.W1/eng.frank.20240527.141332:userdebug/test-keys]
+[ro.build.id]: [UD2A.240505.001.W1]
+[ro.hardware]: [redroid]
+[ro.hardware.egl]: [angle]
+[ro.hardware.gralloc]: [redroid]
+[ro.hardware.vulkan]: [pastel]
+[ro.product.brand]: [redroid]
+[ro.product.device]: [redroid_x86_64]
+[ro.product.model]: [redroid14_x86_64]
+[sys.boot_completed]: [1]
+--- [5] display ---
+size: Physical size: 720x1280  density: Physical density: 320
+--- [6] best-effort host adb burst (127.0.0.1:12700116371; product stops ~1.5s after ADB health) ---
+adb: port answered but shell not ready (window too narrow)
+=== done 04 2026-10-28T15:44:45Z ===

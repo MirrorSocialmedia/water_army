@@ -1,0 +1,6 @@
+=== host-adb ground truth on DIAG (real adb client, 127.0.0.1:16395) @ 2026-10-28T16:08:40Z ===
+device
+adb getprop lines: 570
+[ro.build.fingerprint]: [redroid/redroid_x86_64/redroid_x86_64:14/UD2A.240505.001.W1/eng.frank.20240527.141332:userdebug/test-keys]
+[ro.product.model]: [redroid14_x86_64]
+[sys.boot_completed]: [1]
