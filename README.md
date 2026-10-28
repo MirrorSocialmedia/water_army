@@ -1,6 +1,8 @@
 # water_army
 
-Docker 容器 + AI 任務自動化平台（**7 階段 MVP 全部完成** — P0–P6 ＋ security patch ＋ Redroid 實機矩陣 Stage A/B ＋ **網絡修復鏈 R0–R7** ＋ **Batch Rotation BR-B1–B6**；本 README = P6 最終版 + 2026-10-19 更新 + 2026-10-21 R7 文檔同步 + **2026-10-22 BR-B6 收口**）。
+Docker 容器 + AI 任務自動化平台（本地單一部署；建倉至今历經 P0–P6、Stage A/B、修復鏈 R0–R7、Batch Rotation BR-B1–B6、GMS/身份資產/行為引擎等期 — 期數制摘要已歸檔）。
+
+> **現況唯一事實來源 = [`docs/release-status.md`](docs/release-status.md)**（測試數實跑口徑、真機/mock 驗證分層、KNOWN LIMITATION、NOT VERIFIED、DEFERRED）。本 README = 架構/安裝/運維手檔；以下摘要為**歷史快照（非現況）**；新引用測試數必帶 `(snapshot 日期, scope=…)`。
 本地單一部署：一個 UI、一個 API、一個 worker、Postgres 17、Redis 7，全部跑喺同一部主機嘅 Docker 入面。
 
 - **api** — Fastify 5：auth（argon2id + session cookie）、RBAC、health、容器 API（P2）、AI 任務/批准/provider 管理 API（P3）、排程 API（P4）、Redroid device API（P5）、dashboard + 排程通知（P6）
@@ -12,18 +14,18 @@ Docker 容器 + AI 任務自動化平台（**7 階段 MVP 全部完成** — P0�
 對抗情報：`docs/exposure-surfaces.md`（T7 五層洩漏地圖 + 「今日開機紅旗表」）、`docs/l2-l3-proposal.md`（L2/L3 立項工單草案）、採集工具 `tools/exposure-probe/`。
 GMS/認證面研究：`docs/gms-variants.md`（三變體比較 + 真機整合）、`docs/l3-play-integrity.md`（L3 Play Integrity 暴露面重估 + 六路線評估 + EXP-1/2/3 收斂，2026-10-27；拍板欄喺文檔末；§6 = EXP-6 ARM 翻譯層實錄）。ARM 翻譯層（L3-C'，2026-10-27 老細拍板先行）：`images/gms-mtg-arm`（houdini native bridge 疊 gms-mtg）+ `vendor/arm-translator/SOURCE.md`（料源/pin/授權）。
 
-**P6 交付摘要**（證據：`docs/evidence/p6-e2e/`、`docs/evidence/p6-security/`、`docs/evidence/p6-cleaninstall/`）：
+**P6 交付摘要**（snapshot 2026-10-19，歸檔非現況；證據：`docs/evidence/p6-e2e/`、`docs/evidence/p6-security/`、`docs/evidence/p6-cleaninstall/`）：
 - 5 個 P3–P5 留底 flag 全部收結（managed exception 表 / compose label / 排程通知 / flaky 根因 / concurrency gate）
 - Playwright E2E 14/14（真 headless Chrome + 真 worker，捉到 5 個真 UI bug 全修）
 - 安全：npm audit ×3 = **0 高危**（override 修復 + 驗證鏈）、secret redaction 17/17 實打、審計抽驗、threat-model 最終版（T1–T7）
-- 測試：465（464 pass + 1 env-gated real-redis，已對真 redis 實跑綠）+ vite build clean
+- 測試：465（snapshot 2026-10-19, scope=npm test 全套；464 pass + 1 env-gated real-redis，已對真 redis 實跑綠）+ vite build clean
 - clean install 實跑（`down -v` → README 由零起 → 5/5 healthy → 首 admin → 登入 200）
 
 **P6 之後更新（2026-10-19）**（本 README 已反映以下三批合併）：
 - **Security patch**（`27cc558`）：SSRF guard（provider baseUrl → 400 `BLOCKED_URL`）＋ per-account 登入限流（rate key = 客戶端 IP × 帳號）＋ proxy anti-spoof ＋ `trustProxy` — 見 §安全模型
 - **Stage A Redroid 實機矩陣**（`f8e2986`/`cf6b2d9`）：本機真 host boot（kernel 6.8 + RTX 3090，redroid 14.0.0-240527 → `boot_completed=1`／ADB `device`／SDK 34／boot 後 18+ 分鐘零 crash）、preflight memfd 語義 + containerized vantage、容器內 binderfs wrapper image（`docker/redroid-matrix/`）、root host setup script（`scripts/redroid-host-setup.sh`）— 見 §Redroid 實機矩陣
 - **Stage B per-device egress proxy**（`18f8139`/`ffe800f`/`bd88571`/`351983a`）：per-device gost container（digest pin）＋ tun2socks v2.7.0 bake 入 wrapper image、port 段 20080–20179、`proxyUrl` 加密 data model — 見 §Per-device egress proxy
-- 測試套：465 → **492**（491 pass + 1 env-gated skip，0 fail）→ BR-B1–B6 收口後 **1054**（1053 pass + 1 env-gated skip，0 fail）
+- 測試套：465 → **492**（snapshot 2026-10-19, scope=npm test 全套）→ BR-B1–B6 收口後 **1054**（snapshot 2026-10-22, scope=npm test 全套；以上皆歷史，現況數見 `docs/release-status.md` §1/§2）
 
 ---
 
@@ -465,7 +467,7 @@ P5「mock 驗證主路徑」升級為**真機 boot**：本機（kernel 6.8.0-117
 | `tests/unit/redaction.test.js`（+1） | service token header redact（P6 T7 defense-in-depth） |
 | `tests/unit/schedule-service.test.js`（修正） | flag#4：delay 斷言 deterministic（slot anchor 喺 createdAt）— flake 根因修復（ADR §15.3） |
 
-**P6 測試總數：465 tests**（464 pass + 1 env-gated real-redis skip，0 fail；gated 測試已對真 redis 實跑 1/1 綠 — 見上面 §測試 gate 命令）+ vite build clean。另：**Playwright E2E 14/14**（`e2e/p6-e2e.mjs`，見 P6 節）+ **secret redaction 17/17**（`e2e/secret-redaction-e2e.mjs`，證據 `docs/evidence/p6-security/`）。
+**P6 測試總數：465 tests**（snapshot 2026-10-19, scope=npm test 全套）（464 pass + 1 env-gated real-redis skip，0 fail；gated 測試已對真 redis 實跑 1/1 綠 — 見上面 §測試 gate 命令）+ vite build clean。另：**Playwright E2E 14/14**（`e2e/p6-e2e.mjs`，見 P6 節）+ **secret redaction 17/17**（`e2e/secret-redaction-e2e.mjs`，證據 `docs/evidence/p6-security/`）。
 
 ### 2026-10-19 更新覆蓋（27 tests：security patch 11 ＋ Stage A 4 ＋ Stage B 12）
 
@@ -477,7 +479,7 @@ P5「mock 驗證主路徑」升級為**真機 boot**：本機（kernel 6.8.0-117
 | `tests/unit/preflight.test.js`（+4） | memfd 取代 ashmem（kernel ≥3.17 無 ashmem = supported）、kernel <3.17 仍要 ashmem、containerized vantage 嘅 /dev 狀態 = unknown（永唔假 absent）、unparseable kernel = unknown |
 | `tests/integration/redroid-proxy.test.js`（12，新檔） | pure builders（socks5-only URL parse / gost body：digest pin + 172.17.0.1 bind + 空 Env + port range 強制 / tunnel script exact match + state machine frozen）＋ template CRUD（`v1:` ciphertext 落庫 / view masked / patch 換與清 / malformed 400）＋ device（繼承 template proxy / device override 贏過 template / no-proxy = 零 gost 零 exec / **兩 device 兩個唔同 gostPort** / delete = gost 真 remove / stop→stopped（teardown）/ start→running（gost 重用唔 recreate））＋ **LEAK GUARD**（每個 response body 斷言零 credentials / proxy host 洩露） |
 
-**現行全套總數：492 tests**（491 pass + 1 env-gated real-redis skip，0 fail；= P6 基線 465 + security patch 11 + Stage A 4 + Stage B 12；gated 測試已對真 redis 實跑 1/1 綠 — 見上面 §測試 gate 命令）。實跑核對：2026-10-19 `npm test`。
+**當時全套總數：492 tests**（snapshot 2026-10-19, scope=npm test 全套；現況見 docs/release-status.md）（491 pass + 1 env-gated real-redis skip，0 fail；= P6 基線 465 + security patch 11 + Stage A 4 + Stage B 12；gated 測試已對真 redis 實跑 1/1 綠 — 見上面 §測試 gate 命令）。實跑核對：2026-10-19 `npm test`。
 
 > **本機現實（誠實聲明，2026-10-19 更新）**：本機（kernel 6.8.0-117-generic + RTX 3090）喺跑完
 > `scripts/redroid-host-setup.sh` 之後係**已實機驗證嘅 Redroid host**（Stage A：真 boot／真 ADB／
