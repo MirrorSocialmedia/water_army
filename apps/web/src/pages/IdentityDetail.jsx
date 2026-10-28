@@ -3,6 +3,17 @@ import { useState } from 'react';
 import { useApi } from '../hooks/useApi';
 import { StateFrame } from '../components/StateFrame';
 import { identities, purge, identityLogin } from '../services/batches';
+import { fingerprints, egress, accountLifecycle } from '../services/identity-extras';
+import {
+  canOperateLifecycle,
+  conflictText,
+  errorText,
+  isSwitchDisabled,
+  previewText,
+  validateEgressForm,
+  validReasonCode,
+  LONG_TEXT_CLASS,
+} from '../lib/surfacy-ui';
 import {
   IDENTITY_PILL,
   RUN_STATUS_PILL,
@@ -10,6 +21,9 @@ import {
   LOGIN_STATE_PILL,
   LOGIN_TRANSITIONS_UI,
   LOGIN_TRANSITION_LABELS,
+  ACCOUNT_TRANSITIONS_UI,
+  ACCOUNT_STATUS_PILL,
+  ACCOUNT_STATE_LABELS,
   pillClass,
   fmtTime,
   fmtDateTime,
@@ -35,6 +49,10 @@ export function IdentityDetail({ identityId, user }) {
   const [purgeErr, setPurgeErr] = useState(null);
   const isAdmin = user?.role === 'admin';
   const login = useLoginState(identityId);
+  // WA-UI-SURFACY (s2): tabbed surface for the formerly headless backend
+  // features (W1 fingerprints / W3 egress / T5 account lifecycle). Panels
+  // mount lazily (tab switch) — no hidden polling, no fake data.
+  const [tab, setTab] = useState('overview');
 
   async function runPurge(dryRun) {
     setPurgeBusy(true);
@@ -87,6 +105,32 @@ export function IdentityDetail({ identityId, user }) {
             </div>
           </div>
 
+          <div className="tabs" role="tablist">
+            {[
+              ['overview', '總覽 Overview'],
+              ['fingerprint', '指紋 Fingerprint'],
+              ['egress', '出口綁定 Egress'],
+              ['account', '帳號生命週期 Account'],
+            ].map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={tab === id}
+                className={`tab${tab === id ? ' active' : ''}`}
+                onClick={() => setTab(id)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {tab === 'fingerprint' ? <FingerprintPanel identityId={identityId} user={user} /> : null}
+          {tab === 'egress' ? <EgressPanel identityId={identityId} user={user} /> : null}
+          {tab === 'account' ? <AccountLifecyclePanel identityId={identityId} user={user} /> : null}
+
+          {tab === 'overview' ? (
+          <>
           <div className="cards">
             <div className="card">
               <div className="card-head"><strong>Stable identity</strong></div>
@@ -259,6 +303,8 @@ export function IdentityDetail({ identityId, user }) {
               onDryRun={() => runPurge(true)}
               onPurge={() => runPurge(false)}
             />
+          ) : null}
+          </>
           ) : null}
         </div>
       ) : null}
@@ -458,6 +504,411 @@ function LoginStatePanel({ identityId, login, user }) {
       ) : (
         <p className="muted">no transitions recorded yet</p>
       )}
+    </div>
+  );
+}
+
+
+/**
+ * WA-UI-SURFACY s2 — W1/W1b fingerprint panel (ADR-025/028).
+ * Read = viewer+; ensure (idempotent generate + drift check) + fleet
+ * collision audit = admin. Collision 409 renders the server message
+ * verbatim (conflictText) — never a white screen, never swallowed.
+ */
+function FingerprintPanel({ identityId, user }) {
+  const isAdmin = user?.role === 'admin';
+  const prof = useApi(() => fingerprints.get(identityId), [identityId]);
+  const coll = useApi(() => fingerprints.collisions(), [identityId], { enabled: isAdmin });
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState(null); // { kind: 'ok' | 'err', text }
+
+  async function ensure() {
+    if (busy) return; // double-click guard (submit-in-flight check)
+    setBusy(true);
+    setNote(null);
+    try {
+      await fingerprints.ensure(identityId);
+      setNote({ kind: 'ok', text: 'Profile ensured — deterministic regenerate + drift check passed (idempotent).' });
+      prof.reload();
+      if (isAdmin) coll.reload();
+    } catch (e) {
+      setNote({ kind: 'err', text: conflictText(e) ?? errorText(e) });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const view = prof.data?.profile ?? null;
+  return (
+    <div className="stack">
+      <div className="card" role="region" aria-label="Fingerprint profile">
+        <div className="card-head">
+          <strong><Fingerprint size={14} style={{ verticalAlign: '-2px' }} /> 指紋 Profile (W1 — ADR-025)</strong>
+          <span className="muted">deterministic from identityId — real-device consumption NOT VERIFIED (V3)</span>
+        </div>
+        <StateFrame loading={prof.loading} error={prof.error} empty={!prof.loading && !prof.error && !view} emptyTitle="尚無指紋 profile" emptyHint="Generate one with the button below (admin, idempotent).">
+          <dl className="kv">
+            <dt>schemaVersion</dt><dd className="mono">{view.schemaVersion}</dd>
+            <dt>created</dt><dd>{fmtDateTime(view.createdAt)}</dd>
+            <dt>updated</dt><dd>{fmtDateTime(view.updatedAt)}</dd>
+          </dl>
+          <pre className="log-view" style={{ maxHeight: 320 }}>{JSON.stringify(view.profile, null, 2)}</pre>
+        </StateFrame>
+        {note ? <code className={note.kind === 'ok' ? 'status-ok' : 'dep-error'}>{note.text}</code> : null}
+        {isAdmin ? (
+          <div className="row-actions">
+            <button type="button" className="btn" disabled={busy || prof.loading} onClick={ensure}>
+              {busy ? 'Working…' : '生成 / 校驗 (ensure — idempotent)'}
+            </button>
+            <span className="muted">409 collision / drift fails closed server-side — the message is shown, never swallowed.</span>
+          </div>
+        ) : (
+          <p className="muted">Read-only role ({user?.role}) — 生成/校驗 needs admin.</p>
+        )}
+      </div>
+
+      {isAdmin ? (
+        <div className="card" role="region" aria-label="Fleet collision audit">
+          <div className="card-head">
+            <strong>車隊碰撞審計 (fleet collisions)</strong>
+            <span className="muted">pairwise audit across ALL identities (admin)</span>
+          </div>
+          <StateFrame loading={coll.loading} error={coll.error} empty={!coll.loading && !coll.error && !coll.data} emptyTitle="No audit data">
+            {coll.data ? (
+              <>
+                <p>
+                  blocking:{' '}
+                  <span className={`pill ${coll.data.blocking ? 'pill-down' : 'pill-up'}`}>
+                    {coll.data.blocking ? 'YES — unique-field collision blocks boot' : 'no'}
+                  </span>
+                </p>
+                {coll.data.uniqueFieldCollisions.length ? (
+                  <table className="list-table">
+                    <thead><tr><th>field</th><th>value</th><th>identities</th></tr></thead>
+                    <tbody>
+                      {coll.data.uniqueFieldCollisions.map((c, i) => (
+                        <tr key={`${c.field}-${i}`} className="row-error">
+                          <td className="mono">{c.field}</td>
+                          <td className={LONG_TEXT_CLASS} title={String(c.value)}>{previewText(String(c.value), 60)}</td>
+                          <td className="mono">{(c.identityIds ?? []).map(shortId).join(', ')}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : <p className="muted">no unique-field collisions</p>}
+                {coll.data.informationalRepeats.length ? (
+                  <p className="muted">
+                    informational repeats (non-unique fields):{' '}
+                    {coll.data.informationalRepeats.map((c) => `${c.field}×${c.count}`).join(', ') || 'none'}
+                  </p>
+                ) : null}
+              </>
+            ) : null}
+          </StateFrame>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * WA-UI-SURFACY s2 — W3 pinned egress panel (ADR-027). ZERO-CREDENTIAL:
+ * the proxy URL is never returned — only expectedEgressIp + hash prefix.
+ * Fail-closed 503 EGRESS_BINDING_DISABLED renders an honest switch-off card
+ * (same discipline as the login-state 503 frame). PUT changes / DELETE
+ * reset bound devices server-side (fail-closed until a fresh probe matches).
+ */
+function EgressPanel({ identityId, user }) {
+  const isAdmin = user?.role === 'admin';
+  const bind = useApi(() => egress.get(identityId), [identityId]);
+  const disabled = isSwitchDisabled(bind.error, 'EGRESS_BINDING_DISABLED');
+  const [form, setForm] = useState({ proxyUrl: '', expectedEgressIp: '' });
+  const [formErr, setFormErr] = useState(null);
+  const [busy, setBusy] = useState(null); // 'save' | 'delete' | null
+  const [note, setNote] = useState(null);
+
+  async function save() {
+    if (busy) return; // double-submit guard
+    const errs = validateEgressForm(form);
+    if (Object.keys(errs).length) {
+      setFormErr(Object.values(errs).join(' · '));
+      return;
+    }
+    setBusy('save');
+    setNote(null);
+    setFormErr(null);
+    try {
+      await egress.put(identityId, { proxyUrl: form.proxyUrl.trim(), expectedEgressIp: form.expectedEgressIp.trim() });
+      setNote({ kind: 'ok', text: '綁定已儲存 — proxyUrl 已加密入庫，永不回顯 (zero-credential)。Bound devices reset to fail-closed until a fresh probe matches.' });
+      setForm({ proxyUrl: '', expectedEgressIp: '' });
+      bind.reload();
+    } catch (e) {
+      setNote({ kind: 'err', text: conflictText(e) ?? errorText(e) });
+      bind.reload(); // the state may have moved under us — resync
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function unbind() {
+    if (busy) return;
+    setBusy('delete');
+    setNote(null);
+    try {
+      await egress.del(identityId);
+      setNote({ kind: 'ok', text: '綁定已移除 — bound devices re-enter fail-closed (UNCHECKED).' });
+      bind.reload();
+    } catch (e) {
+      setNote({ kind: 'err', text: conflictText(e) ?? errorText(e) });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  if (disabled) {
+    return (
+      <div className="card" role="region" aria-label="Egress binding">
+        <div className="card-head"><strong>出口綁定 (W3 — ADR-027)</strong></div>
+        <p className="muted">
+          Disabled on this host — <code className="mono">EGRESS_BINDING_DISABLED</code> (503).
+          Set WA_W3_EGRESS_BINDING_ENABLED=true after reviewing ADR-027 (real-device matrix NOT VERIFIED).
+        </p>
+      </div>
+    );
+  }
+
+  const b = bind.data?.binding ?? null;
+  return (
+    <div className="card" role="region" aria-label="Egress binding">
+      <div className="card-head">
+        <strong>出口綁定 (W3 — ADR-027)</strong>
+        <span className="muted">pinned proxy + the ONE exit IP — zero-credential surface</span>
+      </div>
+      <StateFrame
+        loading={bind.loading}
+        error={bind.error}
+        empty={!bind.loading && !bind.error && !b}
+        emptyTitle="未有綁定 (no binding)"
+        emptyHint={isAdmin ? 'Bind one below. The proxy URL is validated server-side and never echoed back.' : 'Ask an admin to bind the pinned egress for this identity.'}
+      >
+        {b ? (
+          <dl className="kv">
+            <dt>expected egress IP</dt><dd className="mono">{b.expectedEgressIp}</dd>
+            <dt>proxy fingerprint</dt><dd className="mono" title="truncated hash of the stored proxy URL — credentials never leave the vault">{b.proxyHashShort}</dd>
+            <dt>first verified</dt><dd>{b.firstVerifiedAt ? fmtDateTime(b.firstVerifiedAt) : '未驗證 (never)'}</dd>
+            <dt>last verified</dt><dd>{b.lastVerifiedAt ? fmtDateTime(b.lastVerifiedAt) : '未驗證 (never)'}</dd>
+            <dt>bound devices</dt><dd className="mono">{b.boundDevices}</dd>
+            <dt>updated</dt><dd>{fmtDateTime(b.updatedAt)}</dd>
+          </dl>
+        ) : null}
+      </StateFrame>
+      {note ? <code className={note.kind === 'ok' ? 'status-ok' : 'dep-error'}>{note.text}</code> : null}
+      {formErr ? <code className="dep-error">{formErr}</code> : null}
+      {isAdmin ? (
+        <div className="stack" style={{ gap: 8 }}>
+          <div className="row-actions">
+            <input
+              type="text"
+              className="input"
+              style={{ maxWidth: 360 }}
+              placeholder="proxyUrl — socks5://[user:pass@]host:port"
+              value={form.proxyUrl}
+              onChange={(e) => setForm((f) => ({ ...f, proxyUrl: e.target.value }))}
+            />
+            <input
+              type="text"
+              className="input"
+              style={{ maxWidth: 200 }}
+              placeholder="expectedEgressIp"
+              value={form.expectedEgressIp}
+              onChange={(e) => setForm((f) => ({ ...f, expectedEgressIp: e.target.value }))}
+            />
+            <button type="button" className="btn" disabled={busy !== null || bind.loading} onClick={save}>
+              {busy === 'save' ? 'Saving…' : b ? '更新綁定 (PUT — idempotent)' : '綁定 (bind)'}
+            </button>
+            {b ? (
+              <button type="button" className="btn btn-danger" disabled={busy !== null} onClick={unbind}>
+                {busy === 'delete' ? 'Removing…' : '解除綁定'}
+              </button>
+            ) : null}
+          </div>
+          <p className="muted">
+            The exit IP is fleet-unique — binding an IP another identity holds 409s with the server message shown above.
+            A saved change resets every bound device until a fresh probe matches.
+          </p>
+        </div>
+      ) : (
+        <p className="muted">Read-only role ({user?.role}) — 綁定/解綁 needs admin.</p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * WA-UI-SURFACY s2 — T5 account-lifecycle panel (ADR-030).
+ * Read (state + masked vault + audit) = viewer+; manual transition + driver
+ * provision touch = operator+. Buttons follow the mirrored transition
+ * matrix (server stays the authority, 409s anything illegal). Vault shows
+ * masked emails + hasPassword only — zero secrets cross this surface.
+ */
+function AccountLifecyclePanel({ identityId, user }) {
+  const canOp = canOperateLifecycle(user?.role);
+  const acct = useApi(() => accountLifecycle.get(identityId), [identityId]);
+  const audit = useApi(() => accountLifecycle.audit(identityId, 50), [identityId]);
+  const disabled = isSwitchDisabled(acct.error, 'ACCOUNT_LIFECYCLE_DISABLED')
+    || isSwitchDisabled(audit.error, 'ACCOUNT_LIFECYCLE_DISABLED');
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(null); // state name | 'provision' | null
+  const [note, setNote] = useState(null);
+
+  async function transition(to) {
+    if (busy) return; // double-submit guard
+    if (!validReasonCode(reason.trim())) {
+      setNote({ kind: 'err', text: 'reasonCode must match ^[A-Z0-9_]{2,60}$ (or stay empty)' });
+      return;
+    }
+    setBusy(to);
+    setNote(null);
+    try {
+      await accountLifecycle.transition(identityId, to, reason.trim() || undefined);
+      setNote({ kind: 'ok', text: `已轉至 ${to}（已審計）。` });
+      setReason('');
+      acct.reload();
+      audit.reload();
+    } catch (e) {
+      setNote({ kind: 'err', text: conflictText(e) ?? errorText(e) });
+      acct.reload(); // matrix may have moved under us — resync
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function provision() {
+    if (busy) return;
+    setBusy('provision');
+    setNote(null);
+    try {
+      const res = await accountLifecycle.provision(identityId);
+      setNote({ kind: 'ok', text: `Driver touch done: ${JSON.stringify(res?.state ?? res?.state ?? res)}`.slice(0, 200) });
+      acct.reload();
+      audit.reload();
+    } catch (e) {
+      setNote({ kind: 'err', text: conflictText(e) ?? errorText(e) });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  if (disabled) {
+    return (
+      <div className="card" role="region" aria-label="Account lifecycle">
+        <div className="card-head"><strong>帳號生命週期 (T5 — ADR-030)</strong></div>
+        <p className="muted">
+          Not available on this API build — <code className="mono">ACCOUNT_LIFECYCLE_DISABLED</code> (503):
+          the account_lifecycles / gmail_accounts tables are missing (run prisma migrate deploy).
+        </p>
+      </div>
+    );
+  }
+
+  const account = acct.data?.account ?? null;
+  const vault = acct.data?.vault ?? null;
+  const allowed = account ? ACCOUNT_TRANSITIONS_UI[account.state] ?? [] : [];
+
+  return (
+    <div className="stack">
+      <div className="card" role="region" aria-label="Account lifecycle state">
+        <div className="card-head">
+          <strong>帳號生命週期 (T5 — ADR-030)</strong>
+          <span className="muted">system-writable by the driver, operator-overridable here</span>
+        </div>
+        <StateFrame loading={acct.loading} error={acct.error} empty={!acct.loading && !acct.error && !account} emptyTitle="No lifecycle state">
+          <dl className="kv">
+            <dt>state</dt>
+            <dd>
+              <span className={`pill ${pillClass(ACCOUNT_STATUS_PILL, account.state)}`}>
+                {account.state} · {ACCOUNT_STATE_LABELS[account.state] ?? ''}
+              </span>
+            </dd>
+            <dt>since</dt><dd>{account.stateSince ? fmtDateTime(account.stateSince) : '—'}</dd>
+            <dt>current step</dt><dd className="mono">{account.currentStep ?? '—'}</dd>
+            <dt>awaiting deadline</dt><dd>{account.awaitingDeadlineAt ? fmtDateTime(account.awaitingDeadlineAt) : '—'}</dd>
+            <dt>intervention</dt><dd className="mono">{account.interventionId ? shortId(account.interventionId) : '—'}</dd>
+            <dt>failure code</dt><dd className="mono">{account.failureCode ?? '—'}</dd>
+          </dl>
+        </StateFrame>
+        <div className="card-head" style={{ marginTop: 10 }}>
+          <strong>憑證庫 (vault — masked)</strong>
+          <span className="muted">zero-secret projection: masked emails + hasPassword only</span>
+        </div>
+        {vault ? (
+          <dl className="kv">
+            <dt>email</dt><dd className={LONG_TEXT_CLASS}>{vault.emailMasked ?? '—'}</dd>
+            <dt>password stored</dt><dd className={vault.hasPassword ? 'status-ok' : 'status-degraded'}>{vault.hasPassword ? 'yes (encrypted)' : 'no'}</dd>
+            <dt>recovery email</dt><dd className={LONG_TEXT_CLASS}>{vault.recoveryEmailMasked ?? '—'}</dd>
+            <dt>created</dt><dd>{fmtDateTime(vault.createdAt)}</dd>
+          </dl>
+        ) : <p className="muted">no vault row for this identity</p>}
+        {canOp ? (
+          <div className="stack" style={{ gap: 8 }}>
+            <div className="row-actions">
+              {allowed.map((to) => (
+                <button key={to} type="button" className="btn" disabled={busy !== null} onClick={() => transition(to)}>
+                  {busy === to ? 'Saving…' : `→ ${to}（${ACCOUNT_STATE_LABELS[to] ?? ''}）`}
+                </button>
+              ))}
+              <button type="button" className="btn btn-ghost" disabled={busy !== null} onClick={provision}>
+                {busy === 'provision' ? 'Driving…' : 'Driver provision touch'}
+              </button>
+              <input
+                type="text"
+                className="input"
+                style={{ maxWidth: 260 }}
+                placeholder="reasonCode（可選，^[A-Z0-9_]{2,60}$）"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+              />
+            </div>
+            {note ? <code className={note.kind === 'ok' ? 'status-ok' : 'dep-error'}>{note.text}</code> : null}
+            <p className="muted">
+              非法轉換 server 409 fail-closed（矩陣鏡像只驅動按鈕顯示）；driver touch 需 Gmail provisioning 開啟，否則誠實 503。
+            </p>
+          </div>
+        ) : (
+          <p className="muted">Read-only role ({user?.role}) — 手動轉換 / provision needs operator+。</p>
+        )}
+      </div>
+
+      <div className="card" role="region" aria-label="Lifecycle audit">
+        <div className="card-head">
+          <strong>轉換審計 (transition audit)</strong>
+          <span className="muted">newest first (max 50)</span>
+        </div>
+        {audit.error && !audit.data ? (
+          <p className="muted">Audit unavailable ({audit.error.code ?? audit.error.message}).</p>
+        ) : audit.data?.items?.length ? (
+          <div className="table-wrap">
+            <table className="list-table">
+              <thead>
+                <tr><th>when</th><th>from</th><th>to</th><th>actor</th><th>reason</th></tr>
+              </thead>
+              <tbody>
+                {audit.data.items.map((r) => (
+                  <tr key={r.id}>
+                    <td>{fmtDateTime(r.createdAt)}</td>
+                    <td><span className={`pill ${pillClass(ACCOUNT_STATUS_PILL, r.fromState)}`}>{r.fromState}</span></td>
+                    <td><span className={`pill ${pillClass(ACCOUNT_STATUS_PILL, r.toState)}`}>{r.toState}</span></td>
+                    <td className="mono">{r.actorKind === 'human' ? (r.actorUserId ? shortId(r.actorUserId) : '—') : `system:${r.actorKind}`}</td>
+                    <td className={LONG_TEXT_CLASS}>{r.reasonCode ?? '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="muted">no transitions recorded yet</p>
+        )}
+      </div>
     </div>
   );
 }
