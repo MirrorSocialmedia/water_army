@@ -125,9 +125,21 @@ export function batchJobId(runId, attempt) {
 }
 
 /**
- * Validate a cycle/batch config object (MD §12: config is validated at the
- * API boundary AND re-checked by the worker before execution — hostile input
- * is assumed on both sides). Returns an error list (empty = valid).
+ * Validate a cycle/batch config object (MD §12). Returns an error list
+ * (empty = valid).
+ *
+ * Where it is enforced (keep this comment in sync with the call sites —
+ * the previous "validated at the API boundary AND re-checked by the worker"
+ * wording was stale: neither path called this, which is F-RDFA-1):
+ *   - CREATE time: batch-service.js createCycle() calls this synchronously
+ *     before the persistence transaction — createCycle is the single
+ *     cycle-write path, so this IS the API boundary (400 VALIDATION_ERROR
+ *     on malformed config; never a 201 that dies at dispatch).
+ *   - DISPATCH time: the container adapter spec is shape-re-checked by
+ *     adapterSpecForRun() (batch-lifecycle-service) which refuses any
+ *     non-'container' spec with 409 RUN_STATE_INVALID — hostile input is
+ *     assumed on both sides (existing malformed rows created before the
+ *     create-time check still land here, honestly).
  *
  * @param {object} config the cycle configJson (optional knobs only)
  * @returns {string[]}

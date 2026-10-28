@@ -214,6 +214,37 @@ test('BR-B2 batches API (G7) — §10 contract over the real HTTP path', async (
 
     // malformed idempotency key
     assertEnvelope(await req('POST', '/api/batches', { cookie: op, payload: { ...batchReq, name: 'x', idempotencyKey: 'short' } }), 400, 'VALIDATION_ERROR');
+
+    // F-RDFA-1 (WA-RDFA-FIX): config.adapter shape is validated at create
+    // over the real HTTP path — the exact v7 payloads that 201'd in the
+    // field now get 400 VALIDATION_ERROR with the honest naming message.
+    assertEnvelope(
+      await req('POST', '/api/batches', {
+        cookie: op,
+        payload: { ...batchReq, name: 'G7 bad-adapter', idempotencyKey: 'g7-badadapter-01', config: { adapter: 'container' } },
+      }),
+      400,
+      'VALIDATION_ERROR',
+    );
+    assertEnvelope(
+      await req('POST', '/api/batches', {
+        cookie: op,
+        payload: { ...batchReq, name: 'G7 bad-adapter', idempotencyKey: 'g7-badadapter-02', config: { adapter: { type: 'emulator' } } },
+      }),
+      400,
+      'VALIDATION_ERROR',
+    );
+    // a well-formed container spec still creates (201)
+    const goodCfg = await req('POST', '/api/batches', {
+      cookie: op,
+      payload: {
+        ...batchReq,
+        name: 'G7 good-adapter',
+        idempotencyKey: 'g7-goodadapter-01',
+        config: { adapter: { type: 'container', image: 'water-army/redroid:14.0.0-240527-gms-mtg' } },
+      },
+    });
+    assert.equal(goodCfg.statusCode, 201, `valid container spec creates: ${goodCfg.body}`);
   });
 
   // ------------------------------------------------------------- capacity

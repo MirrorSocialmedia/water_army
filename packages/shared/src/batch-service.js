@@ -26,6 +26,7 @@ import {
   BatchError,
   planCycle,
   validateCapacityInput,
+  validateBatchConfig,
   validateIdentityDataPath,
   identityDataPaths,
   findDuplicateMountSources,
@@ -210,6 +211,14 @@ export function createBatchService({ db, log = console, now = () => new Date(), 
       errors.push('idempotencyKey is required and must match ^[A-Za-z0-9_-]{8,64}$ (MD §10)');
     }
     errors.push(...validateCapacityInput(input ?? {}));
+    // F-RDFA-1 (WA-RDFA-FIX): config is validated at CREATE time — before
+    // anything is persisted. createCycle is the single cycle-write path, so
+    // this is the API boundary: a malformed config (e.g. adapter = the
+    // string "container", a missing image, an unknown adapter type) is a
+    // 400 here, never a 201 that only dies as a 409 RUN_STATE_INVALID at
+    // dispatch. validateBatchConfig is the single source of truth for the
+    // config shape (shared with the worker-side re-check).
+    errors.push(...validateBatchConfig(input?.config));
     if (!Array.isArray(input?.identities)) errors.push('identities must be an array');
     if (input?.identities && input.identities.some((i) => typeof i?.id !== 'string' || !/^[0-9a-f-]{36}$/i.test(i.id))) {
       errors.push('every identity needs a uuid id');
