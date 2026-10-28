@@ -8,8 +8,8 @@
 
 | 項 | 值 |
 |---|---|
-| 測試實跑基準 commit | `f2d55a6`（生成時 HEAD；工作樹 clean；WA-REALDEVICE-FINAL P3 收口後重跑，全套零回歸 = 同數） |
-| 生成日期 | 2026-10-29 00:38 HKT（Asia/Hong_Kong） |
+| 測試實跑基準 commit | `92f3757`（生成時 HEAD；工作樹 clean；WA-RDFA-FIX S4 收口後重跑，全套零回歸 = 同數） |
+| 生成日期 | 2026-10-29 03:5x HKT（Asia/Hong_Kong） |
 | 工作樹狀態 | 最終 commit 後重跑 `--check` = clean 校驗（見 §5.3） |
 | 生成命令 | `bash scripts/release-status-provenance.sh`（填 §1 實跑數字）；事實欄由 docs/audits/*、docs/*.md、HEARTBEAT 逐條盤點 |
 | 重複核對 | `bash scripts/release-status-provenance.sh --check`（比對本檔 §1 vs 實跑，漂移即 exit 1） |
@@ -38,13 +38,13 @@
 
 > **口徑澄清**：過往記錄（工單、HEARTBEAT）偶見「1606 tests（1600 pass + 6 skip）」— 實測基準下 **1606 = pass 數**，全套 tests 總數 = **1612 = 1606 pass + 6 skip**；引用時請以「tests / pass / fail / skip」四欄分列，避免 pass-vs-total 混用。
 >
-> 實跑快照：`bash scripts/release-status-provenance.sh` @`f2d55a6`（2026-10-29 00:38 HKT）輸出 = `suite total=1612 pass=1606 fail=0 skip=6；unit 1169/1169/0/0；integration 443/437/0/6`。
+> 實跑快照：`bash scripts/release-status-provenance.sh` @`92f3757`（2026-10-29 03:5x HKT）輸出 = `suite total=1658 pass=1652 fail=0 skip=6；unit 1200/1200/0/0；integration 458/452/0/6`。
 
 | 層 | 命令 | 測試數 | 結果 |
 |---|---|---|---|
-| 全套 npm test | `npm test` | 1612 | 1606 pass / 0 fail / 6 skip（skip 全部在 integration 層 = 環境門控：real-redis gated、真機窗口 gated；**非跳過失敗**） |
-| unit | `npm run test:unit`（86 files） | 1169 | 1169 pass / 0 fail / 0 skip |
-| integration | `npm run test:integration`（45 files） | 443 | 437 pass / 0 fail / 6 skip |
+| 全套 npm test | `npm test` | 1658 | 1652 pass / 0 fail / 6 skip（skip 全部在 integration 層 = 環境門控：real-redis gated、真機窗口 gated；**非跳過失敗**） |
+| unit | `npm run test:unit`（89 files） | 1200 | 1200 pass / 0 fail / 0 skip |
+| integration | `npm run test:integration`（46 files） | 458 | 452 pass / 0 fail / 6 skip |
 | web build | `npm run build` | vite | 綠（build green ≠ 功能 PASS，只證可打包） |
 
 **E2E harness（獨立於 npm test，全部對真 web/API 部署打）**：
@@ -58,7 +58,7 @@
 | MC P4/P5 介入 + hardening | T40–T49 / T50–T61 | PASS(real-device) @2026-10-24 | `docs/audits/mobileconsole-final-report.md`、`logs/mobileconsole-p{4,5}/e2e/`（workspace） |
 | UI surfacy 走查 v2 | 16 步真斷言 + 錯誤注入自我證明（fail 集 T1/T2/6.5/7.5） | PASS(live-stack) @2026-10-28 | `docs/audits/ui-surfacy-report.md`（v2 段）、`scripts/e2e-ui-surfacy-walk.mjs`（`a8059ec`）、截圖 `logs/ui-surfacy/`（workspace）；功能 commits `24a11fb`/`2aa08d7`/`a9ab21f`/`dacc9c4`/`6cda5c1`/`3ec1fe2`，fix 單 `a8059ec`/`76afa27`/`07262d0` |
 | R8 隔離 stack 77 項 smoke | A13+B25+C20+D13+D14+E5 | PASS(live-stack) @2026-10-21 | `docs/audits/r8-final-test-matrix.md` §1.2、`docs/live-evidence/r8-20261021/` |
-| RDFA 真機最終（單機全流程 + 批次真機） | P0 7 PASS+2 限制 / P1 單機 8 步 / P2 批次 v4–v9（真 3 容器 ×6 輪，失敗全根因坐實）/ P3 零殘留 | P0/P1/P3 = **PASS(real-device)**；批次端到端 = **FAIL（F-RDFA-2）** @2026-10-28/29 | `docs/audits/realdevice-final-report.md`（`f2d55a6`）、`docs/audits/realdevice-final/p0–p3/` |
+| RDFA 真機最終（單機全流程 + 批次真機）+ RDFA-FIX 收口 | P0 7 PASS+2 限制 / P1 單機 8 步 / P2 批次 v4–v9（真 3 容器 ×6 輪，失敗全根因坐實）/ P3 零殘留 / **WA-RDFA-FIX S4 真機 mini-驗證（probe 雙路徑 + network gate + RAM gate）** | P0/P1/P3 = **PASS(real-device)** @2026-10-28/29；批次端到端 = **NOT VERIFIED**（F-RDFA-1/2/3 根因已修 @92f3757、probe 雙路徑真機驗證、全批次複跑待獨立單） | `docs/audits/realdevice-final-report.md`（`f2d55a6`）、`docs/audits/realdevice-final/p0–p3/`、`docs/audits/rdfa-fix-report.md`、`docs/audits/rdfa-fix-s4-live-evidence.txt` |
 | R7 release gate | MD §9.3 八項全 PASS（3/4 項帶誠實註） | PASS @2026-10-21 | `docs/audits/release-gate-r7.md` |
 
 ---
@@ -116,7 +116,8 @@
 | 批次狀態機 re-arm（FAILED_FINAL→RESERVED→CANCELLED→READY 合法 edge 鏈） | PASS(real-device) | 多輪 re-arm（r3/r6/r7/r8）全 CAS UPDATE 1 + state_events 落庫；未繞狀態機（`docs/audits/realdevice-final-report.md` §3.2 P2.10、p2-41/p2-50） |
 | 批次手動介入流（真 loop） | PASS(real-device，到產品 bug 邊界) | IV8/IV9：open→badge 0→1→ack→真卡點（300s probe 空轉）→engine retry（真 304）→terminal→resolve；stop/retry-resume 未練（orchestrator bug 照實記錄）（報告 §3.4 P2.13/P2.18） |
 | 批次報告導出（真數據 JSON/CSV + secret scan） | PASS(real-device) | v9 cycle 報告 200（JSON 2357B/CSV 1168B）、3 機真實數據核、secret scan 0 命中、5 分鐘穩定窗 PASS（報告 §3.4 P2.19） |
-| 批次 × 真機端到端一條龍（UI 建批次 → N 台真機 run 跑完） | **FAIL（F-RDFA-2，實測 v4–v9 六連敗）** | 根因雙重坐實：**2a netns** = probe 喺 api 容器（bridge netns）探 `127.0.0.1:<hostport>` 但 ADB binding 喺 host loopback → ECONNREFUSED（EXP C 實錚）；**2b protocol** = probe bare `host:version` 無 CNX 首包 → 真 adbd 零字節（EXP A 實錚，同刻真 adb client 完全服務）。F-RDFA-1（create 不驗 adapter 形狀）+ F-RDFA-3（timeout default mock-calibrated）同列。v10 判定 = 重複撞同一面牆（topology/代碼決定，配置改唔到）→ ABORT。`docs/audits/realdevice-final-report.md` §0/§3.5（失敗總表）。不可推斷：批次喺真機可用（F-RDFA-2 修復 + 真機複驗前） |
+| 批次 × 真機端到端一條龍（UI 建批次 → N 台真機 run 跑完） | **NOT VERIFIED（根因已修、複跑待獨立單）** | 歷史 = FAIL（F-RDFA-2，實測 v4–v9 六連敗）：根因雙重坐實（**2a netns** = probe 探 `127.0.0.1:<hostport>` 但 ADB binding 喺 host loopback → ECONNREFUSED；**2b protocol** = bare `host:version` 無 CNX 首包 → 真 adbd 零字節）。**WA-RDFA-FIX（92f3757）修齊三個根因**：F-RDFA-1 create-time 校驗（400 at create、zero rows）；F-RDFA-2 probe = 真 CNXN 握手（`adb-protocol.js` + `adb-cnxn-probe.js`）+ device container bridge IP 目標 + api boot self-attach；F-RDFA-3 window 300s/360s 結構性治理 + C4 撤（ADR-036）。S4 真機 mini-驗證（`docs/audits/rdfa-fix-s4-live-evidence.txt`）：真 MTG device probe healthy（attempt 1、300s window 內、`adb-device@0x1000001`）+ stop 後 unhealthy 雙路徑真跑 + C1/C2 allowlist + RAM gate（ADMITTED）全通 = 本單黃金標準達標、舊結構性 blocker 已除、**升級評估可行**；但完整批次 e2e（N 台並發、完整 run 生命周期）未跑 → 唔可推斷批次喺真機可用。下一步 = 獨立單：全批次真機複驗（`docs/audits/rdfa-fix-report.md` §5） |
+| RDFA 修復驗證（create-time 校驗 / 真 CNXN probe 雙路徑 / window 治理 / C4 撤除） | PASS(real-device)（probe 雙路徑真跑；create-time 校驗 = 代碼層 mock-hermetic 證據級） | `docs/audits/rdfa-fix-report.md`（per-finding root cause/修復/證據/真機驗證）、`docs/audits/rdfa-fix-s4-live-evidence.txt`（raw live 輸出）、ADR-036（`docs/architecture-decisions.md` §36）；commits `991ddfa`/`4291f71`/`39ddeae`/`858bed4`/`92f3757` |
 | UI Batch Planner adapter/template 入口 | KNOWN LIMITATION（gap） | 現 UI 無 adapter 配置入口（control.create 只傳 identities/batchSize/maxActive/failurePolicy）→ container batch 只可走 API（報告 §3.1 P2.0）。下一步：產品單 |
 
 ### 3.3 身份資產（指紋 / egress / 帳號生命週期 / Gmail provisioning / CE 健康）
@@ -209,7 +210,7 @@
 
 ## 4. 真機 / mock 驗證覆蓋總覽（審計者速覽）
 
-**已真機 PASS（可實地重驗）**：skip-phone 兩證（pilot-001/002）、新建帳號 web 登入零驗證牆（Gmail ×2 + FB 零 checkpoint + 重登可重複）、MTG 結構天花板（POST_PRE_ADD_ACCOUNT）+ checkin 斷鏈 + 手動 AID 註冊、microG checkin 後端接納、x86_64 APK 鐵律（Chrome 156）、gost 真鏈雙向 canary + 故障注入矩陣、RAM gate 雙向（10 台 ladder + 真起機）、MC 串流/輸入/介入/hardening（真 redroid ×5）、web session 跨容器重啟持久（docker restart 後零重登，HEARTBEAT 16:0x 段）、fail-open/fail-closed egress 實驗、批次容器起機半環/狀態機 re-arm/介入流（到產品 bug 邊界）/真數據報告導出（WA-REALDEVICE-FINAL，`docs/audits/realdevice-final-report.md`；**批次端到端 = FAIL F-RDFA-2，唔喺本列**）。
+**已真機 PASS（可實地重驗）**：skip-phone 兩證（pilot-001/002）、新建帳號 web 登入零驗證牆（Gmail ×2 + FB 零 checkpoint + 重登可重複）、MTG 結構天花板（POST_PRE_ADD_ACCOUNT）+ checkin 斷鏈 + 手動 AID 註冊、microG checkin 後端接納、x86_64 APK 鐵律（Chrome 156）、gost 真鏈雙向 canary + 故障注入矩陣、RAM gate 雙向（10 台 ladder + 真起機）、MC 串流/輸入/介入/hardening（真 redroid ×5）、web session 跨容器重啟持久（docker restart 後零重登，HEARTBEAT 16:0x 段）、fail-open/fail-closed egress 實驗、批次容器起機半環/狀態機 re-arm/介入流（到產品 bug 邊界）/真數據報告導出（WA-REALDEVICE-FINAL，`docs/audits/realdevice-final-report.md`）、RDFA 修復 probe 雙路徑（真 MTG device CNXN 握手 healthy + stop 後 unhealthy，S4，`docs/audits/rdfa-fix-s4-live-evidence.txt`）；**批次端到端 = NOT VERIFIED（根因已修、複跑待獨立單），唔喺本列**。
 
 **只有 mock/hermetic 證據（唔可以當真機可用）**：全套 npm test、AI 任務執行（provider = mock）、批次執行引擎、帳號生命週期狀態機、行為引擎、註冊節流、contract tests。
 
@@ -222,9 +223,9 @@
 1. **WA-TRANSACTIONAL-EMAIL（2026-10-28）交付物不在本倉**：progress 檔（workspace `logs/waterarmy-transactional-email-progress.md`）記錄 commits `642d4f1`/`60191e5`/`d7373e0`（suite 1606 基線、SMTP 模擬 e2e），但该等 commit 喺 origin/main 歷史、本倉物件庫、reflog 均唔存在（2026-10-28 19:xx 盤點實查）。密碼重置電郵功能 = **DEFERRED（需要重推）**；本頁 §1 實跑數字以 HEAD 為準。
 2. `logs/` 目錄 gitignored：大量原始證據（截圖、worker log、ladder JSON、e2e json）只存於執行機。repo 內 `docs/audits|evidence|live-evidence/` 為已入倉部分。
 3. 本頁測試數字以實跑為準：跑 `scripts/release-status-provenance.sh` 重現；`--check` 模式會將本頁 §1 對照實跑，不一致 = exit 1。
-4. 日期錨點：本文事實盤點截至 2026-10-29 00:5x HKT（WA-REALDEVICE-FINAL 全單收口之後）；ADR 延伸至 ADR-035（`docs/architecture-decisions.md` §35，2026-10-28）。
+4. 日期錨點：本文事實盤點截至 2026-10-29 03:5x HKT（WA-RDFA-FIX 全單收口之後，含 WA-REALDEVICE-FINAL 收口）；ADR 延伸至 ADR-036（`docs/architecture-decisions.md` §36，2026-10-29，F-RDFA-3 window 治理 + C4 撤除）。
 4. Admin dev 密碼等 secret 一律唔入 repo（AC5）；e2e 用 seed/dev 帳號。
-5. **WA-REALDEVICE-FINAL 管理員測試配置（留原狀，還原等老總拍板）**：C1 `network.qaEndpointAllowlist=["http://api:3000"]`（AppSetting）、C2 `batch.container_image_allowlist`（MTG 物件形 entry）、C3 api env `BATCH_CONTAINER_DATA_ROOT=/var/lib/water-army/redroid`、C4 api `BATCH_CONTAINER_HEALTH_TIMEOUT_MS=300000` + worker `CONTAINER_ADAPTER_LIFECYCLE_TIMEOUT_MS=300000`（compose env，已帶 test-config 註釋）。完整還原法 = `docs/audits/realdevice-final-report.md` §4。`network.qaEndpointAllowlistInternal` 已喺 P2 還原。
+5. **WA-REALDEVICE-FINAL 管理員測試配置（WA-RDFA-FIX 後現狀）**：C1 `network.qaEndpointAllowlist=["http://api:3000"]`（AppSetting）、C2 `batch.container_image_allowlist`（MTG 物件形 entry）、C3 api env `BATCH_CONTAINER_DATA_ROOT=/var/lib/water-army/redroid` — **保留**（還原等老總拍板；完整還原法 = `docs/audits/realdevice-final-report.md` §4）。C4（api `BATCH_CONTAINER_HEALTH_TIMEOUT_MS=300000` + worker `CONTAINER_ADAPTER_LIFECYCLE_TIMEOUT_MS=300000` compose env）= **已撤** @WA-RDFA-FIX S3（`39ddeae`）：code default 已合理化（300s/360s，結構性約束，ADR-036）令 env override 冗餘；admin 仍可經 env override。before/after 落檔（ADR-036 + `docs/audits/rdfa-fix-report.md` §3）。`network.qaEndpointAllowlistInternal` 已喺 P2 還原。
 
 ## 6. 維護紀律
 
