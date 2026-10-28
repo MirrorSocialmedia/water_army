@@ -1,0 +1,43 @@
+
+--- wa-batch v4 remnants: VERIFIED (batch 2f3b93e8=rdfa-p2-final-v4 #1 COMPLETED_WITH_ERRORS; runs 7a901895/7ecab939/8b0624c9 all status=failed=terminal; labels com.mirrorsocialmedia.water-army.* managed=true) ---
+rm: wa-batch-7a901895-07f7-4535-b580-a33338a22d06-a1
+wa-batch-7a901895-07f7-4535-b580-a33338a22d06-a1
+rm: wa-batch-7ecab939-082a-464b-b7fd-aeb7a99e2e95-a1
+wa-batch-7ecab939-082a-464b-b7fd-aeb7a99e2e95-a1
+rm: wa-batch-8b0624c9-a03e-4099-924e-bf4022fadf9b-a1
+wa-batch-8b0624c9-a03e-4099-924e-bf4022fadf9b-a1
+
+--- data dir shells (contents already removed by docker-mount rm; mount-point shells rmdir'd) ---
+redroid-rdfa-01: gone
+redroid-rdfa-02: gone
+redroid-rdfa-03: gone
+redroid-rdfa-04: gone
+rdfa-test-td: gone
+
+--- POST-cleanup final state @ 2026-10-28T16:24:51Z ---
+total 32
+drwxr-x---  8 kenneth kenneth 4096 Oct 29 00:23 .
+drwxr-x---  4 kenneth kenneth 4096 Oct 29 00:02 ..
+drwxrwx--x 18 kenneth kenneth 4096 Oct 19 17:53 redroid-ceo-verify-a
+drwxrwx--x 49 kenneth kenneth 4096 Oct 20 01:06 redroid-matrix-r0-smoke
+drwxrwx--x 49 kenneth kenneth 4096 Oct 20 03:59 redroid-matrix-r2-spike
+drwxrwx--x 49 kenneth kenneth 4096 Oct 28 11:49 redroid-mc-dogfood-1
+drwxrwx--x 49 kenneth kenneth 4096 Oct 28 12:04 redroid-mc-dogfood-2
+drwxrwx--x 49 kenneth kenneth 4096 Oct 28 18:07 redroid-uie2e-ok1
+residual wa-batch containers: 0
+residual redroid-rdfa containers: 0
+data root entries (expect: ceo-verify-a, matrix-r0-smoke, matrix-r2-spike, mc-dogfood-1, mc-dogfood-2, uie2e-ok1 ONLY):
+redroid-ceo-verify-a
+redroid-matrix-r0-smoke
+redroid-matrix-r2-spike
+redroid-mc-dogfood-1
+redroid-mc-dogfood-2
+redroid-uie2e-ok1
+
+--- RAM gate (expect baseline: liveCount=2, running=2, inProgress=0) ---
+counts: {'liveLeases': 1, 'running': 1, 'inProgress': 0, 'runningWithLease': 1, 'reservedMiB': 1200}
+liveCount: 1
+--- prohibited set untouched ---
+rdev-f1	Up 8 hours
+redroid-mc-dogfood-2	Up 12 hours
+rdev-e1-gost	Up 26 hours

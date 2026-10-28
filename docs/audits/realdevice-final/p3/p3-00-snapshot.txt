@@ -1,0 +1,70 @@
+=== P3.0 pre-teardown snapshot @ 2026-10-28T16:20:05Z ===
+--- devices (api list) ---
+redroid-mc-dogfood-1 | id: af4d0b5f-3e89-4fe6-8015-f2991b94c455 | container: redroid-mc-dogfood-1 | state: None | gostPort: None | dataDir: None
+redroid-mc-dogfood-2 | id: e9b01374-8cc5-4880-8815-9f6a4a49861e | container: redroid-mc-dogfood-2 | state: None | gostPort: None | dataDir: None
+redroid-rdfa-01 | id: 8b1ac9d2-4c8c-4063-94ab-937f463f381f | container: redroid-rdfa-01 | state: None | gostPort: None | dataDir: None
+--- all rdfa/batch containers (any state) ---
+redroid-rdfa-01	Up 4 hours
+wa-batch-7a901895-07f7-4535-b580-a33338a22d06-a1	Exited (0) 2 hours ago
+wa-batch-7ecab939-082a-464b-b7fd-aeb7a99e2e95-a1	Exited (0) 2 hours ago
+wa-batch-8b0624c9-a03e-4099-924e-bf4022fadf9b-a1	Exited (0) 2 hours ago
+--- data root ---
+total 52
+drwxr-x--- 13 kenneth kenneth 4096 Oct 28 22:32 .
+drwxr-x---  4 kenneth kenneth 4096 Oct 29 00:02 ..
+drwxrwx--x 49 kenneth kenneth 4096 Oct 28 22:34 rdfa-test-td
+drwxrwx--x 18 kenneth kenneth 4096 Oct 19 17:53 redroid-ceo-verify-a
+drwxrwx--x 49 kenneth kenneth 4096 Oct 20 01:06 redroid-matrix-r0-smoke
+drwxrwx--x 49 kenneth kenneth 4096 Oct 20 03:59 redroid-matrix-r2-spike
+drwxrwx--x 49 kenneth kenneth 4096 Oct 28 11:49 redroid-mc-dogfood-1
+drwxrwx--x 49 kenneth kenneth 4096 Oct 28 12:04 redroid-mc-dogfood-2
+drwxrwx--x 49 kenneth kenneth 4096 Oct 28 20:36 redroid-rdfa-01
+drwxrwx--x 49 kenneth kenneth 4096 Oct 28 23:44 redroid-rdfa-02
+drwxrwx--x 49 kenneth kenneth 4096 Oct 28 23:44 redroid-rdfa-03
+drwxrwx--x 49 kenneth kenneth 4096 Oct 28 23:44 redroid-rdfa-04
+drwxrwx--x 49 kenneth kenneth 4096 Oct 28 18:07 redroid-uie2e-ok1
+185M	/var/lib/water-army/redroid/
+--- RAM gate ---
+{
+ "enabled": true,
+ "config": {
+  "enabled": true,
+  "maxParallel": 10,
+  "hardFloorMiB": 4096,
+  "postBootTargetMiB": 5400,
+  "perBootBudgetMiB": 1200,
+  "metricsMaxAgeMs": 30000,
+  "leaseTtlMs": 86400000
+ },
+ "configErrors": null,
+ "counts": {
+  "liveLeases": 2,
+  "running": 2,
+  "inProgress": 0,
+  "runningWithLease": 2,
+  "reservedMiB": 2400
+ },
+ "wouldAdmitNext": {
+  "admitted": true,
+  "reason": "ADMITTED",
+  "liveCount": 2,
+  "projectedMiB": 34331,
+  "currentMiB": 37931.4,
+  "config": {
+   "enabled": true,
+   "maxParallel": 10,
+   "hardFloorMiB": 4096,
+   "postBootTargetMiB": 5400,
+   "perBootBudgetMiB": 1200,
+   "metricsMaxAgeMs": 30000,
+   "leaseTtlMs": 86400000
+  }
+ },
+ "store": {
+  "redis": true
+ },
+ "ts": 1793204405476
+}
+--- P0 baseline gate (from progress) ---
+liveCount=2
+liveCount 2

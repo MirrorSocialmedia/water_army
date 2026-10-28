@@ -1,0 +1,10 @@
+=== P3.1 API DELETE redroid-rdfa-01 @ 2026-10-28T16:21:14Z ===
+endpoint: DELETE /api/devices/redroid/:id (admin) | body: confirm=<exact name>, removeData=true
+double-prefix confirm: name='redroid-rdfa-01' (starts 'redroid-rdfa-') NOT in prohibited {rdev-f1, redroid-mc-dogfood-2, rdev-e1-gost}
+HTTP_STATUS=200
+{"deleted":true,"name":"redroid-rdfa-01","containerRemoved":true,"removeData":true,"dataRemoved":false,"dataRemoveErrorCode":"DATA_DIR_PERM_DENIED","dataRemoveError":"EACCES: permission denied, scandir '/var/lib/water-army/redroid/redroid-rdfa-01/dalvik-cache'","claimReleased":false}
+--- post-delete state ---
+redroid-rdfa-01 containers remaining: 0
+/var/lib/water-army/redroid/redroid-rdfa-01
+DATA DIR STILL PRESENT
+devices now: ['redroid-mc-dogfood-1', 'redroid-mc-dogfood-2']
