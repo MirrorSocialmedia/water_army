@@ -83,3 +83,24 @@ GMS 變體用 stock ro.*（redroid 默認指紋）。合併順序、GMS 對偽�
 
 **生產含義（老細 21:51 確認）**：W3 出口代理綁定由『設計選項』升級為**硬性必須** — 三條 GMS 路線（MTG/microG/OpenGApps）
 嘅 checkin/register/push/phenotype 全部依賴去得切 Google；出口代理規格要入 W3 設計（綁定方式、fail 偵測、斷線告警）。
+
+## 5. MTG 結構性死穴：GMS 帳號永唔落賬（2026-10-28 真機實錚）
+
+**現象**：向導（`ADD_ACCOUNT_SETTINGS` → gms wizard）可以創建 Google 帳號（Google 側成功、Welcome 頁出），但 `dumpsys account` 永遠 = 0；token 亦唔落盤（全盘 grep 邮箱 = 零命中）。danrowe.kx71「登入態消失」同根因。
+
+**logcat 鐵證**：
+```
+W Auth: [IntentResolveHelper] Failed to resolve activity for action
+        com.google.android.gms.auth.addaccount.POST_PRE_ADD_ACCOUNT
+```
+`cmd package query-activities -a ...POST_PRE_ADD_ACCOUNT` = **No activities found**（APK 內根本冇呢個 component，唔係 disabled）。MTG 裁剪把「落賬執行器」（addAccountExplicitly + authtoken persist）成個剔走 → wizard 行到 `PreAddAccountActivity RESULT_OK` 之後斷鏈。
+
+**鑑別要點（修正舊結論）**：
+- `accounts_de.db` `debug_table` 會記錄 `action_called_account_add`（attempt 級）— **有 event ≠ 有賬號**；CE `accounts` 表先係 ground truth。
+- 之前「first-boot SIGKILL 撞壞 accounts_ce.db」係另一舊傷（CE DB 半 schema + 0-byte journal 會令所有後續寫 silent fail）；但**即使 DB 健康，MTG 呢步都寫唔入**——組件缺失係天花板，DB 損壞只係加劇。
+- wizard 過程中 gms RAM 會有 temporary account state（dumpsys 暫時可见 1）— **重啟即蒸發**，唔可以當登入態驗收。
+
+**產品含義**：
+1. MTG 上 GMS 帳號面（Play/同步/雲端 backup/Gmail app 收發）= **結構性不可用**，唔再投資修復（除非換全量 GApps 變體重新評估）。
+2. **登入態唯一承載者 = 瀏覽器 web session**（browser-first doctrine 由選型升格為硬結論）；Gmail/FB/IG 風控/健康監控全部行 web screencap 路線。
+3. 新建帳號本身仍可用（Google 側帳號 + 憑據入 vault），web 登入照用 — skip-phone 創建流程不受影響（2026-10-28 hollowotter902 創建成功、零 2FA 挑戰佐證新帳號路徑順）。
