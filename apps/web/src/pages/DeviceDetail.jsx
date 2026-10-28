@@ -4,6 +4,8 @@ import { useApi } from '../hooks/useApi';
 import { api } from '../api/client';
 import { navigate } from '../router';
 import { StateFrame } from '../components/StateFrame';
+import { deviceApps, redroidTemplates, networkPolicy } from '../services/device-extras';
+import { isSwitchDisabled, conflictText, errorText, LONG_TEXT_CLASS } from '../lib/surfacy-ui';
 import { timeAgo, stateBadgeClass, formatDateTime } from '../components/container-utils';
 import {
   gpuStatusBadge,
@@ -44,6 +46,9 @@ export function DeviceDetail({ deviceId }) {
   const canControl = ['admin', 'operator'].includes(me.data?.user?.role);
   const role = me.data?.user?.role;
   const canWrite = role === 'admin' || role === 'operator';
+  // WA-UI-SURFACY (s3): tabbed surface for the formerly headless device
+  // features (W2 device-apps / redroid templates / network dispatch policy).
+  const [tab, setTab] = useState('overview');
 
   const detail = useApi(() => api.get(`/api/devices/redroid/${encodeURIComponent(deviceId)}`), [deviceId]);
   const device = detail.data?.device ?? null;
@@ -163,6 +168,31 @@ export function DeviceDetail({ deviceId }) {
               )}
             </div>
 
+            <div className="tabs" role="tablist">
+              {[
+                ['overview', '總覽 Overview'],
+                ['apps', '應用 Apps'],
+                ['templates', '模板 Templates'],
+                ['policy', '派發策略 Policy'],
+              ].map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === id}
+                  className={`tab${tab === id ? ' active' : ''}`}
+                  onClick={() => setTab(id)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {tab === 'apps' ? <DeviceAppsPanel deviceId={deviceId} canWrite={canWrite} /> : null}
+            {tab === 'templates' ? <TemplatesPanel /> : null}
+            {tab === 'policy' ? <PolicyPanel role={role} /> : null}
+
+            {tab === 'overview' ? (<>
             {/* P4 (MD §7.1): event banner — an open human-intervention episode
                 on THIS device. openInterventions = open/ack/in_progress count
                 (null = unknown — the banner stays hidden, never a fake 0). */}
@@ -412,6 +442,363 @@ export function DeviceDetail({ deviceId }) {
                 )}
               </div>
             ) : null}
+          </>) : null}
+          </>
+        ) : null}
+      </StateFrame>
+    </div>
+  );
+}
+
+
+/**
+ * WA-UI-SURFACY s3 — W2 device-apps panel (ADR-026).
+ * Reads (pm list packages / package info) = viewer+; install/uninstall =
+ * operator+. Install takes a managed-dir flat file name only — the backend
+ * owns the APK allowlist dir; no path traversal is even expressible here.
+ * 503 APP_OPS_DISABLED renders an honest switch-off card (never a crash).
+ */
+function DeviceAppsPanel({ deviceId, canWrite }) {
+  const [filter, setFilter] = useState('');
+  const pkgs = useApi(() => deviceApps.list(deviceId, filter.trim() || undefined), [deviceId, filter]);
+  const disabled = isSwitchDisabled(pkgs.error, 'APP_OPS_DISABLED');
+  const [installName, setInstallName] = useState('');
+  const [busy, setBusy] = useState(null); // 'install' | pkg name | null
+  const [note, setNote] = useState(null);
+  const [info, setInfo] = useState(null); // { pkg, ...result } | null
+  const [armed, setArmed] = useState(null); // pkg awaiting uninstall confirm
+
+  async function doInstall() {
+    if (busy) return; // double-submit guard
+    setBusy('install');
+    setNote(null);
+    try {
+      const res = await deviceApps.install(deviceId, installName.trim());
+      setNote({ kind: 'ok', text: `installed ${installName.trim()}: ${JSON.stringify(res).slice(0, 160)}` });
+      setInstallName('');
+      pkgs.reload();
+    } catch (e) {
+      setNote({ kind: 'err', text: conflictText(e) ?? errorText(e) });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function doUninstall(pkg) {
+    if (busy) return;
+    if (armed !== pkg) {
+      setArmed(pkg); // first click arms, second confirms (typo-proof two-step)
+      return;
+    }
+    setBusy(pkg);
+    setNote(null);
+    try {
+      await deviceApps.uninstall(deviceId, pkg);
+      setNote({ kind: 'ok', text: `uninstalled ${pkg}` });
+      pkgs.reload();
+    } catch (e) {
+      setNote({ kind: 'err', text: conflictText(e) ?? errorText(e) });
+    } finally {
+      setBusy(null);
+      setArmed(null);
+    }
+  }
+
+  async function showInfo(pkg) {
+    setNote(null);
+    try {
+      const res = await deviceApps.info(deviceId, pkg);
+      setInfo({ pkg, ...res });
+    } catch (e) {
+      setNote({ kind: 'err', text: errorText(e) });
+    }
+  }
+
+  if (disabled) {
+    return (
+      <div className="card" role="region" aria-label="Device apps">
+        <div className="card-head"><strong>應用 (W2 — ADR-026)</strong></div>
+        <p className="muted">
+          Disabled on this host — <code className="mono">APP_OPS_DISABLED</code> (503).
+          Set WA_APP_OPS_ENABLED=true after reviewing ADR-026 (real-device matrix NOT VERIFIED).
+        </p>
+      </div>
+    );
+  }
+
+  const list = pkgs.data?.packages ?? [];
+  return (
+    <div className="card" role="region" aria-label="Device apps">
+      <div className="card-head">
+        <strong>應用 (W2 — ADR-026)</strong>
+        <span className="muted">pm list packages — the device is the truth</span>
+      </div>
+      <div className="row-actions" style={{ marginBottom: 8 }}>
+        <input
+          type="text"
+          className="input"
+          style={{ maxWidth: 280 }}
+          placeholder="package filter (exact pkg name)"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+        />
+        <button type="button" className="btn btn-ghost" onClick={pkgs.reload} disabled={pkgs.loading}>Reload</button>
+        {pkgs.data ? (
+          <span className="muted">
+            {pkgs.data.count} package(s){pkgs.data.truncated ? ' — truncated by output cap' : ''}
+          </span>
+        ) : null}
+      </div>
+      <StateFrame
+        loading={pkgs.loading}
+        error={pkgs.error}
+        empty={!pkgs.loading && !pkgs.error && list.length === 0}
+        emptyTitle="No packages"
+        emptyHint={filter ? 'No package matches the filter.' : 'Device reports no packages.'}
+      >
+        <div className="table-wrap">
+          <table className="list-table">
+            <thead><tr><th>package</th><th>actions</th></tr></thead>
+            <tbody>
+              {list.map((p) => (
+                <tr key={p}>
+                  <td className={LONG_TEXT_CLASS}>{p}</td>
+                  <td>
+                    <div className="row-actions">
+                      <button type="button" className="btn btn-sm btn-ghost" onClick={() => showInfo(p)} disabled={busy !== null}>info</button>
+                      {canWrite ? (
+                        <button
+                          type="button"
+                          className={`btn btn-sm ${armed === p ? 'btn-danger' : 'btn-ghost'}`}
+                          disabled={busy !== null}
+                          onClick={() => doUninstall(p)}
+                        >
+                          {busy === p ? 'Removing…' : armed === p ? 'confirm uninstall' : 'uninstall'}
+                        </button>
+                      ) : null}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </StateFrame>
+      {info ? (
+        <p className="muted">
+          <code className="mono">{info.pkg}</code>: {info.installed ? 'installed' : 'NOT installed'}
+          {info.versionName ? ` · versionName ${info.versionName}` : ''}
+          {info.versionCode ? ` · versionCode ${info.versionCode}` : ''}
+          {info.truncated ? ' — dumpsys truncated (version fields may be cut off)' : ''}
+        </p>
+      ) : null}
+      {note ? <code className={note.kind === 'ok' ? 'status-ok' : 'dep-error'}>{note.text}</code> : null}
+      {canWrite ? (
+        <div className="row-actions" style={{ marginTop: 10 }}>
+          <input
+            type="text"
+            className="input"
+            style={{ maxWidth: 320 }}
+            placeholder="managed-dir file name — e.g. app.apk"
+            value={installName}
+            onChange={(e) => setInstallName(e.target.value)}
+          />
+          <button
+            type="button"
+            className="btn"
+            disabled={busy !== null || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,99}\.apk$/.test(installName.trim())}
+            onClick={doInstall}
+          >
+            {busy === 'install' ? 'Installing…' : '安裝 APK (managed dir)'}
+          </button>
+          <span className="muted">only flat .apk names from the server-managed dir are accepted (backend-validated).</span>
+        </div>
+      ) : (
+        <p className="muted">Read-only role — 安裝/移除 needs operator+.</p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * WA-UI-SURFACY s3 — redroid templates list (read-only; writes stay admin
+ * on the API but the UI surfaces list/detail only, per work order).
+ * proxy presence is a { configured } flag — the URL never travels.
+ */
+function TemplatesPanel() {
+  const tpl = useApi(() => redroidTemplates.list(), []);
+  const rows = tpl.data?.templates ?? [];
+  return (
+    <div className="card" role="region" aria-label="Redroid templates">
+      <div className="card-head">
+        <strong>Redroid 模板 (read-only)</strong>
+        <button type="button" className="btn btn-sm btn-ghost" onClick={tpl.reload} disabled={tpl.loading}>Reload</button>
+      </div>
+      <StateFrame
+        loading={tpl.loading}
+        error={tpl.error}
+        empty={!tpl.loading && !tpl.error && rows.length === 0}
+        emptyTitle="No templates"
+        emptyHint="Create templates via the admin API (pinned image refs only — no latest)."
+      >
+        <div className="table-wrap">
+          <table className="list-table">
+            <thead>
+              <tr>
+                <th>name</th><th>image (pinned)</th><th>Android</th><th>display</th>
+                <th>gpu</th><th>privileged</th><th>limits</th><th>proxy</th><th>enabled</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((t) => (
+                <tr key={t.id}>
+                  <td className="mono">{t.name}</td>
+                  <td className={LONG_TEXT_CLASS} title={t.image}>{t.image}</td>
+                  <td>{t.androidVersion}</td>
+                  <td className="mono">{t.width}×{t.height}·{t.dpi}·{t.fps}fps</td>
+                  <td>{t.gpuMode}</td>
+                  <td>{t.privileged ? `yes — ${t.privilegedReason ?? ''}` : 'no'}</td>
+                  <td className="mono">{t.cpuLimit ?? '—'}c / {t.memoryLimitBytes ? `${Math.round(t.memoryLimitBytes / 1073741824)} GiB` : '∞'}</td>
+                  <td>{t.proxy?.configured ? 'bound (URL hidden)' : '—'}</td>
+                  <td className={t.isEnabled ? 'status-ok' : 'status-degraded'}>{t.isEnabled ? 'yes' : 'no'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </StateFrame>
+      <p className="muted" style={{ marginTop: 8 }}>
+        建/改/刪 templates = admin API 專屬（UI 只讀 — privileged 只可存在於專用 template）。
+      </p>
+    </div>
+  );
+}
+
+/**
+ * WA-UI-SURFACY s3 — network dispatch policy (BR-B6). ADMIN ONLY read AND
+ * write on the backend — a viewer sees an honest 403 frame, never fake data.
+ * Writes echo the EFFECTIVE policy (live on next dispatch; empty+empty env =
+ * unavailable = fail-closed emergency stop, reported as such).
+ */
+function PolicyPanel({ role }) {
+  const isAdmin = role === 'admin';
+  const pol = useApi(() => networkPolicy.get(), [], { enabled: isAdmin });
+  const [zones, setZones] = useState(null); // { allowlist, allowlistInternal } textareas
+  const [busy, setBusy] = useState(null);
+  const [note, setNote] = useState(null);
+
+  async function saveZones() {
+    if (busy) return; // double-submit guard
+    const body = {};
+    for (const key of ['allowlist', 'allowlistInternal']) {
+      const raw = zones?.[key];
+      if (raw === undefined) continue;
+      const lines = raw.split('\n').map((s) => s.trim()).filter(Boolean);
+      body[key] = lines;
+    }
+    setBusy('zones');
+    setNote(null);
+    try {
+      const res = await networkPolicy.putAllowlists(body);
+      setNote({ kind: 'ok', text: `saved — available=${res.available}${res.reason ? ` (${res.reason})` : ''}; effective on NEXT dispatch` });
+      pol.reload();
+    } catch (e) {
+      setNote({ kind: 'err', text: conflictText(e) ?? errorText(e) });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function saveTaskTypes(ai, adhoc) {
+    if (busy) return;
+    setBusy('taskTypes');
+    setNote(null);
+    try {
+      const res = await networkPolicy.putTaskTypes({ ai, adhoc });
+      setNote({ kind: 'ok', text: `task types saved — available=${res.available}` });
+      pol.reload();
+    } catch (e) {
+      setNote({ kind: 'err', text: conflictText(e) ?? errorText(e) });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className="card" role="region" aria-label="Network policy">
+        <div className="card-head"><strong>派發網絡策略 (BR-B6)</strong></div>
+        <p className="muted">
+          403 — the dispatch allowlist is security-critical state: admin-only read <em>and</em> write.
+          Your role ({role}) sees this honest frame, not fake data.
+        </p>
+      </div>
+    );
+  }
+
+  const eff = pol.data?.effective ?? null;
+  const tt = eff?.taskTypes ?? null;
+  const rows = pol.data?.appSettings ?? {};
+  const initZones = (v) => (Array.isArray(rows[v]?.valueJson) ? rows[v].valueJson.join('\n') : '');
+
+  return (
+    <div className="card" role="region" aria-label="Network policy">
+      <div className="card-head">
+        <strong>派發網絡策略 (BR-B6 — admin only)</strong>
+        <button type="button" className="btn btn-sm btn-ghost" onClick={pol.reload} disabled={pol.loading}>Reload</button>
+      </div>
+      <StateFrame loading={pol.loading} error={pol.error} empty={!pol.loading && !pol.error && !pol.data} emptyTitle="No data">
+        {pol.data ? (
+          <>
+            <p>
+              available:{' '}
+              <span className={`pill ${pol.data.available ? 'pill-up' : 'pill-down'}`}>
+                {pol.data.available ? 'yes' : `no — ${pol.data.reason}`}
+              </span>
+            </p>
+            {eff ? (
+              <dl className="kv">
+                {Object.entries(eff.entries ?? {}).map(([zone, list]) => (
+                  <div key={zone}>
+                    <dt>{zone} ({Array.isArray(list) ? list.length : 0})</dt>
+                    <dd className={LONG_TEXT_CLASS}>{Array.isArray(list) && list.length ? list.map((e) => (typeof e === 'string' ? e : e?.entry ?? JSON.stringify(e))).join(' · ') : '(empty — env-only / cleared)'}</dd>
+                  </div>
+                ))}
+                <dt>task types gated</dt>
+                <dd className="mono">{JSON.stringify(eff.taskTypes ?? {})}</dd>
+              </dl>
+            ) : null}
+            <p className="muted">
+              env side: public={pol.data.env?.public ? 'set' : 'empty'} · internal={pol.data.env?.internal ? 'set' : 'empty'} —
+              empty DB + empty env = unavailable = every run fails closed (supported emergency stop).
+            </p>
+            <div className="row-actions" style={{ margin: '8px 0' }}>
+              <label className="check"><input type="checkbox" checked={tt?.ai ?? false} disabled={busy !== null} onChange={(e) => saveTaskTypes(e.target.checked, tt?.adhoc ?? false)} /> AI tasks gated</label>
+              <label className="check"><input type="checkbox" checked={tt?.adhoc ?? false} disabled={busy !== null} onChange={(e) => saveTaskTypes(tt?.ai ?? false, e.target.checked)} /> ad-hoc tasks gated</label>
+            </div>
+            <div className="stack" style={{ gap: 8 }}>
+              {['allowlist', 'allowlistInternal'].map((key) => (
+                <label key={key} className="stack" style={{ gap: 2 }}>
+                  <span className="muted">{key} — one entry per line (empty clears the DB zone; backend re-validates with the gate parser)</span>
+                  <textarea
+                    className="input"
+                    rows={4}
+                    style={{ fontFamily: 'monospace', fontSize: 12 }}
+                    defaultValue={initZones(key)}
+                    onChange={(e) => setZones((z) => ({ ...(z ?? { allowlist: initZones('allowlist'), allowlistInternal: initZones('allowlistInternal') }), [key]: e.target.value }))}
+                  />
+                </label>
+              ))}
+              <div className="row-actions">
+                <button type="button" className="btn" disabled={busy !== null} onClick={saveZones}>
+                  {busy === 'zones' ? 'Saving…' : 'Save allowlists (PUT)'}
+                </button>
+              </div>
+            </div>
+            {note ? <code className={note.kind === 'ok' ? 'status-ok' : 'dep-error'}>{note.text}</code> : null}
+            <p className="muted" style={{ marginTop: 8 }}>
+              Writes are audited (updatedBy + audit row) and live on the next dispatch attempt.
+            </p>
           </>
         ) : null}
       </StateFrame>
