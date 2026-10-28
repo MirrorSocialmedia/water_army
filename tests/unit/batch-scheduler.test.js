@@ -90,7 +90,7 @@ async function seedCycle(world, { identities = 3, batchSize, maxActiveContainers
       batchSize: batchSize ?? identities, // default: one batch
       maxActiveContainers,
       failurePolicy,
-      config: { adapter: 'noop', timeoutSeconds: 30, maxAttempts: 3, interBatchCooldownSeconds: 0, ...config },
+      config: { adapter: { type: 'noop' }, timeoutSeconds: 30, maxAttempts: 3, interBatchCooldownSeconds: 0, ...config },
     },
     { id: 'tester' },
   );

@@ -165,9 +165,16 @@ export function validateBatchConfig(config) {
       errors.push(`config.maxAttempts must be an integer 1..${BATCH_MAX_ATTEMPTS_CAP}`);
     }
   }
-  if (config.adapter !== undefined) {
+  if (config.adapter !== undefined && config.adapter !== null) {
+    // Explicit null = "no adapter" (absent semantics) — the engine already
+    // fails those runs closed at dispatch (ADAPTER_NOT_CONFIGURED); creating
+    // a no-adapter batch is the operator's call, not a malformed spec.
     const a = config.adapter;
     if (typeof a !== 'object' || a === null || Array.isArray(a)) {
+      // F-RDFA-1: the v7 incident payload was the bare string 'container' —
+      // it sailed through createCycle and exploded at dispatch (409). The
+      // adapter is a SPEC, full stop: { type, ... }. A bare string is
+      // rejected here (400 at create), not at dispatch.
       errors.push('config.adapter must be a plain object { type, ... }');
     } else {
       if (typeof a.type !== 'string' || !BATCH_ADAPTER_REGISTRY.includes(a.type)) {

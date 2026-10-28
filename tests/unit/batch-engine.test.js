@@ -15,6 +15,7 @@ import {
   createLeaseService,
   createTaskRunService,
   enqueueAnyRun,
+  BatchError,
   BATCH_RUN_JOB_NAME,
   batchJobId,
 } from '@water-army/shared';
@@ -64,7 +65,7 @@ function makeEngineWorld({ adapterEnv = { NOOP_DURATION_MS: '50' }, networkGate 
 }
 
 let idSeq = 0;
-async function seedBatchRun(w, { identities = 1, maxActiveContainers = 1, adapter = 'noop', maxAttempts = 3, config = {} } = {}) {
+async function seedBatchRun(w, { identities = 1, maxActiveContainers = 1, adapter = { type: 'noop' }, maxAttempts = 3, config = {} } = {}) {
   const ids = [];
   for (let i = 0; i < identities; i += 1) {
     idSeq += 1;
@@ -114,7 +115,7 @@ async function waitFor(pred, { label = 'condition', timeoutMs = 4_000 } = {}) {
 
 test('engine: successful noop run — run succeeded, identity COMPLETED, slot released, heartbeat written', async () => {
   const w = makeEngineWorld();
-  const { batch, identities, runs } = await seedBatchRun(w, { identities: 1, adapter: 'noop' });
+  const { batch, identities, runs } = await seedBatchRun(w, { identities: 1, adapter: { type: 'noop' } });
   const run = runs[0];
   const outcome = await w.engine.handleBatchJob(jobFor(run, w));
 
@@ -401,7 +402,7 @@ test('engine: network gate deny (B4 fail-closed) — failed with the gate code, 
   assert.equal(afterFull.attempt, 1);
 });
 
-test('engine: adapter fail-closed — missing adapter → ADAPTER_NOT_CONFIGURED; unknown → ADAPTER_NOT_ALLOWED', async () => {
+test('engine: adapter fail-closed — missing adapter → ADAPTER_NOT_CONFIGURED; unknown adapter string → 400 at create (F-RDFA-1)', async () => {
   // Missing (configJson.adapter = null).
   const w1 = makeEngineWorld();
   const { runs: r1 } = await seedBatchRun(w1, { identities: 1, adapter: null });
@@ -409,12 +410,15 @@ test('engine: adapter fail-closed — missing adapter → ADAPTER_NOT_CONFIGURED
   assert.equal(o1.outcome, 'failed-final');
   assert.equal((await w1.taskSvc.loadRun(r1[0].id)).errorCode, 'ADAPTER_NOT_CONFIGURED');
 
-  // Unknown adapter name (not on the allowlist).
+  // Unknown adapter name (not on the allowlist). F-RDFA-1: a bare string
+  // adapter is the v7 incident shape — refused at CREATE (400), so it never
+  // reaches dispatch as a 409/ADAPTER_NOT_ALLOWED surprise. (The registry
+  // allowlist surface itself is asserted below, unchanged.)
   const w2 = makeEngineWorld();
-  const { runs: r2 } = await seedBatchRun(w2, { identities: 1, adapter: 'evil' });
-  const o2 = await w2.engine.handleBatchJob(jobFor(r2[0], w2));
-  assert.equal(o2.outcome, 'failed-final');
-  assert.equal((await w2.taskSvc.loadRun(r2[0].id)).errorCode, 'ADAPTER_NOT_ALLOWED');
+  await assert.rejects(
+    () => seedBatchRun(w2, { identities: 1, adapter: 'evil' }),
+    (e) => e instanceof BatchError && e.apiCode === 'VALIDATION_ERROR' && e.statusCode === 400,
+  );
   // Registry surface is honest.
   assert.equal(w2.adapterRegistry.isAllowed('noop'), true);
   assert.equal(w2.adapterRegistry.isAllowed('evil'), false);
