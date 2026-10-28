@@ -42,8 +42,9 @@ if [ "$MODE" = "check" ]; then
   if grep -q '__TOTAL__\|__PASSN__\|__FAILN__\|__SKIPN__\|__UNIT_N__\|__INT_N__' "$DOC"; then
     echo "CHECK: $DOC §1 仍有 placeholder（未填數）" >&2; exit 2
   fi
-  # 由文檔 §1 表抽取：行含 「npm test` | N | A pass / B fail / C skip」；unit/integration 行含 「N」 pass 數
-  read -r d_total d_pass d_fail d_skip < <(grep 'npm test`' "$DOC" | head -1 | sed -E 's/.*\| *([0-9]+) *\| *([0-9]+) pass \/ *([0-9]+) fail \/ *([0-9]+) skip.*/\1 \2 \3 \4/')
+  # 由文檔 §1 表抽取「全套」行：`| 全套 npm test | \`npm test\` | N | A pass / B fail / C skip…`
+  read -r d_total d_pass d_fail d_skip < <(grep -E '^\| *全套 npm test' "$DOC" | head -1 | sed -E 's/.*\| *([0-9]+) *\| *([0-9]+) pass \/ *([0-9]+) fail \/ *([0-9]+) skip.*/\1 \2 \3 \4/')
+  if [ -z "${d_total:-}" ]; then echo "CHECK FAIL: 無法由 $DOC §1 表格抽取全套行（格式漂移？）" >&2; exit 1; fi
   # 重新解析實跑數字做比對
   actual=$( { sum_one "suite" npm test --silent; } | head -1 )
   a_total=$(printf '%s' "$actual" | sed -E 's/.*total=([0-9]+).*/\1/'); a_pass=$(printf '%s' "$actual" | sed -E 's/.*pass=([0-9]+).*/\1/')
