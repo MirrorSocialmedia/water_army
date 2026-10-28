@@ -1,0 +1,107 @@
+# WA-RDFA-FIX S4 — 真機 mini-驗證 live evidence (2026-10-29, UTC)
+
+Golden standard: 真 device (MTG image, redroid-rdfa-vx) + production probe
+code path (the real `adb-cnxn-probe.js` module inside `water-army-api-1`,
+driven with the S3 production window semantics) + real network gates.
+Mocks never count — every output below is real live capture.
+
+## 0. Pre-checks (19:47:04Z)
+- DO-NOT-TOUCH baseline (zero-contact verified at teardown):
+  - /rdev-f1 id=2ae8f5c4...4c6595e state=running started=2026-10-28T07:57:20Z
+  - /redroid-mc-dogfood-2 id=cc3d9a24...7e66c2 state=running started=2026-10-28T04:04:34Z
+  - /rdev-e1-gost id=5050f030...98133ddcf state=running started=2026-10-27T14:45:52Z
+- redroid-rdfa-vx: absent (fresh). Data root: absent (fresh). Port 15001: free.
+- Image present: water-army/redroid:14.0.0-240527-gms-mtg (sha256:02ab5675...)
+- Disk: 952G free. MemAvailable ≈ 39 GiB.
+
+## 1. RAM gate admission (pre-create, live status via GET /api/system/ram-gate)
+- Policy (current state, unchanged by this ticket): enabled, maxParallel=10,
+  hardFloorMiB=4096 (the "4G floor"), postBootTargetMiB=5400,
+  perBootBudgetMiB=1200, leaseTtlMs=86400000.
+- Live: memAvailableMiB=38741.1, liveLeases=2 (dogfood-2 + rdfa-s2),
+  running=2, reservedMiB=2400.
+- **wouldAdmitNext = { admitted: true, reason: "ADMITTED", liveCount: 2,
+  projectedMiB: 35141, currentMiB: 38741.1 }** → next 4G boot admitted
+  (35141 ≥ target 5400; 3 ≤ maxParallel 10; 38741 ≥ floor 4096).
+
+## 2. Device create (mirrors production createAndStart body exactly)
+`docker run -d --name redroid-rdfa-vx --network water-army-devices
+ -p 127.0.0.1:15001:5555 --memory 4294967296 --cpus 2 --privileged
+ -v /var/lib/water-army/redroid/redroid-rdfa-vx:/data
+ water-army/redroid:14.0.0-240527-gms-mtg`
+(allowlist entry: privileged=true, memoryBytes=4294967296, nanoCpus=2 —
+read from live AppSetting `batch.container_image_allowlist`; image default CMD
+= the androidboot args, same as every prior redroid create)
+- id=1390dce34aa15366878f22fff1584838c588ed1ec658b2ae7d5f62061fda0d42
+- started=2026-10-28T19:48:00.435123939Z
+- device network: water-army-devices @ **172.38.200.4** (api @ 172.38.200.3)
+- deviations from a real batch run (documented): host port 15001 (outside the
+  16370-16419 lease pool — no port-lease state pollution; the probe uses the
+  bridge IP anyway); no batch labels (mini-verification, not a batch run);
+  no RAM-gate lease acquired (the admission DECISION is verified in §1; the
+  lifecycle's real acquire/release rides on a real run — S4 is the mini path).
+
+## 3. Network gate (C1/C2) all-pass — live state reads
+- C2 `batch.container_image_allowlist` (AppSetting, live): the MTG image is
+  allowlisted (privileged=true, 4G, 2 CPU) → the batch create gate
+  (resolveImageEntry) resolves it — no wall.
+- C1 `network.qaEndpointAllowlist` (AppSetting, live): ["http://api:3000"] —
+  retained (boss sign-off state).
+- Device-network reachability: api (172.38.200.3) → device (172.38.200.4)
+  via the probe itself (§4) — inter-container path on water-army-devices
+  works (this was the structural failure of F-RDFA-2a; S2 fix verified live).
+- RAM gate: admitted (§1).
+
+## 4. probe REAL HEALTHY (production module, waitHealthy-shaped driver)
+Driver: /tmp/rdva-s4-probe.mjs — imports the REAL
+`/app/apps/api/src/services/adb-cnxn-probe.js` from inside water-army-api-1
+(the running service image, commit 858bed4 code), window=300s (S3 default),
+per-probe 3000ms, poll 10s, first-healthy wins.
+Target: 172.38.200.4:5555 (device bridge IP, container-side port).
+Ran ≈19:49:30Z (container start 19:48:00Z → adbd answering in ≤ ~90s on the
+loaded host; the v6/v8 115-125s figure was under 3-concurrent batch load).
+Output (raw):
+  {"attempt":1,"tMs":3,"healthy":true,"detail":null,"version":"adb-device@0x1000001"}
+  {"verdict":"HEALTHY","bootMs":3,"windowMs":300000,"attempts":1,
+   "result":{"healthy":true,"detail":null,"version":"adb-device@0x1000001"}}
+→ **HEALTHY within window (300s)**. version = device-side A_CNXN banner
+  (adb-device@0x1000001 = A_VERSION 0x01000001), the S2 pass criterion.
+
+## 5. probe REAL UNHEALTHY (negative path, same production module)
+`docker stop redroid-rdfa-vx` (19:49:35Z → 19:49:46Z, graceful, 11s).
+Single production probe after stop (3000ms budget):
+  {"healthy":false,"detail":"no ADB reply within 3000ms (adbd not answering)","version":null}
+→ **UNHEALTHY with actionable detail** (container down → bridge endpoint
+  dead; the sibling ECONNREFUSED detail variant was proven live in S2 on
+  :5599 — both negative branches exercised across the ticket).
+
+## 6. Teardown + lease back to baseline
+- `docker rm -f redroid-rdfa-vx` → gone (docker ps -a filter = 0).
+- Data root: contents root-owned (privileged container) → cleared via
+  root container (`alpine` + bind, `find -mindepth 1 -delete`) + rmdir.
+  /var/lib/water-army/redroid/redroid-rdfa-vx = gone.
+- S2 leftover (own redroid-rdfa-s2, stopped since S2): container removed,
+  data root cleared same way, stale RAM-gate lease released
+  (DEL ramgate:lease:device:redroid-rdfa-s2 → 1; SREM ramgate:live → 1).
+- After state (19:55Z):
+  - ramgate keys: {ramgate:live, ramgate:metrics,
+    ramgate:lease:device:redroid-mc-dogfood-2} — only the DO-NOT-TOUCH
+    device's own lease remains.
+  - live set: {redroid-mc-dogfood-2}. Port leases (DB resource_leases): 0.
+  - Port 15001: free. MemAvailable: 41.3 GB (recovered from 40.0 pre-create).
+  - DO-NOT-TOUCH: id + startedAt identical to the §0 snapshot → **zero
+    contact**.
+  - Final GET /api/system/ram-gate: liveLeases=1, running=2,
+    wouldAdmitNext={admitted:true, reason:"ADMITTED", liveCount:1,
+    projectedMiB:37784, currentMiB:40184.7}. Policy unchanged (4G/5400
+    state kept per workorder).
+
+## 7. S4 verdict
+- RAM gate: admission decision real-verified (ADMITTED, live policy 4G floor
+  / 5400 target, 4G device budget) — §1 + §6.
+- Network gate C1/C2: live reads + device-network reachability all pass — §3.
+- Probe dual path: REAL healthy (CNXN handshake, device banner) + REAL
+  unhealthy (post-stop no-reply) — §4 + §5.
+- Teardown: container + data root + leases back to baseline; forbidden set
+  untouched — §6.
+**S4 = PASS (real-device golden standard met; no mock involved).**
