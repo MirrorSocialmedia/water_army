@@ -1,0 +1,15 @@
+=== P2.0 admin config: batch.container_image_allowlist ===
+2026-10-28T13:03:34Z
+--- BEFORE (row) ---
+               key               |                  value_json                  
+---------------------------------+----------------------------------------------
+ batch.container_image_allowlist | ["water-army/redroid:14.0.0-240527-gms-mtg"]
+(1 row)
+
+INSERT 0 1
+--- AFTER ---
+               key               |                  value_json                  
+---------------------------------+----------------------------------------------
+ batch.container_image_allowlist | ["water-army/redroid:14.0.0-240527-gms-mtg"]
+(1 row)
+

@@ -1,0 +1,4 @@
+=== P2.2c API create batch v3 (public-zone allowlist in place) ===
+2026-10-28T13:30:45Z
+{"replay":false,"cycleId":"035c91a8-d8d6-439c-bacc-2ed1b605545d","batches":[{"id":"2cbb2ce4-83c9-4a23-be04-037b40b6edae","batchNo":1}],"plan":{"batchSize":3,"batchCount":1,"batches":[{"batchNo":1,"size":3,"members":[{"identityId":"8cc54fa8-27ec-406e-b7f7-3133c15b18be","position":1,"state":"PENDING","skipReason":null},{"identityId":"f16ef586-f38f-4d20-a464-7187876e4205","position":2,"state":"PENDING","skipReason":null},{"identityId":"9823ddf2-0e3e-4375-96cc-400f9d3b3dbd","position":3,"state":"PENDING","skipReason":null}]}],"stats":{"total":3,"included":3,"skipped":0}}}
+HTTP_STATUS=201

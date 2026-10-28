@@ -1,0 +1,10 @@
+=== P2.3b intervention flow part 1: badge + create (02 stuck on v1 NETWORK_POLICY_UNAVAILABLE) ===
+2026-10-28T13:28:55Z
+--- needs-attention-count BEFORE ---
+{"count":0}
+--- create intervention (02) ---
+{"intervention":{"id":"14c93202-709c-4581-b5f5-d25570a31d8c","deviceId":null,"deviceNameSnapshot":"redroid-rdfa-02","source":"operator_report","category":"TASK_FAILED","severity":"high","status":"open","automationDisposition":"blocked_pending_review","title":"batch rdfa-p2-final #1: identity redroid-rdfa-02 stuck (FAILED_FINAL) — blocked pending review","summary":"Cycle v1 dispatch failed closed: network gate NETWORK_POLICY_UNAVAILABLE (no allowlist entries configured). Identity redroid-rdfa-02 parked FAILED_FINAL. Blocked pending human review; fix = admin allowlist network.qaEndpointAllowlistInternal=[http://api:3000] + re-arm + v2 cycle.","evidence":{"batchId":"42d33723-6519-4624-bd7a-c534571781ca","errorCode":"NETWORK_POLICY_UNAVAILABLE","taskRunId":"2b90e90a-9ff4-4f86-a4f5-dbb3bb020a43","evidencePaths":["logs/realdevice-final/p2/p2-06-retry-03-04.txt","logs/realdevice-final/p2/p2-05-netpolicy-allowlist.txt"]},"heuristic":false,"signalCount":1,"version":1,"resolutionSummary":null,"createdAt":"2026-10-28T13:28:55.172Z","updatedAt":"2026-10-28T13:28:55.169Z","acknowledgedAt":null,"resolvedAt":null,"assigneeUserId":null,"dedupeKey":"orphan::TASK_FAILED::operator_report","relatedTaskRunId":null},"created":true,"dedupeKey":"orphan::TASK_FAILED::operator_report"}
+HTTP_STATUS=201
+
+--- needs-attention-count AFTER ---
+{"count":1}

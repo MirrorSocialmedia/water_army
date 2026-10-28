@@ -1,0 +1,8 @@
+=== P2.3a retry runs 03+04 (console intervention retry) ===
+2026-10-28T13:07:43Z
+--- retry 82886b2e-9eb8-4d96-a6bf-10ae0df594ea ---
+{"taskRun":{"id":"82886b2e-9eb8-4d96-a6bf-10ae0df594ea","status":"queued","attempt":2,"batchId":"42d33723-6519-4624-bd7a-c534571781ca"},"attempt":2}
+HTTP_STATUS=200
+--- retry 1c867cb0-1a5f-4bdd-bb36-8ad1ec3daed0 ---
+{"taskRun":{"id":"1c867cb0-1a5f-4bdd-bb36-8ad1ec3daed0","status":"queued","attempt":2,"batchId":"42d33723-6519-4624-bd7a-c534571781ca"},"attempt":2}
+HTTP_STATUS=200

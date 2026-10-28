@@ -1,0 +1,9 @@
+=== P2.2 API create batch (3 identities, container adapter MTG) ===
+2026-10-28T13:05:30Z
+{"replay":false,"cycleId":"2ed5097d-a246-4715-aacf-46b4742f70ec","batches":[{"id":"42d33723-6519-4624-bd7a-c534571781ca","batchNo":1}],"plan":{"batchSize":3,"batchCount":1,"batches":[{"batchNo":1,"size":3,"members":[{"identityId":"8cc54fa8-27ec-406e-b7f7-3133c15b18be","position":1,"state":"PENDING","skipReason":null},{"identityId":"f16ef586-f38f-4d20-a464-7187876e4205","position":2,"state":"PENDING","skipReason":null},{"identityId":"9823ddf2-0e3e-4375-96cc-400f9d3b3dbd","position":3,"state":"PENDING","skipReason":null}]}],"stats":{"total":3,"included":3,"skipped":0}}}
+HTTP_STATUS=201
+
+--- start batch ---
+2026-10-28T13:05:40Z
+{"error":{"code":"BATCH_NOT_STARTABLE","message":"Batch is 'COMPLETED_WITH_ERRORS' — only PLANNED batches start (use resume for PAUSED)","requestId":"28a81b7d-f32d-40c5-ab61-1fb4d8e49423"}}
+HTTP_STATUS=409

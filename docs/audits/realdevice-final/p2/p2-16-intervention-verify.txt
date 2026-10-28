@@ -1,0 +1,10 @@
+=== P2.3c intervention console verification ===
+2026-10-28T13:33:56Z
+--- intervention detail ---
+        "status": "resolved",
+        "version": 3,
+        "resolutionSummary": "root cause fixed (admin allowlist network.qaEndpointAllowlist=[http://api:3000] + identity re-arm); resume via v-cycle \u2014 see task mvs2iknd60sig notes",
+        "acknowledgedAt": "2026-10-28T13:33:43.358Z",
+        "resolvedAt": "2026-10-28T13:33:45.424Z",
+--- needs-attention-count (expect 0) ---
+{"count":0}

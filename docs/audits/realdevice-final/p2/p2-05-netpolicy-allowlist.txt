@@ -1,0 +1,14 @@
+=== P2.0b admin config: network.qaEndpointAllowlistInternal ===
+2026-10-28T13:07:22Z
+--- BEFORE ---
+ key | value_json 
+-----+------------
+(0 rows)
+
+INSERT 0 1
+--- AFTER ---
+                 key                 |     value_json      
+-------------------------------------+---------------------
+ network.qaEndpointAllowlistInternal | ["http://api:3000"]
+(1 row)
+

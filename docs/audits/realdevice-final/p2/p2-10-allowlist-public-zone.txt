@@ -1,0 +1,34 @@
+=== P2.0d admin config v2: move allowlist entry internal->public zone (docker subnet 172.38/16 is non-RFC1918 => classified public) ===
+2026-10-28T13:30:32Z
+--- BEFORE ---
+                 key                 |     value_json      
+-------------------------------------+---------------------
+ network.qaEndpointAllowlistInternal | ["http://api:3000"]
+(1 row)
+
+DELETE 1
+INSERT 0 1
+--- AFTER ---
+             key             |     value_json      
+-----------------------------+---------------------
+ network.qaEndpointAllowlist | ["http://api:3000"]
+(1 row)
+
+
+=== re-arm identities v2 FAILED_FINAL -> READY ===
+1
+1
+1
+1
+1
+1
+1
+1
+1
+                  id                  | status 
+--------------------------------------+--------
+ 8cc54fa8-27ec-406e-b7f7-3133c15b18be | READY
+ 9823ddf2-0e3e-4375-96cc-400f9d3b3dbd | READY
+ f16ef586-f38f-4d20-a464-7187876e4205 | READY
+(3 rows)
+

@@ -1,0 +1,48 @@
+=== P2.0c admin action: re-arm FAILED_FINAL identities (no product release route exists — quarantine semantics) ===
+2026-10-28T13:27:00Z
+EDGES USED: FAILED_FINAL -> RESERVED -> CANCELLED -> READY (all in IDENTITY_TRANSITIONS, batch-constants.js:42-54)
+--- BEFORE ---
+ERROR:  invalid input syntax for type uuid: "8cc54fa8-27ec-406e-b7f7-3133c15b18be f16ef586-f38f-4d20-a464-7187876e4205 9823ddf2-0e3e-4375-96cc-400f9d3b3dbd"
+LINE 1: SELECT id, status FROM identities WHERE id IN ('8cc54fa8-27e...
+                                                       ^
+ step1-ok
+
+UPDATE 1
+ step2-ok
+
+UPDATE 1
+ step3-ok
+
+UPDATE 1
+ step1-ok
+
+UPDATE 1
+ step2-ok
+
+UPDATE 1
+ step3-ok
+
+UPDATE 1
+ step1-ok
+
+UPDATE 1
+ step2-ok
+
+UPDATE 1
+ step3-ok
+
+UPDATE 1
+--- AFTER ---
+ERROR:  invalid input syntax for type uuid: "8cc54fa8-27ec-406e-b7f7-3133c15b18be f16ef586-f38f-4d20-a464-7187876e4205 9823ddf2-0e3e-4375-96cc-400f9d3b3dbd"
+LINE 1: SELECT id, status FROM identities WHERE id IN ('8cc54fa8-27e...
+                                                       ^
+
+--- VERIFY (after) ---
+2026-10-28T13:27:10Z
+                  id                  | status 
+--------------------------------------+--------
+ 8cc54fa8-27ec-406e-b7f7-3133c15b18be | READY
+ 9823ddf2-0e3e-4375-96cc-400f9d3b3dbd | READY
+ f16ef586-f38f-4d20-a464-7187876e4205 | READY
+(3 rows)
+
