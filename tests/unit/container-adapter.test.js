@@ -11,9 +11,10 @@
  * still fails fast — the grace never masks a real device death.
  *
  * E2E run-4: 2/6 broken-image runs ended TOOL_TIMEOUT after the worker's
- * 15s client timeout while the API was still inside its 60s boot-health
- * window. start/stop now ride CONTAINER_ADAPTER_LIFECYCLE_TIMEOUT_MS
- * (default 120s) so a slow boot is filed as the API's honest error.
+ * 15s client timeout while the API was still inside its boot-health window.
+ * start/stop now ride CONTAINER_ADAPTER_LIFECYCLE_TIMEOUT_MS (default 360s
+ * = API window 300s + 60s margin, F-RDFA-3) so a slow boot is filed as the
+ * API's honest error.
  *
  * Hermetic: fake api client (records call options), small real timers
  * (health poll floor is 500ms — tests run in ~6s total).
@@ -64,9 +65,10 @@ test('adapter: happy path — holds, counts successful probes, stop rides the li
   const starts = calls.filter((c) => c.op === 'start');
   const stops = calls.filter((c) => c.op === 'stop');
   assert.equal(stops.length, 1, 'success path stops the container (volume kept)');
-  // lifecycle timeout (default 120s) must override the 15s client default
-  assert.equal(starts[0].opts?.timeoutMs, 120_000, 'start rides the lifecycle timeout');
-  assert.equal(stops[0].opts?.timeoutMs, 120_000, 'stop rides the lifecycle timeout');
+  // lifecycle timeout (default 360s = API window 300s + margin, F-RDFA-3)
+  // must override the 15s client default
+  assert.equal(starts[0].opts?.timeoutMs, 360_000, 'start rides the lifecycle timeout');
+  assert.equal(stops[0].opts?.timeoutMs, 360_000, 'stop rides the lifecycle timeout');
 });
 
 test('adapter: lifecycle timeout is env-configurable', async () => {

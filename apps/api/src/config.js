@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 
-import { IDENTITY_DATA_ROOT_DEFAULT, parsePortRange } from '@water-army/shared';
+import { BATCH_BOOT_HEALTH_WINDOW_MS, IDENTITY_DATA_ROOT_DEFAULT, parsePortRange } from '@water-army/shared';
 
 function loadDotEnv(file) {
   const target = path.resolve(file);
@@ -337,7 +337,11 @@ export function loadConfig(env = process.env, opts = {}) {
       return p;
     })(),
     // boot health = ADB handshake wait (MD §8.2: app layer, not docker state).
-    batchContainerHealthTimeoutMs: optInt(e, 'BATCH_CONTAINER_HEALTH_TIMEOUT_MS', 60_000),
+    // F-RDFA-3 (WA-RDFA-FIX S3): 300s default — real MTG cold boot is 115–125s
+    // and 3 concurrent boots exceed 120s (p2-43); the old 60s was mock-
+    // calibrated. Worker client timeout must stay ≥ this window (see
+    // BATCH_BOOT_HEALTH_WINDOW_MS in shared/batch-constants.js).
+    batchContainerHealthTimeoutMs: optInt(e, 'BATCH_CONTAINER_HEALTH_TIMEOUT_MS', BATCH_BOOT_HEALTH_WINDOW_MS),
     batchContainerHealthPollMs: optInt(e, 'BATCH_CONTAINER_HEALTH_POLL_MS', 1_000),
     batchContainerHealthProbeTimeoutMs: optInt(e, 'BATCH_CONTAINER_HEALTH_PROBE_TIMEOUT_MS', 3_000),
     // MC P1 (Mobile Console MD §4.1): global concurrent device stream cap.

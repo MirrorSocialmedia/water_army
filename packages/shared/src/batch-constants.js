@@ -99,6 +99,27 @@ export const BATCH_ADAPTER_REGISTRY = Object.freeze(['noop', 'container']);
 /** Batch runs reuse the task-run attempt cap (MD §11.8 bounded retry). */
 export const BATCH_MAX_ATTEMPTS_CAP = 5;
 
+// ---------------------------------------------------------------- boot-health window
+// F-RDFA-3 (WA-RDFA-FIX S3, 2026-10-29): the batch-container boot-health window
+// and the worker client timeout that must outlive it — one place, one
+// relationship, structurally enforced.
+//
+// Measured (real MTG image, 2026-10-28, docs/audits/realdevice-final/p2/):
+//   - v6: single MTG cold boot ≈ 115–125s container-up → adbd answering on
+//     the wire; the old 60s API default expired mid-boot (HEALTH_TIMEOUT)
+//     and attempt-2 adoption hit 304 already-started.
+//   - v8 (p2-43): 3 CONCURRENT MTG boots pushed the ADB answer past 120s;
+//     the old 120s worker client default timed out first (TOOL_TIMEOUT) and
+//     attempt-2 adoption 304'd again — the worker must NEVER give up before
+//     the API's window closes, or the adopt path double-fails.
+// So: API window 300s (the value that worked in the C4 env override), and
+// the worker client timeout = API window + 60s margin. Both ≥ 180s
+// (work-order floor). The worker default is DERIVED from the API constant
+// below, so the relationship cannot silently regress.
+export const BATCH_BOOT_HEALTH_WINDOW_MS = 300_000;
+/** Worker start/stop client timeout — must stay ≥ BATCH_BOOT_HEALTH_WINDOW_MS. */
+export const BATCH_LIFECYCLE_CLIENT_TIMEOUT_MS = BATCH_BOOT_HEALTH_WINDOW_MS + 60_000;
+
 /** Defaults applied when a cycle's configJson omits a knob. */
 export const BATCH_CONFIG_DEFAULTS = Object.freeze({
   /** Per-identity execution deadline (seconds). */

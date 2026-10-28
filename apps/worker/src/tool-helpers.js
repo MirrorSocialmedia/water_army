@@ -110,8 +110,9 @@ export function createApiClient({ baseUrl, serviceToken, timeoutMs = 15_000, fet
     // ToolExecutionError status for the engine's retry policy mapping.
     /** POST /api/task-runs/:runId/containers/start (create-or-adopt, idempotent).
      *  B6 gen3: long-lived — create + engine start + the API's boot-health
-     *  window (up to batchContainerHealthTimeoutMs, default 60s); pass a
-     *  lifecycle timeout so a slow boot is not misfiled as TOOL_TIMEOUT. */
+     *  window (up to batchContainerHealthTimeoutMs, default 300s since
+     *  F-RDFA-3); pass a lifecycle timeout so a slow boot is not misfiled as
+     *  TOOL_TIMEOUT. */
     async batchContainersStart(runId, { timeoutMs } = {}) {
       return request('POST', `/api/task-runs/${encodeURIComponent(runId)}/containers/start`, { body: {}, timeoutMs });
     },

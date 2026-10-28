@@ -53,6 +53,7 @@ import {
   findDuplicateMountSources,
   IDENTITY_TERMINAL,
   IDENTITY_ACTIVE_RUN_STATUSES,
+  BATCH_BOOT_HEALTH_WINDOW_MS,
   effectiveHealthProbe,
   DOCKER_ERROR,
 } from '@water-army/shared';
@@ -683,7 +684,7 @@ export function createBatchLifecycleService({
   /** Bounded app-layer health wait. Also fails fast if the container dies mid-boot. */
   async function waitHealthy(run, containerId, port, healthCfg) {
     const c = await requireClient();
-    const deadline = clock().getTime() + (config?.batchContainerHealthTimeoutMs ?? 60_000);
+    const deadline = clock().getTime() + (config?.batchContainerHealthTimeoutMs ?? BATCH_BOOT_HEALTH_WINDOW_MS);
     const pollMs = config?.batchContainerHealthPollMs ?? 1_000;
     for (;;) {
       if (healthCfg.kind === 'none') return true;

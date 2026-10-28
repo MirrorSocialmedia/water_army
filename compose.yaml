@@ -125,7 +125,11 @@ services:
       # => VOLUME_PATH_INVALID on every batch run (fail-closed, by design).
       # Restoring this line requires boss sign-off (work-order restore policy).
       BATCH_CONTAINER_DATA_ROOT: /var/lib/water-army/redroid
-      BATCH_CONTAINER_HEALTH_TIMEOUT_MS: "300000"  # WA-REALDEVICE-FINAL test config: MTG cold boot ~115-125s needs 300s window (default 60s) — restore pending boss sign-off
+      # C4 (WA-REALDEVICE-FINAL test config, BATCH_CONTAINER_HEALTH_TIMEOUT_MS=
+      # "300000") REMOVED 2026-10-29 by WA-RDFA-FIX S3: the code default is now
+      # 300s (shared BATCH_BOOT_HEALTH_WINDOW_MS, real MTG boot 115-125s +
+      # 3-concurrent evidence in p2-43/p2-48) — the env override is redundant.
+      # Admin override still available via BATCH_CONTAINER_HEALTH_TIMEOUT_MS.
     volumes:
       # THE ONLY service with Docker socket access — read-only.
       - /var/run/docker.sock:/var/run/docker.sock:ro
@@ -190,15 +194,12 @@ services:
       TASK_DEFAULT_TIMEOUT_MS: ${TASK_DEFAULT_TIMEOUT_MS:-120000}
       TASK_MAX_TIMEOUT_MS: ${TASK_MAX_TIMEOUT_MS:-900000}
       TASK_DEFAULT_ATTEMPTS: ${TASK_DEFAULT_ATTEMPTS:-3}
-      # WA-REALDEVICE-FINAL (mvs2iknd60sig) test config, added 2026-10-28 per boss
-      # authorization (22:02/22:09 P2 deploy-change go): the container adapter's
-      # start/stop client timeout must cover a REAL MTG batch boot. Measured on v8
-      # (2026-10-28 23:33-23:35 HKT): 3 concurrent MTG boots on the batch path exceed
-      # the 120s default (worker TOOL_TIMEOUT at t+120s — ADB handshake never answered
-      # in window; attempt-2 adopt+start then hit 304 already-started -> FAILED_FINAL
-      # x3). 300s aligns with the API-side BATCH_CONTAINER_HEALTH_TIMEOUT_MS=300000.
-      # Restoring this line requires boss sign-off (work-order restore policy).
-      CONTAINER_ADAPTER_LIFECYCLE_TIMEOUT_MS: "300000"
+      # C4 (WA-REALDEVICE-FINAL test config, CONTAINER_ADAPTER_LIFECYCLE_TIMEOUT_
+      # MS="300000") REMOVED 2026-10-29 by WA-RDFA-FIX S3: the code default is
+      # now 360s = API boot-health window (300s) + 60s margin (shared
+      # BATCH_LIFECYCLE_CLIENT_TIMEOUT_MS), calibrated on v8 evidence (3
+      # concurrent MTG boots >120s, p2-43). Admin override still available via
+      # CONTAINER_ADAPTER_LIFECYCLE_TIMEOUT_MS (15000..1800000).
     depends_on:
       redis:
         condition: service_healthy

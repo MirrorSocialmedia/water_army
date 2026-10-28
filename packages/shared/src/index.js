@@ -142,6 +142,10 @@ export {
   // BR-B2 (gen1): scheduler/queue constants + helpers.
   BATCH_ADAPTER_REGISTRY,
   BATCH_MAX_ATTEMPTS_CAP,
+  // F-RDFA-3 (WA-RDFA-FIX S3): boot-health window + worker client timeout (one
+  // relationship, structurally enforced — see batch-constants.js).
+  BATCH_BOOT_HEALTH_WINDOW_MS,
+  BATCH_LIFECYCLE_CLIENT_TIMEOUT_MS,
   BATCH_CONFIG_DEFAULTS,
   BATCH_RUN_JOB_NAME,
   batchJobId,

@@ -45,9 +45,17 @@
  *
  * Lifecycle timeouts (B6 gen3, E2E run-4: 2/6 broken-image runs ended
  * TOOL_TIMEOUT after the worker-side 15s while the API was still inside its
- * 60s boot-health window): start/stop ride CONTAINER_ADAPTER_LIFECYCLE_
- * TIMEOUT_MS (default 120000ms; 15000..1800000) so a slow boot is filed as
- * the API's honest error (HEALTH_TIMEOUT), not a worker give-up.
+ * boot-health window): start/stop ride CONTAINER_ADAPTER_LIFECYCLE_TIMEOUT_MS
+ * (default 360000ms; 15000..1800000) so a slow boot is filed as the API's
+ * honest error (HEALTH_TIMEOUT), not a worker give-up.
+ *
+ * Window relationship (F-RDFA-3, WA-RDFA-FIX S3): the worker client timeout
+ * must be ≥ the API boot-health window (default 300000ms), else a concurrent
+ * real MTG boot (>120s measured, p2-43) times out on the worker side first
+ * and attempt-2 adoption 304's. Both values come from shared
+ * (BATCH_BOOT_HEALTH_WINDOW_MS / BATCH_LIFECYCLE_CLIENT_TIMEOUT_MS) so the
+ * relationship is structurally enforced — real MTG cold boot 115–125s,
+ * 3-concurrent >120s (docs/audits/realdevice-final/p2/p2-43, p2-48).
  *
  * Container disposition at run end (all paths keep the VOLUME):
  *   success           → stop (slot freed for the next rotation, data intact)
@@ -59,6 +67,7 @@
  *                       stop itself fails the container is LEFT for
  *                       reconcile (fix=true) — never force-removed here
  */
+import { BATCH_LIFECYCLE_CLIENT_TIMEOUT_MS } from '@water-army/shared';
 import { AdapterError, abortableSleep } from './adapter-registry.js';
 
 function clampInt(raw, min, max, dflt) {
@@ -80,9 +89,11 @@ export function createContainerAdapter({ api, env = process.env, log = console }
   const holdMs = clampInt(env.CONTAINER_ADAPTER_HOLD_MS, 100, 3_600_000, 1_500);
   const healthPollMs = clampInt(env.CONTAINER_ADAPTER_HEALTH_POLL_MS, 500, 600_000, 15_000);
   // B6 gen3: start/stop are long-lived (create + engine start + the API's
-  // boot-health window, default 60s) — they must not ride the 15s client
+  // boot-health window, default 300s) — they must not ride the 15s client
   // default (E2E run-4: slow boot misfiled as TOOL_TIMEOUT).
-  const lifecycleTimeoutMs = clampInt(env.CONTAINER_ADAPTER_LIFECYCLE_TIMEOUT_MS, 15_000, 1_800_000, 120_000);
+  // F-RDFA-3: default = API window (300s) + 60s margin (360s) — the worker
+  // must never abandon the API's wait mid-window (v8 304 double-fail shape).
+  const lifecycleTimeoutMs = clampInt(env.CONTAINER_ADAPTER_LIFECYCLE_TIMEOUT_MS, 15_000, 1_800_000, BATCH_LIFECYCLE_CLIENT_TIMEOUT_MS);
   // B6 gen3: bounded grace for consecutive probe TRANSPORT failures inside
   // the hold (control-plane blip ≠ device death). 0 = legacy fail-fast.
   const probeGraceMs = clampInt(env.CONTAINER_ADAPTER_PROBE_GRACE_MS, 0, 600_000, 15_000);

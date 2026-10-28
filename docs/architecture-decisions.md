@@ -25,6 +25,7 @@
 | ADR-033 | L2 波次2：/proc 視野（init bind-mount 偽 meminfo/cpuinfo，W1b carrier 模式 per-identity）+ display 池（屏幕幾何 per-identity 落 boot 參數）+ deviceSpec 模板欄位全鏈 | 已實裝（代碼段全綠，full suite 見 §33 驗證）；真機 mount/幾何 **NOT VERIFIED**（零 boot 紀律，清單見 progress 檔）| §33 |
 | ADR-034 | 帳號資產模型：persona 生成器（地區連貫）+ 角色欄 {anchor/ops/farm/recovery} + 三位一體建前綁定 + 憑證庫（gitignored、AES 密封、軟退休）+ 註冊 driver 契約（人肉閘禁自動解）；段4：AID 註冊腳本 + 創建步驟機 + hk 雙名 persona（v2）+ 隨機排程（§7 紀律） | 已實裝（unit 24+31，full suite 1534/1528/0/6）；AID 註冊真機腿見 gacct4 progress；帳號創建真機全流程 = CEO 側驗收 | §34 |
 | ADR-035 | 行為引擎：生活時間表引擎（lognormal 雙峰/日型三態/假期表/出行 silence/年齡曲線，seeded）+ 內容管線（話題池×風格×persona 亲和，env 注入 LLM + loud fallback，trigram 防重，JSONL 人審 ledger）+ dry-run 執行 seam + register-aid 像素級成功判據（EXP-1 加固） | 已實裝（unit +31，full suite 1565/1559/0/6）；「似人」最終裁決 = 平台風控；Mobile Console 真執行 = 後續單 | §35 |
+| ADR-036 | F-RDFA-3 batch boot-health window 合理化（api 300s / worker 360s = api+60s margin，shared 常量結構性約束）+ C4 env 撤除 | 已實裝（unit +5 含關係鎖，full suite 見 §36）；真機驗證 = WA-RDFA-FIX S4 | §36 |
 
 ---
 
@@ -1650,3 +1651,31 @@ MD §13.2 嘅 per-actor 寫 budget（20/60s）係為**人工誤操作**設嘅；
 **決策 5 — register-aid.sh 成功判據加固（EXP-1 實錚）**：舊判據（PNG ≥20KB + 穩定）被白屏穿穿 —— 體積 heuristics 證明唔到「頁面講咗啲乜」。新判據 = **像素級硬核對證據**（`scripts/rdev-single/aid-page-check.py`，PIL）：form 階段要求 non-blank（非白像素比 + 量化色數下限）；success 階段要求 non-blank **AND** 對 pre-submit 幀有真實頁面轉換（取樣像素差異比下限）。白屏 / 停留原頁 全部 continue polling → timeout → exit 3；checker 自身壞（無 PIL/爛檔）→ **exit 4 fail-closed**（heuristic 單獨話事嘅時代結束）；判斷數值全部入 `checks.log` 與 evidence PNG 並存，操作者覆核有數睇。
 
 **驗證**：新增 unit `life-schedule.test.js` 16、`content-pipeline.test.js` 9（含 CLI spawn）、`daily-driver.test.js` 6（含 byte-equal 重放）；乾跑驗收（seed=behave-accept-1，10 帳號 × 7 日，`scripts/behavior/dryrun-stats.mjs` 可重放）：動作時段 早峰 06–09 = 40.8% / 晚峰 18–21 = 40.0% / 離峰 <12%；帳號間 sd/mean = 0.46；出行沉默窗符合紀律（窗口內 shenzhen 1–2d 例證 + 3–7d 由測試鎖）；內容池 60→55（防重拒 5）、唯一文本 100%、話題熵 2.68/2.81 bits。full suite **1565/1559/0/6**（基線 1534/1528/0/6，+31 零回歸）。**未驗證**：真人質感最終裁決 = 平台風控（代碼只能証明「唔係 metronome」，唔能証明「似人」）；Mobile Console 真執行 = 下一單。
+
+---
+
+## 36. F-RDFA-3 — batch boot-health window 合理化 + C4 env 撤除（ADR-036，2026-10-29 — 來源 = WA-RDFA-FIX 工單 S3）
+
+**背景（F-RDFA-3，medium）**：batch container 嘅 boot-health window（api `batchContainerHealthTimeoutMs`）同 worker client timeout（`CONTAINER_ADAPTER_LIFECYCLE_TIMEOUT_MS`）嘅 code default 全部係 **mock-calibrated**——api 60s、worker 120s。WA-REALDEVICE-FINAL 真機實測（2026-10-28，`docs/audits/realdevice-final/p2/`）坐實兩個 failure mode：
+
+- **v6**（p2-28/29/31/32）：單台 MTG cold boot ≈115–125s（container-up → adbd 真係答到 wire），舊 60s api window 喺 boot 途中已到期 → `HEALTH_TIMEOUT` → attempt-2 sweep **adopt** 嗰個仲在 boot 嘅活容器 → engine start **304 already-started** → 2 attempt 耗盡。
+- **v8**（p2-42/43）：3 台並發 MTG boot 令 ADB 答覆拖過 120s → **worker 端** `CONTAINER_ADAPTER_LIFECYCLE_TIMEOUT_MS` 舊 default 120s 先斷（`TOOL_TIMEOUT @ t+120s 整`）→ attempt-2 adopt 仲在 boot 嘅容器 → **304 already-started ×3 FAILED_FINAL**。根因 = worker client 比 api window 先死。
+
+關鍵洞察：**worker client timeout 必須 ≥ api window**，否則並發真 boot 嘅「慢但健康」會被誤殺成 attempt-2 adopt 304 double-fail。呢個關係舊代碼完全冇約束（兩個數字散喺兩個 package、兩個 env、各自 hardcode）。
+
+**決策 1 — 單點常量 + 結構性約束**：兩個數字收埋入 `packages/shared/src/batch-constants.js`：
+- `BATCH_BOOT_HEALTH_WINDOW_MS = 300_000`（api window，300s）
+- `BATCH_LIFECYCLE_CLIENT_TIMEOUT_MS = BATCH_BOOT_HEALTH_WINDOW_MS + 60_000 = 360_000`（worker client，**派生自 api window + 60s margin**——關係用代碼結構鎖死，唔會 silent regress）
+
+api `config.js` 同 `batch-lifecycle-service.js` 嘅 fallback 全部改讀 `BATCH_BOOT_HEALTH_WINDOW_MS`；worker `container-adapter.js` 改讀 `BATCH_LIFECYCLE_CLIENT_TIMEOUT_MS`（clamp 範圍 15000..1800000 保留，admin override 照舊）。
+
+**決策 2 — 300s 定點依據**：單台 boot 115–125s + 3 並發 >120s → 300s ≈ 2.4× 單台實測，俾並發同慢機留足 margin；同時就係 WA-REALDEVICE-FINAL 期間用 env 300s 治標時實測能過嘅值（唔係拍數）。worker 360s = 300s + 60s，確保 worker 永遠唔會先於 api window 放棄。兩者都 ≥180s（工單下限）。
+
+**決策 3 — 撤除 C4 env（治理歸位）**：WA-REALDEVICE-FINAL 期間嘅 admin 測試配置 C4（compose `BATCH_CONTAINER_HEALTH_TIMEOUT_MS="300000"` + worker `CONTAINER_ADAPTER_LIFECYCLE_TIMEOUT_MS="300000"`）原本係 env override 治標。既然 code default 已經合理化並結構性約束，呢兩個 env 變**冗餘**（值同 default 一致、且 default 仲更正確：360s > 300s）。本單 S3 將兩行 env **由 compose.yaml 撤除**（留 comment 註明撤除原因 + 點樣再 override），api/worker 容器 recreate 落 env，before/after 落檔。C1/C2/C3 照工單保留（C3 `BATCH_CONTAINER_DATA_ROOT` 唔受影響）。
+
+**邊界誠實**：
+- 300s/360s 係「real MTG + 本 host 並發 3 台」嘅標定值，唔係物理下限。換更重 image 或更高並發可經 env 調高（clamp 上限 1800000ms = 30min）。
+- 呢度只約束「client 唔好先於 window 死」嘅**關係**；window 本身夠唔夠闊係實測問題——S4 真機 mini-驗證會用新 default 重跑 probe healthy/unhealthy 雙路徑做最終判據。
+- 撤 C4 env 唔改實際行為值（api 維持 300s；worker 由 300s 升到 360s = 修正，唔係縮小）。
+
+**驗證**：新增 unit `batch-window-constants.test.js` 5（雙 default ≥180s、worker ≥ api+30s margin、calibrated 值 300s/360s、api loadConfig default + env override、worker adapter default 經真實 client seam 觀察到 360s）；`container-adapter.test.js` 更新 start/stop 斷言 120s→360s。全套零回歸見 S5 報告（provenance --check 綠）。真機驗證 = WA-RDFA-FIX S4（新 default 下 probe healthy + unhealthy 雙路徑真跑）。
