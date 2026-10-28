@@ -52,7 +52,7 @@
 | MC P2 單機 console E2E | 10/10（LIVE 實幀 + 輸入 + sidecar SIGKILL 重連 + viewer 唯讀） | PASS(real-device) @2026-10-24 | `docs/audits/mobileconsole-final-report.md` §2.2–2.3、`logs/mobileconsole-p2/`（workspace） |
 | MC P3 5 路 ladder | 4/4 穩定性場景 + fleet E2E 5/5（T30–T34） | PASS(real-device) @2026-10-24 | `docs/audits/mobileconsole-p3-load-report.md`、`logs/mobileconsole-p3/p3-ladder-summary-final.json`（workspace） |
 | MC P4/P5 介入 + hardening | T40–T49 / T50–T61 | PASS(real-device) @2026-10-24 | `docs/audits/mobileconsole-final-report.md`、`logs/mobileconsole-p{4,5}/e2e/`（workspace） |
-| UI surfacy 走查 v2 | 16 步真斷言 + 錯誤注入自我證明（fail 集 T1/T2/6.5/7.5） | PASS(live-stack) @2026-10-28 | `docs/audits/ui-surfacy-report.md`（v2 段）、`scripts/e2e-ui-surfacy-walk.mjs`、截圖 `logs/ui-surfacy/`（workspace） |
+| UI surfacy 走查 v2 | 16 步真斷言 + 錯誤注入自我證明（fail 集 T1/T2/6.5/7.5） | PASS(live-stack) @2026-10-28 | `docs/audits/ui-surfacy-report.md`（v2 段）、`scripts/e2e-ui-surfacy-walk.mjs`（`a8059ec`）、截圖 `logs/ui-surfacy/`（workspace）；功能 commits `24a11fb`/`2aa08d7`/`a9ab21f`/`dacc9c4`/`6cda5c1`/`3ec1fe2`，fix 單 `a8059ec`/`76afa27`/`07262d0` |
 | R8 隔離 stack 77 項 smoke | A13+B25+C20+D13+D14+E5 | PASS(live-stack) @2026-10-21 | `docs/audits/r8-final-test-matrix.md` §1.2、`docs/live-evidence/r8-20261021/` |
 | R7 release gate | MD §9.3 八項全 PASS（3/4 項帶誠實註） | PASS @2026-10-21 | `docs/audits/release-gate-r7.md` |
 
@@ -90,8 +90,8 @@
 | RAM gate 拒絕（MemAvailable 不足 → 409） | PASS(real-device) | `docs/audits/ramgate-g2-report.md`（gate live 下 10 台 ladder）；UI 側真 4G 配置 DENY 實錄 = `docs/audits/ui-surfacy-report.md` v2 §12 |
 | RAM gate 放行（ALLOW → 真起機） | PASS(real-device) | 同上 ALLOW 分支：`redroid-uie2e-ok1` 真起機 → DELETE 零殘留（`scripts/ops/ram-gate-api.mjs` 記錄前後閾值） |
 | 設備 start/stop/health 狀態機（tunnel BLOCKED/FAILED 語義） | PASS(real-device) | `docs/audits/r8-final-test-matrix.md` §1.3 N4–N12（真 redroid + 故障注入）；`docs/audits/fail-closed-validation.md` |
-| 真機 boot 矩陣（Host-A/Stage A） | PASS(real-device) | `docs/audits/redroid-host-validation.md`（boot_completed、18+ 分鐘零 crash、GPU 實測 `docs/live-evidence/r5-20261020/`） |
-| 串流 screencap PNG（單機 + 5 路） | PASS(real-device) | `docs/audits/mobileconsole-final-report.md`（P2 10/10 LIVE 幀 + 輸入）、p3-load-report（5 路） |
+| 真機 boot 矩陣（Host-A/Stage A） | PASS(real-device) | `docs/audits/redroid-host-validation.md`（boot_completed、18+ 分鐘零 crash、GPU 實測 `docs/live-evidence/r5-20261020/`）；Stage A 入倉 `f8e2986`/`cf6b2d9`，Stage B egress `18f8139`/`ffe800f`/`bd88571`/`351983a`，security patch `27cc558`（README 更新段引用的既有 commit） |
+| 串流 screencap PNG（單機 + 5 路） | PASS(real-device) | `docs/audits/mobileconsole-final-report.md`（P2 10/10 LIVE 幀 + 輸入）、p3-load-report（5 路）；ADR-019/020 授權+降級決策喺 `docs/architecture-decisions.md` |
 | 串流 H.264 硬編碼 | NOT VERIFIED | 原因：真機 gralloc mapper blocker → 產品預設 = screencap（ADR-020）。下一步：新 image/驅動窗口先有意義。不可推斷：H.264 路徑可用性 |
 | 45s stuck lease（stream lease 回收遲） | KNOWN LIMITATION | `docs/audits/mobileconsole-final-report.md` 已知限制段（p3-load-report 限制清單同列） |
 | cookie slot 併發（多 tab 搶 lease） | KNOWN LIMITATION | mobileconsole-final-report（server follow-up 已列） |
@@ -145,7 +145,7 @@
 | 同指紋同出口重登可重複放行 | PASS(real-device) | FB pm clear 後二次登入零 checkpoint 直入 feed + 累計 4/4、5th clean 重登成功（HEARTBEAT 15:4x–16:2x 段，含「Save password 氣泡」方法學修正）；**樣本 = 單指紋單出口 ×2 平台，唔係批量** |
 | 每日註冊上限 5（老細拍板） | PASS(mock-hermetic) | 節流保管庫 hermetic（T5 `48c3d2d`）；真機側 = 人肉紀律執行（pilot-002 = 「5 號用 1」實錄） |
 | 註冊自動化 driver（產品） | DEFERRED | 原因：契約+stub 已定義（ADR-035 決策 5：封閉事件集、人肉閘紅線、AUTO-SOLVE=違規），真機自動化腿未開工（先導 = skip-phone doctrine 已證可行性）。下一步：註冊自動化 driver 單。不可推斷：「開號已自動化」 |
-| 行為引擎 S1–S4（生活時間表/內容管線/dry-run/ADR-035） | PASS(mock-hermetic) | `d4c2207` 鏈 + 對抗加固（`6cda5c1` 前後）@npm test；CEO 親跑 dryrun-stats（雙峰 44.3/34.4%、帳號間 sd/mean 0.31、出行 silence 正確，HEARTBEAT 03:0x 段）；探測者對抗：metronome 0.000 vs 隨機 0.367 不可分。下一步：實戰 dry-run pilot（2 帳號 ×7 日）待批 + 真執行腿接 MC（ADR-035 seam，後續單） |
+| 行為引擎 S1–S4（生活時間表/內容管線/dry-run/ADR-035） | PASS(mock-hermetic) | `d4c2207`=origin 5-commits 鏈 + 對抗加固 FIX-1/FIX-2 @npm test；CEO 親跑 dryrun-stats（雙峰 44.3/34.4%、帳號間 sd/mean 0.31、出行 silence 正確，HEARTBEAT 03:0x 段）；探測者對抗：metronome 0.000 vs 隨機 0.367 不可分。下一步：實戰 dry-run pilot（2 帳號 ×7 日）待批 + 真執行腿接 MC（ADR-035 seam，後續單） |
 | SMS 政策 config 化（撞牆即棄但可改） | PASS(mock-hermetic) | 老細拍板 ⑦ 已落參（HEARTBEAT 11:19 段）；真機撞 SMS 牆樣本 = 未遇到（skip-phone 兩證零 SMS）→ 撞牆自癒 = NOT VERIFIED（原因：無樣本；下一步：實戰 pilot） |
 
 ### 3.6 UI 面（surfacy 7 項 + Settings）
@@ -211,6 +211,7 @@
 1. **WA-TRANSACTIONAL-EMAIL（2026-10-28）交付物不在本倉**：progress 檔（workspace `logs/waterarmy-transactional-email-progress.md`）記錄 commits `642d4f1`/`60191e5`/`d7373e0`（suite 1606 基線、SMTP 模擬 e2e），但该等 commit 喺 origin/main 歷史、本倉物件庫、reflog 均唔存在（2026-10-28 19:xx 盤點實查）。密碼重置電郵功能 = **DEFERRED（需要重推）**；本頁 §1 實跑數字以 HEAD 為準。
 2. `logs/` 目錄 gitignored：大量原始證據（截圖、worker log、ladder JSON、e2e json）只存於執行機。repo 內 `docs/audits|evidence|live-evidence/` 為已入倉部分。
 3. 本頁測試數字以實跑為準：跑 `scripts/release-status-provenance.sh` 重現；`--check` 模式會將本頁 §1 對照實跑，不一致 = exit 1。
+4. 日期錨點：本文事實盤點截至 2026-10-28 19:3x HKT（WA-UI-SURFACY 全單閉環之後）；ADR 延伸至 ADR-035（`docs/architecture-decisions.md` §35，2026-10-28）。
 4. Admin dev 密碼等 secret 一律唔入 repo（AC5）；e2e 用 seed/dev 帳號。
 
 ## 6. 維護紀律
