@@ -1,0 +1,17 @@
+import { chromium } from '/usr/lib/node_modules/openclaw/node_modules/playwright-core/index.mjs';
+import fs from 'node:fs';
+const token = fs.readFileSync('/home/kenneth/.openclaw/workspace/water_army/logs/ui-surfacy/.token', 'utf8').trim();
+const browser = await chromium.launch({ executablePath: `${process.env.HOME}/.cache/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-linux64/chrome-headless-shell` });
+const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+await ctx.addCookies([{ name: 'session', value: token, domain: '127.0.0.1', path: '/' }]);
+const page = await ctx.newPage();
+await page.goto('http://127.0.0.1:3012/devices', { waitUntil: 'domcontentloaded', timeout: 30000 });
+await page.waitForTimeout(1500);
+console.log('URL:', page.url());
+console.log('H1/H2:', await page.$$eval('h1,h2', els => els.map(e => e.textContent.trim()).join(' | ')));
+const btns = await page.$$eval('button', bs => bs.map(b => b.textContent.trim()).filter(Boolean).slice(0, 20));
+console.log('BUTTONS:', btns.join(' | '));
+const ph = await page.$$eval('input', ins => ins.map(i => i.placeholder).filter(Boolean));
+console.log('INPUT-PLACEHOLDERS:', ph.join(' | '));
+await page.screenshot({ path: '/home/kenneth/.openclaw/workspace/water_army/logs/ui-surfacy/diag-devices.png' });
+await browser.close();
