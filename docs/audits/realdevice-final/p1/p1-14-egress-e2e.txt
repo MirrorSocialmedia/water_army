@@ -1,0 +1,7 @@
+=== P1.8c egress e2e: in-device via gost ===
+2026-10-28T12:46:58Z
+--- default route ---
+172.38.200.0/24 dev eth0 proto kernel scope link src 172.38.200.3 
+--- proxy e2e: ipify over gost ---
+toybox: Unknown command wget (see "toybox --help")
+

@@ -1,0 +1,17 @@
+=== P1.14 gate AFTER (post P1 single machine) ===
+2026-10-28T12:54:52Z
+{
+ "liveLeases": {
+  "liveLeases": 2,
+  "running": 2,
+  "inProgress": 0,
+  "runningWithLease": 2,
+  "reservedMiB": 2400
+ },
+ "memAvailableMiB": 43225.6,
+ "wouldAdmitNext": {
+  "admitted": true,
+  "reason": "ADMITTED",
+  "liveCount": 2
+ }
+}

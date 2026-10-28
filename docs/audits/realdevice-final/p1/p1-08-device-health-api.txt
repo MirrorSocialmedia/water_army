@@ -1,0 +1,45 @@
+=== P1.6 API device state (GET + refresh) ===
+2026-10-28T12:37:05Z
+--- GET ---
+{
+    "device": {
+        "id": "8b1ac9d2-4c8c-4063-94ab-937f463f381f",
+        "name": "redroid-rdfa-01",
+        "templateName": "mc-dogfood-gmsmtg",
+        "image": "water-army/redroid:14.0.0-240527-gms-mtg",
+        "androidVersion": "14",
+        "width": 1080,
+        "height": 2400,
+        "dpi": 420,
+        "fps": 30,
+        "adbPort": 15000,
+        "adbBind": "127.0.0.1",
+        "gpuMode": "host",
+        "gpuStatus": "unverified",
+        "containerName": "redroid-rdfa-01",
+        "containerId": "9599ab23e1ea28d8e20f2b56979ac0437e0bc846686e84b7890d281fd385f3f0",
+        "containerState": "running",
+        "adbState": "unknown",
+        "proxy": {
+            "configured": false,
+            "gostPort": null,
+            "state": "off",
+            "hasUrl": false,
+            "binaryState": null,
+            "binaryVersion": null,
+            "network": null
+        },
+        "lastDiagnosedAt": null,
+        "identityId": "9c931b40-a100-4300-906b-232c97e413ec",
+        "roOverrides": {
+            "ro.build.id": "V9AB2GJ",
+            "ro.hardware": "redmi-1ba",
+            "ro.serialno": "MOTO-616277-P6V8",
+            "ro.product.name": "redmi-1ba",
+            "ro.boot.hardware": "redmi-1ba",
+            "ro.product.brand": "motorola",
+            "ro.product.model": "Redmi1BA",
+            "ro.product.device": "redmi-1ba",
+            "ro.build.display.id": "14.V9AB2GJ.Y2MKJ.keys",
+--- POST refresh ---
+{"adbError": "ADB_UNAVAILABLE", "adbNote": "adb unavailable on this host (engine failure)"}

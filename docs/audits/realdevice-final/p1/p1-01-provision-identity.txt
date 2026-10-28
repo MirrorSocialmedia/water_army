@@ -1,0 +1,7 @@
+=== P1.1 provision identity rdfa01 (qa_device) ===
+2026-10-28T12:33:44Z
+{"error":{"code":"VALIDATION_ERROR","message":"name 'rdfa01' invalid (must match the device-name pattern ^redroid-[a-z0-9][a-z0-9_-]{0,39}$ — the pool entry IS the device name)","requestId":"9fd2e75f-f4b4-475e-94b1-30911f06b7ae"}}
+
+--- retry with device-name pattern ---
+2026-10-28T12:33:52Z
+{"items":[{"name":"redroid-rdfa-01","identityId":"9c931b40-a100-4300-906b-232c97e413ec","action":"created","dataPath":"/var/lib/water-army/redroid/redroid-rdfa-01","suggestedDeviceName":"redroid-rdfa-01","fingerprint":"ensured","egressIp":null}],"created":1,"replayed":0,"dryRun":false}

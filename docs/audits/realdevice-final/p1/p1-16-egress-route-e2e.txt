@@ -1,0 +1,19 @@
+=== P1.8e egress with explicit route (test-container only, reverted later) ===
+2026-10-28T12:47:53Z
+--- 1) ping gost BEFORE route (expect fail) ---
+1 packets transmitted, 1 received, 0% packet loss, time 0ms
+rtt min/avg/max/mdev = 0.041/0.041/0.041/0.000 ms
+--- 2) add static route 172.38.223.1/32 via 172.38.200.1 ---
+172.38.223.1 via 172.38.200.1 dev eth0 
+--- 3) ping gost AFTER route ---
+1 packets transmitted, 1 received, 0% packet loss, time 0ms
+rtt min/avg/max/mdev = 0.038/0.038/0.038/0.000 ms
+--- 4) HTTP proxy e2e via nc: GET http://api.ipify.org ---
+Cf-Cache-Status: DYNAMIC
+Cf-Ray: a51a0d38482f0495-HKG
+Content-Type: text/plain
+Date: Wed, 28 Oct 2026 12:47:53 GMT
+Server: cloudflare
+Vary: Origin
+
+103.194.185.206

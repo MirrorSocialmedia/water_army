@@ -1,0 +1,17 @@
+=== P1.4b in-app ground-truth vs profile (decode of logcat DUMP_B64) ===
+2026-10-28T12:52:55Z
+prop                             expected(profile)                        actual(in-app) match
+ro.product.brand                 motorola                                 redroid    MISMATCH
+ro.product.manufacturer          Motorola                                 redroid    MISMATCH
+ro.product.model                 Redmi1BA                                 redroid14_ MISMATCH
+ro.product.device                redmi-1ba                                redroid_x8 MISMATCH
+ro.product.name                  redmi-1ba                                redroid_x8 MISMATCH
+ro.build.id                      V9AB2GJ                                  UD2A.24050 MISMATCH
+ro.build.display.id              14.V9AB2GJ.Y2MKJ.keys                    redroid_x8 MISMATCH
+ro.build.fingerprint             motorola/redmi-1ba/redmi-1barcqv23p7xy:1 redroid/re MISMATCH
+ro.serialno                      MOTO-616277-P6V8                                    MISMATCH
+persist.sys.timezone             Asia/Tokyo                               <absent>   MISMATCH
+ro.hardware                      redmi-1ba                                <absent>   MISMATCH
+ro.boot.hardware                 redmi-1ba                                <absent>   MISMATCH
+--- in-app match 0/12
+propCount(dump): 591 | settings: {'locale': 'en-US', 'timezone': 'GMT', 'deviceName': 'redroid14_x86_64'} | telephony: {'networkOperator': '', 'networkOperatorName': '', 'simOperator': '', 'simOperatorName': '', 'phoneType': 1}

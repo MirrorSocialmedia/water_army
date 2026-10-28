@@ -1,0 +1,12 @@
+=== P1.10 host adb: install + launch probes ===
+2026-10-28T12:52:03Z
+--- push ---
+attest-app/dist/wa-attest.apk: 1 file pushed, 0 skipped. 457.1 MB/s (319915 bytes in 0.001s)
+probe-app/dist/wa-probe.apk: 1 file pushed, 0 skipped. 79.4 MB/s (12715 bytes in 0.000s)
+--- pm install attest ---
+Success
+--- pm install probe ---
+Success
+--- pm list ---
+package:com.waterarmy.probe
+package:com.waterarmy.attest

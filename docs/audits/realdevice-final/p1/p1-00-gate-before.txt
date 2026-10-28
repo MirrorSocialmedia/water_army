@@ -1,0 +1,22 @@
+=== P1.0 gate BEFORE (create redroid-rdfa-01) ===
+2026-10-28T12:33:44Z
+{
+ "liveLeases": 1,
+ "wouldAdmitNext": {
+  "admitted": true,
+  "reason": "ADMITTED",
+  "liveCount": 1,
+  "projectedMiB": 42623,
+  "currentMiB": 45023.4,
+  "config": {
+   "enabled": true,
+   "maxParallel": 10,
+   "hardFloorMiB": 4096,
+   "postBootTargetMiB": 5400,
+   "perBootBudgetMiB": 1200,
+   "metricsMaxAgeMs": 30000,
+   "leaseTtlMs": 86400000
+  }
+ },
+ "memAvailableMiB": 45023.4
+}

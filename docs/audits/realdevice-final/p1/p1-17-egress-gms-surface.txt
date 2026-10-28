@@ -1,0 +1,10 @@
+=== P1.8f GMS global http_proxy (documented manual path) ===
+2026-10-28T12:48:20Z
+--- settings put global http_proxy 172.38.223.1:18443 ---
+--- readback ---
+172.38.223.1:18443
+--- API PUT egress (expect 503 fail-closed) ---
+{"error":{"code":"NOT_FOUND","message":"Route PUT /api/devices/redroid/8b1ac9d2-4c8c-4063-94ab-937f463f381f/egress not found","requestId":"3a71efa9-ba6b-47b1-8df0-a748a953d942"}}
+HTTP_STATUS=404
+--- cleanup: proxy off + remove test route ---
+route-cleaned

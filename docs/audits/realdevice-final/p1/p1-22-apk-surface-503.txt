@@ -1,0 +1,5 @@
+=== P1.9a platform app-ops surface (expect 503 APP_OPS_DISABLED) ===
+2026-10-28T12:51:22Z
+--- GET /apps ---
+{"error":{"code":"APP_OPS_DISABLED","message":"app-layer ops (W2) are disabled on this host — set WA_APP_OPS_ENABLED=true after reviewing ADR-026 (real-device matrix NOT VERIFIED)"}}
+HTTP_STATUS=503

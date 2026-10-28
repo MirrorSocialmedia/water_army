@@ -1,0 +1,6 @@
+=== P1.12 launch wa-attest (Play Integrity/SafetyNet) ===
+2026-10-28T12:53:09Z
+Starting: Intent { cmp=com.waterarmy.attest/.AttestActivity }
+--- logcat WA-INTEGRITY ---
+--- result file (adb shell uid has /data/local/tmp) ---
+cat: /data/local/tmp/wa-attest-result.json: No such file or directory

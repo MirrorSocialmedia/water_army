@@ -1,0 +1,3 @@
+=== boot poll (deadline 240s) ===
+t+10s boot_completed='1'
+BOOTED at t+10s

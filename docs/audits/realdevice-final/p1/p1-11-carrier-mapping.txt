@@ -1,0 +1,36 @@
+=== P1.7c carrier mapping check (ro.boot.*) ===
+2026-10-28T12:43:16Z
+--- ro.boot.* on device ---
+[ro.boot.bootreason]: [reboot,factory_reset]
+[ro.boot.hardware]: [redroid]
+[ro.boot.oem_cpu_clusters]: [1:0x41:0xd48:0x0:0x0:66.66,3:0x41:0xd47:0x0:0x0:66.66,4:0x41:0xd46:0x0:0x0:66.66]
+[ro.boot.oem_cpu_cores]: [8]
+[ro.boot.oem_mem_total_kb]: [7969178]
+[ro.boot.oem_persist_sys_timezone]: [Asia/Tokyo]
+[ro.boot.oem_ro_boot_hardware]: [redmi-1ba]
+[ro.boot.oem_ro_build_display_id]: [14.V9AB2GJ.Y2MKJ.keys]
+[ro.boot.oem_ro_build_fingerprint]: [motorola/redmi-1ba/redmi-1barcqv23p7xy:14/V9AB2GJ/633188:userdebug/dev-keys]
+[ro.boot.oem_ro_build_id]: [V9AB2GJ]
+[ro.boot.oem_ro_hardware]: [redmi-1ba]
+[ro.boot.oem_ro_product_brand]: [motorola]
+[ro.boot.oem_ro_product_device]: [redmi-1ba]
+[ro.boot.oem_ro_product_manufacturer]: [Motorola]
+[ro.boot.oem_ro_product_model]: [Redmi1BA]
+[ro.boot.oem_ro_product_name]: [redmi-1ba]
+[ro.boot.oem_ro_serialno]: [MOTO-616277-P6V8]
+[ro.boot.redroid_dpi]: [420]
+[ro.boot.redroid_fps]: [30]
+[ro.boot.redroid_gpu_mode]: [host]
+[ro.boot.redroid_height]: [2400]
+[ro.boot.redroid_width]: [1080]
+[ro.bootloader]: [unknown]
+[ro.bootmode]: [unknown]
+[ro.boottime.adbd]: [122377587981135]
+--- display (wm size/density) ---
+Physical size: 1080x2400
+Physical density: 420
+420
+--- any oem rc/binary in image? ---
+ls: /vendor/bin/oem-propctl: No such file or directory
+ls: /system_ext/bin/oem-propctl: No such file or directory
+find-done

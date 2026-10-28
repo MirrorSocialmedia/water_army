@@ -1,0 +1,16 @@
+=== P1.8g identity egress surface (expect 503 EGRESS_BINDING_DISABLED) ===
+2026-10-28T12:48:50Z
+--- GET /api/identities/9c931b40-a100-4300-906b-232c97e413ec/egress ---
+{"error":{"code":"EGRESS_BINDING_DISABLED","message":"identity egress binding (W3) is disabled on this host — set WA_W3_EGRESS_BINDING_ENABLED=true after reviewing ADR-027 (real-device matrix NOT VERIFIED)"}}
+HTTP_STATUS=503
+--- PUT /api/identities/9c931b40-a100-4300-906b-232c97e413ec/egress (mode=gateway) ---
+{"error":{"code":"VALIDATION_ERROR","message":"Request validation failed: must have required property 'proxyUrl'","requestId":"cf075995-aa22-4ef0-b24a-bc3a34a05231"}}
+HTTP_STATUS=400
+
+--- PUT with valid body (expect 503 gate) ---
+{"error":{"code":"VALIDATION_ERROR","message":"Request validation failed: must have required property 'expectedEgressIp'","requestId":"b5e11517-3ba0-40cf-9148-85eafa1f96cb"}}
+HTTP_STATUS=400
+
+--- PUT with full body (expect 503 gate) ---
+{"error":{"code":"EGRESS_BINDING_DISABLED","message":"identity egress binding (W3) is disabled on this host — set WA_W3_EGRESS_BINDING_ENABLED=true after reviewing ADR-027 (real-device matrix NOT VERIFIED)"}}
+HTTP_STATUS=503

@@ -1,0 +1,24 @@
+=== P1.12b attest follow-up ===
+2026-10-28T12:54:00Z
+--- any waterarmy/attest/integrity logcat ---
+10-28 12:53:09.945  2109  2109 D BoundBrokerSvc: Loading bound service for intent: Intent { act=com.google.android.gms.safetynet.service.START pkg=com.google.android.gms }
+10-28 12:53:09.957  1279 13229 D CoreBackPreview: Window{882c159 u0 com.waterarmy.attest/com.waterarmy.attest.AttestActivity}: Setting back callback OnBackInvokedCallbackInfo{mCallback=android.window.IOnBackInvokedCallback$Stub$Proxy@baf76cd, mPriority=0, mIsAnimationCallback=false}
+10-28 12:53:09.979  1279  1297 I ActivityTaskManager: Displayed com.waterarmy.attest/.AttestActivity for user 0: +90ms
+10-28 12:53:54.944  1279  2228 W ProcessStats: Tracking association SourceState{91b900b com.waterarmy.attest/10103 Top #404472} whose proc state 1 is better than process ProcessState{65f1590 com.android.vending/10057 pkg=com.android.vending} proc state 8 (1 skipped)
+10-28 12:54:05.205  3231  3496 E Finsky  : [55] lrq.a(1): requestIntegrityToken() failed for com.waterarmy.attest.
+10-28 12:54:05.206 14371 14391 I WA-INTEGRITY: {"probe":"gms","com.google.android.gms":"22.21.16 (140800-454906765)+222116056","com.android.vending":"30.4.17-21 [0] [PR] 445549118+83041710","com.google.android.gsf":"14-10347885+34","status":"ok"}
+10-28 12:54:05.206 14371 14391 I WA-INTEGRITY: {"probe":"bind","com.google.android.gms.atom.attest.BIND":"NO_RESOLVER","com.google.android.gms.safetynet.BIND":"NO_RESOLVER","com.google.android.gms.auth.api.zinzi.BIND":"NO_RESOLVER","status":"ok"}
+10-28 12:54:05.206 14371 14391 I WA-INTEGRITY: {"probe":"legacyapi","com.google.android.gms.integrity.IntegrityApi":"absent","com.google.android.gms.integrity.IntegrityStatusCodes":"absent","com.google.android.play.core.integrity.StandardIntegrityManager":"present:[\"prepareIntegrityToken\"]","standard_prepare":"task_error","standard_prepare_err":{"err_class":"com.google.android.play.core.integrity.StandardIntegrityException","err_msg":"-9: Standard Integrity API error (-9): Binding to the service in the Play Store has failed. This can be due to having an old Play Store version installed on the device.\nAsk the user to update Play Store.\n (https:\/\/developer.android.com\/google\/play\/integrity\/reference\/com\/google\/android\/play\/core\/int...","err_status":-9,"err_cause":"com.google.android.play.integrity.internal.af: Failed to bind to the service."},"status":"ok"}
+10-28 12:54:05.206 14371 14391 I WA-INTEGRITY: {"probe":"safety","nonce":"i0AvDdrB35bf0WNVV1Xd0w","status":"task_error","err":"unknown\/incomplete"}
+10-28 12:54:05.206 14371 14391 I WA-INTEGRITY: {"probe":"integrity","nonce":"ydxYdF-xUdjGjJUeEm9bI6GbkbaK-WKU","status":"task_error","err_class":"com.google.android.play.core.integrity.IntegrityServiceException","err_msg":"-12: Integrity API error (-12): Unknown internal Google server error.\nRetry with an exponential backoff. Consider filing a bug if fails consistently.\n (https:\/\/developer.android.com\/google\/play\/integrity\/reference\/com\/google\/android\/play\/core\/integrity\/model\/IntegrityErrorCode.html#GOOGLE_SERVER_UNA...","err_status":-12}
+10-28 12:54:05.206 14371 14391 I WA-INTEGRITY: {"probe":"summary","ts":1793192045206,"elapsed_ms":55269,"gms":"ok","bind":"ok","legacyapi":"ok","safety":"task_error","integrity":"task_error"}
+10-28 12:54:05.206 14371 14391 I WA-INTEGRITY: {"error":"java.io.FileNotFoundException: \/data\/local\/tmp\/wa-attest-result.json: open failed: EACCES (Permission denied)"}
+10-28 12:54:05.208  1279  1293 D CoreBackPreview: Window{882c159 u0 com.waterarmy.attest/com.waterarmy.attest.AttestActivity}: Setting back callback null
+10-28 12:54:05.208  1279  1293 W InputManager-JNI: Input channel object '882c159 com.waterarmy.attest/com.waterarmy.attest.AttestActivity (client)' was disposed without first being removed with the input manager!
+10-28 12:54:05.208  1279  1305 W UsageStatsService: Unexpected activity event reported! (com.waterarmy.attest/com.waterarmy.attest.AttestActivity event : 23 instanceId : 247249789)
+--- activity state ---
+--- GMS packages ---
+package:com.google.android.gms
+--- /data/local/tmp wa files ---
+-rw-rw-rw- 1 shell shell 319915 2026-10-27 13:11 wa_attest.apk
+-rw-rw-rw- 1 shell shell  12715 2026-10-27 09:12 wa_probe.apk

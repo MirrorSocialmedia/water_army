@@ -1,0 +1,15 @@
+=== P1.7b injection mechanism forensics (in-container) ===
+2026-10-28T12:37:35Z
+--- container Cmd (androidboot carrier) ---
+[androidboot.redroid_width=1080 androidboot.redroid_height=2400 androidboot.redroid_dpi=420 androidboot.redroid_fps=30 androidboot.redroid_gpu_mode=host androidboot.oem_persist_sys_timezone=Asia/Tokyo androidboot.oem_ro_boot_hardware=redmi-1ba androidboot.oem_ro_build_display_id=14.V9AB2GJ.Y2MKJ.keys androidboot.oem_ro_build_fingerprint=motorola/redmi-1ba/redmi-1barcqv23p7xy:14/V9AB2GJ/633188:userdebug/dev-keys androidboot.oem_ro_build_id=V9AB2GJ androidboot.oem_ro_hardware=redmi-1ba androidboot.oem_ro_product_brand=motorola androidboot.oem_ro_product_device=redmi-1ba androidboot.oem_ro_product_manufacturer=Motorola androidboot.oem_ro_product_model=Redmi1BA androidboot.oem_ro_product_name=redmi-1ba androidboot.oem_ro_serialno=MOTO-616277-P6V8 androidboot.oem_mem_total_kb=7969178 androidboot.oem_cpu_cores=8 androidboot.oem_cpu_clusters=1:0x41:0xd48:0x0:0x0:66.66,3:0x41:0xd47:0x0:0x0:66.66,4:0x41:0xd46:0x0:0x0:66.66]
+
+--- oem-propctl present? ---
+ls: /system/bin/oem-propctl: No such file or directory
+ls: /system/xbin/oem-propctl: No such file or directory
+--- androidboot.* props on device ---
+--- init rc carrier files? ---
+/system/etc/init/android.hidl.allocator@1.0-service.rc
+/system/etc/init/android.system.suspend-service.rc
+/system/etc/init/apexd.rc
+/system/etc/init/atrace.rc
+/system/etc/init/atrace_userdebug.rc
