@@ -423,8 +423,12 @@ export function createBatchLifecycleService({
    * recreates drop any manual attachment, the next boot re-attaches.
    *
    * Own-container lookup = the running container whose Config.Hostname
-   * equals os.hostname() (compose sets the container hostname to the
-   * container name; we read the same value back from inside).
+   * equals os.hostname() (Docker sets the container hostname to the
+   * container id; we read the same value back from inside). The
+   * listContainers summary does NOT carry Config (Docker API
+   * GET /containers/json), so the match goes through a full inspect of
+   * each running candidate — bounded by the number of running
+   * containers, and this only runs once at boot.
    *
    * Failures are LOGGED, never fatal: the app must boot regardless; the
    * probe then fails closed with an actionable detail (no device-network
@@ -438,17 +442,24 @@ export function createBatchLifecycleService({
     catch (err) { log.error({ error: err.message }, 'batch lifecycle: device network ensure failed — L2 probe will fail closed'); return; }
     let self = null;
     try {
+      // listContainers summaries have no Config field — match via inspect
+      // (see doc block above; the first S3 deploy caught the broken
+      // list-summary version: the match was structurally impossible).
       const running = await c.listContainers({ all: false });
       const hn = os.hostname();
-      self = running.find((ct) => ct.Config?.Hostname === hn) ?? null;
+      for (const ct of running) {
+        try {
+          const ins = await c.getContainer(ct.Id).inspect();
+          if (ins.Config?.Hostname === hn) { self = ins; break; }
+        } catch { /* candidate not inspectable — keep scanning */ }
+      }
     } catch (err) { log.error({ error: err.message }, 'batch lifecycle: self-attach lookup failed'); return; }
     if (!self) {
       log.warn('batch lifecycle: could not locate own container (hostname match) — L2 probe will fail closed until the api container is on the device network');
       return;
     }
     try {
-      const ins = await c.getContainer(self.Id).inspect();
-      if (ins.NetworkSettings?.Networks?.[name]) return; // already attached (idempotent)
+      if (self.NetworkSettings?.Networks?.[name]) return; // already attached (idempotent)
       await c.getNetwork(name).connect({ Container: self.Id });
       log.info({ container: String(self.Id).slice(0, 12), network: name }, 'batch lifecycle: api container attached to device network (L2 ADB probe path)');
     } catch (err) {

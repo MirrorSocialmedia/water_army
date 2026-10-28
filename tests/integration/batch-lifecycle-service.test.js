@@ -914,3 +914,70 @@ test('list: returns the managed batch containers with their run lineage', async 
 test.after(() => {
   for (const r of ROOTS) fs.rmSync(r, { recursive: true, force: true });
 });
+
+// ---------------------------------------------------------------- 16. device-network self-attach (F-RDFA-2/S3)
+/**
+ * Self-attach runs fire-and-forget at service creation (makeEnv). These
+ * tests pin the LIVE failure the first S3 deploy caught: the listContainers
+ * summary has NO Config field (Docker API GET /containers/json), so matching
+ * on the summary was structurally impossible and the api booted unattached
+ * — the L2 probe then failed closed on every real run. The match must go
+ * through a full inspect per running candidate.
+ */
+
+async function waitForNetworkConnect(docker, timeoutMs = 2_000) {
+  const t0 = Date.now();
+  for (;;) {
+    const hit = docker.client.__calls.find((c) => c.method === 'networkConnect');
+    if (hit) return hit;
+    if (Date.now() - t0 > timeoutMs) return null;
+    await new Promise((r) => setTimeout(r, 10));
+  }
+}
+
+test('self-attach: api container attaches to the device network at boot (hostname via INSPECT, not list summary)', async () => {
+  const SELF_ID = 'b'.repeat(64);
+  const env = makeEnv({
+    containerSeeds: [
+      {
+        name: 'water-army-api-1',
+        id: SELF_ID,
+        state: 'running',
+        hostname: os.hostname(), // = what os.hostname() reads inside the container
+        networks: { 'water-army-platform': '172.38.100.5' },
+      },
+    ],
+  });
+  const hit = await waitForNetworkConnect(env.docker);
+  assert.ok(hit, 'self-attach issued a network connect at boot');
+  assert.equal(hit.id, 'water-army-devices');
+  assert.equal(hit.opts?.Container, SELF_ID);
+});
+
+test('self-attach: already on the device network → idempotent no-op (no duplicate connect)', async () => {
+  const SELF_ID = 'c'.repeat(64);
+  const env = makeEnv({
+    containerSeeds: [
+      {
+        name: 'water-army-api-1',
+        id: SELF_ID,
+        state: 'running',
+        hostname: os.hostname(),
+        networks: { 'water-army-platform': '172.38.100.5', 'water-army-devices': '172.38.200.4' },
+      },
+    ],
+  });
+  // the self-attach path is synchronous in-process; a short settle is enough
+  await new Promise((r) => setTimeout(r, 150));
+  const hits = env.docker.client.__calls.filter((c) => c.method === 'networkConnect');
+  assert.equal(hits.length, 0, 'no connect call when the api is already attached');
+});
+
+test('self-attach: own container not locatable → fail-closed (no connect, no crash)', async () => {
+  const env = makeEnv({
+    containerSeeds: [{ name: 'some-other-device', state: 'running' }],
+  });
+  await new Promise((r) => setTimeout(r, 150));
+  const hits = env.docker.client.__calls.filter((c) => c.method === 'networkConnect');
+  assert.equal(hits.length, 0, 'never guesses a container to attach');
+});

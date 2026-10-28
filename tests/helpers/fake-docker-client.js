@@ -58,6 +58,10 @@ export function makeFakeDockerClient({ mode = 'ok', containers = [], networks = 
           Env: inspectRow.env ?? [],
           Cmd: inspectRow.command ?? null,
           Image: inspectRow.image ?? 'alpine:3.20',
+          // F-RDFA-2/S3: Docker sets the container hostname to the container
+          // id (12-hex inside the container). The self-attach lookup matches
+          // on this — seed rows may override with `hostname`.
+          Hostname: inspectRow.hostname ?? String(id).slice(0, 12),
         },
         HostConfig: {
           NetworkMode: inspectRow.network ?? 'bridge',
@@ -324,7 +328,9 @@ export function makeFakeDockerClient({ mode = 'ok', containers = [], networks = 
       return [...netById.values()].map(({ Name }) => ({ Name }));
     },
 
-    /** BR-B6 G2: dockerode getNetwork(name).inspect() — 404 when absent. */
+    /** BR-B6 G2: dockerode getNetwork(name).inspect() — 404 when absent.
+     *  F-RDFA-2: .connect() too (self-attach) — records the call and mirrors
+     *  the endpoint into the known container's NetworkSettings (live parity). */
     getNetwork(name) {
       guard();
       record('getNetwork', name);
@@ -334,6 +340,19 @@ export function makeFakeDockerClient({ mode = 'ok', containers = [], networks = 
           const n = netById.get(name);
           if (!n) throw engineError(404, `network ${name} not found`);
           return JSON.parse(JSON.stringify(n));
+        },
+        async connect(body) {
+          const n = netById.get(name);
+          if (!n) throw engineError(404, `network ${name} not found`);
+          const cid = String(body?.Container ?? '').slice(0, 64);
+          record('networkConnect', name, body);
+          const rec = byId.get(cid) ?? (body?.Container ? byId.get(byName.get(body.Container)) : null);
+          if (rec) {
+            rec.inspect.NetworkSettings ??= { Networks: {} };
+            rec.inspect.NetworkSettings.Networks ??= {};
+            rec.inspect.NetworkSettings.Networks[name] = { NetworkID: n.Id, IPAddress: '172.38.200.250' };
+          }
+          return {};
         },
       };
     },
