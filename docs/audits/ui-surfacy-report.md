@@ -29,6 +29,15 @@
 | E1 | Settings 實體化 | PASS | config-summary 卡 \| providers 卡（masked hasApiKey）\| task-definitions 卡 全渲染 | `13-settings.png` |
 | E2 | RAM Gate 頁 | PASS | 建機 gate 決策記錄頁渲染 | `14-ram-gate.png` |
 
+### 補充實證（CEO 降 gate 4G 後補跑，同日）
+
+CEO 將 RAM gate 經 AppSetting 降至 `hardFloorMiB 4096 / postBootTargetMiB 5400`（config-summary 確認 `source: app_setting+env`）後補跑建機步：
+
+- 模板 `matrix-a-14-host` + 名字 `redroid-uie2e-ok1` → **建機成功**：無 error-box、列表 row 出現、API 確認 `containerId` 已分配（真 container）。gate ALLOW 路徑亦有實證。
+- 驗證後經 UI 同款兩步確認 API `DELETE`（`confirm` 名字）清理：`200 {deleted:true, containerRemoved:true}` — 無殘留。
+- 截圖：`03b-device-created.png`。
+- 結論：03 步的 `RAM_GATE_DENIED` 與補跑的 ALLOW+創建成功共同證明 gate 兩側行為均誠實正確。
+
 ## 誠實降級證據鏈（後端開關矩陣 × UI 行為）
 
 | 功能 | 後端狀態（部署 default） | UI 行為（走查觀察） |
@@ -71,5 +80,5 @@
 
 ## 殘留
 
-- e2e 種子資料：identity `UI-E2E walkthrough`、admin `ui-e2e` + session（一次性，可刪）；`redroid-uie2e*` 建機嘗試均被 gate 拒 — DB 無殘留 device row。
+- e2e 種子資料：identity `UI-E2E walkthrough`、admin `ui-e2e` + session（一次性，可刪）；早期建機嘗試被 gate 拒 — 無殘留；降 gate 後補跑的 `redroid-uie2e-ok1` 已連 container 一併 DELETE 清理。
 - s7/s8（Reviewer Agent 代碼審查 + 全套復跑）為 Kairo 單後續 subtask，非本段範圍。
