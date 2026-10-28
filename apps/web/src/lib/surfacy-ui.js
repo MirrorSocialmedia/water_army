@@ -185,3 +185,45 @@ export function fmtMs(ms) {
   if (ms >= 60000) return `${Math.round(ms / 60000)} min`;
   return `${Math.round(ms / 1000)} s`;
 }
+
+// ------------------------------------------------- policy allowlist editor ---
+// F4 (review mvrvfa9l5l813): the PolicyPanel textareas must re-seed whenever
+// server state changes (reload/save) and an untouched/empty editor must not
+// fire a PUT that the backend answers 400 "nothing to update". Pure helpers
+// so both behaviors are unit-testable without DOM.
+
+export const POLICY_ZONE_KEYS = ['allowlist', 'allowlistInternal'];
+
+/** Textarea seeds from GET /api/network-policy appSettings rows. Missing or
+ *  non-array valueJson → '' (honest empty editor, never 'undefined'). */
+export function zonesFromPolicyRows(rows) {
+  const out = {};
+  for (const key of POLICY_ZONE_KEYS) {
+    const v = rows?.[key]?.valueJson;
+    out[key] = Array.isArray(v) ? v.map(String).join('\n') : '';
+  }
+  return out;
+}
+
+/** Textarea text → PUT body zone array (trim + drop empty lines). */
+export function parseZoneLines(text) {
+  if (typeof text !== 'string') return [];
+  return text.split('\n').map((s) => s.trim()).filter(Boolean);
+}
+
+/** PUT body from editor state — ALWAYS both keys, so body is never `{}`. */
+export function zonesToBody(zones) {
+  const body = {};
+  for (const key of POLICY_ZONE_KEYS) body[key] = parseZoneLines(zones?.[key]);
+  return body;
+}
+
+/** True when the editor text is semantically identical to server state —
+ *  Save is a no-op then (button disabled), which is what prevents the
+ *  unedited-Save → 400 UX trap. Explicit clears still differ → allowed. */
+export function zonesMatchServer(zones, rows) {
+  const server = zonesFromPolicyRows(rows);
+  return POLICY_ZONE_KEYS.every(
+    (k) => JSON.stringify(parseZoneLines(zones?.[k])) === JSON.stringify(parseZoneLines(server[k])),
+  );
+}

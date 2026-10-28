@@ -547,12 +547,20 @@ function FingerprintPanel({ identityId, user }) {
           <span className="muted">deterministic from identityId — real-device consumption NOT VERIFIED (V3)</span>
         </div>
         <StateFrame loading={prof.loading} error={prof.error} empty={!prof.loading && !prof.error && !view} emptyTitle="尚無指紋 profile" emptyHint="Generate one with the button below (admin, idempotent).">
-          <dl className="kv">
-            <dt>schemaVersion</dt><dd className="mono">{view.schemaVersion}</dd>
-            <dt>created</dt><dd>{fmtDateTime(view.createdAt)}</dd>
-            <dt>updated</dt><dd>{fmtDateTime(view.updatedAt)}</dd>
-          </dl>
-          <pre className="log-view" style={{ maxHeight: 320 }}>{JSON.stringify(view.profile, null, 2)}</pre>
+          {/* guard required: children JSX evaluates during THIS render even
+              though StateFrame may swap in its empty frame — view is null for
+              a never-generated profile and used to crash the whole page
+              (found by the F1 v2 harness: reading 'schemaVersion' of null) */}
+          {view ? (
+            <>
+              <dl className="kv">
+                <dt>schemaVersion</dt><dd className="mono">{view.schemaVersion}</dd>
+                <dt>created</dt><dd>{fmtDateTime(view.createdAt)}</dd>
+                <dt>updated</dt><dd>{fmtDateTime(view.updatedAt)}</dd>
+              </dl>
+              <pre className="log-view" style={{ maxHeight: 320 }}>{JSON.stringify(view.profile, null, 2)}</pre>
+            </>
+          ) : null}
         </StateFrame>
         {note ? <code className={note.kind === 'ok' ? 'status-ok' : 'dep-error'}>{note.text}</code> : null}
         {isAdmin ? (
@@ -823,19 +831,24 @@ function AccountLifecyclePanel({ identityId, user }) {
           <span className="muted">system-writable by the driver, operator-overridable here</span>
         </div>
         <StateFrame loading={acct.loading} error={acct.error} empty={!acct.loading && !acct.error && !account} emptyTitle="No lifecycle state">
-          <dl className="kv">
-            <dt>state</dt>
-            <dd>
-              <span className={`pill ${pillClass(ACCOUNT_STATUS_PILL, account.state)}`}>
-                {account.state} · {ACCOUNT_STATE_LABELS[account.state] ?? ''}
-              </span>
-            </dd>
-            <dt>since</dt><dd>{account.stateSince ? fmtDateTime(account.stateSince) : '—'}</dd>
-            <dt>current step</dt><dd className="mono">{account.currentStep ?? '—'}</dd>
-            <dt>awaiting deadline</dt><dd>{account.awaitingDeadlineAt ? fmtDateTime(account.awaitingDeadlineAt) : '—'}</dd>
-            <dt>intervention</dt><dd className="mono">{account.interventionId ? shortId(account.interventionId) : '—'}</dd>
-            <dt>failure code</dt><dd className="mono">{account.failureCode ?? '—'}</dd>
-          </dl>
+          {/* guard required — see FingerprintPanel note: children evaluate eagerly
+              and account is null for a never-provisioned identity (found by the
+              F1 v2 harness: reading 'state' of null crashed the page) */}
+          {account ? (
+            <dl className="kv">
+              <dt>state</dt>
+              <dd>
+                <span className={`pill ${pillClass(ACCOUNT_STATUS_PILL, account.state)}`}>
+                  {account.state} · {ACCOUNT_STATE_LABELS[account.state] ?? ''}
+                </span>
+              </dd>
+              <dt>since</dt><dd>{account.stateSince ? fmtDateTime(account.stateSince) : '—'}</dd>
+              <dt>current step</dt><dd className="mono">{account.currentStep ?? '—'}</dd>
+              <dt>awaiting deadline</dt><dd>{account.awaitingDeadlineAt ? fmtDateTime(account.awaitingDeadlineAt) : '—'}</dd>
+              <dt>intervention</dt><dd className="mono">{account.interventionId ? shortId(account.interventionId) : '—'}</dd>
+              <dt>failure code</dt><dd className="mono">{account.failureCode ?? '—'}</dd>
+            </dl>
+          ) : null}
         </StateFrame>
         <div className="card-head" style={{ marginTop: 10 }}>
           <strong>憑證庫 (vault — masked)</strong>

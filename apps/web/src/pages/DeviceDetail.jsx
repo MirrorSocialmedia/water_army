@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { useApi } from '../hooks/useApi';
 import { api } from '../api/client';
 import { navigate } from '../router';
 import { StateFrame } from '../components/StateFrame';
 import { deviceApps, redroidTemplates, networkPolicy } from '../services/device-extras';
-import { isSwitchDisabled, conflictText, errorText, LONG_TEXT_CLASS } from '../lib/surfacy-ui';
+import { isSwitchDisabled, conflictText, errorText, LONG_TEXT_CLASS, zonesFromPolicyRows, zonesToBody, zonesMatchServer } from '../lib/surfacy-ui';
 import { timeAgo, stateBadgeClass, formatDateTime } from '../components/container-utils';
 import {
   gpuStatusBadge,
@@ -683,25 +683,32 @@ function TemplatesPanel() {
 function PolicyPanel({ role }) {
   const isAdmin = role === 'admin';
   const pol = useApi(() => networkPolicy.get(), [], { enabled: isAdmin });
-  const [zones, setZones] = useState(null); // { allowlist, allowlistInternal } textareas
+  const [zones, setZones] = useState(null); // { allowlist, allowlistInternal } textarea text
   const [busy, setBusy] = useState(null);
   const [note, setNote] = useState(null);
 
+  // F4 fix: re-seed the textareas whenever SERVER state changes (first load,
+  // Reload button, or a save's follow-up reload). defaultValue-only textareas
+  // kept stale user text across reloads — reload must show server truth.
+  const rows = pol.data?.appSettings ?? null;
+  const serverSig = rows ? JSON.stringify(zonesFromPolicyRows(rows)) : null;
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
+  useEffect(() => {
+    setZones(zonesFromPolicyRows(rowsRef.current));
+  }, [serverSig]);
+
   async function saveZones() {
     if (busy) return; // double-submit guard
-    const body = {};
-    for (const key of ['allowlist', 'allowlistInternal']) {
-      const raw = zones?.[key];
-      if (raw === undefined) continue;
-      const lines = raw.split('\n').map((s) => s.trim()).filter(Boolean);
-      body[key] = lines;
-    }
+    if (!zones) return; // nothing painted yet — honest no-op (F4 empty-save guard)
+    if (zonesMatchServer(zones, rowsRef.current)) return; // no-op save never fires (was: backend 400 "nothing to update")
+    const body = zonesToBody(zones); // always BOTH keys — never {}
     setBusy('zones');
     setNote(null);
     try {
       const res = await networkPolicy.putAllowlists(body);
       setNote({ kind: 'ok', text: `saved — available=${res.available}${res.reason ? ` (${res.reason})` : ''}; effective on NEXT dispatch` });
-      pol.reload();
+      pol.reload(); // re-seeds textareas from fresh server state (effect on serverSig)
     } catch (e) {
       setNote({ kind: 'err', text: conflictText(e) ?? errorText(e) });
     } finally {
@@ -738,8 +745,7 @@ function PolicyPanel({ role }) {
 
   const eff = pol.data?.effective ?? null;
   const tt = eff?.taskTypes ?? null;
-  const rows = pol.data?.appSettings ?? {};
-  const initZones = (v) => (Array.isArray(rows[v]?.valueJson) ? rows[v].valueJson.join('\n') : '');
+  const unchanged = !zones || zonesMatchServer(zones, rowsRef.current);
 
   return (
     <div className="card" role="region" aria-label="Network policy">
@@ -784,14 +790,14 @@ function PolicyPanel({ role }) {
                     className="input"
                     rows={4}
                     style={{ fontFamily: 'monospace', fontSize: 12 }}
-                    defaultValue={initZones(key)}
-                    onChange={(e) => setZones((z) => ({ ...(z ?? { allowlist: initZones('allowlist'), allowlistInternal: initZones('allowlistInternal') }), [key]: e.target.value }))}
+                    value={zones?.[key] ?? ''}
+                    onChange={(e) => setZones((z) => ({ ...(z ?? { allowlist: '', allowlistInternal: '' }), [key]: e.target.value }))}
                   />
                 </label>
               ))}
               <div className="row-actions">
-                <button type="button" className="btn" disabled={busy !== null} onClick={saveZones}>
-                  {busy === 'zones' ? 'Saving…' : 'Save allowlists (PUT)'}
+                <button type="button" className="btn" disabled={busy !== null || unchanged} onClick={saveZones}>
+                  {busy === 'zones' ? 'Saving…' : unchanged ? 'No changes' : 'Save allowlists (PUT)'}
                 </button>
               </div>
             </div>

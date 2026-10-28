@@ -43,6 +43,11 @@ import {
   formatCollisionRow,
   fmtMiB,
   fmtMs,
+  zonesFromPolicyRows,
+  zonesToBody,
+  zonesMatchServer,
+  parseZoneLines,
+  POLICY_ZONE_KEYS,
 } from '../../apps/web/src/lib/surfacy-ui.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -214,4 +219,79 @@ test('formatters are null-safe and honest', () => {
   assert.equal(fmtMs(7_200_000), '2.0 h');
   assert.equal(fmtMs(null), '—');
   assert.equal(formatCollisionRow({ field: 'ro.serialno', value: 'x'.repeat(100), count: 2 }), `ro.serialno = ${'x'.repeat(60)}… (+40 more) ×2`);
+});
+
+// ------------------------------------------------ policy editor (F4 fix) ---
+// Review finding F4: PolicyPanel textareas kept stale user text after
+// pol.reload(), and an untouched editor could fire a PUT body {} that the
+// backend honestly answered 400 "nothing to update". Pure helpers below make
+// both behaviors testable; the page wiring is asserted structurally after.
+
+test('f4: zonesFromPolicyRows seeds honest textareas from server rows', () => {
+  const rows = {
+    allowlist: { valueJson: ['*.google.com', 'cdn.example'] },
+    allowlistInternal: { valueJson: [] },
+  };
+  assert.deepEqual(zonesFromPolicyRows(rows), { allowlist: '*.google.com\ncdn.example', allowlistInternal: '' });
+  // missing row / missing valueJson / non-array → '' (never undefined text)
+  assert.deepEqual(zonesFromPolicyRows({ allowlist: { valueJson: null } }), { allowlist: '', allowlistInternal: '' });
+  assert.deepEqual(zonesFromPolicyRows({ allowlist: { valueJson: 'not-an-array' } }), { allowlist: '', allowlistInternal: '' });
+  assert.deepEqual(zonesFromPolicyRows(undefined), { allowlist: '', allowlistInternal: '' });
+});
+
+test('f4: zonesFromPolicyRows RE-seeds when server state changes (reload truth)', () => {
+  const before = zonesFromPolicyRows({ allowlist: { valueJson: ['a.com'] } });
+  const after = zonesFromPolicyRows({ allowlist: { valueJson: ['b.com', 'c.com'] } });
+  assert.equal(before.allowlist, 'a.com');
+  assert.equal(after.allowlist, 'b.com\nc.com', 'a server change must produce different seed text — the page re-seeds on this signature');
+});
+
+test('f4: parseZoneLines trims and drops blanks; body always carries BOTH keys', () => {
+  assert.deepEqual(parseZoneLines('  a.com \n\n  b.com\n'), ['a.com', 'b.com']);
+  assert.deepEqual(parseZoneLines(''), []);
+  assert.deepEqual(parseZoneLines(undefined), []);
+  // The unedited editor on an EMPTY policy previously produced body {} → 400.
+  assert.deepEqual(zonesToBody({}), { allowlist: [], allowlistInternal: [] });
+  assert.deepEqual(zonesToBody(null), { allowlist: [], allowlistInternal: [] });
+  assert.deepEqual(POLICY_ZONE_KEYS, ['allowlist', 'allowlistInternal']);
+});
+
+test('f4: zonesMatchServer disables no-op saves but allows explicit clears', () => {
+  const rows = { allowlist: { valueJson: ['a.com', 'b.com'] }, allowlistInternal: { valueJson: ['i.com'] } };
+  // untouched editor (seed text, even with whitespace noise) = unchanged
+  assert.equal(zonesMatchServer(zonesFromPolicyRows(rows), rows), true);
+  assert.equal(zonesMatchServer({ allowlist: 'a.com\n\n  b.com  ', allowlistInternal: 'i.com' }, rows), true);
+  // explicit clear differs from server → save allowed (clearing is meaningful)
+  assert.equal(zonesMatchServer({ allowlist: '', allowlistInternal: 'i.com' }, rows), false);
+  // edits differ
+  assert.equal(zonesMatchServer({ allowlist: 'a.com', allowlistInternal: 'i.com' }, rows), false);
+  // empty server + untouched editor = unchanged → no 400-prone PUT
+  assert.equal(zonesMatchServer(zonesFromPolicyRows({}), {}), true);
+});
+
+test('f4: PolicyPanel is wired controlled (structural — value= seed, no defaultValue, guarded Save)', () => {
+  const src = fs.readFileSync(path.join(ROOT, 'apps/web/src/pages/DeviceDetail.jsx'), 'utf8');
+  const panel = src.slice(src.indexOf('function PolicyPanel'));
+  assert.ok(panel, 'PolicyPanel not found');
+  assert.ok(!panel.includes('defaultValue='), 'PolicyPanel textareas must be CONTROLLED (defaultValue never re-seeds on reload)');
+  assert.match(panel, /value=\{zones\?\.\[key\]/, 'textareas must read from seeded zones state');
+  assert.match(panel, /useEffect\([\s\S]{0,120}setZones[\s\S]{0,80}serverSig\]/, 'a serverSig-keyed effect must re-seed zones on every server change');
+  assert.match(panel, /zonesMatchServer\(zones, rowsRef\.current\)/, 'saveZones must no-op-guard against unchanged editor content');
+  assert.match(panel, /disabled=\{busy !== null \|\| unchanged\}/, 'Save button must be disabled while unchanged (empty/no-op save blocked in the UI)');
+  assert.ok(!/const body = \{\};/.test(panel), 'the old hand-rolled body{} builder is gone — zonesToBody always sends both keys');
+});
+
+// ---------------------------- eager-children crash guards (found by F1 v2) ---
+// StateFrame swaps in its empty/error frame at RENDER time, but the JSX passed
+// as children is evaluated EAGERLY in the parent render — an unguarded
+// `view.schemaVersion` / `account.state` inside children used to crash the
+// whole page whenever the profile/lifecycle row did not exist yet (real page
+// dead crashes caught by the v2 harness on a never-generated seed identity).
+test('crash-guard: IdentityDetail StateFrame children are null-guarded', () => {
+  const src = fs.readFileSync(path.join(ROOT, 'apps/web/src/pages/IdentityDetail.jsx'), 'utf8');
+  assert.match(src, /\{view \? \([\s\S]{0,400}schemaVersion/, 'fingerprint profile children must be wrapped in {view ? ... : null}');
+  assert.match(src, /\{account \? \([\s\S]{0,400}account\.state/, 'account lifecycle children must be wrapped in {account ? ... : null}');
+  // sibling discipline: these were already guarded — keep them that way
+  assert.match(src, /\{b \? \([\s\S]{0,400}expectedEgressIp/, 'egress binding children must stay guarded');
+  assert.match(src, /\{coll\.data \? \([\s\S]{0,200}blocking/, 'collision audit children must stay guarded');
 });
