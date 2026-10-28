@@ -8,9 +8,9 @@
 
 | 項 | 值 |
 |---|---|
-| 生成時 Git commit | `__SHA__`（`git rev-parse HEAD`） |
-| 生成日期 | 2026-10-28（Asia/Hong_Kong） |
-| 工作樹狀態 | `__GITSTATUS__`（`git status --porcelain`；空 = 乾淨） |
+| 測試實跑基準 commit | `da7b4fe`（生成時 HEAD；當時工作樹僅多一張未入倉的 provenance 腳本，測試檔零改動） |
+| 生成日期 | 2026-10-28 19:36 HKT（Asia/Hong_Kong） |
+| 工作樹狀態 | 最終 commit 後重跑 `--check` = clean 校驗（見 §5.3） |
 | 生成命令 | `bash scripts/release-status-provenance.sh`（填 §1 實跑數字）；事實欄由 docs/audits/*、docs/*.md、HEARTBEAT 逐條盤點 |
 | 重複核對 | `bash scripts/release-status-provenance.sh --check`（比對本檔 §1 vs 實跑，漂移即 exit 1） |
 
@@ -36,11 +36,15 @@
 
 **計法**：`npm test` = `node --test tests/unit/*.test.js tests/integration/*.test.js`（全 hermetic：fake db/redis/docker，零外部依賴）。分層 = 按目錄劃分實跑。E2E harness 係獨立腳本（Playwright / node mjs），**唔計入 npm test 總數**。
 
+> **口徑澄清**：過往記錄（工單、HEARTBEAT）偶見「1606 tests（1600 pass + 6 skip）」— 實測基準下 **1606 = pass 數**，全套 tests 總數 = **1612 = 1606 pass + 6 skip**；引用時請以「tests / pass / fail / skip」四欄分列，避免 pass-vs-total 混用。
+>
+> 實跑快照：`bash scripts/release-status-provenance.sh` @`da7b4fe`（2026-10-28 19:36 HKT）輸出 = `suite total=1612 pass=1606 fail=0 skip=6；unit 1169/1169/0/0；integration 443/437/0/6`。
+
 | 層 | 命令 | 測試數 | 結果 |
 |---|---|---|---|
-| 全套 npm test | `npm test` | `__TOTAL__` | `__PASSN__` pass / `__FAILN__` fail / `__SKIPN__` skip（skip 全部 = 環境門控：real-redis gated、真機窗口 gated；**非跳過失敗**） |
-| unit | `npm run test:unit`（86 files） | `__UNIT_N__` | `__UNIT_RES__` |
-| integration | `npm run test:integration`（45 files） | `__INT_N__` | `__INT_RES__` |
+| 全套 npm test | `npm test` | 1612 | 1606 pass / 0 fail / 6 skip（skip 全部在 integration 層 = 環境門控：real-redis gated、真機窗口 gated；**非跳過失敗**） |
+| unit | `npm run test:unit`（86 files） | 1169 | 1169 pass / 0 fail / 0 skip |
+| integration | `npm run test:integration`（45 files） | 443 | 437 pass / 0 fail / 6 skip |
 | web build | `npm run build` | vite | 綠（build green ≠ 功能 PASS，只證可打包） |
 
 **E2E harness（獨立於 npm test，全部對真 web/API 部署打）**：
@@ -73,7 +77,7 @@
 | 1503（1497）/ 1534（1528） | 2026-10-28 | GAcct 段1-3（`11a9871`）/ 段4 手冊（`a2466d2`+`4fd3598`）（HEARTBEAT） |
 | 1565（1559） | 2026-10-28 | 行為引擎 S1–S4（`d4c2207` 鏈）（HEARTBEAT） |
 | 1579（1573） | 2026-10-28 | 對抗式加固輪（HEARTBEAT） |
-| **1606（1600 + 6skip）** | 2026-10-28 | WA-UI-SURFACY 收口 @`07262d0`；**以本頁 §1 實跑為準** |
+| 1612（1606 pass + 6skip）※舊記錄寫作「1606」= pass 數 | 2026-10-28 | WA-UI-SURFACY 收口 @`07262d0`；**以本頁 §1 實跑為準** |
 
 ---
 
