@@ -1,0 +1,11 @@
+# Dev/ops override — expose pg/redis on 127.0.0.1 ONLY so a host-process
+# api/sidecar/web (P5 MC topology) can reach them: compose api has no adb
+# binary and device adb ports publish on the HOST loopback, so MC streaming
+# runs api-on-host (see logs/waterarmy-mc-dogfood-progress.md).
+services:
+  postgres:
+    ports:
+      - "127.0.0.1:15433:5432"
+  redis:
+    ports:
+      - "127.0.0.1:16380:6379"
