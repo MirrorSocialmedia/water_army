@@ -1,6 +1,6 @@
 # WA-UI-SURFACY — e2e 真機走查報告（s6）
 
-- 日期：2026-10-28（Asia/Hong_Kong）
+- 日期：2026-10-28（Asia/Hong_Kong）；**v2 重跑同日**（WA-UI-SURFACY-FIX，見文末「v2 重跑」節）
 - 執行：CTO agent（Kairo 單 `mvrvfa9l5l813`，步驟 s6）
 - 棧：產品 stack 真機 — web `http://127.0.0.1:3012`（host published）→ api container:3000 → pg/redis container。5 個 `water-army-*` 容器 healthy。
 - 瀏覽器：chromium headless shell（playwright-core，零新依賴），viewport 1440×900。
@@ -16,11 +16,11 @@
 | 02 | dashboard（登入後） | PASS | `/api/auth/me`=200，heading=Dashboard | `02-dashboard.png` |
 | 03 | 建機（RAM gate） | PASS — **RAM gate 誠實拒絕** | `RAM_GATE_DENIED — Device create '…' denied by RAM gate (PROJECTED_BELOW_TARGET) — MemAvailable 7,316 MiB, projected 4,915 MiB`；UI error-box 原文顯示、無白屏、無殭屍 row | `03-devices-create.png` |
 | 04 | identities 列表 | PASS | 1 row（種子 identity） | `04-identities.png` |
-| 05 | 生成指紋（W1） | PASS | 指紋 tab 渲染；generate → 誠實 500 `FINGERPRINT_GENERATION_FAILED`（RoService 未就緒），StateFrame 錯誤態 | `05-identity-fingerprint.png` |
-| 06 | 綁 egress（W3，172.38.223.1:18443） | PASS | 表單+綁定結果渲染；W3 開關預設 off → 誠實 503 `EGRESS_BINDING_DISABLED` 卡 | `06-identity-egress.png` |
-| 6.5 | 帳號生命週期（T5） | PASS | lifecycle 面板渲染（503 `ACCOUNT_LIFECYCLE_DISABLED` 誠實態） | `06b-identity-account.png` |
-| 07 | 裝 APK（W2 device-apps） | PASS | apps 面板 = 誠實 503 開關卡（`APP_OPS_DISABLED`，附開關指引） | `07-device-apps.png` |
-| 7.5 | templates + network-policy tabs | PASS | 兩面板均渲染；admin 見可編輯 policy（`{public:[],internal:[]}` 分區） | `07b-device-templates-policy.png` |
+| 05 | 生成指紋（W1） | PASS | 指紋 tab 渲染；generate → 誠實 500 `FINGERPRINT_GENERATION_FAILED`（RoService 未就緒），StateFrame 錯誤態。**v1 措辭更正（F2）**：本 run 截圖因 deps-reload 黑屏並未捕獲該 500 態，屬 walk-results 級證據；真實渲染由 v2 重跑補證（`v2-05-identity-fingerprint.png`：profile 視圖渲染，generate 回 `Profile ensured`） | `05-identity-fingerprint.png` → **`v2-05-identity-fingerprint.png`** |
+| 06 | 綁 egress（W3，172.38.223.1:18443） | PASS | 表單+綁定結果渲染；W3 開關預設 off → 誠實 503 `EGRESS_BINDING_DISABLED` 卡。**v1 措辭更正（F2）**：v1 截圖為黑屏、results detail 未含 503 字樣；v2 以 DOM 斷言 card 文案 + 截圖雙證（`v2-06-identity-egress.png`：「Disabled on this host — EGRESS_BINDING_DISABLED (503)」卡） | `06-identity-egress.png` → **`v2-06-identity-egress.png`** |
+| 6.5 | 帳號生命週期（T5） | PASS | lifecycle 面板渲染。**v2 更正**：本 host T5 開關現為 ON（GET /account = 200，非 v1 所寫 503 卡）；面板誠實渲染空態（state pill、vault「no vault row」）＝ `v2-06b-identity-account.png` | `06b-identity-account.png` → **`v2-06b-identity-account.png`** |
+| 07 | 裝 APK（W2 device-apps） | PASS | apps 面板渲染。**v2 更正**：本 host W2 開關現為 ON（誠實空列表，非 v1 所寫 503 卡）— `v2-07-device-apps.png` | `07-device-apps.png` → **`v2-07-device-apps.png`** |
+| 7.5 | templates + network-policy tabs | PASS | 兩面板均渲染；admin 見可編輯 policy（`{public:[],internal:[]}` 分區）。**v2 強化（F3-low）**：斷言 2 個 zone textarea 實際可見才 PASS — `v2-07b-device-templates-policy.png` | `07b-device-templates-policy.png` → **`v2-07b-device-templates-policy.png`** |
 | 08 | 批次策劃 | PASS | planner 渲染 | `08-batch-planner.png` |
 | 09 | 執行 | PASS | 誠實空態（無可啟動項 — 不造假按鈕） | `09-execute.png` |
 | 10 | live view | PASS | monitor SSE live frame 渲染 | `10-monitor-live.png` |
@@ -43,10 +43,10 @@ CEO 將 RAM gate 經 AppSetting 降至 `hardFloorMiB 4096 / postBootTargetMiB 54
 | 功能 | 後端狀態（部署 default） | UI 行為（走查觀察） |
 |------|--------------------------|---------------------|
 | 建機 RAM gate | ON | 拒絕 POST → error-box 原文 `RAM_GATE_DENIED (PROJECTED_BELOW_TARGET)` + 右欄 Ram Gate 卡 RED `✕ DENIED`；未創建即被拒 = gate 語義正確 |
-| W1 fingerprints | ON（RoService 未就緒） | 500 `FINGERPRINT_GENERATION_FAILED` 誠實錯誤態 |
-| W3 egress binding | OFF（`WA_W3_EGRESS_BINDING_ENABLED=false`） | 503 `EGRESS_BINDING_DISABLED` 卡（非白屏、非假成功） |
-| T5 account-lifecycle | OFF | 503 `ACCOUNT_LIFECYCLE_DISABLED` 卡 |
-| W2 app-ops | OFF | 503 `APP_OPS_DISABLED` 卡 + 開關指引 |
+| W1 fingerprints | ON（RoService 已就緒 — v2 時點） | generate → `Profile ensured`，profile 視圖渲染（v1 時點為 500 誠實錯誤態） |
+| W3 egress binding | OFF（`WA_W3_EGRESS_BINDING_ENABLED=false`） | 503 `EGRESS_BINDING_DISABLED` 卡（非白屏、非假成功）— v2 DOM+截圖雙證 |
+| T5 account-lifecycle | **ON（v2 時點；v1 為 OFF）** | GET 200，面板誠實渲染空態（無假資料） |
+| W2 app-ops | **ON（v2 時點；v1 為 OFF）** | 誠實空列表 + provision 動作態 |
 | 建機 name 校驗 | — | 非 `^redroid-…` 名 → 表單錯誤態 `VALIDATION_ERROR — must match pattern`（實測捕獲） |
 | providers key | masked | 僅 `hasApiKey ✓/✗`，零 key 回顯；proxyUrl 零回顯（config-summary 結構性 redact） |
 
@@ -77,6 +77,18 @@ CEO 將 RAM gate 經 AppSetting 降至 `hardFloorMiB 4096 / postBootTargetMiB 54
 
 - SPA 為 hash router：`page.goto` 同 document 內 hash 變更**不會** reload → 步驟間殘留舊 React 態。修正 = 每步強制真 `reload()`；修正後 16/16。
 - headless 截圖前必須以 DOM（innerText/locator）machine-read 為準；縮圖誤讀曾造成一輪「舊 UI」疑雲（bundle md5、DOM grep、截圖三方核對後確認產品為新版本）。
+
+## v2 重跑（WA-UI-SURFACY-FIX，2026-10-28，修 F1/F2 後）
+
+來自主代碼審查單（`logs/waterarmy-ui-surfacy-review.md` F1/F2）的更正重跑：
+
+- **harness v2（真斷言）**：每步 = 門禁斷言（`expectText`/`expectRegionText` 先機讀 DOM，失敗立即記錄 FAIL + 捕 `v2-99-fail-*.png`）再截圖；截圖前頁面必須處於可判定的 settled 態；任何 throw 不再被吞（v1 的 try/swallow 是 F1 根因）；每步 exit code 如實傳播（FAIL → exit 1）。
+- **錯誤注入自我證明**：`WALK_SELFTEST=1` 追加 T1（不可能文案必須找不到）+ T2（strict click 不存在按鈕）兩步 —— 兩者均 **FAIL**（`fails:["T1","T2"]`，exit 1）：證明斷言不是恆真。
+- **md5 兩兩校驗**：16 張 `v2-*.png` 步圖 pairwise md5 全部不同（防 v1 黑屏重複圖）。
+- **結果：17/17 PASS，exit 0**（含新增 6.5/E1/E2/CLN/MD5 行）。截圖 `logs/ui-surfacy/v2-*.png`，明細 `walk-results.json`。
+- **產品 bug 兩個（v2 harness 抓出，已修）**：`IdentityDetail.jsx` FingerprintPanel / AccountLifecyclePanel 在 StateFrame 空態下 children 急切求值（`view.schemaVersion` / `account.state` of null）→ 整頁白屏崩潰（v1 黑屏 05 圖真因）。修復 = children 用 `{view ? … : null}` / `{account ? … : null}` 守衛；附結構性回歸測試（crash-guard）。
+- 一時 UNKNOWN 錯誤態備忘：走查曾捕獲 `UNKNOWN — identity egress…` 503 卡 — 實為 web 容器重建窗口內 proxy 发出的無 envelope 503（非產品代碼 bug）；settled 判定改用區內文案/控件雙條件後穩定。同時修復一個 harness 測試口徑 bug：disabled 卡文案 uppercase、後端 message 小寫，大小寫不敏感匹配避免誤分支。
+- 本輪新增產品面改動同單：PolicyPanel reload 不刷新修復 + 空 Save 前端攞截（見代碼 `surfacy-ui.js` zones* helpers + 測試）。測試基線見下節。
 
 ## 殘留
 
