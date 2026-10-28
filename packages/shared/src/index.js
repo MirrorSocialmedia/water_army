@@ -198,6 +198,32 @@ export {
   parseAdbVersionReply,
 } from './batch-lifecycle.js';
 
+/**
+ * ADB wire-protocol primitives (F-RDFA-2 fix): the CNXN handshake the
+ * container health probe performs against real adbd. Pure, no I/O — the
+ * probe itself is apps/api/src/services/adb-cnxn-probe.js.
+ */
+export {
+  A_CNXN,
+  A_OPEN,
+  A_OKAY,
+  A_CLSE,
+  A_AUTH,
+  A_STLS,
+  A_VERSION,
+  A_VERSION_MIN,
+  A_VERSION_SKIP_CHECKSUM,
+  ADB_PROBE_MAXDATA,
+  ADB_HEADER_SIZE,
+  ADB_PROBE_HOST_BANNER,
+  ADB_BANNER_TYPES,
+  adbMagic,
+  adbPayloadChecksum,
+  buildAdbCnxnPacket,
+  parseAdbPacket,
+  parseAdbBanner,
+} from './adb-protocol.js';
+
 /** LeaseService — cross-process resource leases (BR-B1, MD §9.6). */
 export { createLeaseService } from './lease-service.js';
 

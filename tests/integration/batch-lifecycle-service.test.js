@@ -20,6 +20,12 @@ import {
   buildContainerLabels,
   createLeaseService,
   DOCKER_ERROR,
+  buildAdbCnxnPacket,
+  parseAdbPacket,
+  A_CNXN,
+  A_AUTH,
+  A_STLS,
+  adbMagic,
 } from '@water-army/shared';
 
 import { createBatchLifecycleService } from '../../apps/api/src/services/batch-lifecycle-service.js';
@@ -398,7 +404,7 @@ test('start: crash window (container created, DB bind never landed) → ADOPT, n
   const fx = makeFixtureRoot();
   const env = makeEnv({
     fixture: fx,
-    containerSeeds: [{ name: 'br-b3-' + RUN1 + '-a1', state: 'created', labels, mounts: [{ Type: 'bind', Source: fx.dataPath(ID1), Target: '/data', RW: true }], portBindings: { '5555/tcp': [{ HostIp: '127.0.0.1', HostPort: '16380' }] } }],
+    containerSeeds: [{ name: 'br-b3-' + RUN1 + '-a1', state: 'created', labels, mounts: [{ Type: 'bind', Source: fx.dataPath(ID1), Target: '/data', RW: true }], portBindings: { '5555/tcp': [{ HostIp: '127.0.0.1', HostPort: '16380' }] }, networks: { 'water-army-devices': '127.0.0.1' } }],
   });
   const res = await env.svc.startForRun(RUN1);
   const creates = env.docker.client.__calls.filter((c) => c.method === 'createContainer');
@@ -416,7 +422,7 @@ test('start: prior-attempt container (running, bound) → adopted too (safe reus
   const fx = makeFixtureRoot();
   const env = makeEnv({
     fixture: fx,
-    containerSeeds: [{ name: 'br-b3-' + RUN1 + '-a1', state: 'running', labels, mounts: [{ Type: 'bind', Source: fx.dataPath(ID1), Target: '/data', RW: true }], portBindings: { '5555/tcp': [{ HostIp: '127.0.0.1', HostPort: '16381' }] } }],
+    containerSeeds: [{ name: 'br-b3-' + RUN1 + '-a1', state: 'running', labels, mounts: [{ Type: 'bind', Source: fx.dataPath(ID1), Target: '/data', RW: true }], portBindings: { '5555/tcp': [{ HostIp: '127.0.0.1', HostPort: '16381' }] }, networks: { 'water-army-devices': '127.0.0.1' } }],
     taskRuns: [runRow({ containerId: 'preseed' + '0'.repeat(57) })],
   });
   // point the run's containerId at the seeded container's real id
@@ -808,18 +814,38 @@ test('start: engine start failure → container removed, DB bind cleared, retrya
   assert.equal(creates.length, 1);
 });
 
-// ---------------------------------------------------------------- 14. real ADB probe (node:net path)
-test('default probe: a real local ADB-style server passes; closed port fails (node:net path)', async () => {
-  // stand up a tiny server answering the host:version handshake
-  const server = net.createServer((s) => {
-    s.once('data', () => { s.write(Buffer.from('00050.0.1', 'ascii')); s.end(); });
+// ---------------------------------------------------------------- 14. real ADB CNXN probe (node:net path)
+// F-RDFA-2: the default probe is now a genuine ADB CNXN handshake over the
+// device-network IP (not the old bare host:version at 127.0.0.1). This test
+// stands up a fake adbd that only answers a VALID CNXN, and places the fake
+// container's device-network endpoint on 127.0.0.1 so the real node:net probe
+// reaches it.
+function makeFakeAdbd({ banner = 'device::ro.product.name=faux-device;ro.product.model=faux;ro.product.device=faux;features=cmd,shell_v2' } = {}) {
+  return net.createServer((s) => {
+    let buf = Buffer.alloc(0);
+    s.on('data', (chunk) => {
+      buf = Buffer.concat([buf, chunk]);
+      if (buf.length < 24) return;
+      const p = parseAdbPacket(buf);
+      // Real adbd ignores anything before a valid CNXN (p2-55 EXP A/B).
+      if (p.state !== 'ok' || p.command !== A_CNXN || !p.magicValid) return;
+      const payload = Buffer.from(banner, 'utf8');
+      const header = buildAdbCnxnPacket(banner).header;
+      s.end(Buffer.concat([header, payload]));
+    });
   });
+}
+test('default probe: a real local ADB-style server passes; closed port fails (node:net path)', async () => {
+  const server = makeFakeAdbd();
   await new Promise((res) => server.listen(0, '127.0.0.1', res));
   const port = server.address().port;
 
   const clock = makeAdvancingClock();
   const fx = makeFixtureRoot();
-  const db = makeBatchFakeDb({ identities: fx.identities, batches: BATCHES, taskRuns: [runRow()] });
+  // the adapter spec's health.port selects the CONTAINER-side port the
+  // probe dials (here the fake adbd's port — a real redroid always 5555)
+  const batches = [{ ...BATCHES[0], configJson: { adapter: { type: 'container', image: IMG, health: { kind: 'adb-tcp', port } } } }];
+  const db = makeBatchFakeDb({ identities: fx.identities, batches, taskRuns: [runRow()] });
   const lease = createLeaseService({ db, now: clock });
   const config = {
     batchContainerDataRoot: fx.root, batchContainerAllowedImages: [], batchAdbHostPortRange: '16370-16419',
@@ -828,21 +854,47 @@ test('default probe: a real local ADB-style server passes; closed port fails (no
   };
   const mkSvc = (docker) => createBatchLifecycleService({ db, docker, config, lease, audit: async () => {}, log: { info() {}, warn() {}, error() {} }, clock });
 
-  // bind the run to a container that "publishes" our test port
+  // bind the run to a container that "publishes" our test port AND sits on
+  // the device network at 127.0.0.1 (where the fake adbd listens)
   const labels = buildContainerLabels({ identityId: ID1, batchId: BATCH1, taskRunId: RUN1, createdBy: 'w' });
-  const fake = makeFakeDockerWrapper({ containers: [{ name: 'br-b3-probe', state: 'running', labels, portBindings: { '5555/tcp': [{ HostIp: '127.0.0.1', HostPort: String(port) }] } }] });
+  const fake = makeFakeDockerWrapper({ containers: [{ name: 'br-b3-probe', state: 'running', labels, portBindings: { [`${port}/tcp`]: [{ HostIp: '127.0.0.1', HostPort: String(port) }] }, networks: { 'water-army-devices': '127.0.0.1' } }] });
   const id = fake.client.__byName.get('br-b3-probe');
   await db.taskRun.update({ where: { id: RUN1 }, data: { containerId: id } });
 
   const svc = mkSvc(fake);
   const h = await svc.healthForRun(RUN1);
-  assert.equal(h.healthy, true, 'a genuine ADB handshake is accepted as app-layer health');
-  assert.equal(h.version, '0.0.1');
+  assert.equal(h.healthy, true, 'a genuine ADB CNXN handshake is accepted as app-layer health');
+  assert.equal(h.version, 'adb-device@0x1000001');
   await server.close();
 
   // closed port → unhealthy (never throws, reports the detail)
   const h2 = await svc.healthForRun(RUN1);
   assert.equal(h2.healthy, false);
+});
+
+test('health: running container with NO device-network endpoint → fast fail (no L2 probe possible)', async () => {
+  const fx = makeFixtureRoot();
+  const labels = buildContainerLabels({ identityId: ID1, batchId: BATCH1, taskRunId: RUN1, createdBy: 'w' });
+  // pre-G2 shaped container: running + port bound but never joined the
+  // device network — the L2 probe is structurally impossible, so the
+  // service must report that explicitly instead of polling the timeout.
+  const fake = makeFakeDockerWrapper({ containers: [{ name: 'br-b3-nonet', state: 'running', labels, portBindings: { '5555/tcp': [{ HostIp: '127.0.0.1', HostPort: '16382' }] } }] });
+  const id = fake.client.__byName.get('br-b3-nonet');
+  const clock = makeAdvancingClock();
+  const db = makeBatchFakeDb({ identities: fx.identities, batches: BATCHES, taskRuns: [runRow()] });
+  const lease = createLeaseService({ db, now: clock });
+  const config = {
+    batchContainerDataRoot: fx.root, batchContainerAllowedImages: [], batchAdbHostPortRange: '16370-16419',
+    batchPortLeaseTtlMs: 3_600_000, batchContainerStopTimeoutSec: 1, batchContainerNamePrefix: 'br-b3-',
+    batchContainerHealthTimeoutMs: 2_000, batchContainerHealthPollMs: 10, batchContainerHealthProbeTimeoutMs: 1_000,
+  };
+  const svc = createBatchLifecycleService({ db, docker: fake, config, lease, audit: async () => {}, log: { info() {}, warn() {}, error() {} }, clock });
+  await db.taskRun.update({ where: { id: RUN1 }, data: { containerId: id } });
+  const t0 = Date.now();
+  const h = await svc.healthForRun(RUN1);
+  assert.ok(Date.now() - t0 < 1_000, 'fast fail — no timeout polling');
+  assert.equal(h.healthy, false);
+  assert.match(h.detail ?? '', /no endpoint on 'water-army-devices'/);
 });
 
 // ---------------------------------------------------------------- 15. list

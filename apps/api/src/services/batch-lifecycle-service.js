@@ -13,16 +13,21 @@
  *   - data volume: <dataRoot>/<identityId>/data, string-validated (B1) AND
  *     fs-validated here (realpath containment, 0700 dirs, duplicate writable
  *     mount-source scan across ALL live managed containers)
- *   - network: ADB bound to 127.0.0.1:<hostPort>; the port is a ResourceLease
- *     (atomic across processes, MD §5.2) from a bounded admin range
+ *   - network: ADB published on 127.0.0.1:<hostPort> for humans/adb-CLI
+ *     (the port is a ResourceLease — atomic across processes, MD §5.2, from a
+ *     bounded admin range). The HEALTH PROBE does NOT ride that publish:
+ *     it reaches adbd over L2 on the device network (container bridge IP),
+ *     because the api container's loopback has no view of host-published
+ *     ports (F-RDFA-2, docs/audits/rdfa-fix-report.md).
  *   - image: admin allowlist only (AppSetting, env fallback) — fail closed
  *   - privileged: only when the allowlist entry explicitly opts in (+reason)
  *
  * FAILURE MODEL (MD §8/§10 — fail closed, never a silent success):
  *   - daemon down / permission denied → 503/502 DOCKER_DAEMON_UNAVAILABLE,
  *     nothing is claimed to have happened, no DB write, leases released
- *   - boot health = ADB wire-protocol handshake (app layer, MD §8.2) — a
- *     "running" docker state alone is NEVER reported as healthy
+ *   - boot health = a GENUINE ADB CNXN handshake answered by adbd (app
+ *     layer, MD §8.2) — a "running" docker state, a bare TCP connect, or an
+ *     unanswered handshake are all NEVER reported as healthy
  *   - every destructive action re-verifies ownership IMMEDIATELY before
  *     acting (TOCTOU window covered by label re-inspect)
  *
@@ -30,7 +35,7 @@
  * over HTTP with the service token, exactly like the AI tool handler.
  */
 import fs from 'node:fs';
-import net from 'node:net';
+import os from 'node:os';
 import path from 'node:path';
 
 import {
@@ -41,8 +46,6 @@ import {
   parsePortRange,
   ownershipVerdict,
   reconcileVerdict,
-  ADB_HOST_VERSION_CMD,
-  parseAdbVersionReply,
   CONTAINER_LABELS,
   buildContainerLabels,
   IDENTITY_DATA_ROOT_DEFAULT,
@@ -56,6 +59,7 @@ import {
 
 import { classifyDockerError } from './docker-service.js';
 import { deviceNetwork, ensureDeviceNetwork } from './device-network.js';
+import { adbCnxnProbe } from './adb-cnxn-probe.js';
 
 /** Docker port-key shape for the probe port (container side). */
 function portKey(containerPort) {
@@ -404,37 +408,53 @@ export function createBatchLifecycleService({
   }
 
   // ------------------------------------------------------------ health (app layer, MD §8.2)
-  const probe = healthProbe ?? defaultAdbProbe;
+  // Default probe = a genuine ADB CNXN handshake (apps/api/src/services/adb-cnxn-probe.js).
+  // It is invoked with the DEVICE CONTAINER's bridge IP + container-side ADB
+  // port (L2 on the device network) — never 127.0.0.1 (the api container's
+  // loopback cannot see host-published ports; that publish is the human path).
+  const probe = healthProbe ?? adbCnxnProbe;
 
   /**
-   * Default probe: ADB wire-protocol handshake over 127.0.0.1. A raw TCP
-   * connect would pass for any port; the host:version reply proves the
-   * Android side is actually answering (MD §8.2: 不能只依賴 Docker 狀態).
+   * Device-network self-attach (F-RDFA-2). The probe reaches adbd over L2 on
+   * the device network, so the api container must ride that network too.
+   * Self-attach at boot is IDEMPOTENT and LIVE (`docker network connect`
+   * on a running container needs no restart) and SELF-HEALING: compose
+   * recreates drop any manual attachment, the next boot re-attaches.
+   *
+   * Own-container lookup = the running container whose Config.Hostname
+   * equals os.hostname() (compose sets the container hostname to the
+   * container name; we read the same value back from inside).
+   *
+   * Failures are LOGGED, never fatal: the app must boot regardless; the
+   * probe then fails closed with an actionable detail (no device-network
+   * endpoint) instead of a silent healthy.
    */
-  async function defaultAdbProbe(host, port, timeoutMs) {
+  async function ensureDeviceNetworkSelfAttachment() {
+    let c;
+    try { c = await requireClient(); } catch { return; } // docker disabled — nothing to attach
+    let name;
+    try { name = await ensureDeviceNetwork(c, { log }); }
+    catch (err) { log.error({ error: err.message }, 'batch lifecycle: device network ensure failed — L2 probe will fail closed'); return; }
+    let self = null;
     try {
-      const raw = await new Promise((resolve, reject) => {
-        const s = net.connect({ host, port, timeout: timeoutMs });
-        let buf = Buffer.alloc(0);
-        const done = (err, val) => { s.destroy(); err ? reject(err) : resolve(val); };
-        s.once('error', (e) => done(e));
-        s.once('timeout', () => done(new Error('probe timeout')));
-        s.once('connect', () => {
-          s.write(ADB_HOST_VERSION_CMD);
-        });
-        s.once('data', (chunk) => {
-          buf = Buffer.concat([buf, chunk]);
-          const p = parseAdbVersionReply(buf);
-          if (p.ok) done(null, { healthy: true, detail: null, version: p.version });
-          else if (buf.length > 4096) done(new Error('probe: oversized reply, not an ADB endpoint'));
-          // else keep reading (partial frame)
-        });
-      });
-      return raw;
+      const running = await c.listContainers({ all: false });
+      const hn = os.hostname();
+      self = running.find((ct) => ct.Config?.Hostname === hn) ?? null;
+    } catch (err) { log.error({ error: err.message }, 'batch lifecycle: self-attach lookup failed'); return; }
+    if (!self) {
+      log.warn('batch lifecycle: could not locate own container (hostname match) — L2 probe will fail closed until the api container is on the device network');
+      return;
+    }
+    try {
+      const ins = await c.getContainer(self.Id).inspect();
+      if (ins.NetworkSettings?.Networks?.[name]) return; // already attached (idempotent)
+      await c.getNetwork(name).connect({ Container: self.Id });
+      log.info({ container: String(self.Id).slice(0, 12), network: name }, 'batch lifecycle: api container attached to device network (L2 ADB probe path)');
     } catch (err) {
-      return { healthy: false, detail: String(err?.message ?? err).slice(0, 120), version: null };
+      log.error({ error: err.message, container: String(self.Id).slice(0, 12), network: name }, 'batch lifecycle: device network self-attach failed — L2 probe will fail closed');
     }
   }
+  void ensureDeviceNetworkSelfAttachment();
 
   // ------------------------------------------------------------ CREATE (start path)
   /**
@@ -667,17 +687,25 @@ export function createBatchLifecycleService({
     const pollMs = config?.batchContainerHealthPollMs ?? 1_000;
     for (;;) {
       if (healthCfg.kind === 'none') return true;
-      const r = await probe('127.0.0.1', port, config?.batchContainerHealthProbeTimeoutMs ?? 3_000);
-      if (r.healthy) return true;
       let state = 'unknown';
+      let ip = null;
       try {
         const info = await c.getContainer(containerId).inspect();
         state = info.State?.Status ?? 'unknown';
+        ip = info.NetworkSettings?.Networks?.[deviceNetwork.name]?.IPAddress ?? null;
       } catch { state = 'gone'; }
       if (state === 'exited' || state === 'dead' || state === 'gone') {
         log.error({ runId: run.id, containerId: String(containerId).slice(0, 12), state }, 'batch lifecycle: container died during boot health wait');
         return false;
       }
+      if (!ip) {
+        // Structural: running but NOT on the device network (a pre-G2
+        // container handed to the batch adapter). Polling cannot fix this.
+        log.error({ runId: run.id, containerId: String(containerId).slice(0, 12), network: deviceNetwork.name }, 'batch lifecycle: container has no device-network endpoint — cannot L2-probe');
+        return false;
+      }
+      const r = await probe(ip, healthCfg.containerPort, config?.batchContainerHealthProbeTimeoutMs ?? 3_000);
+      if (r.healthy) return true;
       if (clock().getTime() >= deadline) return false;
       await new Promise((res) => setTimeout(res, pollMs));
     }
@@ -693,14 +721,19 @@ export function createBatchLifecycleService({
     if (state !== 'running') return { healthy: false, state, detail: null, containerId };
     const spec = await adapterSpecForRun(run);
     const healthCfg = effectiveHealthProbe(spec);
-    // recover the bound port from the container's own PortBindings (source of truth)
+    // host port binding — kept in the response for observability (the
+    // human/adb-CLI path on 127.0.0.1). The PROBE itself goes over L2 to
+    // the container's device-network IP (F-RDFA-2).
     const binds = container.HostConfig?.PortBindings ?? {};
     const bind = binds[portKey(healthCfg.containerPort)] ?? Object.values(binds)[0];
     const hostPort = bind?.[0]?.HostPort ? Number(bind[0].HostPort) : null;
     if (!hostPort) return { healthy: false, state, detail: 'no host port binding found', containerId };
-    const r = healthCfg.kind === 'none'
-      ? { healthy: true, detail: null, version: null }
-      : await probe('127.0.0.1', hostPort, config?.batchContainerHealthProbeTimeoutMs ?? 3_000);
+    if (healthCfg.kind === 'none') {
+      return { healthy: verdict === 'ok', state, detail: null, version: null, containerId, hostPort };
+    }
+    const ip = container.NetworkSettings?.Networks?.[deviceNetwork.name]?.IPAddress ?? null;
+    if (!ip) return { healthy: false, state, detail: `container has no endpoint on '${deviceNetwork.name}' — cannot L2-probe`, containerId, hostPort };
+    const r = await probe(ip, healthCfg.containerPort, config?.batchContainerHealthProbeTimeoutMs ?? 3_000);
     return { healthy: Boolean(r.healthy) && verdict === 'ok', state, detail: r.detail ?? null, version: r.version ?? null, containerId, hostPort };
   }
 

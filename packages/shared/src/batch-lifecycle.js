@@ -299,11 +299,16 @@ export {
 // ADB wire-protocol handshake (health = app layer, MD §8.2)
 // --------------------------------------------------------------------------
 /**
+ * LEGACY — retained for unit-test coverage of the length-prefixed framing
+ * parser only. The PRODUCTION health probe no longer sends this (F-RDFA-2,
+ * 2026-10-29): a bare '000chost:version' with NO A_CNXN connection handshake
+ * is ignored by real adbd (AOSP answers only after a valid CNXN), so the old
+ * probe could never see a reply from a real device. The real handshake lives
+ * in ./adb-protocol.js (buildAdbCnxnPacket) + apps/api/.../adb-cnxn-probe.js.
+ *
  * The ADB client/server command framing: 4-hex-digit length + command
- * string. 'host:version' is answered by adbd with a length-prefixed
- * version string — the cheapest genuine APP-LAYER proof that the Android
- * side (not just the docker state) is up. Returns the raw answer bytes
- * (the caller judges it) — pure protocol constants, no I/O here.
+ * string. Returns the raw answer bytes (the caller judges it) — pure
+ * protocol constants, no I/O here.
  */
 export const ADB_HOST_VERSION_CMD = '000chost:version';
 

@@ -18,9 +18,16 @@
  *     proxy listener is no longer anchored to the default bridge.
  *
  * The platform services (web/api/worker/postgres/redis) stay on the compose
- * platform network (G1) — the two networks have different duties and no
- * cross-attachment: the API reaches devices through the host-published
- * 127.0.0.1:<adbPort> mapping (unchanged), never through L2.
+ * platform network (G1). The ONE deliberate cross-network attachment (F-RDFA-2
+ * fix, 2026-10-29): the api container is attached to THIS network at boot
+ * (self-attach, idempotent + self-healing — see batch-lifecycle-service.js
+ * ensureDeviceNetworkSelfAttachment) so the batch health probe can reach
+ * adbd over L2 at the device container's bridge IP:5555. Rationale + exposure
+ * analysis in docs/audits/rdfa-fix-report.md. The host-published
+ * 127.0.0.1:<adbPort> mapping remains for humans/adb-CLI only — the probe
+ * does NOT ride it (the api container's loopback cannot see host publishes).
+ * The worker has no docker socket and no network attachment: it stays on
+ * the platform network only (threat model T1 unchanged).
  *
  * Existing devices created before G2 remain on their original network until
  * recreated (the network is snapshotted at container create; there is no

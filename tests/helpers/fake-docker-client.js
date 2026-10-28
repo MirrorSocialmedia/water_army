@@ -64,7 +64,16 @@ export function makeFakeDockerClient({ mode = 'ok', containers = [], networks = 
           Privileged: Boolean(inspectRow.privileged),
           PortBindings: inspectRow.portBindings ?? null,
         },
-        NetworkSettings: { Ports: inspectRow.ports ?? null },
+        // F-RDFA-2: mirror the real engine — a container on the device
+        // network carries its bridge IP here (the probe targets it). Seed
+        // rows may set `networks: { 'water-army-devices': '127.0.0.1' }`
+        // (or any ip) to place the fake endpoint where a test server listens.
+        NetworkSettings: {
+          Ports: inspectRow.ports ?? null,
+          Networks: inspectRow.networks
+            ? Object.fromEntries(Object.entries(inspectRow.networks).map(([k, ip]) => [k, { NetworkID: `net-${k}`, IPAddress: ip }]))
+            : undefined,
+        },
         Mounts: inspectRow.mounts ?? [],
       },
       restarts: 0,
@@ -376,8 +385,11 @@ export function makeFakeDockerClient({ mode = 'ok', containers = [], networks = 
           },
           NetworkSettings: {
             Ports: null,
+            // F-RDFA-2: a created container on the device network carries a
+            // bridge IP (real engine assigns one at create; the probe needs
+            // it). Deterministic per create-sequence, 172.38.200.0/24 range.
             Networks: body.NetworkingConfig?.EndpointsConfig
-              ? Object.fromEntries(Object.keys(body.NetworkingConfig.EndpointsConfig).map((k) => [k, { NetworkID: `net-${k}` }]))
+              ? Object.fromEntries(Object.keys(body.NetworkingConfig.EndpointsConfig).map((k) => [k, { NetworkID: `net-${k}`, IPAddress: `172.38.200.${10 + (idSeq % 200)}` }]))
               : undefined,
           },
           Mounts: (body.HostConfig?.Mounts ?? body.Mounts ?? []).map((m) => ({ Type: m.Type, Source: m.Source ?? null, Destination: m.Target, RW: !m.ReadOnly })),
