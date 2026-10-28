@@ -27,6 +27,7 @@ const execFileAsync = promisify(execFile);
 
 import { maskEmail } from '@water-army/shared';
 import { CREATE_ACCOUNT_STEPS, createSignupDriver, deriveSignupValues, planRegistrationSchedule, SIGNUP_COORD_BASE } from '@water-army/shared';
+import { runCeHealthProbe, verifyCePersistence, formatCeHealthRemediation } from '@water-army/shared';
 import {
   createAccount,
   listAccounts,
@@ -48,6 +49,12 @@ commands:
   show <accountId> [--show]  one account (--show decrypts the password)
   retire <accountId> [--note <text>]   soft retire (T5 -> DEAD, never hard-delete)
   signup <accountId> --serial <adb-serial> [--dry-run] [--resume-from <step>]
+         [--no-ce-check] [--verify-persistence --container <docker-name>]
+         CE disk-health gate runs after CREATED (kx71 forensics): stale
+         accounts_ce.db-journal or a half-created schema = loud FAIL exit 2,
+         because the login would be RAM-only. --verify-persistence restarts
+         the container (docker stop/start, graceful only) and demands the
+         account survive the cold boot.
                      [--evidence-dir <dir>]  drive the MinuteMaid create-account
                      step table (ADR-034 §7); writes lifecycle back to vault.
                      --show prints typed values (password!) — masked otherwise.
@@ -158,6 +165,61 @@ async function signupCommand({ flags, positional }) {
     if (ev.kind === 'HUMAN_GATE') exit = 3;
   }
   process.stdout.write(`# ${id} lifecycleState=${last} evidence=${evidDir}\n`);
+
+  // --- CE disk-health gate (kx71 forensics, CEO 2026-10-28) --------------
+  // CREATED in RAM is NOT proof the account reached accounts_ce.db. A
+  // first-boot SIGKILL mid-transaction leaves a half-created db + orphan
+  // journal; every later write then silently fails and the login evaporates
+  // on the next restart. Probe the DISK before we believe the login.
+  if (exit === 0 && last === 'CREATED' && !flags['no-ce-check']) {
+    const io = {
+      // NOTE: pass the command as ONE argv element after shell/exec-out — adb
+      // joins and re-parses remotely; wrapping in `sh -c` locally truncates
+      // args (remote sh -c takes only the first word).
+      runShell: (cmd) => adbRun(['shell', cmd]),
+      readBinary: (cmd) => adbRun(['exec-out', cmd], { binary: true }),
+    };
+    const report = (r) => { for (const p of r.problems) process.stdout.write(`[ce-health] FAIL: ${p}\n`); };
+    if (flags['verify-persistence']) {
+      const container = flags.container;
+      if (!container) throw new Error('--verify-persistence requires --container <docker-name>');
+      const dockerBin = process.env.DOCKER_BIN || 'docker';
+      const probe = () => runCeHealthProbe(io);
+      const result = await verifyCePersistence({
+        probe,
+        restart: async () => {
+          await execFileAsync(dockerBin, ['stop', container], { timeout: 120_000 });
+          await execFileAsync(dockerBin, ['start', container], { timeout: 120_000 });
+          // graceful boot wait (no rm -f): poll boot_completed up to 5 min
+          const deadline = Date.now() + 300_000;
+          for (;;) {
+            if (Date.now() > deadline) throw new Error('boot_completed timeout after restart (5 min)');
+            const b = String(await io.runShell('getprop sys.boot_completed')).trim();
+            if (b === '1') break;
+            await new Promise((r) => setTimeout(r, 5_000));
+          }
+        },
+      });
+      if (!result.ok) {
+        process.stdout.write(`[ce-health] persistence FAIL before=${result.before} after=${result.after}\n`);
+        report(result);
+        process.stdout.write(`${formatCeHealthRemediation({ serial, container })}\n`);
+        setLifecycleState(id, last, { note: `ce-health:PERSISTENCE_FAIL before=${result.before} after=${result.after}`, storePath: flags.path });
+        return 2;
+      }
+      process.stdout.write(`[ce-health] PASS — accounts=${result.after} survived docker stop/start (CE writes healthy)\n`);
+    } else {
+      const health = await runCeHealthProbe(io);
+      if (!health.ok) {
+        report(health);
+        process.stdout.write(`${formatCeHealthRemediation({ serial })}\n`);
+        setLifecycleState(id, last, { note: 'ce-health:DISK_FAIL (login is RAM-only — do not trust this datadir)', storePath: flags.path });
+        return 2;
+      }
+      process.stdout.write(`[ce-health] PASS — accounts_ce.db structurally sound (accounts=${health.accounts}); use --verify-persistence to also demand restart survival\n`);
+    }
+  }
+
   return exit;
 }
 

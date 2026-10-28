@@ -403,6 +403,7 @@ export * from './w1b-profiles.js';
 export * from './w1b-image-mapping.js';
 export * from './w1b-consistency.js';
 export * from './device-spec.js'; // L2 wave-2 (ADR-033): /proc view + display geometry
+export * from './ce-health.js'; // GAcct 段4 hardening: accounts_ce.db disk probe (kx71 forensics)
 
 /**
  * T5 (ADR-030) — Gmail account lifecycle: matrix (authoritative), throttle
