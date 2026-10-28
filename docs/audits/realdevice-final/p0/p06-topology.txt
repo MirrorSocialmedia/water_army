@@ -1,0 +1,21 @@
+
+=== P0.5 host canonical adb (runbook §270) ===
+2026-10-28T12:25:08Z
+Android Debug Bridge version 1.0.41
+Version 37.0.1-15733141
+Installed as /home/kenneth/.openclaw/workspace/tools/platform-tools/adb
+Running on Linux 6.8.0-117-generic (x86_64)
+
+--- adb devices (host observer; no connect — list only) ---
+* daemon not running; starting now at tcp:5037
+* daemon started successfully
+List of devices attached
+
+
+=== P0.6 topology findings (recon) ===
+- api container: NO adb binary (documented, runbook L270) -> platform adb zone = ADB_UNAVAILABLE by design of this topology; host adb is the verification vehicle
+- WA_W3_EGRESS_BINDING_ENABLED: unset (default false) -> W3 identity-egress surface fail-closed 503 (to be evidenced in P1.5)
+- WA_REDROID_RO_OVERRIDES_ENABLED: default true -> W1 fingerprint injection ACTIVE
+- template mc-dogfood-gmsmtg = MTG image, no proxyUrl
+- identities: 1 (UI-E2E walkthrough, READY)
+- NOTE: shell env http_proxy=127.0.0.1:7897 -> any 'direct' curl from this shell is NOT direct; use env -i for true direct egress

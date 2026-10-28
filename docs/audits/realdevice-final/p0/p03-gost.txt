@@ -1,0 +1,22 @@
+=== P0.3 gost via proxy ===
+2026-10-28T12:10:24Z
+http_code=200 ip=172.38.223.1 time=0.331681s
+{
+  "ip": "103.194.185.206",
+  "city": "Hoi Fu Court",
+  "region": "Yau Tsim Mong District",
+  "country": "HK",
+  "loc": "22.3163,114.1647",
+  "org": "AS45753 Netsec Limited",
+  "postal": "999077",
+  "timezone": "Asia/Hong_Kong",
+  "readme": "https://ipinfo.io/missingauth"
+}
+=== P0.3 host direct (control) ===
+direct http_code=200
+
+=== P0.3 CORRECTION (2026-10-28T12:14Z) ===
+shell env has http_proxy=127.0.0.1:7897 -> earlier 'direct' was via 7897 env proxy (TOOLSMd trap re-verified).
+true_host_direct_ip= 27.45.51.73 AS17816 China Unicom IP network China169 Guangdong province
+
+gost_18443_egress=103.194.185.206 (Netsec) != true_host_direct 27.45.51.73 -> IP-based egress verdict usable in P1

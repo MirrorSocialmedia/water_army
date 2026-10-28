@@ -1,0 +1,16 @@
+=== P0.4 docker ps (all water army) ===
+2026-10-28T12:10:25Z
+NAMES                   IMAGE                                      STATUS                       PORTS
+sglang-fixed-run        sglang-fixed:latest                        Up 18 minutes (healthy)      0.0.0.0:30000->30000/tcp, [::]:30000->30000/tcp
+water-army-web-1        water-army/web:local                       Up About an hour (healthy)   127.0.0.1:3012->3012/tcp
+water-army-api-1        water-army/api:local                       Up 3 hours (healthy)         3000/tcp
+water-army-worker-1     water-army/worker:local                    Up 3 hours (healthy)         3001/tcp
+rdev-f1                 water-army/redroid:14.0.0-240527-gms-mtg   Up 4 hours                   127.0.0.1:16512->5555/tcp
+redroid-mc-dogfood-2    redroid/redroid:14.0.0-240527              Up 8 hours                   127.0.0.1:16801->5555/tcp
+water-army-redis-1      redis:7.4.5                                Up 9 hours (healthy)         127.0.0.1:16380->6379/tcp
+water-army-postgres-1   postgres:17.6                              Up 9 hours (healthy)         127.0.0.1:15433->5432/tcp
+rdev-e1-gost            gogost/gost:3.3.0                          Up 21 hours                  
+
+=== P0.4 redroid-* list ===
+redroid-mc-dogfood-2	Up 8 hours
+redroid-mc-dogfood-1	Exited (137) 8 hours ago

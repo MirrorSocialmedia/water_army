@@ -1,0 +1,8 @@
+=== P0.1 free -g ===
+2026-10-28T12:10:24Z
+               total        used        free      shared  buff/cache   available
+Mem:              91          48           4           0          41          43
+Swap:              7           3           4
+
+=== P0.1 GET /api/system/ram-gate ===
+{"enabled":true,"config":{"enabled":true,"maxParallel":10,"hardFloorMiB":4096,"postBootTargetMiB":5400,"perBootBudgetMiB":1200,"metricsMaxAgeMs":30000,"leaseTtlMs":86400000},"configErrors":null,"metrics":{"ok":true,"ts":1793189424441,"memAvailableMiB":44751.1,"memTotalMiB":94179.2,"memFreeMiB":4648.3,"swapTotalMiB":8192,"swapFreeMiB":4476.9,"loadAvg":[2.32,2.27,2.53],"source":"proc-meminfo","ageMs":0,"stale":false},"counts":{"liveLeases":1,"running":1,"inProgress":0,"runningWithLease":1,"reservedMiB":1200},"wouldAdmitNext":{"admitted":true,"reason":"ADMITTED","liveCount":1,"projectedMiB":42351,"currentMiB":44751.1,"config":{"enabled":true,"maxParallel":10,"hardFloorMiB":4096,"postBootTargetMiB":5400,"perBootBudgetMiB":1200,"metricsMaxAgeMs":30000,"leaseTtlMs":86400000}},"store":{"redis":true},"ts":1793189424443}

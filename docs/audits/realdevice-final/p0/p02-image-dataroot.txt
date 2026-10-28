@@ -1,0 +1,21 @@
+=== P0.2 MTG image ===
+2026-10-28T12:10:24Z
+REPOSITORY           TAG                         DIGEST                                                                    IMAGE ID       CREATED        SIZE
+water-army/redroid   14.0.0-240527-gms-mtg-arm   sha256:5c24b8b678b2338ad9e18e1f4841d03c39088a08b69bd14613659d50eec4a8b8   5c24b8b678b2   24 hours ago   3.99GB
+water-army/redroid   14.0.0-240527-w1b           sha256:bfa6a160a3719ce3a4537ac2d1b275385cd02e936f28be92c8ba3ec958b635b7   bfa6a160a371   26 hours ago   2.95GB
+water-army/redroid   14.0.0-240527-w1b-f1        sha256:640736776de337abf41fa5df9f642e8cd3eadaeeb108b811bef0ce0d0c72a97c   640736776de3   27 hours ago   2.95GB
+water-army/redroid   14.0.0-240527-gms-mtg       sha256:02ab5675ba15f4acadaf21544a9e28aa5af774c3dd6a7e53e8b74d002fa4ecee   02ab5675ba15   31 hours ago   3.69GB
+water-army/redroid   14.0.0-240527-gms-microg    sha256:08b7be141cf761e22f04af9e8881b602b119a54b9745a7f52a057dce7d1b5c38   08b7be141cf7   31 hours ago   3.2GB
+water-army/redroid   14.0.0-240527-w1b-pre1      sha256:9b0c697c310689c094698fffad8b168b4e43fed5d596afd256c22b81211add33   9b0c697c3106   32 hours ago   2.98GB
+water-army/redroid   14.0.0-240527-matrixa-r3    sha256:591296d5656571f346994dc81608ca33744af4d0e9c9876241a8595e70143b55   591296d56565   8 days ago     3.01GB
+water-army/redroid   14.0.0-240527-matrixa-r1    sha256:623f7def30bd4a833df9f6637fe57ee08a0b8b1cd03fa370ef4032cb02caa1fe   623f7def30bd   8 days ago     3GB
+water-army/redroid   14.0.0-240527-matrixa       sha256:c9c4e6e5c6e97b622f73e6a2c6633226c27921a831085cc77f071d093cc3a009   c9c4e6e5c6e9   9 days ago     2.98GB
+REPOSITORY           TAG                     IMAGE ID                                                                  CREATED        SIZE
+water-army/redroid   14.0.0-240527-gms-mtg   sha256:02ab5675ba15f4acadaf21544a9e28aa5af774c3dd6a7e53e8b74d002fa4ecee   31 hours ago   3.69GB
+
+=== P0.2 data root ===
+total 16
+drwxr-x---  4 1000 1000 4096 Oct 27 17:50 .
+drwxr-xr-x 86    0    0 4096 Oct 19 17:41 ..
+drwxr-x---  8 1000 1000 4096 Oct 28 18:07 redroid
+drwxr-x---  2 1000 1000 4096 Oct 23 05:43 redroid-ramgate-g2

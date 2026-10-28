@@ -1,0 +1,11 @@
+=== P0.5 adb (host canonical: /home/kenneth/.openclaw/workspace/tools/platform-tools/adb) ===
+2026-10-28T12:25:16Z
+(first attempt 'adb' from PATH: command not found — PATH gap recorded; canonical path per runbook §270 used)
+Android Debug Bridge version 1.0.41
+Version 37.0.1-15733141
+Installed as /home/kenneth/.openclaw/workspace/tools/platform-tools/adb
+Running on Linux 6.8.0-117-generic (x86_64)
+
+--- adb devices -l (host observer, list only, no connect) ---
+List of devices attached
+
