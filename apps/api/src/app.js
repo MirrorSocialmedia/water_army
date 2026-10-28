@@ -64,6 +64,7 @@ import { batchMonitorRoutes } from './routes/batch-monitor.js';
 import { batchContainerRoutes } from './routes/batch-containers.js';
 import { networkPolicyRoutes } from './routes/network-policy.js';
 import { systemRamGateRoutes } from './routes/system-ram-gate.js';
+import { systemConfigSummaryRoutes } from './routes/system-config-summary.js';
 import { deviceStreamRoutes } from './routes/device-streams.js';
 import { manualInterventionRoutes } from './routes/manual-interventions.js';
 import { buildStreamSidecarManager, STREAM_SIDECAR_ENTRY } from './plugins/stream-sidecar.js';
@@ -656,6 +657,7 @@ export async function buildApp(opts = {}) {
   batchContainerRoutes(app);
   networkPolicyRoutes(app);
   systemRamGateRoutes(app);
+  systemConfigSummaryRoutes(app);
   deviceStreamRoutes(app);
   manualInterventionRoutes(app);
 
