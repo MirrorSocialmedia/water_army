@@ -1,0 +1,5 @@
+== battery story apply (prod script + present 1 + plugged 0) ==
+Unknown set option: temperature
+Unknown set option: voltage
+BATSET_OK
+-- readback --

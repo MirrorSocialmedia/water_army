@@ -1,0 +1,10 @@
+{
+ "ts": "2026-10-29T12:52:32.868Z",
+ "webrtc": {
+  "candidates": [
+   "candidate:4248743138 1 udp 2113937151 172.38.200.11 38330 typ host generation 0 ufrag nRfB network-cost 999",
+   "candidate:2850827590 1 udp 1677729535 27.45.51.73 4843 typ srflx raddr 172.38.200.11 rport 38330 generation 0 ufrag nRfB network-cost 999"
+  ],
+  "err": null
+ }
+}

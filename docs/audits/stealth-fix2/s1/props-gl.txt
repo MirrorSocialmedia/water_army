@@ -1,0 +1,14 @@
+== props / GL ==
+radeon
+
+gs101
+GLES: AMD, AMD Radeon Graphics (radeonsi, raphael_mendocino, ACO, DRM 3.57, 6.8.0-117-generic), OpenGL ES 3.2 Mesa 24.0.8 (git-441f064c1c)
+vulkan.broadcom.so
+vulkan.freedreno.so
+vulkan.intel.so
+vulkan.intel_hasvk.so
+vulkan.lvp.so
+vulkan.nouveau.so
+vulkan.pastel.so
+vulkan.radeon.so
+vulkan.virtio.so
