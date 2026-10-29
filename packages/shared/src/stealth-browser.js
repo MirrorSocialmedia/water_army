@@ -91,3 +91,51 @@ export function buildBrowserArgsProvisionScript(opts = {}) {
   lines.push(`echo ${BROWSER_ARGS_MARKER} args=${args} dns=${dns || 'off'}`);
   return lines.join('; ');
 }
+
+/* -----------------------------------------------------------------------
+ * WA-RESCAN (S2, 2026-10-30) — Chrome carrier for the WebRTC IP policy.
+ *
+ * s1 proved the three WebView carriers (prop / file / settings) are inert
+ * for the RELEASE WebView (docs/audits/stealth-fix2/s1/S1-RESEARCH §3,
+ * docs/audits/stealth-fix2/s2/evidence-s2-live.txt). But the production
+ * browser surface is Chrome-for-Android, and Chrome honours a fourth
+ * carrier the WebView never did: the `command_line_args` INTENT EXTRA on
+ * `am start`. Two device rules come with it (both encoded here):
+ *  - the extra is only consumed at process START → force-stop first;
+ *  - switches persist for the browser process lifetime (one launch per
+ *    policy change is enough; no daemon, no boot risk).
+ * This is the "接返 Chrome 邊條" leg of the parameterisation: same policy
+ * knob as the WebView provisioning (buildWebviewCommandLine), one more
+ * carrier. Real-device ICE before/after lives in docs/audits/rescan/.
+ * --------------------------------------------------------------------- */
+
+export const CHROME_LAUNCH_MARKER = 'CHROME_LAUNCH_OK';
+export const CHROME_ACTIVITY = 'com.android.chrome/com.google.android.apps.chrome.Main';
+export const CHROME_PACKAGE = 'com.android.chrome';
+
+/**
+ * Device-side Chrome launch through the exec/adb seam (fixed argv).
+ * @param {{ webrtcPolicy?: string, launchArgs?: string, url?: string,
+ *           remoteDebugPort?: number }} opts
+ * @returns {string} sh script ending in the CHROME_LAUNCH_OK marker
+ */
+export function buildChromeLaunchScript(opts = {}) {
+  const args = buildWebviewCommandLine(opts); // policy validated + override semantics shared
+  const port = opts.remoteDebugPort;
+  if (port !== undefined && port !== null) {
+    if (!Number.isInteger(port) || port < 1024 || port > 65535) {
+      throw new Error(`chrome launch: invalid remoteDebugPort: ${String(port)}`);
+    }
+  }
+  const fullArgs = port ? `${args} --remote-debugging-port=${port}` : args;
+  const url = opts.url === undefined || opts.url === '' ? 'about:blank' : String(opts.url);
+  if (/[;&|<>`$"'\\\s]/.test(url)) {
+    throw new Error(`chrome launch: url may not contain spaces or shell metacharacters: ${url}`);
+  }
+  return [
+    `am force-stop ${CHROME_PACKAGE}`,
+    'sleep 1',
+    `am start -n ${CHROME_ACTIVITY} -a android.intent.action.VIEW -d '${url}' -e command_line_args '${fullArgs}'`,
+    `echo ${CHROME_LAUNCH_MARKER}`,
+  ].join('; ');
+}
