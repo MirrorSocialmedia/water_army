@@ -187,6 +187,30 @@ export {
   egressGroupStatus,
 } from './egress-group.js';
 
+/** WA-WARMING: cookie-warming state machine + business gate (warm-state.js). */
+export {
+  WARM_STATES,
+  WARM_GATE_BLOCKED,
+  WARM_TRANSITION_INVALID,
+  WARM_OVERRIDE_ADMIN_ONLY,
+  APP_SETTING_WARM_THRESHOLD_DAYS,
+  WARM_THRESHOLD_DEFAULT_DAYS,
+  WARM_THRESHOLD_DAYS_MIN,
+  WARM_THRESHOLD_DAYS_MAX,
+  BATCH_PURPOSE,
+  isValidWarmState,
+  resolveStoredWarmState,
+  canTransitionWarm,
+  readWarmThresholdDays,
+  identityWarmThresholdDays,
+  resolveWarmThreshold,
+  evaluateWarmProgress,
+  checkWarmGate,
+  batchPurposeOf,
+  createWarmStateService,
+  normalizeWarmThresholdInput,
+} from './warm-state.js';
+
 /** Batch Rotation metrics + alert evaluation (BR-B5, MD §13 — pure core). */
 export {
   BATCH_METRIC_NAMES,

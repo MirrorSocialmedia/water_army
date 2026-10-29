@@ -435,6 +435,15 @@ model Identity {
   //   LOGGED_OUT         已登出 (explicit manual logout)
   loginState      String    @default("PENDING_LOGIN") @map("login_state")
   loginStateSince DateTime? @map("login_state_since")
+  // WA-WARMING: cookie-warming lifecycle (Google/FB anti-ban: a fresh account
+  // must accumulate organic-looking footprint BEFORE business runs). Orthogonal
+  // axis to loginState/AccountLifecycle (see packages/shared/src/warm-state.js).
+  //   cold     未養 — 業務閘擋（新註冊默認）
+  //   warming  養緊 — 未夠门槛，業務閘仍擋；warming 排程只對呢個狀態開工
+  //   warm     養熟 — 業務放行（遷移：既有身份默認回填 warm = 零破壞）
+  warmState     String    @default("cold") @map("warm_state")
+  warmStartedAt DateTime? @map("warm_started_at")
+  warmReadyAt   DateTime? @map("warm_ready_at")
   metadataJson Json     @default("{}") @map("metadata_json")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
@@ -457,6 +466,7 @@ model Identity {
   @@index([status])
   @@index([identityType])
   @@index([loginState])
+  @@index([warmState])
   @@map("identities")
 }
 

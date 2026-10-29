@@ -106,6 +106,11 @@ export function createIdentityProvisionService({ db, config, log = { info() {}, 
           dataPath,
           // T2: fresh test identity = awaiting a human login assertion.
           loginState: 'PENDING_LOGIN',
+          // WA-WARMING: a NEWLY provisioned account is un-warmed — business
+          // dispatch stays gated until warm (threshold or admin force). The
+          // pre-WARMING fleet was grandfathered warm by the migration; new
+          // registrations are explicitly cold (work order: 新註冊 = cold).
+          warmState: 'cold',
           metadataJson: {},
         },
       });

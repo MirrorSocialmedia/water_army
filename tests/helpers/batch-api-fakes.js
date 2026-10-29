@@ -69,6 +69,10 @@ export function makeBatchApiDb({ users = [], batch = {}, clock } = {}) {
   // WA-IPGROUP: delegate the W3 bindings table too, so the API fake can
   // exercise egress-group derivation via expectedEgressIp (layer 2).
   if (bdb.identityEgress) db.identityEgress = bdb.identityEgress;
+  // WA-WARMING: createCycle writes inside db.$transaction — the base fake
+  // never had one (its callers never used transactions). Delegate the BATCH
+  // fake's interactive-transaction sim (was silently 500-ing POST /api/batches).
+  db.$transaction = bdb.$transaction.bind(bdb);
 
   // ---- taskRun: + batchId / orderBy / take / skip --------------------------
   const trFindMany = bdb.taskRun.findMany.bind(bdb.taskRun);

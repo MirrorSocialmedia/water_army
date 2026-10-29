@@ -38,6 +38,10 @@ import {
   enqueueAnyRun,
   removeWaitingBatchRun,
   scrubObject,
+  batchPurposeOf,
+  BATCH_PURPOSE,
+  WARM_GATE_BLOCKED,
+  WARM_OVERRIDE_ADMIN_ONLY,
 } from '@water-army/shared';
 
 // --------------------------------------------------------------------------
@@ -107,6 +111,10 @@ function publicIdentity(i) {
     displayName: i.displayName ?? null,
     identityType: i.identityType ?? null,
     status: i.status,
+    // WA-WARMING: derived warm progress rides the list shape (the stored
+    // column may lag; effectiveState closes the gap — same source of truth
+    // as the gate).
+    warmState: i.warmState ?? 'warm',
     dataPath: i.dataPath ?? null,
     metadata: scrubObject(i.metadataJson ?? null, 1_000),
     createdAt: i.createdAt ?? null,
@@ -317,6 +325,14 @@ export function batchRoutes(app) {
       });
       const plan = batchSvc.previewCycle({ identities: rows, batchSize: body.batchSize });
 
+      // WA-WARMING: informational warm preview (preview never blocks) — the
+      // operator sees WHICH identities the gate would refuse before confirming.
+      let warmPreview = null;
+      if (app.warmStateService) {
+        const { blocked } = await app.warmStateService.gateCheck(ids, { purpose: batchPurposeOf(body.config ?? {}) });
+        warmPreview = { purpose: batchPurposeOf(body.config ?? {}), blocked };
+      }
+
       // Resource estimate (MD §10: 資源估算) — containers are the unit of
       // cost; per-batch peak = min(batchSize, caps), total included.
       const { cap: globalCap } = await scheduler.readGlobalMaxActive(db);
@@ -329,6 +345,7 @@ export function batchRoutes(app) {
         preview: true,
         plan,
         unknown,
+        warm: warmPreview,
         estimate: {
           identitiesTotal: plan.stats.total,
           identitiesIncluded: included,
@@ -372,6 +389,10 @@ export function batchRoutes(app) {
             maxActiveContainers: { type: 'integer', minimum: 1, maximum: 100 },
             failurePolicy: { type: 'string', enum: ['stop_batch', 'continue_and_report'] },
             config: { type: 'object' },
+            // WA-WARMING: admin-only dispatch override for cold/warming
+            // identities — reason REQUIRED, lands in the audit trail.
+            warmOverride: { type: 'boolean' },
+            warmOverrideReason: { type: 'string', minLength: 3, maxLength: 280 },
           },
         },
       },
@@ -397,6 +418,47 @@ export function batchRoutes(app) {
         });
       }
       const rows = ids.map((id) => ({ id, status: statusById.get(id) }));
+
+      // ---------------------------------------------------------- warm gate
+      // WA-WARMING: business cycles of NOT-warm identities are refused (409
+      // WARM_GATE_BLOCKED). The business/warming split is the batch PURPOSE
+      // label (config.purpose === 'warming' — the warming scheduler stamps
+      // it): 養號任務 exists precisely to warm cold accounts, so it bypasses
+      // the gate BY DEFINITION. Override: admin only + reason required, fully
+      // audited. Gate reads DERIVED state (a matured 'warming' identity
+      // passes without waiting for a lazy-promote write).
+      const purpose = batchPurposeOf(body.config ?? {});
+      let warmOverrideInfo = null;
+      if (purpose !== BATCH_PURPOSE.WARMING && app.warmStateService) {
+        const { blocked } = await app.warmStateService.gateCheck(ids, { purpose });
+        if (blocked.length) {
+          if (body.warmOverride) {
+            if (req.user?.role !== 'admin') {
+              return reply.code(403).send({
+                error: { code: WARM_OVERRIDE_ADMIN_ONLY, message: 'warm-gate override is admin-only (operator cannot release cold accounts into business runs)' },
+              });
+            }
+            if (typeof body.warmOverrideReason !== 'string' || body.warmOverrideReason.length < 3) {
+              return reply.code(400).send({
+                error: { code: 'VALIDATION_ERROR', message: 'warmOverride requires warmOverrideReason (3..280 chars) — the audit must carry the WHY' },
+              });
+            }
+            warmOverrideInfo = {
+              reason: body.warmOverrideReason,
+              released: blocked.map((b) => ({ identityId: b.identityId, state: b.effectiveState })),
+            };
+          } else {
+            return reply.code(409).send({
+              error: {
+                code: WARM_GATE_BLOCKED,
+                message: `${blocked.length} identity(ies) not warm — business dispatch blocked (養號中/未養). Admin may dispatch with warmOverride + reason.`,
+                blocked,
+              },
+            });
+          }
+        }
+      }
+
       const res = await batchSvc.createCycle(
         {
           name: body.name,
@@ -412,7 +474,10 @@ export function batchRoutes(app) {
       await audit(req, 'batch.cycle_create', {
         resourceType: 'batch_cycle',
         resourceId: res.cycleId,
-        details: { replay: res.replay, batchCount: res.batches.length, idempotencyKey: body.idempotencyKey },
+        details: {
+          replay: res.replay, batchCount: res.batches.length, idempotencyKey: body.idempotencyKey,
+          purpose, warmOverride: warmOverrideInfo ?? undefined,
+        },
       });
       return reply.code(res.replay ? 200 : 201).send(res);
     },

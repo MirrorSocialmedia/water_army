@@ -120,6 +120,11 @@ export function makeBatchFakeDb({ identities = [], batches = [], batchIdentities
           identityType: data.identityType,
           status: data.status ?? 'READY',
           dataPath: data.dataPath,
+          // WA-WARMING: preserve the warm axis (absent = grandfathered warm —
+          // same resolution rule as the shared module, not a fake invention).
+          warmState: data.warmState ?? null,
+          warmStartedAt: data.warmStartedAt ?? null,
+          warmReadyAt: data.warmReadyAt ?? null,
           metadataJson: data.metadataJson ?? {},
           createdAt: data.createdAt ?? clock(),
           updatedAt: clock(),

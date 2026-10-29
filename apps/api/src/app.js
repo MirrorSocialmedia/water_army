@@ -15,7 +15,7 @@
 import crypto from 'node:crypto';
 import Fastify from 'fastify';
 
-import { PINO_REDACT_PATHS, SESSION_COOKIE, API_ERROR, createLeaseService, BatchLifecycleError } from '@water-army/shared';
+import { PINO_REDACT_PATHS, SESSION_COOKIE, API_ERROR, createLeaseService, BatchLifecycleError, createWarmStateService } from '@water-army/shared';
 
 import { loadConfig } from './config.js';
 import { createDb, closeDb } from './plugins/db.js';
@@ -48,6 +48,7 @@ import { redroidDeviceRoutes } from './routes/devices.js';
 import { identityFingerprintRoutes } from './routes/identity-fingerprints.js';
 import { identityEgressRoutes } from './routes/identity-egress.js';
 import { identityLoginRoutes } from './routes/identity-login.js';
+import { warmStateRoutes } from './routes/identity-warm.js';
 import { createLoginStateService } from './services/login-state-service.js';
 import { createIdentityProvisionService } from './services/identity-provision-service.js';
 import { accountLifecycleRoutes } from './routes/account-lifecycle.js';
@@ -301,6 +302,13 @@ export async function buildApp(opts = {}) {
   const identityProvisionService = hasLoginSurface && db?.identityEgress
     ? createIdentityProvisionService({ db, config, log: app.log, audit, fingerprintService })
     : null;
+  // WA-WARMING s1: warm-state service (needs the identities warm_state columns
+  // + app_settings for the threshold). Fail-closed 503 WARM_STATE_DISABLED when
+  // absent (pre-migration DB / partial fakes). The business gate is enforced at
+  // the dispatch boundary (batches.js create); this service owns the transitions.
+  const warmStateService = Boolean(db?.identity && db?.appSetting)
+    ? createWarmStateService({ db, log: app.log })
+    : null;
   if (hasLoginSurface) {
     app.log.info('identity login-state service ON — T2 (ADR-029) manual login machine + provisioning');
   }
@@ -496,6 +504,7 @@ export async function buildApp(opts = {}) {
   app.decorate('fingerprintService', fingerprintService);
   app.decorate('identityEgressService', identityEgressService);
   app.decorate('loginStateService', loginStateService);
+  app.decorate('warmStateService', warmStateService);
   app.decorate('identityProvisionService', identityProvisionService);
   app.decorate('accountLifecycleService', accountLifecycleService);
   app.decorate('gmailProvisionDriver', gmailProvisionDriver);
@@ -646,6 +655,7 @@ export async function buildApp(opts = {}) {
   identityEgressRoutes(app);
   identityLoginRoutes(app);
   accountLifecycleRoutes(app);
+  warmStateRoutes(app);
   deviceAppRoutes(app);
   taskRoutes(app, { taskQueue });
   batchRoutes(app);
