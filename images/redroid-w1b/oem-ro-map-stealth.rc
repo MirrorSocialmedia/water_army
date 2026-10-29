@@ -1,0 +1,204 @@
+# water_army WA-VMSTEALTH — carrier -> ro.*/persist.* mapping + stealth props + carrier sweep (GENERATED — do not hand-edit)
+# regenerate: node scripts/w1b/generate-wa-ro-map-rc.mjs --stealth
+# source of truth: packages/shared/src/w1b-image-mapping.js + fingerprint-profile.js (unit-diffed in CI)
+#
+# Same semantics as the base W1b rc (see generateWaRoMapRc header) plus:
+# - stealth: derived build props (ro.build.flavor/description/…, the five
+#   ro.product.<partition>.* variant sets and ro.<partition>.build.* tags/
+#   incremental/fingerprints, ro.product.board/ro.board.platform) ride the
+#   same verified carrier chain — the redroid build-prop tell dies with them
+#   (docs/audits/vmstealth-s1-mechanism.md §4).
+# - sweep: after every write of a phase has run, each still-present
+#   ro.boot.oem_* carrier is deleted (--delete-if-exist = absent-safe).
+
+on early-init && property:ro.boot.oem_ro_product_brand=*
+    exec -- /vendor/bin/oem-propctl ro.product.brand ${ro.boot.oem_ro_product_brand}
+on early-init && property:ro.boot.oem_ro_build_id=*
+    exec -- /vendor/bin/oem-propctl ro.build.id ${ro.boot.oem_ro_build_id}
+on early-init && property:ro.boot.oem_ro_product_device=*
+    exec -- /vendor/bin/oem-propctl ro.product.device ${ro.boot.oem_ro_product_device}
+on early-init && property:ro.boot.oem_ro_build_display_id=*
+    exec -- /vendor/bin/oem-propctl ro.build.display.id ${ro.boot.oem_ro_build_display_id}
+on early-init && property:ro.boot.oem_ro_build_fingerprint=*
+    exec -- /vendor/bin/oem-propctl ro.build.fingerprint ${ro.boot.oem_ro_build_fingerprint}
+on early-init && property:ro.boot.oem_ro_boot_hardware=*
+    exec -- /vendor/bin/oem-propctl ro.boot.hardware ${ro.boot.oem_ro_boot_hardware}
+on early-init && property:ro.boot.oem_ro_hardware=*
+    exec -- /vendor/bin/oem-propctl ro.hardware ${ro.boot.oem_ro_hardware}
+on early-init && property:ro.boot.oem_ro_product_manufacturer=*
+    exec -- /vendor/bin/oem-propctl ro.product.manufacturer ${ro.boot.oem_ro_product_manufacturer}
+on early-init && property:ro.boot.oem_ro_product_model=*
+    exec -- /vendor/bin/oem-propctl ro.product.model ${ro.boot.oem_ro_product_model}
+on early-init && property:ro.boot.oem_ro_product_name=*
+    exec -- /vendor/bin/oem-propctl ro.product.name ${ro.boot.oem_ro_product_name}
+on early-init && property:ro.boot.oem_ro_serialno=*
+    exec -- /vendor/bin/oem-propctl ro.serialno ${ro.boot.oem_ro_serialno}
+on load_persist_props_action && property:ro.boot.oem_persist_sys_timezone=*
+    exec -- /system/bin/setprop persist.sys.timezone ${ro.boot.oem_persist_sys_timezone}
+on early-init && property:ro.boot.oem_ro_board_platform=*
+    exec -- /vendor/bin/oem-propctl ro.board.platform ${ro.boot.oem_ro_board_platform}
+on early-init && property:ro.boot.oem_ro_build_description=*
+    exec -- /vendor/bin/oem-propctl ro.build.description ${ro.boot.oem_ro_build_description}
+on early-init && property:ro.boot.oem_ro_build_flavor=*
+    exec -- /vendor/bin/oem-propctl ro.build.flavor ${ro.boot.oem_ro_build_flavor}
+on early-init && property:ro.boot.oem_ro_build_host=*
+    exec -- /vendor/bin/oem-propctl ro.build.host ${ro.boot.oem_ro_build_host}
+on early-init && property:ro.boot.oem_ro_build_product=*
+    exec -- /vendor/bin/oem-propctl ro.build.product ${ro.boot.oem_ro_build_product}
+on early-init && property:ro.boot.oem_ro_build_tags=*
+    exec -- /vendor/bin/oem-propctl ro.build.tags ${ro.boot.oem_ro_build_tags}
+on early-init && property:ro.boot.oem_ro_build_type=*
+    exec -- /vendor/bin/oem-propctl ro.build.type ${ro.boot.oem_ro_build_type}
+on early-init && property:ro.boot.oem_ro_build_user=*
+    exec -- /vendor/bin/oem-propctl ro.build.user ${ro.boot.oem_ro_build_user}
+on early-init && property:ro.boot.oem_ro_build_version_incremental=*
+    exec -- /vendor/bin/oem-propctl ro.build.version.incremental ${ro.boot.oem_ro_build_version_incremental}
+on early-init && property:ro.boot.oem_ro_odm_build_fingerprint=*
+    exec -- /vendor/bin/oem-propctl ro.odm.build.fingerprint ${ro.boot.oem_ro_odm_build_fingerprint}
+on early-init && property:ro.boot.oem_ro_odm_build_tags=*
+    exec -- /vendor/bin/oem-propctl ro.odm.build.tags ${ro.boot.oem_ro_odm_build_tags}
+on early-init && property:ro.boot.oem_ro_odm_build_version_incremental=*
+    exec -- /vendor/bin/oem-propctl ro.odm.build.version.incremental ${ro.boot.oem_ro_odm_build_version_incremental}
+on early-init && property:ro.boot.oem_ro_product_board=*
+    exec -- /vendor/bin/oem-propctl ro.product.board ${ro.boot.oem_ro_product_board}
+on early-init && property:ro.boot.oem_ro_product_build_fingerprint=*
+    exec -- /vendor/bin/oem-propctl ro.product.build.fingerprint ${ro.boot.oem_ro_product_build_fingerprint}
+on early-init && property:ro.boot.oem_ro_product_build_tags=*
+    exec -- /vendor/bin/oem-propctl ro.product.build.tags ${ro.boot.oem_ro_product_build_tags}
+on early-init && property:ro.boot.oem_ro_product_build_version_incremental=*
+    exec -- /vendor/bin/oem-propctl ro.product.build.version.incremental ${ro.boot.oem_ro_product_build_version_incremental}
+on early-init && property:ro.boot.oem_ro_product_odm_brand=*
+    exec -- /vendor/bin/oem-propctl ro.product.odm.brand ${ro.boot.oem_ro_product_odm_brand}
+on early-init && property:ro.boot.oem_ro_product_odm_device=*
+    exec -- /vendor/bin/oem-propctl ro.product.odm.device ${ro.boot.oem_ro_product_odm_device}
+on early-init && property:ro.boot.oem_ro_product_odm_manufacturer=*
+    exec -- /vendor/bin/oem-propctl ro.product.odm.manufacturer ${ro.boot.oem_ro_product_odm_manufacturer}
+on early-init && property:ro.boot.oem_ro_product_odm_model=*
+    exec -- /vendor/bin/oem-propctl ro.product.odm.model ${ro.boot.oem_ro_product_odm_model}
+on early-init && property:ro.boot.oem_ro_product_odm_name=*
+    exec -- /vendor/bin/oem-propctl ro.product.odm.name ${ro.boot.oem_ro_product_odm_name}
+on early-init && property:ro.boot.oem_ro_product_product_brand=*
+    exec -- /vendor/bin/oem-propctl ro.product.product.brand ${ro.boot.oem_ro_product_product_brand}
+on early-init && property:ro.boot.oem_ro_product_product_device=*
+    exec -- /vendor/bin/oem-propctl ro.product.product.device ${ro.boot.oem_ro_product_product_device}
+on early-init && property:ro.boot.oem_ro_product_product_manufacturer=*
+    exec -- /vendor/bin/oem-propctl ro.product.product.manufacturer ${ro.boot.oem_ro_product_product_manufacturer}
+on early-init && property:ro.boot.oem_ro_product_product_model=*
+    exec -- /vendor/bin/oem-propctl ro.product.product.model ${ro.boot.oem_ro_product_product_model}
+on early-init && property:ro.boot.oem_ro_product_product_name=*
+    exec -- /vendor/bin/oem-propctl ro.product.product.name ${ro.boot.oem_ro_product_product_name}
+on early-init && property:ro.boot.oem_ro_product_system_brand=*
+    exec -- /vendor/bin/oem-propctl ro.product.system.brand ${ro.boot.oem_ro_product_system_brand}
+on early-init && property:ro.boot.oem_ro_product_system_device=*
+    exec -- /vendor/bin/oem-propctl ro.product.system.device ${ro.boot.oem_ro_product_system_device}
+on early-init && property:ro.boot.oem_ro_product_system_manufacturer=*
+    exec -- /vendor/bin/oem-propctl ro.product.system.manufacturer ${ro.boot.oem_ro_product_system_manufacturer}
+on early-init && property:ro.boot.oem_ro_product_system_model=*
+    exec -- /vendor/bin/oem-propctl ro.product.system.model ${ro.boot.oem_ro_product_system_model}
+on early-init && property:ro.boot.oem_ro_product_system_name=*
+    exec -- /vendor/bin/oem-propctl ro.product.system.name ${ro.boot.oem_ro_product_system_name}
+on early-init && property:ro.boot.oem_ro_product_system_ext_brand=*
+    exec -- /vendor/bin/oem-propctl ro.product.system_ext.brand ${ro.boot.oem_ro_product_system_ext_brand}
+on early-init && property:ro.boot.oem_ro_product_system_ext_device=*
+    exec -- /vendor/bin/oem-propctl ro.product.system_ext.device ${ro.boot.oem_ro_product_system_ext_device}
+on early-init && property:ro.boot.oem_ro_product_system_ext_manufacturer=*
+    exec -- /vendor/bin/oem-propctl ro.product.system_ext.manufacturer ${ro.boot.oem_ro_product_system_ext_manufacturer}
+on early-init && property:ro.boot.oem_ro_product_system_ext_model=*
+    exec -- /vendor/bin/oem-propctl ro.product.system_ext.model ${ro.boot.oem_ro_product_system_ext_model}
+on early-init && property:ro.boot.oem_ro_product_system_ext_name=*
+    exec -- /vendor/bin/oem-propctl ro.product.system_ext.name ${ro.boot.oem_ro_product_system_ext_name}
+on early-init && property:ro.boot.oem_ro_product_vendor_brand=*
+    exec -- /vendor/bin/oem-propctl ro.product.vendor.brand ${ro.boot.oem_ro_product_vendor_brand}
+on early-init && property:ro.boot.oem_ro_product_vendor_device=*
+    exec -- /vendor/bin/oem-propctl ro.product.vendor.device ${ro.boot.oem_ro_product_vendor_device}
+on early-init && property:ro.boot.oem_ro_product_vendor_manufacturer=*
+    exec -- /vendor/bin/oem-propctl ro.product.vendor.manufacturer ${ro.boot.oem_ro_product_vendor_manufacturer}
+on early-init && property:ro.boot.oem_ro_product_vendor_model=*
+    exec -- /vendor/bin/oem-propctl ro.product.vendor.model ${ro.boot.oem_ro_product_vendor_model}
+on early-init && property:ro.boot.oem_ro_product_vendor_name=*
+    exec -- /vendor/bin/oem-propctl ro.product.vendor.name ${ro.boot.oem_ro_product_vendor_name}
+on early-init && property:ro.boot.oem_ro_system_build_fingerprint=*
+    exec -- /vendor/bin/oem-propctl ro.system.build.fingerprint ${ro.boot.oem_ro_system_build_fingerprint}
+on early-init && property:ro.boot.oem_ro_system_build_tags=*
+    exec -- /vendor/bin/oem-propctl ro.system.build.tags ${ro.boot.oem_ro_system_build_tags}
+on early-init && property:ro.boot.oem_ro_system_build_version_incremental=*
+    exec -- /vendor/bin/oem-propctl ro.system.build.version.incremental ${ro.boot.oem_ro_system_build_version_incremental}
+on early-init && property:ro.boot.oem_ro_system_ext_build_fingerprint=*
+    exec -- /vendor/bin/oem-propctl ro.system_ext.build.fingerprint ${ro.boot.oem_ro_system_ext_build_fingerprint}
+on early-init && property:ro.boot.oem_ro_system_ext_build_tags=*
+    exec -- /vendor/bin/oem-propctl ro.system_ext.build.tags ${ro.boot.oem_ro_system_ext_build_tags}
+on early-init && property:ro.boot.oem_ro_system_ext_build_version_incremental=*
+    exec -- /vendor/bin/oem-propctl ro.system_ext.build.version.incremental ${ro.boot.oem_ro_system_ext_build_version_incremental}
+on early-init && property:ro.boot.oem_ro_vendor_build_fingerprint=*
+    exec -- /vendor/bin/oem-propctl ro.vendor.build.fingerprint ${ro.boot.oem_ro_vendor_build_fingerprint}
+on early-init && property:ro.boot.oem_ro_vendor_build_tags=*
+    exec -- /vendor/bin/oem-propctl ro.vendor.build.tags ${ro.boot.oem_ro_vendor_build_tags}
+on early-init && property:ro.boot.oem_ro_vendor_build_version_incremental=*
+    exec -- /vendor/bin/oem-propctl ro.vendor.build.version.incremental ${ro.boot.oem_ro_vendor_build_version_incremental}
+
+# carrier sweep — runs strictly after all write blocks above (file order)
+on early-init
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_product_brand
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_build_id
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_product_device
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_build_display_id
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_build_fingerprint
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_boot_hardware
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_hardware
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_product_manufacturer
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_product_model
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_product_name
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_serialno
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_board_platform
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_build_description
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_build_flavor
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_build_host
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_build_product
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_build_tags
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_build_type
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_build_user
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_build_version_incremental
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_odm_build_fingerprint
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_odm_build_tags
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_odm_build_version_incremental
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_product_board
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_product_build_fingerprint
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_product_build_tags
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_product_build_version_incremental
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_product_odm_brand
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_product_odm_device
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_product_odm_manufacturer
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_product_odm_model
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_product_odm_name
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_product_product_brand
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_product_product_device
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_product_product_manufacturer
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_product_product_model
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_product_product_name
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_product_system_brand
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_product_system_device
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_product_system_manufacturer
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_product_system_model
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_product_system_name
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_product_system_ext_brand
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_product_system_ext_device
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_product_system_ext_manufacturer
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_product_system_ext_model
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_product_system_ext_name
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_product_vendor_brand
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_product_vendor_device
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_product_vendor_manufacturer
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_product_vendor_model
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_product_vendor_name
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_system_build_fingerprint
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_system_build_tags
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_system_build_version_incremental
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_system_ext_build_fingerprint
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_system_ext_build_tags
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_system_ext_build_version_incremental
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_vendor_build_fingerprint
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_vendor_build_tags
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_ro_vendor_build_version_incremental
+
+on load_persist_props_action
+    exec -- /vendor/bin/oem-propctl --delete-if-exist ro.boot.oem_persist_sys_timezone

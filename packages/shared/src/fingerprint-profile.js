@@ -451,6 +451,131 @@ export function profileToRoOverrides(profile) {
 }
 
 /**
+ * WA-VMSTEALTH (S1 §4.3, 2026-10-29): the oemprop chain rewrites ro.hardware,
+ * but the redroid build props still spell `redroid_x86_64`/`eng.frank`/
+ * `test-keys` across ~80 properties (real-device leak inventory:
+ * docs/audits/oemprop-s3/s3-07b-rdfp01-getprop-v4.txt — ro.build.flavor/
+ * description/product/user/host/version.incremental, the five
+ * ro.product.<partition>.* variant sets and ro.<partition>.build.*
+ * fingerprints/tags/incrementals, empty ro.product.board/ro.board.platform).
+ * Identity SDKs cross-check the partition variants and the fingerprint
+ * segments, so these ride the SAME verified carrier chain as the identity
+ * props — derived deterministically from the stored profile (no new stored
+ * fields: the profile drift guard stays byte-identical), merged as an extra
+ * layer at container create (see redroid-service).
+ *
+ * Every value is parsed out of the profile's own AOSP fingerprint
+ * (`brand/device/product:release/id/incremental:type/tags`), so the whole
+ * build story stays self-consistent. model is %20-encoded exactly like
+ * templateProfileToRoOverrides (ADR-028). An unparseable fingerprint
+ * (legacy rows predating the full-grammar validation) degrades to the
+ * partition product.* subset — those need no segments and can never be
+ * inconsistent.
+ */
+export const STEALTH_PARTITIONS = Object.freeze(['system', 'vendor', 'odm', 'product', 'system_ext']);
+const FP_SEG_RE = /^([^/]+)\/[^/]+\/[^/]+:([^/]+)\/[^/]+\/([^:]+):([^/]+)\/(.+)$/;
+const BUILD_USER_POOL = Object.freeze(['builder', 'ci-bot', 'android', 'maker']);
+const BUILD_HOST_POOL = Object.freeze(['build-01', 'build-02', 'build-03', 'build-p1']);
+const PLATFORM_POOL_BY_BRAND = Object.freeze({
+  xiaomi: ['kalama', 'taro', 'bengal'], redmi: ['kalama', 'taro', 'bengal'], poco: ['kalama', 'taro', 'bengal'],
+  samsung: ['universal9810', 'exynos9825'],
+  huawei: ['kirin990', 'kirin980'], honor: ['taro', 'bengal'],
+  vivo: ['taro', 'bengal'], oppo: ['taro', 'bengal'], realme: ['taro', 'bengal'],
+  oneplus: ['kalama', 'taro'], google: ['gs101', 'zuma'],
+});
+const PLATFORM_POOL_FLAT = Object.freeze(['kalama', 'taro', 'bengal']);
+
+/**
+ * The COMPLETE derived prop list (every prop deriveStealthRoOverrides can
+ * emit). The rc generator needs the static carrier set without a profile —
+ * single source of truth lives HERE so rc and product layer can never drift.
+ */
+export function stealthDerivedPropList() {
+  const props = [
+    'ro.build.flavor', 'ro.build.product', 'ro.build.description',
+    'ro.build.type', 'ro.build.tags', 'ro.build.version.incremental',
+    'ro.build.user', 'ro.build.host',
+    'ro.product.board', 'ro.board.platform',
+  ];
+  for (const part of STEALTH_PARTITIONS) {
+    props.push(
+      `ro.${part}.build.fingerprint`, `ro.${part}.build.tags`, `ro.${part}.build.version.incremental`,
+      `ro.product.${part}.brand`, `ro.product.${part}.manufacturer`, `ro.product.${part}.model`,
+      `ro.product.${part}.device`, `ro.product.${part}.name`,
+    );
+  }
+  return props;
+}
+
+/** Stable 32-bit hash for pool selection (FNV-1a — same family as device-mac). */
+function fnv1a(str) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
+}
+
+/**
+ * Derive the stealth override layer from a stored profile. Pure + total:
+ * never throws — missing fields simply skip their props.
+ * @param {object} profile FingerprintProfile (identity or template layer)
+ * @returns {Record<string,string>} prop → carrier-safe value (%20 for spaces)
+ */
+export function deriveStealthRoOverrides(profile) {
+  const out = {};
+  const s = (v) => (typeof v === 'string' && v !== '' ? v : null);
+  const brand = s(profile?.brand);
+  const manufacturer = s(profile?.manufacturer);
+  const device = s(profile?.device);
+  const productName = s(profile?.productName);
+  const model = s(profile?.model);
+  const modelCarrier = model ? model.replaceAll(' ', '%20') : null;
+  const fingerprint = s(profile?.fingerprint);
+
+  // Partition product variants — story values, no fingerprint segments needed.
+  if (brand && manufacturer && device && modelCarrier && productName) {
+    for (const part of STEALTH_PARTITIONS) {
+      out[`ro.product.${part}.brand`] = brand;
+      out[`ro.product.${part}.manufacturer`] = manufacturer;
+      out[`ro.product.${part}.model`] = modelCarrier;
+      out[`ro.product.${part}.device`] = device;
+      out[`ro.product.${part}.name`] = productName;
+    }
+  }
+  // Partition fingerprints — the stored fp itself (self-consistent by construction).
+  if (fingerprint) {
+    for (const part of STEALTH_PARTITIONS) out[`ro.${part}.build.fingerprint`] = fingerprint;
+  }
+  // Board/platform — non-empty plausible beats empty (S1 §4.2(d)).
+  const hash = fnv1a(fingerprint ?? device ?? 'vmstealth');
+  if (device) out['ro.product.board'] = device;
+  const platforms = PLATFORM_POOL_BY_BRAND[String(brand ?? '').toLowerCase()] ?? PLATFORM_POOL_FLAT;
+  out['ro.board.platform'] = platforms[hash % platforms.length];
+
+  // Fingerprint-segment props — flavor/description/incremental/tags/user/host.
+  const m = fingerprint ? FP_SEG_RE.exec(fingerprint) : null;
+  if (m && device) {
+    const [, , release, incremental, type, tags] = m;
+    const flavor = `${device}-${type}`;
+    out['ro.build.flavor'] = flavor;
+    out['ro.build.product'] = device;
+    out['ro.build.type'] = type;
+    out['ro.build.tags'] = tags;
+    out['ro.build.version.incremental'] = incremental;
+    out['ro.build.description'] = [flavor, release, s(profile?.buildId) ?? 'unknown', incremental, tags].join('%20');
+    out['ro.build.user'] = BUILD_USER_POOL[hash % BUILD_USER_POOL.length];
+    out['ro.build.host'] = BUILD_HOST_POOL[(hash >>> 8) % BUILD_HOST_POOL.length];
+    for (const part of STEALTH_PARTITIONS) {
+      out[`ro.${part}.build.tags`] = tags;
+      out[`ro.${part}.build.version.incremental`] = incremental;
+    }
+  }
+  return out;
+}
+
+/**
  * Validate a template-level roOverrides map (JSONB on RedroidTemplate):
  * Android-prop-shaped keys + transport-safe values. Fail closed.
  * @returns {string[]} problems
@@ -459,7 +584,10 @@ export function validateRoOverridesMap(map) {
   const problems = [];
   if (!map || typeof map !== 'object' || Array.isArray(map)) return ['roOverrides must be a plain object'];
   const keys = Object.keys(map);
-  if (keys.length > 32) problems.push('roOverrides: max 32 props');
+  // WA-VMSTEALTH: cap 32 → 96. The stealth layer adds ~41 derived props on
+  // top of the 12 identity targets; the arg budget is the docker Cmd argv
+  // (~50 B/arg — 96 args ≈ 5 KB, two orders of magnitude under MAX_ARG_STRLEN).
+  if (keys.length > 96) problems.push('roOverrides: max 96 props');
   for (const prop of keys) {
     if (!/^(ro|persist)\.[a-z0-9_.]{1,80}$/.test(prop)) {
       problems.push(`roOverrides key "${prop.slice(0, 60)}" must be an ro.*/persist.* prop name`);

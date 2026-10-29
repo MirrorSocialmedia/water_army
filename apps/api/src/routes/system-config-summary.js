@@ -64,6 +64,7 @@ export function systemConfigSummaryRoutes(app) {
       },
       fingerprint: {
         roOverridesEnabled: c.redroidRoOverridesEnabled === true,
+        stealthEnabled: c.redroidStealthEnabled === true,
         templateProfilesEnabled: c.redroidTemplateProfilesEnabled === true,
         appOpsEnabled: c.waAppOpsEnabled === true,
       },

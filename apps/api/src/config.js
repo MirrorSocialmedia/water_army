@@ -149,6 +149,15 @@ export function loadConfig(env = process.env, opts = {}) {
   // generator they were created with (drift guard matches per row).
   const redroidTemplateProfilesEnabled = ['1', 'true', 'yes', 'on'].includes(String(e.WA_TEMPLATE_PROFILES_ENABLED ?? 'false').toLowerCase());
 
+  // WA-VMSTEALTH (S2, 2026-10-29): stealth product-layer bundle — derived
+  // build-prop layer (partition variants/flavor/description), planned
+  // phone-OUI device MAC, and the post-boot battery override. OFF by
+  // default: real-device verification is batched into WA-ADVERSARIAL-FINAL
+  // (same discipline as ADR-031 — no unverified boot/behaviour surface in
+  // production). Subordinate to redroidRoOverridesEnabled for the prop layer
+  // (the MAC/battery parts are independent of injection).
+  const redroidStealthEnabled = ['1', 'true', 'yes', 'on'].includes(String(e.WA_REDROID_STEALTH_ENABLED ?? 'false').toLowerCase());
+
   // W2 (ADR-026): app-layer ops (install/packages/UI tree/tap) — OFF by
   // default. Until the real-device matrix passes, routes fail closed with
   // 503 APP_OPS_DISABLED; flipping on is an explicit operator opt-in.
@@ -231,6 +240,7 @@ export function loadConfig(env = process.env, opts = {}) {
     redroidAdapter,
     redroidRoOverridesEnabled,
     redroidTemplateProfilesEnabled,
+    redroidStealthEnabled,
     waAppOpsEnabled,
     egressBindingEnabled,
     gmailProvisionEnabled,

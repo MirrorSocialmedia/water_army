@@ -37,7 +37,7 @@
  *    NOT `--set`; NOT named `resetprop` to avoid Magisk/KSU applet shadowing).
  */
 
-import { propToAndroidbootKey, profilePropEntries } from './fingerprint-profile.js';
+import { propToAndroidbootKey, profilePropEntries, stealthDerivedPropList } from './fingerprint-profile.js';
 
 /** Carrier prop (ro.boot.* namespace, device side) for an ro.* target prop. */
 export function propToCarrierRoKey(prop) {
@@ -137,18 +137,82 @@ export function generateWaRoMapRc() {
 }
 
 /**
+ * WA-VMSTEALTH stealth rc (S1 §4.2): base mapping + the derived stealth prop
+ * set (ro.build.* and the partition variants — source of truth
+ * fingerprint-profile.stealthDerivedPropList) + a per-phase carrier sweep
+ * that erases the ro.boot.oem_* carriers after their values were consumed
+ * (resetprop-rs `--delete-if-exist`, conditional so absent carriers are a
+ * no-op). The carriers are the mapping's only consumer inside init — the
+ * `${...} ` expansions happen as each exec line runs, and init executes an
+ * action's commands in file order, so a sweep section placed after all
+ * write blocks can never outrun a write. /proc/1 cmdline keeps its
+ * androidboot.* tokens (argv is immutable), but the getprop-visible oem_*
+ * trail is gone. ro.boot.redroid_* are NOT swept — redroid's own init
+ * consumes them later (S1 §4.2(c): FINAL experiment).
+ */
+export function generateWaRoMapStealthRc() {
+  const rows = [
+    ...carrierMappingTable(),
+    ...stealthDerivedPropList()
+      .sort()
+      .map((prop) => ({ field: 'stealth', target: prop, carrier: propToCarrierRoKey(prop), phase: rcPhaseFor(prop) })),
+  ];
+  const out = [];
+  out.push('# water_army WA-VMSTEALTH — carrier -> ro.*/persist.* mapping + stealth props + carrier sweep (GENERATED — do not hand-edit)');
+  out.push('# regenerate: node scripts/w1b/generate-wa-ro-map-rc.mjs --stealth');
+  out.push('# source of truth: packages/shared/src/w1b-image-mapping.js + fingerprint-profile.js (unit-diffed in CI)');
+  out.push('#');
+  out.push('# Same semantics as the base W1b rc (see generateWaRoMapRc header) plus:');
+  out.push('# - stealth: derived build props (ro.build.flavor/description/…, the five');
+  out.push('#   ro.product.<partition>.* variant sets and ro.<partition>.build.* tags/');
+  out.push('#   incremental/fingerprints, ro.product.board/ro.board.platform) ride the');
+  out.push('#   same verified carrier chain — the redroid build-prop tell dies with them');
+  out.push('#   (docs/audits/vmstealth-s1-mechanism.md §4).');
+  out.push('# - sweep: after every write of a phase has run, each still-present');
+  out.push('#   ro.boot.oem_* carrier is deleted (--delete-if-exist = absent-safe).');
+  out.push('');
+  for (const r of rows) {
+    out.push(`on ${r.phase} && property:${r.carrier}=*`);
+    out.push(`    exec -- ${rcWriterFor(r.target)} ${r.target} \${${r.carrier}}`);
+  }
+  out.push('');
+  out.push('# carrier sweep — runs strictly after all write blocks above (file order)');
+  for (const phase of ['early-init', 'load_persist_props_action']) {
+    out.push(`on ${phase}`);
+    for (const r of rows.filter((x) => x.phase === phase)) {
+      out.push(`    exec -- ${PROPCTL_BIN} --delete-if-exist ${r.carrier}`);
+    }
+    out.push('');
+  }
+  return out.join('\n');
+}
+
+/**
  * Parse an rc artifact back into the table (drift check + shell-harness input).
- * @returns {{rows: Array<{carrier: string, target: string}>, problems: string[]}}
+ * Accepts both artifacts: the base W1b rc (write blocks only) and the
+ * WA-VMSTEALTH stealth rc (write blocks + one bare-trigger carrier-sweep
+ * section per phase whose `--delete-if-exist` lines erase the carriers after
+ * their values were consumed — S1 §4.2(b)).
+ * @returns {{rows: Array<{carrier: string, target: string}>, deleted: string[], problems: string[]}}
  */
 export function parseWaRoMapRc(text) {
   const problems = [];
   const rows = [];
+  const deleted = [];
   const lines = String(text ?? '').split('\n');
   let pending = null;
+  let sweep = null; // phase of the open bare-trigger carrier-sweep section
   for (const [i, line] of lines.entries()) {
+    const bare = line.match(/^on (early-init|load_persist_props_action)$/);
+    if (bare) {
+      if (pending) problems.push(`line ${i}: trigger without matching exec (previous: ${pending.carrier})`);
+      sweep = bare[1]; // a new section (bare or conditional) closes the previous sweep
+      continue;
+    }
     const trig = line.match(/^on (early-init|load_persist_props_action) && property:([A-Za-z0-9_.]+)=\*$/);
     if (trig) {
       if (pending) problems.push(`line ${i}: trigger without matching exec (previous: ${pending.carrier})`);
+      sweep = null;
       pending = { carrier: trig[2], phase: trig[1] };
       continue;
     }
@@ -164,9 +228,17 @@ export function parseWaRoMapRc(text) {
       pending = null;
       continue;
     }
+    const del = line.match(/^ {4}exec -- \/vendor\/bin\/oem-propctl --delete-if-exist ([A-Za-z0-9_.]+)$/);
+    if (del) {
+      if (!sweep) { problems.push(`line ${i}: delete exec outside a sweep section`); continue; }
+      const wantPhase = del[1].startsWith('ro.boot.oem_persist_') ? 'load_persist_props_action' : 'early-init';
+      if (sweep !== wantPhase) problems.push(`line ${i}: delete of ${del[1]} in sweep section ${sweep} (belongs to ${wantPhase})`);
+      deleted.push(del[1]);
+      continue;
+    }
     if (line.trim() === '' || line.trim().startsWith('#')) continue;
     problems.push(`line ${i}: unexpected rc content "${line.slice(0, 60)}"`);
   }
   if (pending) problems.push(`dangling trigger without exec: ${pending.carrier}`);
-  return { rows, problems };
+  return { rows, deleted, problems };
 }

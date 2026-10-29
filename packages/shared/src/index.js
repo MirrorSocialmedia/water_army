@@ -556,3 +556,7 @@ export {
   CONTENT_STYLES,
   pickStyle,
 } from './life-schedule.js';
+
+// WA-VMSTEALTH (2026-10-29): per-identity device MAC planning (S2)
+export * from './device-mac.js';
+export * from './stealth-battery.js';

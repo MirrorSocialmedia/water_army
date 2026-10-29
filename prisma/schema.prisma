@@ -301,6 +301,11 @@ model Device {
   dataDir         String    @map("data_dir") // dedicated host dir for /data (MD §10.2)
   containerName   String    @map("container_name")
   containerId     String?   @map("container_id") // docker id after create; null = provisioning failed
+  // WA-VMSTEALTH (S2): planned per-device MAC (phone-vendor OUI pool, see
+  // packages/shared/src/device-mac.js). Null = created before the feature or
+  // without a plan (docker default 02:42:* applies). Unique — L2 collision in
+  // the fleet is rejected at plan time; replay reuses the stored value.
+  macAddress      String?   @unique @map("mac_address")
   image           String // snapshot of the template image at creation (deployment record, MD §10.2)
   androidVersion  String    @map("android_version")
   width           Int

@@ -23,7 +23,7 @@ import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 
-import { DOCKER_ERROR, encryptSecret, decryptSecret, resolveProviderKey, buildRoCmdArgs, profileToRoOverrides, templateProfileToRoOverrides, mergeRoOverrides, validateRoOverridesMap, deviceDisplayArgs, profileProcCmdArgs } from '@water-army/shared';
+import { DOCKER_ERROR, encryptSecret, decryptSecret, resolveProviderKey, buildRoCmdArgs, profileToRoOverrides, templateProfileToRoOverrides, mergeRoOverrides, validateRoOverridesMap, deviceDisplayArgs, profileProcCmdArgs, planDeviceMac, deriveStealthRoOverrides, buildStealthBatteryProfile, buildStealthBatteryScript, BATTERY_STEALTH_MARKER } from '@water-army/shared';
 
 import { DockerServiceError, classifyDockerError } from './docker-service.js';
 import { GOST_HOST_BIND, deviceNetwork, withDeviceNetwork, ensureDeviceNetwork } from './device-network.js';
@@ -1790,6 +1790,40 @@ export function createRedroidService({
   }
 
   /**
+   * WA-VMSTEALTH (S2, S1 §3.4): apply the battery story override after boot
+   * (dumpsys battery override layer — S1 §3.3 ruling (a): zero image/boot
+   * risk, re-applied every boot because the override lives in BatteryService
+   * memory). Fire-and-forget like the tunnel: never breaks create/start,
+   * failures are log-only. Deterministic per device seed (stable across
+   * reboots). Gate OFF ⇒ nothing runs (byte-identical legacy behaviour).
+   */
+  async function provisionBatteryStealth(row) {
+    if (!config?.redroidStealthEnabled) return { applied: false, reason: 'gate-off' };
+    if (!row?.containerId || row.containerState !== 'running') return { applied: false, reason: 'not-running' };
+    try {
+      const target = `127.0.0.1:${row.adbPort}`;
+      const deadline = Date.now() + (config?.redroidTunnelBootTimeoutMs ?? 2_400_000);
+      const pollMs = config?.redroidTunnelPollMs ?? 5000;
+      const { booted } = await waitForAdbBootCompleted({ adbEngine, target, deadline, pollMs });
+      if (!booted) {
+        log.warn({ device: row.name }, 'vmstealth: battery override skipped — boot not observed');
+        return { applied: false, reason: 'boot-timeout' };
+      }
+      const profile = buildStealthBatteryProfile({ seed: String(row.identityId ?? row.name) });
+      const r = await execInContainer(row.containerId, buildStealthBatteryScript(profile));
+      if (r.exitCode !== 0 || !r.stdout.includes(BATTERY_STEALTH_MARKER)) {
+        log.warn({ device: row.name, exit: r.exitCode, out: String(r.stdout ?? r.stderr).slice(0, 160) }, 'vmstealth: battery override FAILED (non-fatal)');
+        return { applied: false, reason: 'exec-failed' };
+      }
+      log.info({ device: row.name, level: profile.level }, 'vmstealth: battery override applied');
+      return { applied: true, profile };
+    } catch (err) {
+      log.warn({ device: row.name, error: err?.message }, 'vmstealth: battery provisioning error (non-fatal)');
+      return { applied: false, reason: 'error' };
+    }
+  }
+
+  /**
    * Bring up the in-device tunnel: wait for Android boot (adb whitelist
    * getprop sys.boot_completed — the SAME op the diagnostics use), then run
    * the verified setup script via the exec seam. Idempotent. Runs in the
@@ -2066,6 +2100,13 @@ export function createRedroidService({
         // spaces -> %20 carrier encoding (decoded on-device by oem-propctl).
         // W1 synthetic profiles keep the byte-identical legacy path.
         layers.push(profile.templateId ? templateProfileToRoOverrides(profile) : profileToRoOverrides(profile));
+        // WA-VMSTEALTH (S2, S1 §4.3): derived build-prop layer — flavor /
+        // description / build.product / the five partition variant sets /
+        // fingerprints-tags-incrementals / board+platform, all parsed out of
+        // the profile's own fingerprint (no new stored fields → the profile
+        // drift guard stays byte-identical). Gated: OFF until FINAL verifies
+        // the chain on-device (same discipline as ADR-031).
+        if (config?.redroidStealthEnabled) layers.push(deriveStealthRoOverrides(profile));
         identityIdForDevice = input.identityId;
       }
       const merged = mergeRoOverrides(layers);
@@ -2278,6 +2319,23 @@ export function createRedroidService({
       // BR-B6 G2: devices ride the DEDICATED device network — never the
       // default bridge (idempotent ensure; fail closed on engine error).
       await ensureDeviceNetwork(client, { log });
+      // WA-VMSTEALTH (S2, S1 §5.4): planned per-device MAC from the phone-vendor
+      // OUI pool — without it docker assigns 02:42:<hex(IP)>, the textbook
+      // container tell. Deterministic from the identity seed; excluded against
+      // the fleet's taken set; persisted on the row (replay/recreate reuses).
+      // Gate OFF ⇒ byte-identical legacy behaviour (no docker default change).
+      let deviceMac = row.macAddress ?? null;
+      if (config?.redroidStealthEnabled && !deviceMac) {
+        const takenRows = await db.device.findMany({ where: { macAddress: { not: null } }, select: { macAddress: true } });
+        const taken = new Set(takenRows.map((r) => r.macAddress));
+        const plan = planDeviceMac({ seed: String(identityIdForDevice ?? name), brand: identityProfile?.brand, taken });
+        if (!plan.ok) {
+          await rollback(row, dataDir, createdDir);
+          throw fail('REDROID_MAC_PLAN', 500, `device MAC planning failed: ${plan.reason}`);
+        }
+        deviceMac = plan.mac;
+        row = await db.device.update({ where: { id: row.id }, data: { macAddress: plan.mac } });
+      }
       const HostConfig = {
         // (no NetworkMode — the explicit device-network endpoint wins)
         PortBindings: {
@@ -2317,8 +2375,9 @@ export function createRedroidService({
         },
         HostConfig,
         // BR-B6 G2: explicit device-network endpoint (replaces the old
-        // HostConfig.NetworkMode = 'bridge').
-        NetworkingConfig: { EndpointsConfig: { [deviceNetwork.name]: {} } },
+        // HostConfig.NetworkMode = 'bridge'). WA-VMSTEALTH: the planned MAC
+        // rides the endpoint (bridge driver honours MacAddress there).
+        NetworkingConfig: { EndpointsConfig: { [deviceNetwork.name]: deviceMac ? { MacAddress: deviceMac } : {} } },
       };
 
       let created;
@@ -2378,8 +2437,14 @@ export function createRedroidService({
         provisionTunnel(freshRow).catch((err) => {
           log.error({ device: name, error: err?.message }, 'redroid proxy: background tunnel provisioning failed');
         });
+        provisionBatteryStealth(freshRow); // WA-VMSTEALTH: fire-and-forget, self-gated
       } else if (effectiveProxy && containerState !== 'running') {
         log.warn({ device: name, containerState }, 'redroid proxy: container not running at create — tunnel will be provisioned on the start action');
+      }
+      // WA-VMSTEALTH: battery story for non-proxy devices too (self-gated;
+      // proxy devices are covered by the hook inside provisionTunnel above).
+      if (!effectiveProxy && containerState === 'running') {
+        provisionBatteryStealth({ ...row, containerId, containerState });
       }
 
       const result = deviceView({ ...row, template: { name: template.name } }, { withDataDir: true });
@@ -2577,6 +2642,13 @@ export function createRedroidService({
       provisionTunnel(freshNow).catch((err) => {
         log.error({ device: row.name, error: err?.message }, 'redroid proxy: background tunnel provisioning failed');
       });
+    }
+    // WA-VMSTEALTH: every start/restart re-applies the battery override (the
+    // override dies with the BatteryService process on reboot). Self-gated;
+    // covers proxy and non-proxy devices uniformly (idempotent with the
+    // create-time hook — dumpsys set is last-write-wins, same values).
+    if ((action === 'start' || action === 'restart') && result.state === 'running') {
+      provisionBatteryStealth(await findDevice(row.id));
     }
     await audit({
       actorUserId: actorUserId ?? null,

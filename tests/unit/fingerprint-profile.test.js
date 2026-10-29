@@ -182,8 +182,12 @@ test('carrier: validateRoOverridesMap + mergeRoOverrides fail-closed', () => {
   assert.ok(validateRoOverridesMap({ 'ro.x': 'has space' }).length > 0);
   assert.ok(validateRoOverridesMap({ 'ro.x': 'has=eq' }).length > 0);
   assert.ok(validateRoOverridesMap(null).length > 0);
-  const tooMany = Object.fromEntries(Array.from({ length: 33 }, (_, i) => [`ro.p${i}`, 'v']));
+  // WA-VMSTEALTH: cap raised 32 → 96 (identity 12 + derived ~50) — the
+  // over-cap probe must exceed the CURRENT cap.
+  const tooMany = Object.fromEntries(Array.from({ length: 97 }, (_, i) => [`ro.p${i}`, 'v']));
   assert.ok(validateRoOverridesMap(tooMany).length > 0);
+  const atCap = Object.fromEntries(Array.from({ length: 96 }, (_, i) => [`ro.p${i}`, 'v']));
+  assert.deepEqual(validateRoOverridesMap(atCap), []);
 
   const merged = mergeRoOverrides([{ 'ro.product.model': 'A' }, { 'ro.product.model': 'B', 'ro.serialno': 'S' }]);
   assert.deepEqual(merged.problems, []);
