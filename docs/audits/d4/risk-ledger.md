@@ -1,0 +1,32 @@
+# WA-D4 Risk Ledger — 平台實測風險賬本（gen1）
+
+> 紀律：D4 唔係報 PASS，係搵風險。每項 = 新增風險/待決策，唔寫「已安全」。
+> 設備：rdev-d4-fb（FB anchor, identity 0fb6ebfd, adb 15000）/ rdev-d4-gm（Gmail anchor, identity 9df2cdfa, adb 15001）
+> 鏡像：water-army/redroid:14.0.0-240527-gms-mtg-oemprop-stealth3b（template fx-adv-stealth3, gpuMode=host）
+
+| # | 風險 / 發現 | 證據 | 影響 | 狀態 |
+|---|---|---|---|---|
+| R1 | **API container 冇 adb binary → provisionTunnel 純 `waitForAdbBootCompleted`（冇用 hybrid seam）→ boot_completed 永不見 → 2400s 後 `FAILED TUNNEL_START_TIMEOUT`**；`proxy/retry` 由 FAILED 允許但落返同一 2400s 黑洞 = 死循環 | a1/a2 舊患同根因；d4-gm 實測 2400s FAILED → retry(200) → 再 STARTING；`waitForBootCompletedHybrid`（redroid-service.js:241，有 execInContainer fallback）存在但 provisionTunnel:1968 未用 | 全部 redroid 機 egress 永不上線 = 平台互動（登入/網頁）做唔到；非機器問題 | **PRODUCT GAP**（fix 候選：provisionTunnel 改 call hybrid；待 CEO 批修復窗口） |
+| R2 | **display pipeline zombie（機隊級）**：framework boot 後 WM focus/input 正常，但 SurfaceFlinger 合成停擺 — screencap 返回凍結幀（boot splash 15KB 幀或最後合成幀，md5 恒定）；Chrome 冷啟動常觸發；kill surfaceflinger（init auto-respawn）可暫時解凍但會復發 | d4-fb/d4-gm 兩台皆中；多次 screencap md5 相同；SF restart 後 focus 返嚟 + 117KB 動態幀 | UI 自動化截圖證據唔可靠；登入截圖必須喺解凍 window 內捕 | **OPEN 風險**（根因未定；見 R8  workaround） |
+| R3 | **無 vsync → Android 14 window transition 懸空 → Chrome window 永久 GONE**（focus 喺 FirstRun 但 surface 唔繪）。**`settings put global *_animation_scale 0` 關閉 animation 後 uiautomator 即刻读到 Chrome 完整 UI tree = transition 完成** | animation-on：uiautomator dump 永遠捕 Launcher（Chrome window mViewVisibility=0x8）；animation-off：dump 出「Welcome to Chrome / Continue / No thanks / Continue」完整節點 | UI 驅動 FB 登入嘅先決條件（已用呢個 workaround 穿過 Chrome FRE） | **已用 workaround 解**；建議寫入 redroid provision 預設（待 CEO 批） |
+| R4 | **Chrome `--disable-gpu-compositing`（+`--disable-gpu`）= 啟動 SIGTRAP crash**（libchrome CHECK，`Fatal signal 5 SI_KERNEL` on main）。5-flag 穩定版 = 唔帶 disable-gpu | d4-fb 實測 crash（tombstone logcat -b crash：Cmdline com.android.chrome, SIGTRAP）；remove flag 後存活 | 軟渲染 fallback 路徑呢個 image 用唔到 | **入賬**（避免呢兩個 flag 與 stealth3b 組合） |
+| R5 | **swiftshader_indirect 喺 stealth3b image = SF `GLESRenderEngine` EGL loader abort（SIGABRT crash loop）**，image 冇 sw GL blob；zygote/surfaceflinger restarting 循環，boot 永唔完成 | d4-fb 以 template fx-adv-stealth3-sw（swiftshader）重建後 logcat crash backtrace：`Loader::open ... eglGetDisplay → SurfaceFlinger::init abort` | 軟合成（swiftshader）方案喺呢 image 唔 work；要改要 rebuild image 加 swrast | **假設被否**（swiftshader 唔係 display zombie 嘅 free lunch） |
+| R6 | **egress pool IP rotation vs identity 綁定**：Chrome 經 gost sidecar 實測 egress = `103.194.185.206`（GM anchor 綁定 IP），而 FB identity(0fb6ebfd) 綁定 expected `27.45.51.73`。兩 sidecar 同一 upstream `socks5://172.38.223.1:18443`，egress 由 upstream session 決定，產品層控制唔到邊個 pool IP 分邊台 | ipify probe via fb 機 Chrome = 103.194.185.206（04:0x 實測）；bind 紀錄 27.45.51.73/103.194.185.206 | FB 登入落喺「唔係自己」嘅 egress IP = 多 IP 風險（FB 地理/裝置指紋）；canary VERIFIED 斷言可能永遠錯配 | **OPEN 風險 + CEO 決策**（FB login 用 103.194.185.206 定要鎖 27.45.51.73？） |
+| R7 | **容器直接 egress 對 FB 超時**（ERR_CONNECTION_TIMED_OUT），但 host 直去 FB = 200/0.28s、容器 ICMP OK = 容器 TCP 外連被 NAT/firewall 半斷；Chrome 必須行 proxy（gost sidecar）先見到 web | d4-fb Chrome 直航 m.facebook.com timeout；`--proxy-server=socks5://172.38.200.4:1080` 後 FB 200（wtsid 正常） | R1 未修前，網頁互動靠 Chrome 層 `--proxy-server` workaround（繞過產品 tunnel 設計 = 指紋 story 要 re-check：真機冇 proxy-server flag 可見性？chrome://flags 唔洩，CDP 先見） | **WORKAROUND 生效**（S2 登入路徑已開通） |
+| R8 | **Chrome FirstRun「Sign in?」↔ GMS PreAddAccountActivity nag 循環**：tap「No thanks」→ GMS 搶鏡（Checking info… loading）→ close → 返 sign-in 頁 = 3 步循環；`pm disable-user com.google.android.gms` 後 GMS 仍可被 Chrome intent 拉起 UI | d4-fb 連環截圖 n4–n9；uiautomator dump PreAddAccount 節點 | FRE 過關效率；Gmail 機（gm）未能 disable GMS（需要佢）= gm FRE 會同一循環 | **已穿過**（用 R3 workaround + 反覆 No thanks）；列賬 |
+| R9 | **首啟弹窗序列逐機不同**：d4-fb 出現 usage-statistics 弹窗變體（預期外）；d4-gm 出現 GMS「Welcome to Chrome」通知 nag（F1 era MinuteMaid 变體喺 stealth3b 重現）| 截圖 d4fb-chrome-01-usagestats.png、d4-gm-1.png（nag） | 自動化弹窗處理要 per-boot 偵測，唔可以 hardcode 序列 | 入賬 |
+| R10 | **ICE host candidate 洩漏被 Chrome + `--webrtc-ip-handling-policy=default_public_interface_only` 反轉**：OFF = `172.38.200.3 typ host`（container bridge 私網洩漏，matrix row 4 KL 重現）；ON = **0 candidates**（私網 host 全消，連 srflx 都無 = 無 internet 時亦 0） | ice-probe 對照實測 d4-fb-ice-off / d4-fb-ice-on（03:4x，CDP over chrome_devtools_remote） | 好消息：WebRTC ICE KL 有解（Chrome host + flag）；但「0 candidates」需喺 egress 通咗之後再測 srflx 先完整（matrix row 4 更新要 CEO 批） | **正面發現**（待 egress ONLINE 補測 srflx 場景） |
+| R11 | **about:blank 頁面 CDP `location.href=` 導航無效**（assignment 返回成功但 target 不變）；Page.navigate 先 work（且 ack 會 timeout 假失敗 — 要 check /json target 為準，唔好信 ack） | d4-fb CDP 實測（nav/nav2 失敗、Page.navigate 生效但 CDP timeout） | 自動化脚本設計：導航後斷言要 check target URL，唔好靠 RPC ack/timeout | 入賬（工具紀律） |
+| R12 | **toybox grep 喺 redroid guest 大 log 會 SIGSEGV**（tombstone 假兇手：Cmdline=grep）；`docker exec` 冇 `-i` 丟 stdin | logcat pipe 多次中招；tombstone_25 自證 | 日誌取證要避 guest 內 grep pipe（用 logcat -s / -d 過濾） | 入賬（TOOLS 既有陷阱，再確證） |
+
+## 環境處置紀錄（唔屬風險，屬動作）
+- a1/a2 teardown + alpine purge + 5 條 orphan `identity_data_dir_claims` 清理（fx-1 claim 保留 = dir 仲喺度，fail-closed）。
+- d4-fb 重建 ×2（swiftshader 實驗 R5 後收回，現行 = host GPU template；id `42af8bf2`）。
+- Chrome x86_64 nodpi 156.0.8078.47（apkmirror）裝 fb+gm，primaryCpuAbi=x86_64 ✓。
+- `pm disable-user com.google.android.setupwizard`（gm）；GMS disable-user（fb）。
+- `settings put global *_animation_scale 0`（兩機，R3 workaround）。
+- Chrome cmdline file = `/data/local/tmp/chrome-command-line`（debuggable build 先食）：ICE policy + CDP 9222 + no-first-run + proxy-server(gost)。
+
+## 登入截圖證據（老細 01:24 指令：截圖 = 登入唯一證據）
+- 狀態：**FB 登入未完成 — 未收到 feed 截圖 = 未算登入**（FB 賬號資料缺失，待老細提供 username）。
+- 待截圖清單（登入成功後第一步）：① FB feed 截圖（m.facebook.com 已登入 feed 內容）→ 交 CEO 轉老細。
