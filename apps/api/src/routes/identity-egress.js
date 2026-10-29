@@ -43,6 +43,12 @@ const PUT_BODY = {
     proxyUrl: { type: 'string', minLength: 8, maxLength: 2048 },
     // The ONE exit IP this identity may exit from (DB-unique fleet-wide).
     expectedEgressIp: { type: 'string', minLength: 7, maxLength: 15 },
+    // WA-STEALTH-FIX2 (E): declared exit country (ISO-3166 alpha-2). When
+    // present it must agree with the fingerprint's derived region (timezone /
+    // locale subtag) or the PUT 409s EGRESS_REGION_MISMATCH — unless the
+    // admin explicitly overrides (audit trail keeps the receipt).
+    region: { type: 'string', pattern: '^[A-Z]{2}$' },
+    regionOverride: { type: 'boolean' },
   },
 };
 

@@ -251,15 +251,20 @@ test('device create: name taken → 409 (fresh key)', async (t) => {
 });
 
 test('adb port allocation: real 127.0.0.1 collision → next port (工單 硬驗收 2 collision case)', async (t) => {
-  // Occupy 15000 on the real loopback; the allocator must skip it.
+  // Occupy the range start with a REAL loopback listener; the allocator must
+  // probe and skip it. WA-STEALTH-FIX2: the port is now RESERVED (listen 0),
+  // not hardcoded 15000 — the live fleet's docker-proxy binds hold 15000-15004
+  // and the fixed port made this fixture collide with the fleet, not with
+  // itself.
   const blocker = net.createServer();
-  await new Promise((res) => blocker.listen(15000, '127.0.0.1', res));
+  await new Promise((res) => blocker.listen(0, '127.0.0.1', res));
+  const p = blocker.address().port;
   try {
-    const { app, cookies, close } = await makeApp({ configOverride: { redroidAdbRangeStart: 15000, redroidAdbRangeEnd: 15001 } });
+    const { app, cookies, close } = await makeApp({ configOverride: { redroidAdbRangeStart: p, redroidAdbRangeEnd: p + 1 } });
     t.after(close);
     const r = await app.inject({ method: 'POST', url: '/api/devices/redroid', headers: { cookie: cookies.operator }, payload: { name: 'redroid-port', templateName: 'redroid-14-swiftshader', idempotencyKey: 'key-port-001' } });
     assert.equal(r.statusCode, 201, r.body);
-    assert.equal(r.json().device.adbPort, 15001, 'occupied 15000 must be skipped (real 127.0.0.1 probe)');
+    assert.equal(r.json().device.adbPort, p + 1, 'occupied start port must be skipped (real 127.0.0.1 probe)');
   } finally {
     blocker.close();
   }
@@ -267,9 +272,10 @@ test('adb port allocation: real 127.0.0.1 collision → next port (工單 硬驗
 
 test('adb port allocation: exhausted range → 503 REDROID_PORT_UNAVAILABLE', async (t) => {
   const blocker = net.createServer();
-  await new Promise((res) => blocker.listen(15000, '127.0.0.1', res));
+  await new Promise((res) => blocker.listen(0, '127.0.0.1', res));
+  const p = blocker.address().port;
   try {
-    const { app, cookies, close } = await makeApp({ configOverride: { redroidAdbRangeStart: 15000, redroidAdbRangeEnd: 15000 } });
+    const { app, cookies, close } = await makeApp({ configOverride: { redroidAdbRangeStart: p, redroidAdbRangeEnd: p } });
     t.after(close);
     const r = await app.inject({ method: 'POST', url: '/api/devices/redroid', headers: { cookie: cookies.operator }, payload: { name: 'redroid-port2', templateName: 'redroid-14-swiftshader', idempotencyKey: 'key-port-002' } });
     assert.equal(r.statusCode, 503);

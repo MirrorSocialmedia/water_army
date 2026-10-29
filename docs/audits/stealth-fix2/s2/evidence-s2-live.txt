@@ -1,0 +1,20 @@
+=== battery v2 script run ===
+BATTERY_STEALTH_OK
+=== battery readback ===
+  AC powered: false
+  USB powered: false
+  Dock powered: false
+  status: 3
+  present: true
+  level: 48
+=== drift script run (2h elapsed -> planned 44) ===
+BATTERY_DRIFT_OK
+  level: 44
+=== browser args provisioning ===
+BROWSER_ARGS_OK args=--webrtc-ip-handling-policy=default_public_interface_only dns=dns.alidns.com
+=== browser readback ===
+--webrtc-ip-handling-policy=default_public_interface_only
+default_public_interface_only
+hostname
+dns.alidns.com
+--webrtc-ip-handling-policy=default_public_interface_only

@@ -14,11 +14,13 @@
  *
  * Values are deterministic per device seed (stable across reboots — a phone
  * does not reboot at 100% then 12% then 88%) and re-planned on identity
- * change. Slow level drift over time is a FINAL refinement (S1 §6.1).
+ * change. WA-STEALTH-FIX2 adds the slow LEVEL drift (batteryDriftLevel —
+ * deterministic, watchdog-applied; S1 §6.1 refinement landed).
  */
 import { stealthRng } from './device-mac.js';
 
 export const BATTERY_STEALTH_MARKER = 'BATTERY_STEALTH_OK';
+export const BATTERY_DRIFT_MARKER = 'BATTERY_DRIFT_OK';
 
 const INT = (v, name) => {
   if (!Number.isInteger(v)) throw new Error(`stealth battery: ${name} must be an integer, got ${String(v)}`);
@@ -43,24 +45,69 @@ export function buildStealthBatteryProfile({ seed } = {}) {
  * The device-side script (exec seam: `sh -c`, same zero-arbitrary-shell rule
  * as the tunnel builders). Fixed argv, integers only — anything non-integer
  * THROWS here, never reaches the device.
+ *
+ * WA-STEALTH-FIX2 (s1 ruling, D1-4): the SUPPORTED shell surface on the real
+ * image is exactly `unplug/reset/status/level/present/ac/usb/wireless/dock`
+ * — `set temperature/voltage/health/plug` answer `Unknown set option:`
+ * (docs/audits/stealth-fix2/s1/S1-RESEARCH §1). v1 sent temperature+voltage
+ * anyway: harmless but silently DROPPED, so the app surface kept
+ * voltage=0/temperature=0 — a story-CONSISTENCY tell. v2 therefore applies
+ * only supported knobs and adds `present 1` (a real handset reports a
+ * battery PRESENT; the container default is present:false). voltage/
+ * temperature stay zero on this image = documented KNOWN GAP (root fix =
+ * battery HAL, image wave; NOT this layer).
  * @returns {string} sh script ending in the BATTERY_STEALTH_OK marker
  */
 export function buildStealthBatteryScript(profile) {
-  const { level, status, temperature, voltage } = profile ?? {};
-  INT(level, 'level'); INT(status, 'status'); INT(temperature, 'temperature'); INT(voltage, 'voltage');
+  const { level, status } = profile ?? {};
+  INT(level, 'level'); INT(status, 'status');
   if (level < 0 || level > 100) throw new Error(`stealth battery: level out of range: ${level}`);
   if (status < 0 || status > 5) throw new Error(`stealth battery: status out of range: ${status}`);
-  if (temperature < 0 || temperature > 600) throw new Error(`stealth battery: temperature out of range: ${temperature}`);
-  if (voltage < 0 || voltage > 20000) throw new Error(`stealth battery: voltage out of range: ${voltage}`);
   return [
     'dumpsys battery unplug',
     `dumpsys battery set status ${status}`,
     `dumpsys battery set level ${level}`,
-    `dumpsys battery set temperature ${temperature}`,
-    `dumpsys battery set voltage ${voltage}`,
-    `dumpsys battery set ac 0`,
-    `dumpsys battery set usb 0`,
-    `dumpsys battery set wireless 0`,
+    'dumpsys battery set present 1',
+    'dumpsys battery set ac 0',
+    'dumpsys battery set usb 0',
+    'dumpsys battery set wireless 0',
+    'dumpsys battery set dock 0',
     `echo ${BATTERY_STEALTH_MARKER}`,
   ].join('; ');
+}
+
+/**
+ * WA-STEALTH-FIX2 (work-order A): slow LEVEL drift so the story is not
+ * frozen — a phone that sits at exactly 79% for a week is its own tell.
+ * Pure and deterministic: level falls 1% per full `stepMinutes` elapsed
+ * since `anchorMs`, clamped at `floorLevel` (never panic-low). No RNG:
+ * the value is a function of (profile, clock) only — every recomputation
+ * at the same minute agrees, so watchdog ticks never fight.
+ * @returns {number} planned level for `nowMs`
+ */
+export function batteryDriftLevel({ profile, anchorMs, nowMs, stepMinutes = 30, floorLevel = 21 } = {}) {
+  const base = Number(profile?.level);
+  if (!Number.isInteger(base) || base < 0 || base > 100) throw new Error('stealth battery drift: profile.level required');
+  const anchor = Number(anchorMs);
+  const now = Number(nowMs);
+  const step = Number(stepMinutes);
+  const floor = Number(floorLevel);
+  if (!Number.isFinite(anchor) || !Number.isFinite(now) || step < 1 || floor < 0 || floor > 100) {
+    throw new Error('stealth battery drift: invalid anchor/now/step/floor');
+  }
+  if (now < anchor) return base; // clock went backwards (NTP) — hold the base
+  const steps = Math.floor((now - anchor) / (step * 60_000));
+  return Math.max(floor, base - steps);
+}
+
+/**
+ * Drift tick script (exec seam). Only the supported `level` knob moves —
+ * status/present were set at provisioning and live in BatteryService memory
+ * until reboot (a reboot re-runs the FULL provisioning, not this).
+ * @returns {string} sh script ending in the BATTERY_DRIFT_OK marker
+ */
+export function buildBatteryDriftScript(level) {
+  INT(level, 'level');
+  if (level < 0 || level > 100) throw new Error(`stealth battery drift: level out of range: ${level}`);
+  return `dumpsys battery set level ${level}; echo ${BATTERY_DRIFT_MARKER}`;
 }

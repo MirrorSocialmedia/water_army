@@ -23,7 +23,7 @@ import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 
-import { DOCKER_ERROR, encryptSecret, decryptSecret, resolveProviderKey, buildRoCmdArgs, profileToRoOverrides, templateProfileToRoOverrides, mergeRoOverrides, validateRoOverridesMap, deviceDisplayArgs, profileProcCmdArgs, planDeviceMac, deriveStealthRoOverrides, buildStealthBatteryProfile, buildStealthBatteryScript, BATTERY_STEALTH_MARKER } from '@water-army/shared';
+import { DOCKER_ERROR, encryptSecret, decryptSecret, resolveProviderKey, buildRoCmdArgs, profileToRoOverrides, templateProfileToRoOverrides, mergeRoOverrides, validateRoOverridesMap, deviceDisplayArgs, profileProcCmdArgs, planDeviceMac, deriveStealthRoOverrides, buildStealthBatteryProfile, buildStealthBatteryScript, BATTERY_STEALTH_MARKER, buildBatteryDriftScript, batteryDriftLevel, BATTERY_DRIFT_MARKER, buildBrowserArgsProvisionScript, BROWSER_ARGS_MARKER } from '@water-army/shared';
 
 import { DockerServiceError, classifyDockerError } from './docker-service.js';
 import { GOST_HOST_BIND, deviceNetwork, withDeviceNetwork, ensureDeviceNetwork } from './device-network.js';
@@ -224,6 +224,35 @@ export async function waitForAdbBootCompleted({ adbEngine, target, deadline, pol
     await new Promise((res) => setTimeout(res, pollMs));
   }
   return { booted: false };
+}
+
+/**
+ * WA-STEALTH-FIX2 (s2): boot detection with an EXEC-SEAM fallback.
+ * The API container ships NO adb binary (pre-existing defect, recorded in
+ * the fix2 progress file): every create/start inside the container therefore
+ * answered `boot not observed` after the 2400s adb deadline and the battery
+ * story silently skipped on the whole adv fleet (docker logs evidence).
+ * The docker exec seam is already owned by this service and needs no adb:
+ * `getprop sys.boot_completed` inside the container is the SAME whitelisted
+ * property. Strategy: give adb a SHORT grace (it may be injected later),
+ * then poll via exec until the shared deadline. Evidence: rdev-fx-1 reached
+ * boot_completed=1 in ~30s through exactly this seam (S1-RESEARCH §1).
+ */
+export async function waitForBootCompletedHybrid({ adbEngine, target, execInContainer, containerId, deadline, pollMs, now = Date.now, sleep = (ms) => new Promise((res) => setTimeout(res, ms)) }) {
+  try {
+    // Short adb grace — 3 polls max, then the seam is authoritative.
+    const grace = Math.min(deadline, now() + Math.max(pollMs, 1_000) * 3);
+    const { booted } = await waitForAdbBootCompleted({ adbEngine, target, deadline: grace, pollMs });
+    if (booted) return { booted: true, via: 'adb' };
+  } catch { /* adb unreachable from this container — expected */ }
+  while (now() < deadline) {
+    try {
+      const r = await execInContainer(containerId, 'getprop sys.boot_completed', { timeoutMs: 10_000 });
+      if (r?.exitCode === 0 && String(r.stdout ?? '').trim() === '1') return { booted: true, via: 'exec' };
+    } catch { /* not exec-able yet — keep polling */ }
+    await sleep(pollMs);
+  }
+  return { booted: false, via: null };
 }
 
 /**
@@ -1441,6 +1470,10 @@ export function createRedroidService({
   let watchdogTimer = null;
   let watchdogSweepTimer = null;
   let watchdogRunning = false;
+  // WA-STEALTH-FIX2 (A, drift leg): deviceId -> last applied drift level.
+  // Per-process on purpose: an API restart simply re-applies the current
+  // planned value on the next tick (one cheap docker exec — no DB state).
+  const batteryDriftApplied = new Map();
   /** In-process double-trigger guard (the DB lease is the cross-crash guard). */
   const recovering = new Set();
 
@@ -1646,6 +1679,9 @@ export function createRedroidService({
       const rows = await db.device.findMany({ include: { template: true } });
       for (const row of rows) {
         try {
+          // WA-STEALTH-FIX2 (A): battery drift rides this sweep — proxy AND
+          // non-proxy devices alike (isolated; never breaks the net pass).
+          await batteryDriftTick(row);
           if (!row.gostPort) {
             // W3 (ADR-027): proxy-less devices skip the net pass but still
             // get an EXPLICIT egress stamp (NO_PROXY while the switch is ON
@@ -1790,12 +1826,18 @@ export function createRedroidService({
   }
 
   /**
-   * WA-VMSTEALTH (S2, S1 §3.4): apply the battery story override after boot
-   * (dumpsys battery override layer — S1 §3.3 ruling (a): zero image/boot
-   * risk, re-applied every boot because the override lives in BatteryService
-   * memory). Fire-and-forget like the tunnel: never breaks create/start,
-   * failures are log-only. Deterministic per device seed (stable across
-   * reboots). Gate OFF ⇒ nothing runs (byte-identical legacy behaviour).
+   * WA-VMSTEALTH (S2) + WA-STEALTH-FIX2: the post-boot device stealth story —
+   * (a) battery override (dumpsys layer, re-applied every boot: the override
+   * lives in BatteryService memory) and (b) browser launch-argument
+   * provisioning (WebRTC IP-policy carriers + optional private DNS —
+   * packages/shared/stealth-browser.js carries the s1 evidence that release
+   * WebView may ignore the carriers; provisioning is idempotent and the
+   * residual-risk statement, not an overclaim, ships with it).
+   *
+   * Boot detection is HYBRID (adb grace + docker-exec seam — the API
+   * container has no adb, see waitForBootCompletedHybrid). Fire-and-forget
+   * like the tunnel: never breaks create/start, failures are log-only.
+   * Deterministic per device seed. Gate OFF ⇒ nothing runs.
    */
   async function provisionBatteryStealth(row) {
     if (!config?.redroidStealthEnabled) return { applied: false, reason: 'gate-off' };
@@ -1804,7 +1846,7 @@ export function createRedroidService({
       const target = `127.0.0.1:${row.adbPort}`;
       const deadline = Date.now() + (config?.redroidTunnelBootTimeoutMs ?? 2_400_000);
       const pollMs = config?.redroidTunnelPollMs ?? 5000;
-      const { booted } = await waitForAdbBootCompleted({ adbEngine, target, deadline, pollMs });
+      const { booted, via } = await waitForBootCompletedHybrid({ adbEngine, target, execInContainer, containerId: row.containerId, deadline, pollMs });
       if (!booted) {
         log.warn({ device: row.name }, 'vmstealth: battery override skipped — boot not observed');
         return { applied: false, reason: 'boot-timeout' };
@@ -1813,14 +1855,59 @@ export function createRedroidService({
       const r = await execInContainer(row.containerId, buildStealthBatteryScript(profile));
       if (r.exitCode !== 0 || !r.stdout.includes(BATTERY_STEALTH_MARKER)) {
         log.warn({ device: row.name, exit: r.exitCode, out: String(r.stdout ?? r.stderr).slice(0, 160) }, 'vmstealth: battery override FAILED (non-fatal)');
-        return { applied: false, reason: 'exec-failed' };
+        return { applied: false, reason: 'exec-failed', via, profile };
       }
-      log.info({ device: row.name, level: profile.level }, 'vmstealth: battery override applied');
-      return { applied: true, profile };
+      // Drift anchor: provisioning applied the BASE level — let the watchdog
+      // tick move it from there (per-process map; API restart just re-applies).
+      batteryDriftApplied.set(row.id, profile.level);
+      // WA-STEALTH-FIX2 (D/E): browser launch args — best-effort, isolated.
+      let browser = { applied: false };
+      try {
+        const script = buildBrowserArgsProvisionScript({
+          webrtcPolicy: config.browserWebrtcIpPolicy,
+          launchArgs: config.browserLaunchArgs,
+          dnsResolver: config.deviceDnsResolver,
+        });
+        const br = await execInContainer(row.containerId, script);
+        if (br.exitCode === 0 && String(br.stdout ?? '').includes(BROWSER_ARGS_MARKER)) browser = { applied: true };
+        else log.warn({ device: row.name, exit: br.exitCode, out: String(br.stdout ?? br.stderr).slice(0, 160) }, 'vmstealth: browser-args provisioning FAILED (non-fatal)');
+      } catch (err) {
+        log.warn({ device: row.name, error: err?.message }, 'vmstealth: browser-args provisioning error (non-fatal)');
+      }
+      log.info({ device: row.name, level: profile.level, via, browser: browser.applied }, 'vmstealth: device story override applied');
+      return { applied: true, profile, via, browser };
     } catch (err) {
       log.warn({ device: row.name, error: err?.message }, 'vmstealth: battery provisioning error (non-fatal)');
       return { applied: false, reason: 'error' };
     }
+  }
+
+  /**
+   * WA-STEALTH-FIX2 (A, drift leg): slow deterministic LEVEL drift riding the
+   * net watchdog tick — pure function of (profile seed, device age), so a
+   * recompute never fights itself; exec fires ONLY when the planned level
+   * moved (per-process map). Status/present knobs are NOT touched here —
+   * they live in BatteryService memory and are re-applied wholesale by the
+   * create/start provisioning pass.
+   */
+  async function batteryDriftTick(row) {
+    if (!config?.redroidStealthEnabled || !config?.redroidBatteryDriftEnabled) return null;
+    if (row.containerState !== 'running' || !row.containerId) {
+      batteryDriftApplied.delete(row.id); // container gone — forget the anchor
+      return null;
+    }
+    const profile = buildStealthBatteryProfile({ seed: String(row.identityId ?? row.name) });
+    const anchorMs = row.createdAt ? new Date(row.createdAt).getTime() : Date.now();
+    const planned = batteryDriftLevel({ profile, anchorMs, nowMs: Date.now(), stepMinutes: config.redroidBatteryDriftStepMinutes ?? 30 });
+    if (batteryDriftApplied.get(row.id) === planned) return { skipped: 'steady' };
+    const r = await execInContainer(row.containerId, buildBatteryDriftScript(planned), { timeoutMs: 15_000 });
+    if (r.exitCode === 0 && String(r.stdout ?? '').includes(BATTERY_DRIFT_MARKER)) {
+      batteryDriftApplied.set(row.id, planned);
+      log.info({ device: row.name, level: planned, base: profile.level }, 'vmstealth: battery drift applied');
+      return { applied: planned };
+    }
+    log.warn({ device: row.name, exit: r.exitCode, out: String(r.stdout ?? r.stderr).slice(0, 120) }, 'vmstealth: battery drift tick failed (non-fatal)');
+    return null;
   }
 
   /**

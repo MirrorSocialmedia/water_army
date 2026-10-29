@@ -29,7 +29,7 @@
  */
 import { createHash } from 'node:crypto';
 
-import { encryptSecret, resolveProviderKey } from '@water-army/shared';
+import { encryptSecret, resolveProviderKey, checkRegionConsistency, ISO2_RE } from '@water-army/shared';
 import { validateEgressIp } from './redroid-health.js';
 import { RedroidServiceError, validateProxyUrl } from './redroid-service.js';
 
@@ -86,6 +86,8 @@ export function createIdentityEgressService({ db, config, audit = null, log = { 
     return {
       identityId: row.identityId,
       expectedEgressIp: row.expectedEgressIp,
+      // WA-STEALTH-FIX2 (E): declared exit country (null = legacy / not declared).
+      region: row.region ?? null,
       proxyHashShort: hashShort(row.proxyUrlHash),
       schemaVersion: row.schemaVersion ?? 1,
       firstVerifiedAt: row.firstVerifiedAt ?? null,
@@ -140,7 +142,7 @@ export function createIdentityEgressService({ db, config, audit = null, log = { 
    * the bound devices are reset to UNCHECKED (see above).
    *
    * @param {string} identityId
-   * @param {{ proxyUrl: string, expectedEgressIp: string }} input
+   * @param {{ proxyUrl: string, expectedEgressIp: string, region?: string, regionOverride?: boolean }} input
    * @param {object} [ctx] { actorUserId, requestId, ip }
    */
   async function upsertBinding(identityId, input, ctx = {}) {
@@ -167,6 +169,31 @@ export function createIdentityEgressService({ db, config, audit = null, log = { 
       throw fail('EGRESS_IP_INVALID', 400, `expectedEgressIp is not a valid IPv4 address (${ipCheck.error})`);
     }
 
+    // WA-STEALTH-FIX2 (E): declared exit region + three-way consistency.
+    // The profile's region is DERIVED from the fingerprint (timezone /
+    // locale subtag — packages/shared/src/region.js); each axis is checked
+    // INDEPENDENTLY. Mismatch → 409 unless regionOverride (admin
+    // acknowledgement lands in the audit trail). No fingerprint / unknown
+    // zone = unverifiable → allowed (fail-open by ruling, visible as
+    // region in the view; the D2 case — Paris TZ + en-US + CN exit — breaks
+    // on BOTH axes and 409s).
+    const region = typeof input?.region === 'string' && input.region.trim()
+      ? input.region.trim().toUpperCase()
+      : null;
+    if (region && !ISO2_RE.test(region)) {
+      throw fail('EGRESS_REGION_INVALID', 400, 'region must be an ISO-3166 alpha-2 code (two uppercase letters, e.g. "HK")');
+    }
+    const regionOverride = input?.regionOverride === true;
+    let regionCheck = null;
+    if (region) {
+      const fp = db.identityFingerprint ? await db.identityFingerprint.findUnique({ where: { identityId } }) : null;
+      regionCheck = checkRegionConsistency({ egressRegion: region, timezone: fp?.timezone, locale: fp?.locale });
+      if (!regionCheck.ok && !regionOverride) {
+        const say = regionCheck.mismatches.map((axis) => `${axis}:${axis === 'timezone' ? regionCheck.tzRegion : regionCheck.localeRegion}`).join(', ');
+        throw fail('EGRESS_REGION_MISMATCH', 409, `exit region ${region} contradicts the identity profile (${say}) — pass regionOverride=true to acknowledge`);
+      }
+    }
+
     // Correlation killer: no OTHER identity may already pin this exit IP.
     const clash = await db.identityEgress.findFirst({ where: { expectedEgressIp: expectedIp, NOT: { identityId } } });
     if (clash) {
@@ -180,38 +207,47 @@ export function createIdentityEgressService({ db, config, audit = null, log = { 
     const existing = await db.identityEgress.findUnique({ where: { identityId } });
     if (!existing) {
       const row = await db.identityEgress.create({
-        data: { identityId, proxyUrlEncrypted: encrypted, proxyUrlHash: hash, expectedEgressIp: expectedIp, createdAt: now, updatedAt: now },
+        data: { identityId, proxyUrlEncrypted: encrypted, proxyUrlHash: hash, expectedEgressIp: expectedIp, region, createdAt: now, updatedAt: now },
       }).catch((err) => {
         if (err?.code === 'P2002') throw fail('EGRESS_IP_CONFLICT', 409, `exit IP ${expectedIp} is already pinned by another identity`);
         throw err;
       });
+      if (regionOverride && regionCheck && !regionCheck.ok) {
+        await writeAudit(ctx.actorUserId, 'identity.egress_region_override', identityId, 'success',
+          { region, tzRegion: regionCheck.tzRegion, localeRegion: regionCheck.localeRegion, mismatches: regionCheck.mismatches }, ctx.requestId, ctx.ip);
+      }
       await writeAudit(ctx.actorUserId, 'identity.egress_binding_create', identityId, 'success',
-        { expectedEgressIp: expectedIp, proxyHashShort: hashShort(hash), action: 'create' }, ctx.requestId, ctx.ip);
-      log.info({ identityId, expectedIp }, 'identity egress: binding created');
+        { expectedEgressIp: expectedIp, region, proxyHashShort: hashShort(hash), action: 'create' }, ctx.requestId, ctx.ip);
+      log.info({ identityId, expectedIp, region }, 'identity egress: binding created');
       return bindingView(row);
     }
 
     const ipChanged = existing.expectedEgressIp !== expectedIp;
     const proxyChanged = existing.proxyUrlHash !== hash;
-    if (!ipChanged && !proxyChanged) {
+    const regionChanged = (existing.region ?? null) !== region;
+    if (!ipChanged && !proxyChanged && !regionChanged) {
       // Identical → idempotent no-op (still a valid read).
       return bindingView(existing);
     }
 
     const row = await db.identityEgress.update({
       where: { identityId },
-      data: { proxyUrlEncrypted: encrypted, proxyUrlHash: hash, expectedEgressIp: expectedIp, updatedAt: now },
+      data: { proxyUrlEncrypted: encrypted, proxyUrlHash: hash, expectedEgressIp: expectedIp, region, updatedAt: now },
     }).catch((err) => {
       if (err?.code === 'P2002') throw fail('EGRESS_IP_CONFLICT', 409, `exit IP ${expectedIp} is already pinned by another identity`);
       throw err;
     });
 
+    if (regionOverride && regionCheck && !regionCheck.ok) {
+      await writeAudit(ctx.actorUserId, 'identity.egress_region_override', identityId, 'success',
+        { region, tzRegion: regionCheck.tzRegion, localeRegion: regionCheck.localeRegion, mismatches: regionCheck.mismatches }, ctx.requestId, ctx.ip);
+    }
     // The expectation moved → old VERIFIED evidence is void. Reset bound
     // devices to UNCHECKED (fail-closed until a fresh probe matches).
     const reset = await resetBoundDevices(identityId);
     await writeAudit(ctx.actorUserId, 'identity.egress_binding_update', identityId, 'success',
-      { expectedEgressIp: expectedIp, previousEgressIp: ipChanged ? existing.expectedEgressIp : null, proxyHashShort: hashShort(hash), proxyChanged, devicesReset: reset }, ctx.requestId, ctx.ip);
-    log.info({ identityId, expectedIp, ipChanged, proxyChanged, devicesReset: reset }, 'identity egress: binding updated (bound devices reset to UNCHECKED)');
+      { expectedEgressIp: expectedIp, previousEgressIp: ipChanged ? existing.expectedEgressIp : null, region, previousRegion: regionChanged ? (existing.region ?? null) : null, proxyHashShort: hashShort(hash), proxyChanged, devicesReset: reset }, ctx.requestId, ctx.ip);
+    log.info({ identityId, expectedIp, ipChanged, proxyChanged, regionChanged, devicesReset: reset }, 'identity egress: binding updated (bound devices reset to UNCHECKED)');
     return bindingView(row);
   }
 

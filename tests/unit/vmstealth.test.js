@@ -129,13 +129,25 @@ describe('stealth battery', () => {
     assert.doesNotMatch(s, /[$`|&*()\\]/); // no expansion/substitution surface (semicolons are OUR separators)
   });
 
+  it('script v2 (WA-STEALTH-FIX2): ONLY the supported shell surface, present 1, no temperature/voltage', () => {
+    // s1 real-device ruling (S1-RESEARCH §1): this image's BatteryService
+    // answers `Unknown set option:` for temperature/voltage — v2 must not
+    // send them, and must pin present 1 (container default present:false).
+    const p = buildStealthBatteryProfile({ seed: 'dev-3b' });
+    const s = buildStealthBatteryScript(p);
+    assert.ok(s.includes('dumpsys battery set present 1'));
+    assert.ok(s.includes('dumpsys battery set dock 0'));
+    assert.doesNotMatch(s, /set (temperature|voltage)/);
+    assert.equal(s.split('; ').at(-1), `echo ${BATTERY_STEALTH_MARKER}`);
+  });
+
   it('script: fail-closed on anything non-integer or out of range', () => {
     const p = buildStealthBatteryProfile({ seed: 'dev-4' });
     assert.throws(() => buildStealthBatteryScript({ ...p, level: '7; rm -rf /' }));
     assert.throws(() => buildStealthBatteryScript({ ...p, level: 7.5 }));
     assert.throws(() => buildStealthBatteryScript({ ...p, level: 101 }));
     assert.throws(() => buildStealthBatteryScript({ ...p, status: 9 }));
-    assert.throws(() => buildStealthBatteryScript({ ...p, temperature: 999 }));
+    assert.doesNotThrow(() => buildStealthBatteryScript({ ...p, temperature: 999 })); // v2: unused knob
     assert.throws(() => buildStealthBatteryScript(undefined));
   });
 });

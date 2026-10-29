@@ -663,6 +663,11 @@ model IdentityEgress {
   proxyUrlEncrypted String  @map("proxy_url_encrypted")
   proxyUrlHash     String   @map("proxy_url_hash")
   expectedEgressIp String   @unique @map("expected_egress_ip")
+  // WA-STEALTH-FIX2 (E): the exit's declared country (ISO-3166 alpha-2).
+  // NULL = legacy/not declared (three-way check skipped). When set it must
+  // agree with the identity fingerprint's derived region (TZ / locale
+  // subtag) or the ADMIT 409s — see packages/shared/src/region.js.
+  region           String?   @db.VarChar(2)
   schemaVersion    Int      @default(1) @map("schema_version")
   firstVerifiedAt  DateTime? @map("first_verified_at")
   lastVerifiedAt   DateTime? @map("last_verified_at")

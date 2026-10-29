@@ -602,3 +602,5 @@ export {
 // WA-VMSTEALTH (2026-10-29): per-identity device MAC planning (S2)
 export * from './device-mac.js';
 export * from './stealth-battery.js';
+export * from './stealth-browser.js';
+export * from './region.js';

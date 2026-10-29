@@ -158,6 +158,16 @@ export function loadConfig(env = process.env, opts = {}) {
   // (the MAC/battery parts are independent of injection).
   const redroidStealthEnabled = ['1', 'true', 'yes', 'on'].includes(String(e.WA_REDROID_STEALTH_ENABLED ?? 'false').toLowerCase());
 
+  // WA-STEALTH-FIX2 (s2): browser launch-argument provisioning (WebRTC IP
+  // policy carriers + optional private-DNS resolver) and battery story
+  // drift — all subordinate to redroidStealthEnabled (gate OFF = zero new
+  // device-side behaviour). Policy/args semantics + the s1 evidence that
+  // release WebView may ignore the carriers: packages/shared/stealth-browser.js.
+  const browserWebrtcIpPolicy = String(e.WA_BROWSER_WEBRTC_IP_POLICY ?? 'default_public_interface_only').trim() || 'default_public_interface_only';
+  const browserLaunchArgs = String(e.WA_BROWSER_LAUNCH_ARGS ?? '').trim(); // full-string override; builder validates
+  const deviceDnsResolver = String(e.WA_DEVICE_DNS_RESOLVER ?? '').trim(); // '' = image default (off)
+  const redroidBatteryDriftEnabled = ['1', 'true', 'yes', 'on'].includes(String(e.WA_REDROID_BATTERY_DRIFT_ENABLED ?? 'true').toLowerCase());
+
   // W2 (ADR-026): app-layer ops (install/packages/UI tree/tap) — OFF by
   // default. Until the real-device matrix passes, routes fail closed with
   // 503 APP_OPS_DISABLED; flipping on is an explicit operator opt-in.
@@ -241,6 +251,11 @@ export function loadConfig(env = process.env, opts = {}) {
     redroidRoOverridesEnabled,
     redroidTemplateProfilesEnabled,
     redroidStealthEnabled,
+    browserWebrtcIpPolicy,
+    browserLaunchArgs,
+    deviceDnsResolver,
+    redroidBatteryDriftEnabled,
+    redroidBatteryDriftStepMinutes: optInt(e, 'WA_REDROID_BATTERY_DRIFT_STEP_MIN', 30),
     waAppOpsEnabled,
     egressBindingEnabled,
     gmailProvisionEnabled,

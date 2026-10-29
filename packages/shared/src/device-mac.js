@@ -34,6 +34,7 @@ export const PHONE_OUI_POOL = Object.freeze({
   honor: ['0c:b9:83', '2c:b3:01', '40:d4:f6'],
   oneplus: ['ac:c0:48', '5c:17:cf', 'a0:91:a2'],
   google: ['60:70:6c', 'c8:2a:dd', '24:29:34'],
+  nothing: ['3c:b0:ed', '2c:be:eb', '2c:be:ee'], // Nothing Technology Limited (IEEE oui.txt 2026-10-29 snapshot; WA-STEALTH-FIX2 F2 — before this the 'Nothing' brand fell through to the Google/flat pool, adv-a4 tell)
   motorola: ['64:1b:2f', '0c:b9:83', 'ac:c0:48'], // no current MA-L match for "Motorola Mobile" in the snapshot — reuse pool entries (plausible, same-ecosystem)
 });
 
