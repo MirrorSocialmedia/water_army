@@ -200,11 +200,6 @@ services:
       # BATCH_LIFECYCLE_CLIENT_TIMEOUT_MS), calibrated on v8 evidence (3
       # concurrent MTG boots >120s, p2-43). Admin override still available via
       # CONTAINER_ADAPTER_LIFECYCLE_TIMEOUT_MS (15000..1800000).
-      # WA-BATCH-E2E-RERUN (admin test config): in-window work window for the
-      # real-ADB getprop evidence step — default stays 1500ms (zero behavior
-      # change when the var is unset); set in .env for the P2 batch only and
-      # reverted in P3 (zero residue).
-      CONTAINER_ADAPTER_HOLD_MS: ${CONTAINER_ADAPTER_HOLD_MS:-1500}
     depends_on:
       redis:
         condition: service_healthy

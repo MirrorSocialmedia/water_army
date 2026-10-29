@@ -1,0 +1,20 @@
+=== P3.1c product-API re-purge x9 (post-chown) @ 2026-10-29T04:10:26Z ===
+redroid-rdfa-r1 dryRun=200 confirm={"dryRun":false,"identityId":"6ec12568-1134-4d4f-9016-6737c8c29614","dataPath":"/var/lib/water-army/redroid/redroid-rdfa-r1","removed":true,"sizeBytes":67530017,"fileCount":835,"containers":[]}|200
+redroid-rdfa-r2 dryRun=200 confirm={"dryRun":false,"identityId":"71e69433-f125-417d-876e-ce6819ad2bac","dataPath":"/var/lib/water-army/redroid/redroid-rdfa-r2","removed":true,"sizeBytes":67645228,"fileCount":837,"containers":[]}|200
+redroid-rdfa-r3 dryRun=200 confirm={"dryRun":false,"identityId":"536934e3-add2-4811-91ee-94062d00be95","dataPath":"/var/lib/water-army/redroid/redroid-rdfa-r3","removed":true,"sizeBytes":67561409,"fileCount":836,"containers":[]}|200
+redroid-rdfa-r4 dryRun=200 confirm={"dryRun":false,"identityId":"36f55eae-9040-4c0e-95a0-b80068bc2991","dataPath":"/var/lib/water-army/redroid/redroid-rdfa-r4","removed":true,"sizeBytes":67336031,"fileCount":863,"containers":[]}|200
+redroid-rdfa-r5 dryRun=200 confirm={"dryRun":false,"identityId":"99512824-2250-45e4-8d01-fcf81982535d","dataPath":"/var/lib/water-army/redroid/redroid-rdfa-r5","removed":true,"sizeBytes":66743498,"fileCount":834,"containers":[]}|200
+redroid-rdfa-r6 dryRun=200 confirm={"dryRun":false,"identityId":"b66953a4-3210-4a52-90b8-cd00a4b7794a","dataPath":"/var/lib/water-army/redroid/redroid-rdfa-r6","removed":true,"sizeBytes":67244810,"fileCount":864,"containers":[]}|200
+redroid-rdfa-r7 dryRun=200 confirm={"dryRun":false,"identityId":"e66ff36c-f7d7-45bf-a45e-c5854bed0208","dataPath":"/var/lib/water-army/redroid/redroid-rdfa-r7","removed":true,"sizeBytes":67453086,"fileCount":835,"containers":[]}|200
+redroid-rdfa-r8 dryRun=200 confirm={"dryRun":false,"identityId":"ff8ebfd0-edd1-4598-a200-e74a971960e3","dataPath":"/var/lib/water-army/redroid/redroid-rdfa-r8","removed":true,"sizeBytes":67278549,"fileCount":867,"containers":[]}|200
+redroid-rdfa-r9 dryRun=200 confirm={"dryRun":false,"identityId":"55b4920e-942b-4bab-a690-1df8f6383619","dataPath":"/var/lib/water-army/redroid/redroid-rdfa-r9","removed":true,"sizeBytes":67362423,"fileCount":834,"containers":[]}|200
+--- data dirs after ---
+r1 gone
+r2 gone
+r3 gone
+r4 gone
+r5 gone
+r6 gone
+r7 gone
+r8 gone
+r9 gone

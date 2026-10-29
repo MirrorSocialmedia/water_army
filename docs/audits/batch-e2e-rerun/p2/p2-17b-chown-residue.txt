@@ -1,0 +1,11 @@
+=== P3.1b root-owned residue chown 1000:1000 (alpine) so PRODUCT purge can complete its own path @ 2026-10-29T04:10:03Z ===
+why: redroid container runs as root in-container -> dalvik-cache etc. owned by root on host; api runs uid 1000 -> fso.rm EACCES (known, see p2-17). chown to api's own uid = product path completes natively; no product code touched.
+r1: chown-ok
+r2: chown-ok
+r3: chown-ok
+r4: chown-ok
+r5: chown-ok
+r6: chown-ok
+r7: chown-ok
+r8: chown-ok
+r9: chown-ok

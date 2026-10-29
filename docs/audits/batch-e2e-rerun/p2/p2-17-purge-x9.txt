@@ -1,0 +1,28 @@
+=== P3.1 product-API purge x9 (dryRun -> confirm=identityId) @ 2026-10-29T04:07:42Z ===
+--- redroid-rdfa-r1 (6ec12568-1134-4d4f-9016-6737c8c29614) ---
+[dryRun] dataExists=True size=10578917 files=448 containers=1 HTTP=200
+[confirm] {"error":{"code":"INTERNAL","message":"Internal server error","requestId":"b117816d-e9e5-49a2-9c9c-ed96d91a31f8"}} HTTP=500
+--- redroid-rdfa-r2 (71e69433-f125-417d-876e-ce6819ad2bac) ---
+[dryRun] dataExists=True size=10578071 files=446 containers=1 HTTP=200
+[confirm] {"error":{"code":"INTERNAL","message":"Internal server error","requestId":"bdbeb145-d0cb-433c-bc29-583b2ab44c1b"}} HTTP=500
+--- redroid-rdfa-r3 (536934e3-add2-4811-91ee-94062d00be95) ---
+[dryRun] dataExists=True size=10577716 files=446 containers=1 HTTP=200
+[confirm] {"error":{"code":"INTERNAL","message":"Internal server error","requestId":"415251ac-3aaa-485c-a487-86eb7449bd81"}} HTTP=500
+--- redroid-rdfa-r4 (36f55eae-9040-4c0e-95a0-b80068bc2991) ---
+[dryRun] dataExists=True size=10573438 files=437 containers=1 HTTP=200
+[confirm] {"error":{"code":"INTERNAL","message":"Internal server error","requestId":"00059ee5-eee5-4e55-9ea0-d2e574b25d75"}} HTTP=500
+--- redroid-rdfa-r5 (99512824-2250-45e4-8d01-fcf81982535d) ---
+[dryRun] dataExists=True size=10578377 files=447 containers=1 HTTP=200
+[confirm] {"error":{"code":"INTERNAL","message":"Internal server error","requestId":"62eef57f-efc5-430d-84f4-9126efa46c05"}} HTTP=500
+--- redroid-rdfa-r6 (b66953a4-3210-4a52-90b8-cd00a4b7794a) ---
+[dryRun] dataExists=True size=10561260 files=437 containers=1 HTTP=200
+[confirm] {"error":{"code":"INTERNAL","message":"Internal server error","requestId":"152a080a-e5a0-4353-ac4f-c49abe63bb9e"}} HTTP=500
+--- redroid-rdfa-r7 (e66ff36c-f7d7-45bf-a45e-c5854bed0208) ---
+[dryRun] dataExists=True size=10580388 files=446 containers=1 HTTP=200
+[confirm] {"error":{"code":"INTERNAL","message":"Internal server error","requestId":"4617d962-d4b4-44e9-ba1e-57241b19d36b"}} HTTP=500
+--- redroid-rdfa-r8 (ff8ebfd0-edd1-4598-a200-e74a971960e3) ---
+[dryRun] dataExists=True size=12364922 files=495 containers=1 HTTP=200
+[confirm] {"error":{"code":"INTERNAL","message":"Internal server error","requestId":"42f6f44c-68ab-401b-8ab1-c87f7578e64e"}} HTTP=500
+--- redroid-rdfa-r9 (55b4920e-942b-4bab-a690-1df8f6383619) ---
+[dryRun] dataExists=True size=10582051 files=447 containers=1 HTTP=200
+[confirm] {"error":{"code":"INTERNAL","message":"Internal server error","requestId":"db35c303-f45a-4364-bff5-36548a914370"}} HTTP=500
