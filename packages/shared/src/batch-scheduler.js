@@ -31,6 +31,12 @@ import {
 } from './batch-constants.js';
 import { TASK_RUN_TERMINAL as TASK_RUN_TERMINAL_LOCAL } from './task-constants.js';
 import { enqueueBatchRun, removeWaitingBatchRun } from './task-queue.js';
+import {
+  readEgressGroupJitter,
+  resolveIdentityGroupKey,
+  evaluateEgressGroupGate,
+  isSingletonGroupKey,
+} from './egress-group.js';
 
 /** Re-exported for consumers that import from the scheduler (single source). */
 export const BATCH_SCHEDULER_DEFAULTS = Object.freeze({
@@ -248,7 +254,23 @@ export function createBatchScheduler({
   async function ensureRuns(batch, { actor = 'scheduler' } = {}) {
     const members = await db.batchIdentity.findMany({ where: { batchId: batch.id } });
     members.sort((a, b) => a.position - b.position);
-    const out = { dispatched: 0, reused: 0, skipped: 0 };
+    const out = { dispatched: 0, reused: 0, skipped: 0, groupDeferred: [] };
+
+    // WA-IPGROUP 鐵律 2: stagger window per dispatch pass (AppSetting read
+    // is one cheap PK read; an admin change applies at the next dispatch).
+    const jitterWindow = await readEgressGroupJitter(db, { log });
+
+    /**
+     * Soft egress-group gate for a NEW dispatch (membership stays PENDING —
+     * the reused `queued_group_wait` semantic, see egress-group.js header).
+     * Singleton groups short-circuit: unconfigured fleets are untouched.
+     */
+    async function groupGateAllows(identity) {
+      const groupKey = await resolveIdentityGroupKey(db, identity);
+      if (isSingletonGroupKey(groupKey)) return { allowed: true, groupKey };
+      const gate = await evaluateEgressGroupGate({ db, groupKey, now, jitter: jitterWindow, log });
+      return { allowed: gate.allowed, groupKey, reason: gate.reason, nextEligibleAt: gate.nextEligibleAt ?? null };
+    }
 
     for (const m of members) {
       if (['COMPLETED', 'FAILED_FINAL', 'SKIPPED'].includes(m.status)) continue;
@@ -297,6 +319,11 @@ export function createBatchScheduler({
           continue;
         }
         const runId = newUuid();
+        const gate = await groupGateAllows(identity);
+        if (!gate.allowed) {
+          out.groupDeferred.push({ identityId: identity.id, groupKey: gate.groupKey, reason: gate.reason, nextEligibleAt: gate.nextEligibleAt });
+          continue;
+        }
         const rearm = await rearmCancelledForDispatch(identity.id, runId, { batchId: batch.id, actor });
         if (!rearm.ok) {
           out.skipped += 1;
@@ -311,6 +338,13 @@ export function createBatchScheduler({
       // Fresh membership: identity must be READY (the plan cycle SKIPPED everything else).
       if (identity.status !== 'READY') {
         out.skipped += 1;
+        continue;
+      }
+      const gate = await groupGateAllows(identity);
+      if (!gate.allowed) {
+        // 鐵律 2: the exit is busy or inside its stagger window — defer
+        // HONESTLY (no reservation burned; the next tick retries).
+        out.groupDeferred.push({ identityId: identity.id, groupKey: gate.groupKey, reason: gate.reason, nextEligibleAt: gate.nextEligibleAt });
         continue;
       }
       const runId = newUuid();
@@ -661,8 +695,33 @@ export function createBatchScheduler({
    */
   async function reconcileExpiredLeases() {
     const expired = await leaseSvc.listExpired(now());
-    const summary = { scanned: expired.length, released: 0, isolated: 0, cancelled: 0, retried: 0, finalFailed: 0, errors: [] };
+    const summary = { scanned: expired.length, released: 0, isolated: 0, cancelled: 0, retried: 0, finalFailed: 0, groupLeasesReleased: 0, groupLeasesRenewed: 0, errors: [] };
     for (const lease of expired) {
+      // WA-IPGROUP: egress_group exclusion lease lifecycle. Owner gone /
+      // terminal → release (the group must not stay wedged by a crash).
+      // Owner run still live → renew ONCE (the zombie is being reconciled by
+      // the slot path below; the group stays claimed until that converges —
+      // never a silent takeover of a possibly-live exit).
+      if (lease.resourceType === 'egress_group') {
+        try {
+          const run = lease.ownerRunId ? await db.taskRun.findUnique({ where: { id: lease.ownerRunId } }) : null;
+          if (!run || TASK_RUN_TERMINAL_LOCAL.includes(run.status)) {
+            if (lease.ownerRunId) await leaseSvc.release({ resourceType: 'egress_group', resourceKey: lease.resourceKey, ownerRunId: lease.ownerRunId });
+            else await db.resourceLease.deleteMany({ where: { resourceType: 'egress_group', resourceKey: lease.resourceKey, ownerRunId: null } });
+            summary.groupLeasesReleased += 1;
+          } else {
+            // Owner run still LIVE: re-claim the expired row FOR THE SAME
+            // OWNER (renew() refuses expired rows by design) — the zombie
+            // converges via the slot path below; never a silent takeover.
+            const re = await leaseSvc.acquire({ resourceType: 'egress_group', resourceKey: lease.resourceKey, ownerRunId: lease.ownerRunId, ownerLabel: lease.ownerLabel ?? undefined, ttlMs: slotTtlMs });
+            if (re.acquired && re.lease?.ownerRunId === lease.ownerRunId) summary.groupLeasesRenewed += 1;
+            else summary.groupLeasesReleased += 1; // lost the race to a real takeover
+          }
+        } catch (err) {
+          summary.errors.push({ slot: lease.resourceKey, runId: lease.ownerRunId, error: err.message });
+        }
+        continue;
+      }
       if (lease.resourceType !== 'container_slot') continue; // port/identity leases: B3 scope
       try {
         await reconcileOneSlotLease(lease, summary);

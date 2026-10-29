@@ -8,9 +8,20 @@
  *   0. stale guards (run gone / terminal / superseded attempt)
  *   1. batch gate        — batch must be RUNNING (else: stop the run)
  *   2. identity guard    — identity must be RESERVED/RETRY_WAIT
+ *   2b. EGRESS GROUP gate (WA-IPGROUP 鐵律 2: 同出口 IP 嚴禁併發) —
+ *                          resolve the identity's egress group (shared
+ *                          module = single source); singleton groups pass
+ *                          untouched. Otherwise: the soft gate (active run
+ *                          in group / stagger window) defers the job, then
+ *                          the HARD gate takes an `egress_group` lease (CAS
+ *                          on the lease row — two engines racing one group:
+ *                          one wins, the other defers). HELD → defer (the
+ *                          row is foreign — nothing to release).
  *   3. GLOBAL slot gate  — container_slot lease (the MD §3.1 hard cap;
  *                          no slot → job.moveToDelayed, run stays queued —
- *                          NOTHING holds resources while waiting)
+ *                          NOTHING holds resources while waiting; a held
+ *                          egress_group lease is released on EVERY defer
+ *                          path — never park a whole exit behind a slot wait)
  *   4. claim CAS         — queued→running on (id, attempt); the single
  *                          winner of a duplicated delivery
  *   5. identity → RUNNING
@@ -34,6 +45,12 @@ import {
   TASK_EVENT,
   NETWORK_GATE_ERROR,
   BATCH_CONFIG_DEFAULTS,
+  resolveIdentityGroupKey,
+  isSingletonGroupKey,
+  evaluateEgressGroupGate,
+  acquireGroupLease,
+  releaseGroupLease,
+  renewGroupLease,
 } from '@water-army/shared';
 import { AdapterError } from './adapter-registry.js';
 
@@ -61,6 +78,12 @@ export function createBatchEngine({
   const slotTtlMs = Math.max(5_000, Number(config.batchSlotTtlMs ?? 60_000));
   const maxSlotDefers = Math.max(1, Number(config.batchMaxSlotDefers ?? 40));
   const defaultTimeoutMs = Number(config.batchDefaultTimeoutMs ?? 120_000);
+  // WA-IPGROUP: egress-group defers poll at the slot cadence by default; a
+  // known stagger deadline shortens the wait to its remainder (capped).
+  const groupWaitMs = Math.max(1_000, Number(config.batchGroupWaitMs ?? 15_000));
+  // A group can legitimately be busy for a full run deadline (~15min class)
+  // — the honest-exhaustion cap sits above that (default 80 × 15s = 20min).
+  const maxGroupDefers = Math.max(1, Number(config.batchMaxGroupDefers ?? 80));
 
   /**
    * Claim the run (CAS on id+status+attempt). count===1 is the single
@@ -174,6 +197,36 @@ export function createBatchEngine({
    * One batch-run job. Always returns an outcome descriptor (never throws
    * for a legitimate terminal); the DB is the source of truth.
    */
+  /**
+   * WA-IPGROUP: honest bounded defer while the egress group is busy or
+   * inside its stagger window. Same shape as the slot defer: the run stays
+   * QUEUED and holds NOTHING (callers release any lease first). Exhaustion
+   * is a HONEST terminal (BLOCKED_EGRESS_GROUP) — never an infinite spin.
+   */
+  async function deferGroupWait(job, runId, attempt, gate, groupKey) {
+    const defers = Number.isInteger(job.data?.groupDefers) ? job.data.groupDefers : 0;
+    if (defers + 1 > maxGroupDefers) {
+      await taskSvc.finishRun(runId, {
+        status: 'failed',
+        errorCode: 'BLOCKED_EGRESS_GROUP',
+        errorMessage: `egress group '${groupKey}' busy/staggered after ${defers} defers (~${defers * groupWaitMs}ms) — group lease leaked or exit saturated`,
+        attempt,
+      });
+      await scheduler.syncIdentityAfterRunTerminal(await taskSvc.loadRun(runId), { actor: 'engine' });
+      log.error?.({ runId, groupKey, defers }, 'batch engine: egress group blocked after bounded defers — honest fail');
+      return { outcome: 'group-exhausted', defers, groupKey };
+    }
+    let waitMs = groupWaitMs;
+    if (gate?.nextEligibleAt) {
+      // Known stagger deadline → sleep its remainder (capped at the poll
+      // cadence so a clock skew can never oversleep).
+      waitMs = Math.max(1_000, Math.min(groupWaitMs, gate.nextEligibleAt.getTime() - now().getTime()));
+    }
+    job.data.groupDefers = defers + 1;
+    await job.moveToDelayed(waitMs);
+    return { outcome: 'group-deferred', defer: defers + 1, waitMs, groupKey, reason: gate?.reason ?? 'lease_held' };
+  }
+
   async function handleBatchJob(job) {
     const { runId, attempt, timeoutMs } = job.data ?? {};
     if (!runId || !Number.isInteger(attempt)) {
@@ -181,6 +234,20 @@ export function createBatchEngine({
       throw new Error('batch engine: malformed job data');
     }
     let lease = null;
+    // WA-IPGROUP: the egress-group lease key once WON by THIS delivery
+    // (every defer/lost/terminal path after this point releases it — the
+    // group must never be parked by a waiting or dead delivery).
+    let groupKeyHeld = null;
+    const releaseGroupLeaseHeld = async () => {
+      if (!groupKeyHeld) return;
+      const key = groupKeyHeld;
+      groupKeyHeld = null;
+      try {
+        await releaseGroupLease(leaseSvc, { groupKey: key, runId });
+      } catch (err) {
+        log.error?.({ runId, groupKey: key, error: err.message }, 'batch engine: group lease release failed (sweeper will sweep)');
+      }
+    };
 
     try {
       // 0) stale guards -------------------------------------------------
@@ -210,6 +277,16 @@ export function createBatchEngine({
       }
       if (identity.status === 'RUNNING') {
         log.info?.({ runId, attempt }, 'batch engine: identity already RUNNING — claim CAS decides (duplicate delivery or divergence)');
+      }
+
+      // 2b) EGRESS GROUP soft gate (WA-IPGROUP 鐵律 2) --------------------
+      // Resolve the group (single source: egress-group.js) and check the
+      // DB state BEFORE touching a slot. Singleton keys (identity:<id>)
+      // short-circuit — unconfigured fleets keep today's behaviour exactly.
+      const groupKey = await resolveIdentityGroupKey(db, identity);
+      if (!isSingletonGroupKey(groupKey)) {
+        const gate = await evaluateEgressGroupGate({ db, groupKey, now, excludeRunId: runId, log });
+        if (!gate.allowed) return deferGroupWait(job, runId, attempt, gate, groupKey);
       }
 
       // 3) GLOBAL slot gate (MD §3.1 — the hard cap, before any claim) --
@@ -243,6 +320,24 @@ export function createBatchEngine({
       }
       lease = acq.lease;
 
+      // 4a) EGRESS GROUP hard gate (CAS row closes the one-tick race the
+      // soft gate leaves between replicas). Acquired AFTER the slot so a
+      // waiting job never parks a whole exit behind a slot wait; on HELD
+      // the slot goes back before deferring.
+      if (!isSingletonGroupKey(groupKey)) {
+        const g = await acquireGroupLease(leaseSvc, { groupKey, runId, ttlMs: slotTtlMs });
+        if (!g.acquired) {
+          try {
+            await leaseSvc.release({ resourceType: SLOT_RESOURCE_TYPE, resourceKey: lease.resourceKey, ownerRunId: runId });
+          } catch (err) {
+            log.error?.({ runId, slot: lease.resourceKey, error: err.message }, 'batch engine: slot release on group-defer failed (TTL sweep will clean)');
+          }
+          lease = null;
+          return deferGroupWait(job, runId, attempt, null, groupKey);
+        }
+        groupKeyHeld = groupKey;
+      }
+
       // 4) claim CAS (single winner of a duplicated delivery) -----------
       const claim = await claimRun(runId, attempt);
       if (claim !== 'won') {
@@ -250,6 +345,10 @@ export function createBatchEngine({
         if (live?.status === 'cancel_requested') {
           await taskSvc.markCancelled(runId, { reason: 'cancel_before_start (claim race)' });
           await scheduler.syncIdentityAfterRunTerminal(await taskSvc.loadRun(runId), { actor: 'engine' });
+          // The run is terminal and no twin executes it — hand the group
+          // back now (a plain claim-lost KEEPS the lease: the live twin of
+          // the same runId owns the very same row and renews it).
+          await releaseGroupLeaseHeld();
           return { outcome: 'claim-lost-cancelled' };
         }
         return { outcome: 'claim-lost' };
@@ -284,6 +383,7 @@ export function createBatchEngine({
           // Divergent (concurrent cancel / manual move) — the run must not
           // proceed on an identity that is not ours to reserve.
           await stopQueuedRun(runId, `identity re-reserve failed: ${e.message}`);
+          await releaseGroupLeaseHeld();
           return { outcome: 'identity-claim-failed' };
         }
       }
@@ -300,6 +400,7 @@ export function createBatchEngine({
           } else {
             // Unclaimable state → stop honestly (the run must not run).
             await stopQueuedRun(runId, `identity transition failed: ${e.message}`);
+            await releaseGroupLeaseHeld();
             return { outcome: 'identity-claim-failed' };
           }
         }
@@ -313,6 +414,7 @@ export function createBatchEngine({
         if (!gate.unapplied) {
           await scheduler.syncIdentityAfterRunTerminal(await taskSvc.loadRun(runId), { actor: 'engine' });
         }
+        await releaseGroupLeaseHeld();
         return { outcome: 'network-denied', code: gate.code, unapplied: gate.unapplied ?? false };
       }
 
@@ -323,6 +425,7 @@ export function createBatchEngine({
         : Number(runRow.inputJson?.timeoutMs ?? defaultTimeoutMs);
       const controller = new AbortController();
       let slotLost = false;
+      let groupLost = false;
       const timers = [];
 
       timers.push(setInterval(() => {
@@ -342,6 +445,19 @@ export function createBatchEngine({
                 controller.abort('slot-lost');
               }
               return;
+            }
+            // WA-IPGROUP: renew the egress-group lease in the same beat —
+            // a lost group lease means another owner entered the exit:
+            // STOP (鐵律 2 is worth stopping for, same call as slot-lost).
+            if (groupKeyHeld) {
+              const gr = await renewGroupLease(leaseSvc, { groupKey: groupKeyHeld, runId, ttlMs: slotTtlMs });
+              if (!gr.renewed) {
+                if (!controller.signal.aborted) {
+                  groupLost = true;
+                  controller.abort('egress-group-lost');
+                }
+                return;
+              }
             }
             await db.taskRun.update({ where: { id: runId }, data: { heartbeatAt: now() } });
           } catch (err) {
@@ -416,6 +532,17 @@ export function createBatchEngine({
             attempt,
           });
           outcome = 'slot-lost';
+        } else if (isAbortReason(reason, 'egress-group-lost')) {
+          // WA-IPGROUP: another owner took the exit under us (expired lease
+          // takeover) — stop honestly; the group's next run waits the
+          // stagger from THIS terminal like any other.
+          await taskSvc.finishRun(runId, {
+            status: 'failed',
+            errorCode: 'EGRESS_GROUP_LEASE_LOST',
+            errorMessage: `egress group '${groupKey}' lease lost during run (renew: ${groupLost ? 'expired/taken' : 'gone'}) — aborted to protect 鐵律 2`,
+            attempt,
+          });
+          outcome = 'group-lost';
         } else {
           const handled = await handleAdapterFailure(runRow, err);
           outcome = handled.outcome;
@@ -433,6 +560,9 @@ export function createBatchEngine({
             log.error?.({ runId, slot: lease.resourceKey, error: err.message }, 'batch engine: slot release failed (reconciliation will sweep)');
           }
         }
+        // WA-IPGROUP: the group goes back on EVERY post-claim path (the
+        // stagger clock starts from this terminal, scheduler side).
+        await releaseGroupLeaseHeld();
       }
 
       // 8) identity + membership sync (shared map; divergence is logged,

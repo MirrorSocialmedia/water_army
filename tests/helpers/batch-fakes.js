@@ -43,6 +43,8 @@ export function makeBatchFakeDb({ identities = [], batches = [], batchIdentities
   const taskRunEventRows = [];
   const approvalRows = new Map();
   const appSettingRows = new Map();
+  // WA-IPGROUP: W3 identity_egress bindings (group derivation layer 2).
+  const egressRows = new Map(); // identityId → row
   let txDepth = 0;
 
   for (const r of identities) identityRows.set(r.id, { ...r, updatedAt: r.updatedAt ?? clock() });
@@ -61,6 +63,7 @@ export function makeBatchFakeDb({ identities = [], batches = [], batchIdentities
       taskRunEvents: taskRunEventRows,
       approvals: approvalRows,
       appSettings: appSettingRows,
+      identityEgress: egressRows,
     },
 
     // ------------------------------------------------------------- identity
@@ -518,6 +521,32 @@ export function makeBatchFakeDb({ identities = [], batches = [], batchIdentities
       },
     },
 
+    // --------------------------- WA-IPGROUP: identity_egress (W3 bindings)
+    identityEgress: {
+      findUnique: async ({ where }) => {
+        if (where.identityId != null && egressRows.has(where.identityId)) return { ...egressRows.get(where.identityId) };
+        return null;
+      },
+      findMany: async ({ where = {} } = {}) => {
+        let rows = [...egressRows.values()];
+        if (where.expectedEgressIp !== undefined) rows = rows.filter((r) => r.expectedEgressIp === where.expectedEgressIp);
+        return rows.map((r) => ({ ...r }));
+      },
+      create: async ({ data }) => {
+        if (egressRows.has(data.identityId)) throw P2002('identity_id');
+        if ([...egressRows.values()].some((r) => r.expectedEgressIp === data.expectedEgressIp)) throw P2002('expected_egress_ip');
+        const row = {
+          identityId: data.identityId,
+          expectedEgressIp: data.expectedEgressIp,
+          proxyUrlHash: data.proxyUrlHash ?? `hash-${data.expectedEgressIp}`,
+          createdAt: clock(),
+          updatedAt: clock(),
+        };
+        egressRows.set(data.identityId, row);
+        return { ...row };
+      },
+    },
+
     // ------------------------------------- BR-B2 (G1): task_run_events
     taskRunEvent: {
       create: async ({ data }) => {
@@ -608,6 +637,7 @@ export function makeBatchFakeDb({ identities = [], batches = [], batchIdentities
         taskRunEvents: structuredClone(taskRunEventRows),
         approvals: new Map([...approvalRows.entries()].map(([k, v]) => [k, structuredClone(v)])),
         appSettings: new Map([...appSettingRows.entries()].map(([k, v]) => [k, structuredClone(v)])),
+        identityEgress: new Map([...egressRows.entries()].map(([k, v]) => [k, structuredClone(v)])),
       };
       txDepth += 1;
       try {
@@ -631,6 +661,8 @@ export function makeBatchFakeDb({ identities = [], batches = [], batchIdentities
         for (const [k, v] of snapshot.approvals) approvalRows.set(k, v);
         appSettingRows.clear();
         for (const [k, v] of snapshot.appSettings) appSettingRows.set(k, v);
+        egressRows.clear();
+        for (const [k, v] of snapshot.identityEgress) egressRows.set(k, v);
         throw err;
       } finally {
         txDepth -= 1;

@@ -168,6 +168,25 @@ export {
   BATCH_SCHEDULER_DEFAULTS,
 } from './batch-scheduler.js';
 
+/** Egress groups — 鐵律 2 serial scheduling + stagger (WA-IPGROUP). */
+export {
+  EGRESS_GROUP_LEASE_TYPE,
+  APP_SETTING_EGRESS_GROUP_JITTER_MS,
+  EGRESS_GROUP_JITTER_DEFAULTS,
+  egressGroupLabelFromMetadata,
+  egressGroupKeyFor,
+  isSingletonGroupKey,
+  readEgressGroupJitter,
+  fnv1a32,
+  deterministicJitterMs,
+  evaluateEgressGroupGate,
+  resolveIdentityGroupKey,
+  acquireGroupLease,
+  releaseGroupLease,
+  renewGroupLease,
+  egressGroupStatus,
+} from './egress-group.js';
+
 /** Batch Rotation metrics + alert evaluation (BR-B5, MD §13 — pure core). */
 export {
   BATCH_METRIC_NAMES,
