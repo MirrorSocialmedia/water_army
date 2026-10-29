@@ -1,0 +1,7 @@
+adb probe KNOWN ENV DEFECT (pre-existing, not caused by this work order)
+- api container has no /usr/bin/adb (adb-whitelist.js default adbBinary='/usr/bin/adb')
+  -> adbEngine exec ENOENT -> exitCode=null -> R6 honest path adbState='unknown' + ADB_UNAVAILABLE.
+- DB adb_state distribution at 2026-10-29 18:05 HKT: unknown=6 (dogfood x2 historical + adv x4) — zero devices ever recorded online via product probe.
+- Host adb IS the working authority: 127.0.0.1:15000..15003 all report 'device' (adb get-state).
+- Profile injection verified on a1: ro.product.model=Edge2WJ, persist.sys.timezone=Europe/Paris — matches deterministic fingerprint profile (D1/D2 injection precondition satisfied).
+- Suffix decision: s1 online-gate uses host adb authority; product-view adbState recorded honestly as unknown(ADB_UNAVAILABLE).

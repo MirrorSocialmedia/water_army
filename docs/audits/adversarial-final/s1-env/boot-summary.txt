@@ -1,0 +1,6 @@
+redroid-rdev-adv-a1	id=8c551ca6-de98-4407-b33c-e2cea5840e8f	adb=127.0.0.1:15000	running/online(host-adb)
+redroid-rdev-adv-a2	id=735fd291-a094-4fa7-9900-852c976a9b3a	adb=127.0.0.1:15001	running/online(host-adb)
+redroid-rdev-adv-a3	id=45f2608b-4610-4e6c-a617-566e587c2f39	adb=127.0.0.1:15002	running/online(host-adb)
+redroid-rdev-adv-a4	id=a1bb7673-49bf-4118-b92c-9f72a37ea981	adb=127.0.0.1:15003	running/online(host-adb)
+redroid-rdev-adv-b1	NOT_CREATED	RAM_GATE_DENIED PROJECTED_BELOW_TARGET (see ram-gate-decisions.json)
+redroid-rdev-adv-b2	NOT_CREATED	gate not reached (script stopped after b1 deny)

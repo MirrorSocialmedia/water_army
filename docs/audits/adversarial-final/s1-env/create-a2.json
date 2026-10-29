@@ -1,0 +1,277 @@
+{
+ "status": 201,
+ "body": {
+  "name": "redroid-rdev-adv-a2",
+  "templateName": "adv-stealth",
+  "idempotencyKey": "adv-a2-20261029T09582",
+  "identityId": "78aea3d4-5b02-4cd5-a73c-57b8f5e5dcf5",
+  "overrides": {
+   "width": 1080,
+   "height": 2340,
+   "dpi": 395,
+   "fps": 90
+  },
+  "proxyUrl": "socks5://172.38.223.1:18443"
+ },
+ "response": {
+  "device": {
+   "id": "735fd291-a094-4fa7-9900-852c976a9b3a",
+   "name": "redroid-rdev-adv-a2",
+   "templateName": "adv-stealth",
+   "image": "water-army/redroid:14.0.0-240527-gms-mtg-oemprop-stealth",
+   "androidVersion": "14",
+   "width": 1080,
+   "height": 2340,
+   "dpi": 395,
+   "fps": 90,
+   "adbPort": 15001,
+   "adbBind": "127.0.0.1",
+   "gpuMode": "host",
+   "gpuStatus": "unverified",
+   "containerName": "redroid-rdev-adv-a2",
+   "containerId": "be413e0aed1ee6853b4181605e54b1ce9c3377f03ef5f93e8a0caa02836abc3b",
+   "containerState": "running",
+   "adbState": "unknown",
+   "proxy": {
+    "configured": true,
+    "gostPort": 20081,
+    "gostBind": "172.38.200.1",
+    "state": "provisioning",
+    "hasUrl": true,
+    "containerName": "redroid-matrix-b-gost-redroid-rdev-adv-a2",
+    "binaryState": null,
+    "binaryVersion": null,
+    "network": {
+     "state": "STARTING",
+     "stateSince": "2026-10-29T09:58:27.454Z",
+     "checkedAt": null,
+     "lastSuccessAt": null,
+     "consecutiveFailures": 0,
+     "recoveries": 0,
+     "manualIntervention": false,
+     "canaryConfigured": false,
+     "stale": false,
+     "networkReady": false,
+     "checks": {
+      "binary": "UNKNOWN",
+      "process": "UNKNOWN",
+      "interface": "UNKNOWN",
+      "routePolicy": "UNKNOWN",
+      "tcpCanary": "UNKNOWN"
+     },
+     "lastErrorCode": null,
+     "nextRecoveryAt": null,
+     "recoveryLock": null,
+     "lastError": null,
+     "lastCanary": null,
+     "egress": null
+    }
+   },
+   "lastDiagnosedAt": null,
+   "identityId": "78aea3d4-5b02-4cd5-a73c-57b8f5e5dcf5",
+   "roOverrides": {
+    "ro.build.id": "O8ABMXJ",
+    "ro.hardware": "magic-65p",
+    "ro.serialno": "HONO-534823-STWD",
+    "ro.build.host": "build-02",
+    "ro.build.tags": "dev-keys",
+    "ro.build.type": "userdebug",
+    "ro.build.user": "maker",
+    "ro.build.flavor": "magic-65p-userdebug",
+    "ro.product.name": "magic-65p",
+    "ro.boot.hardware": "magic-65p",
+    "ro.build.product": "magic-65p",
+    "ro.product.board": "magic-65p",
+    "ro.product.brand": "honor",
+    "ro.product.model": "Magic65P",
+    "ro.board.platform": "bengal",
+    "ro.odm.build.tags": "dev-keys",
+    "ro.product.device": "magic-65p",
+    "ro.build.display.id": "15.O8ABMXJ.9C62F.keys",
+    "ro.product.odm.name": "magic-65p",
+    "persist.sys.timezone": "Australia/Sydney",
+    "ro.build.description": "magic-65p-userdebug%2015%20O8ABMXJ%20031065%20dev-keys",
+    "ro.build.fingerprint": "honor/magic-65p/magic-65pv75b8vxjhs:15/O8ABMXJ/031065:userdebug/dev-keys",
+    "ro.product.odm.brand": "honor",
+    "ro.product.odm.model": "Magic65P",
+    "ro.system.build.tags": "dev-keys",
+    "ro.vendor.build.tags": "dev-keys",
+    "ro.product.build.tags": "dev-keys",
+    "ro.product.odm.device": "magic-65p",
+    "ro.product.system.name": "magic-65p",
+    "ro.product.vendor.name": "magic-65p",
+    "ro.product.manufacturer": "Honor",
+    "ro.product.product.name": "magic-65p",
+    "ro.product.system.brand": "honor",
+    "ro.product.system.model": "Magic65P",
+    "ro.product.vendor.brand": "honor",
+    "ro.product.vendor.model": "Magic65P",
+    "ro.odm.build.fingerprint": "honor/magic-65p/magic-65pv75b8vxjhs:15/O8ABMXJ/031065:userdebug/dev-keys",
+    "ro.product.product.brand": "honor",
+    "ro.product.product.model": "Magic65P",
+    "ro.product.system.device": "magic-65p",
+    "ro.product.vendor.device": "magic-65p",
+    "ro.system_ext.build.tags": "dev-keys",
+    "ro.product.product.device": "magic-65p",
+    "ro.product.system_ext.name": "magic-65p",
+    "ro.product.odm.manufacturer": "Honor",
+    "ro.product.system_ext.brand": "honor",
+    "ro.product.system_ext.model": "Magic65P",
+    "ro.system.build.fingerprint": "honor/magic-65p/magic-65pv75b8vxjhs:15/O8ABMXJ/031065:userdebug/dev-keys",
+    "ro.vendor.build.fingerprint": "honor/magic-65p/magic-65pv75b8vxjhs:15/O8ABMXJ/031065:userdebug/dev-keys",
+    "ro.build.version.incremental": "031065",
+    "ro.product.build.fingerprint": "honor/magic-65p/magic-65pv75b8vxjhs:15/O8ABMXJ/031065:userdebug/dev-keys",
+    "ro.product.system_ext.device": "magic-65p",
+    "ro.product.system.manufacturer": "Honor",
+    "ro.product.vendor.manufacturer": "Honor",
+    "ro.product.product.manufacturer": "Honor",
+    "ro.system_ext.build.fingerprint": "honor/magic-65p/magic-65pv75b8vxjhs:15/O8ABMXJ/031065:userdebug/dev-keys",
+    "ro.odm.build.version.incremental": "031065",
+    "ro.product.system_ext.manufacturer": "Honor",
+    "ro.system.build.version.incremental": "031065",
+    "ro.vendor.build.version.incremental": "031065",
+    "ro.product.build.version.incremental": "031065",
+    "ro.system_ext.build.version.incremental": "031065"
+   },
+   "egress": null,
+   "createdAt": "2026-10-29T09:58:27.452Z",
+   "updatedAt": "2026-10-29T09:58:28.170Z",
+   "dataDir": "/var/lib/water-army/redroid/redroid-rdev-adv-a2"
+  },
+  "replay": false,
+  "startError": null,
+  "preflight": {
+   "checkedAt": "2026-10-29T09:58:27.450Z",
+   "host": {
+    "platform": "linux",
+    "isLinux": true,
+    "kernel": "6.8.0-117-generic",
+    "kernelSource": "uname -r",
+    "arch": "x64"
+   },
+   "docker": {
+    "available": true,
+    "error": null
+   },
+   "binder": {
+    "modules": {
+     "binder_linux": "present",
+     "ashmem_linux": "absent"
+    },
+    "devices": {
+     "/dev/binder": false,
+     "/dev/binder_hwbinder": false,
+     "/dev/ashmem": false
+    },
+    "deviceVisibility": "containerized",
+    "binderFstype": "unknown",
+    "memfd": {
+     "available": true,
+     "kernel": "6.8",
+     "note": "memfd_create available (kernel ≥ 3.17) — ashmem_linux module not required"
+    },
+    "dmesg": {
+     "readable": false,
+     "relevantLines": [],
+     "note": "dmesg: read kernel buffer failed: Operation not permitted\n"
+    },
+    "supported": "unknown",
+    "suggestions": [
+     "api service runs in a container and cannot see host /dev — verify the binderfs mount FROM THE HOST (mount | grep binder). A privileged redroid container gets the host /dev, so the host-level preflight is the authoritative check for this node.",
+     "Official docs: https://github.com/remote-android/redroid-doc — verify the exact procedure for this kernel before booting Redroid."
+    ]
+   },
+   "disk": {
+    "dataRoot": "/var/lib/water-army/redroid",
+    "exists": true,
+    "writable": true,
+    "freeBytes": 906697261056
+   },
+   "ports": null,
+   "exposure": {
+    "range": {
+     "start": 15000,
+     "end": 15999
+    },
+    "vantage": "containerized",
+    "scanned": false,
+    "listenersInRange": [],
+    "exposed": []
+   },
+   "imageArch": {
+    "image": "water-army/redroid:14.0.0-240527-gms-mtg-oemprop-stealth",
+    "imageArch": "amd64",
+    "imageArchNorm": "x86_64",
+    "hostArch": "x64",
+    "hostArchNorm": "x86_64",
+    "mismatch": false,
+    "error": null
+   },
+   "gpu": {
+    "available": true,
+    "driverVersion": null,
+    "gpus": [],
+    "verified": false,
+    "source": "docker-info",
+    "detail": "docker nvidia runtime registered (path: nvidia-container-runtime) — driver visible from the socket vantage",
+    "note": "runtime registration ≠ Redroid GPU verified (MD §2.4). In-device render check is required."
+   },
+   "checks": [
+    {
+     "id": "docker-daemon",
+     "status": "PASS",
+     "detail": "docker daemon answered ping"
+    },
+    {
+     "id": "binder-module",
+     "status": "PASS",
+     "detail": "binder_linux loaded"
+    },
+    {
+     "id": "binderfs-mount",
+     "status": "WARN",
+     "detail": "containerized vantage — host /proc/mounts not visible",
+     "fix": "Verify from the host: mount | grep binder"
+    },
+    {
+     "id": "shared-memory",
+     "status": "PASS",
+     "detail": "memfd available (kernel 6.8)"
+    },
+    {
+     "id": "kernel-compat",
+     "status": "PASS",
+     "detail": "kernel 6.8.0-117-generic (x86_64) — meets the redroid floor"
+    },
+    {
+     "id": "image-arch",
+     "status": "PASS",
+     "detail": "image 'water-army/redroid:14.0.0-240527-gms-mtg-oemprop-stealth' arch 'x86_64' matches host"
+    },
+    {
+     "id": "adb-exposure",
+     "status": "WARN",
+     "detail": "containerized vantage — host /proc/net/tcp not visible from here",
+     "fix": "Verify from the host: ss -ltn | grep -E \":1[56][0-9]{3}\" — expect 127.0.0.1 only"
+    },
+    {
+     "id": "data-volume",
+     "status": "PASS",
+     "detail": "/var/lib/water-army/redroid writable, 844 GiB free"
+    },
+    {
+     "id": "gpu-visibility",
+     "status": "WARN",
+     "detail": "docker nvidia runtime registered (path: nvidia-container-runtime) — driver visible from the socket vantage",
+     "fix": "Rendering is proven only by the in-device diagnostics check (device → diagnostics → gpu zone)"
+    }
+   ],
+   "verdict": "WARN",
+   "overall": "unknown",
+   "warnings": [
+    "api service is containerized — host /dev nodes are not visible from here; run the host-level preflight to confirm /dev/binder (a privileged redroid container gets the host /dev).",
+    "GPU is NOT verified for Redroid rendering — nvidia-smi success does not prove Android EGL/WebGL works (MD §2.4)."
+   ]
+  }
+ }
+}

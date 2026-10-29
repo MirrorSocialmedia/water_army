@@ -1,0 +1,11 @@
+== e1/e2 socks5 probe (curl -x socks5h ipinfo) 2026-10-29 17:48 HKT ==
+18443 -> 103.194.185.206 AS45753 Netsec Limited (HK)
+18444 -> 27.45.51.73 AS17816 China Unicom Guangdong
+true-direct -> 27.45.51.73 (same as e2)
+
+redroid-rdev-adv-a1|adv-e1|Edge2WJ
+redroid-rdev-adv-a2|adv-e1|Magic65P
+redroid-rdev-adv-a3|adv-e1|Pixel2GC
+redroid-rdev-adv-a4|adv-e1|Phone4YS
+redroid-rdev-adv-b1|adv-e2|Legion8SJ
+redroid-rdev-adv-b2|adv-e2|GT8MR

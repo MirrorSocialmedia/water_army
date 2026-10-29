@@ -125,6 +125,12 @@ services:
       # => VOLUME_PATH_INVALID on every batch run (fail-closed, by design).
       # Restoring this line requires boss sign-off (work-order restore policy).
       BATCH_CONTAINER_DATA_ROOT: /var/lib/water-army/redroid
+      # WA-ADVERSARIAL-FINAL (Kairo mvt3rgj9dnspm) env overrides, added 2026-10-29
+      # per work-order (boss approved 17:32). Teardown ledger: remove these 3 lines
+      # + the WA_* lines in .env, then `docker compose up -d api worker` = zero residue.
+      WA_REDROID_STEALTH_ENABLED: ${WA_REDROID_STEALTH_ENABLED:-false}
+      WA_W3_EGRESS_BINDING_ENABLED: ${WA_W3_EGRESS_BINDING_ENABLED:-false}
+      WA_APP_OPS_ENABLED: ${WA_APP_OPS_ENABLED:-false}
       # C4 (WA-REALDEVICE-FINAL test config, BATCH_CONTAINER_HEALTH_TIMEOUT_MS=
       # "300000") REMOVED 2026-10-29 by WA-RDFA-FIX S3: the code default is now
       # 300s (shared BATCH_BOOT_HEALTH_WINDOW_MS, real MTG boot 115-125s +
@@ -185,6 +191,9 @@ services:
       # Mock provider script (built-in name | file | inline JSON) — orchestrates
       # the demo/live lifecycle: tool calls, approval, retries, delays.
       AI_MOCK_SCRIPT: ${AI_MOCK_SCRIPT:-default}
+      # WA-ADVERSARIAL-FINAL (Kairo mvt3rgj9dnspm) env override, 2026-10-29.
+      # Teardown ledger: remove this line + the WA_* line in .env.
+      WA_WARMING_SCHEDULE_ENABLED: ${WA_WARMING_SCHEDULE_ENABLED:-false}
       WORKER_HEALTH_PORT: "3001"
       TASK_MAX_CONCURRENCY: ${TASK_MAX_CONCURRENCY:-4}
       # P6 flag #5: concurrency_key mutual exclusion — the worker gate defers

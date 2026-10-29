@@ -1,0 +1,22 @@
+redroid-matrix-b-gost-redroid-rdev-adv-a4	f7a958c45192	Up 3 minutes
+redroid-rdev-adv-a4	water-army/redroid:14.0.0-240527-gms-mtg-oemprop-stealth	Up 3 minutes
+redroid-matrix-b-gost-redroid-rdev-adv-a3	f7a958c45192	Up 3 minutes
+redroid-rdev-adv-a3	water-army/redroid:14.0.0-240527-gms-mtg-oemprop-stealth	Up 3 minutes
+redroid-matrix-b-gost-redroid-rdev-adv-a2	f7a958c45192	Up 3 minutes
+redroid-rdev-adv-a2	water-army/redroid:14.0.0-240527-gms-mtg-oemprop-stealth	Up 3 minutes
+redroid-matrix-b-gost-redroid-rdev-adv-a1	f7a958c45192	Up 11 minutes
+redroid-rdev-adv-a1	water-army/redroid:14.0.0-240527-gms-mtg-oemprop-stealth	Up 11 minutes
+water-army-api-1	water-army/api:local	Up 11 minutes (healthy)
+rdev-e2-gost	gogost/gost:3.3.0	Up 13 minutes
+rdev-e1-gost	gogost/gost:3.3.0	Up 13 minutes
+water-army-worker-1	water-army/worker:local	Up 15 minutes (healthy)
+water-army-web-1	water-army/web:local	Up 26 minutes (healthy)
+water-army-postgres-1	postgres:17.6	Up 26 minutes (healthy)
+water-army-redis-1	redis:7.4.5	Up 26 minutes (healthy)
+
+== image digest ==
+14.0.0-240527-gms-mtg-oemprop-stealth sha256:86e823fa67ccf07df125aa2cb1403ebf65a442ecfc6f3c8265d2a1a75fde970b
+== free -h (host load context) ==
+               total        used        free      shared  buff/cache   available
+Mem:            91Gi        82Gi       1.1Gi        11Gi        20Gi       9.4Gi
+Swap:          8.0Gi       4.7Gi       3.3Gi

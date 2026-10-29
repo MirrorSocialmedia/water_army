@@ -1,0 +1,29 @@
+{
+ "status": 409,
+ "body": {
+  "name": "redroid-rdev-adv-b1",
+  "templateName": "adv-stealth",
+  "idempotencyKey": "adv-b1-20261029T09583",
+  "identityId": "4a469ae2-5e8e-4e04-9cff-7229d8922dd9",
+  "overrides": {
+   "width": 1080,
+   "height": 2340,
+   "dpi": 395,
+   "fps": 90
+  },
+  "proxyUrl": "socks5://172.38.223.1:18444"
+ },
+ "response": {
+  "error": {
+   "code": "RAM_GATE_DENIED",
+   "message": "Device create 'redroid-rdev-adv-b1' denied by RAM gate (PROJECTED_BELOW_TARGET) — MemAvailable 11,743 MiB, projected 4,543 MiB; see Settings → RAM Gate for the policy and decision log",
+   "requestId": "1eedb88e-5fef-41c9-aff6-7b9f1dc877aa",
+   "details": {
+    "reason": "PROJECTED_BELOW_TARGET",
+    "currentMiB": 11743.4,
+    "projectedMiB": 4543,
+    "liveCount": 5
+   }
+  }
+ }
+}
