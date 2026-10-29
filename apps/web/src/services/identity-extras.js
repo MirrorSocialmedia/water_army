@@ -39,3 +39,14 @@ export const accountLifecycle = {
   /** one driver provision touch (operator+; 503 GMAIL_PROVISION_DISABLED off). */
   provision: (id) => api.post(`/api/identities/${enc(id)}/account/provision`),
 };
+
+/** WA-WARMING: warm 狀態機（狀態/進度 viewer+；start/reset operator；force admin）。 */
+export const warmState = {
+  get: (id) => api.get(`/api/identities/${enc(id)}/warm`),
+  /** cold -> warming：養號時鐘由這一刻開始（operator+）。 */
+  start: (id) => api.post(`/api/identities/${enc(id)}/warm/start`, {}),
+  /** * -> cold：重設時鐘（operator+）。 */
+  reset: (id) => api.post(`/api/identities/${enc(id)}/warm/reset`, {}),
+  /** * -> warm：admin 越權，reason 必要（3..280 chars，入 audit）。 */
+  force: (id, reason) => api.post(`/api/identities/${enc(id)}/warm/force`, { reason }),
+};

@@ -25,7 +25,7 @@ import { pathToFileURL } from 'node:url';
 import { Worker as BullMQWorker } from 'bullmq';
 import Redis from 'ioredis';
 import pino from 'pino';
-import { PINO_REDACT_PATHS, buildRedisConnection, createTaskRunService, TASK_QUEUE_NAME, createTaskQueue, enqueueTaskRun, enqueueAnyRun, closeTaskQueue, SCHEDULE_FIRE_JOB_NAME, createNetworkPolicyGate, BATCH_RUN_JOB_NAME, createBatchService, createLeaseService, createBatchScheduler, createBatchSchedulerLoop } from '@water-army/shared';
+import { PINO_REDACT_PATHS, buildRedisConnection, createTaskRunService, TASK_QUEUE_NAME, createTaskQueue, enqueueTaskRun, enqueueAnyRun, closeTaskQueue, SCHEDULE_FIRE_JOB_NAME, createNetworkPolicyGate, BATCH_RUN_JOB_NAME, createBatchService, createLeaseService, createBatchScheduler, createBatchSchedulerLoop, createWarmingScheduler, createWarmStateService } from '@water-army/shared';
 import { createAdapterRegistry } from './adapter-registry.js';
 import { createContainerAdapter } from './container-adapter.js';
 import { createBatchEngine, makeInspectEffects } from './batch-engine.js';
@@ -326,6 +326,8 @@ export function createWorkerApp({
   const batchSchedulerRef = { impl: null };
   const batchSchedulerLoopRef = { impl: null };
   const batchEngineRef = { impl: null };
+  // WA-WARMING: warming dispatcher loop (built in start(), env-gated off).
+  const warmingSchedulerRef = { impl: null };
 
   const buildRealServices = () => {
     if (!svcRef.impl) {
@@ -583,6 +585,26 @@ export function createWorkerApp({
     } else {
       log.info('batch scheduler disabled (BATCH_SCHEDULER_ENABLED=false) — this replica only executes batch jobs');
     }
+
+    // WA-WARMING (S2): 養號 dispatcher — env-gated OFF (WA_WARMING_SCHEDULE_ENABLED).
+    // Each tick: promote matured `warming` identities (lazy, no cron), then
+    // create one single-identity cycle per DUE session of the day's
+    // deterministic plan. Restart-safe by idempotency key; multi-replica safe
+    // for the same reason (same seed => same keys => replay, never duplicate).
+    if (config.warmingSchedulerEnabled) {
+      if (!warmingSchedulerRef.impl) {
+        warmingSchedulerRef.impl = createWarmingScheduler({
+          db: dbRef.client,
+          batchService: batchSvcRef.impl,
+          warmStateService: createWarmStateService({ db: dbRef.client, log }),
+          log,
+        });
+      }
+      warmingSchedulerRef.impl.start({ intervalMs: config.warmingSchedulerIntervalMs });
+      log.info({ intervalMs: config.warmingSchedulerIntervalMs }, 'warming scheduler started (WA_WARMING_SCHEDULE_ENABLED)');
+    } else {
+      log.info('warming scheduler disabled (WA_WARMING_SCHEDULE_ENABLED unset) — 養號 sessions must be created manually');
+    }
   };
 
   let shuttingDown = false;
@@ -595,6 +617,9 @@ export function createWorkerApp({
     } catch { /* best effort */ }
     try {
       batchSchedulerLoopRef.impl?.stop();
+    } catch { /* best effort */ }
+    try {
+      warmingSchedulerRef.impl?.stop();
     } catch { /* best effort */ }
     try {
       worker.queueStateProbeStop?.();
@@ -618,7 +643,7 @@ export function createWorkerApp({
     // P4 (test inspection): producer + reconciler + fire handler.
     producerQueue, reconcilerRef, fireHandlerRef,
     // BR-B2 (test inspection): batch lane refs.
-    batchSvcRef, leaseSvcRef, adapterRegistryRef, batchSchedulerRef, batchSchedulerLoopRef, batchEngineRef,
+    batchSvcRef, leaseSvcRef, adapterRegistryRef, batchSchedulerRef, batchSchedulerLoopRef, batchEngineRef, warmingSchedulerRef,
   };
 }
 

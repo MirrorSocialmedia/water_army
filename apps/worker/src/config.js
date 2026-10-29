@@ -46,6 +46,13 @@ export function loadWorkerConfig(env = process.env) {
     /** Scheduler tick cadence (boot pass is immediate) + master switch. */
     batchSchedulerIntervalMs: Number(env.BATCH_SCHEDULER_INTERVAL_MS ?? 5_000),
     batchSchedulerEnabled: env.BATCH_SCHEDULER_ENABLED !== 'false' && env.BATCH_SCHEDULER_ENABLED !== '0',
+    /**
+     * WA-WARMING (S2): the 養號 dispatcher. OFF by default — the warm-state
+     * gate and the manual/API paths work without it; flipping this on starts
+     * creating purpose='warming' cycles for identities in `warming`.
+     */
+    warmingSchedulerEnabled: env.WA_WARMING_SCHEDULE_ENABLED === 'true' || env.WA_WARMING_SCHEDULE_ENABLED === '1',
+    warmingSchedulerIntervalMs: Number(env.WA_WARMING_INTERVAL_MS ?? 300_000),
   };
   if (!Number.isFinite(config.healthPort) || config.healthPort <= 0) {
     throw new Error(`invalid WORKER_HEALTH_PORT: ${env.WORKER_HEALTH_PORT}`);

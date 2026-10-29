@@ -8,6 +8,8 @@
   "exports": {
     ".": "./src/index.js",
     "./batch-constants": "./src/batch-constants.js",
-    "./batch-metrics": "./src/batch-metrics.js"
+    "./batch-metrics": "./src/batch-metrics.js",
+    "./warm-state": "./src/warm-state.js",
+    "./warming-schedule": "./src/warming-schedule.js"
   }
 }

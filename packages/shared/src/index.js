@@ -211,6 +211,24 @@ export {
   normalizeWarmThresholdInput,
 } from './warm-state.js';
 
+/** WA-WARMING (S2): warming templates + deterministic daily plan (warming-schedule.js). */
+export {
+  APP_SETTING_WARM_SCHEDULE,
+  WARMING_SCHEDULE_DEFAULTS,
+  WARMING_SESSION_MINUTES,
+  WARMING_CATCHUP_GRACE_MS,
+  WARMING_TEMPLATES,
+  WARMING_TEMPLATE_NAMES,
+  WARMING_TEMPLATE_FALLBACK,
+  WARMING_QUERY_POOL,
+  readWarmingSchedule,
+  hkDateString,
+  warmingIdempotencyKey,
+  planWarmingDay,
+  warmingBatchSpec,
+  createWarmingScheduler,
+} from './warming-schedule.js';
+
 /** Batch Rotation metrics + alert evaluation (BR-B5, MD §13 — pure core). */
 export {
   BATCH_METRIC_NAMES,

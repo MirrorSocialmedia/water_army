@@ -79,6 +79,8 @@ export function makeBatchFakeDb({ identities = [], batches = [], batchIdentities
           rows = rows.filter((r) => set.has(r.id));
         }
         if (where.status !== undefined) rows = rows.filter((r) => r.status === where.status);
+        // WA-WARMING: warming scheduler lists `where: { warmState: 'warming' }`.
+        if (where.warmState !== undefined) rows = rows.filter((r) => (r.warmState ?? null) === where.warmState);
         if (orderBy?.createdAt) {
           rows.sort((a, b) => (orderBy.createdAt === 'asc' ? a.createdAt - b.createdAt : b.createdAt - a.createdAt));
         }

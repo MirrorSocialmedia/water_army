@@ -3,7 +3,8 @@ import { useState } from 'react';
 import { useApi } from '../hooks/useApi';
 import { StateFrame } from '../components/StateFrame';
 import { identities, purge, identityLogin } from '../services/batches';
-import { fingerprints, egress, accountLifecycle } from '../services/identity-extras';
+import { fingerprints, egress, accountLifecycle, warmState } from '../services/identity-extras';
+import { planWarmingDay, hkDateString } from '@water-army/shared/warming-schedule';
 import {
   canOperateLifecycle,
   conflictText,
@@ -111,6 +112,7 @@ export function IdentityDetail({ identityId, user }) {
               ['fingerprint', '指紋 Fingerprint'],
               ['egress', '出口綁定 Egress'],
               ['account', '帳號生命週期 Account'],
+              ['warm', '養號 Warming'],
             ].map(([id, label]) => (
               <button
                 key={id}
@@ -128,6 +130,7 @@ export function IdentityDetail({ identityId, user }) {
           {tab === 'fingerprint' ? <FingerprintPanel identityId={identityId} user={user} /> : null}
           {tab === 'egress' ? <EgressPanel identityId={identityId} user={user} /> : null}
           {tab === 'account' ? <AccountLifecyclePanel identityId={identityId} user={user} /> : null}
+          {tab === 'warm' ? <WarmLifecyclePanel identityId={identityId} user={user} /> : null}
 
           {tab === 'overview' ? (
           <>
@@ -922,6 +925,161 @@ function AccountLifecyclePanel({ identityId, user }) {
           <p className="muted">no transitions recorded yet</p>
         )}
       </div>
+    </div>
+  );
+}
+
+// ------------------------------------------------------------- WA-WARMING ---
+const WARM_STATE_PILL = { cold: 'pill-down', warming: 'pill-disabled', warm: 'pill-up' };
+const WARM_STATE_LABELS = { cold: '未養號', warming: '養號中', warm: '已養好' };
+const WARM_SESSION_STATUS_PILL = { due: 'pill-up', future: 'pill-disabled', missed: 'pill-down' };
+
+function WarmLifecyclePanel({ identityId, user }) {
+  const canOp = canOperateLifecycle(user?.role);
+  const isAdmin = user?.role === 'admin';
+  const warm = useApi(() => warmState.get(identityId), [identityId]);
+  const disabled = isSwitchDisabled(warm.error, 'WARM_STATE_DISABLED');
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(null);
+  const [note, setNote] = useState(null);
+
+  async function act(name, fn) {
+    if (busy) return; // double-submit guard
+    setBusy(name);
+    setNote(null);
+    try {
+      await fn();
+      setNote({ kind: 'ok', text: `已執行 ${name}（已審計）。` });
+      setReason('');
+      warm.reload();
+    } catch (e) {
+      setNote({ kind: 'err', text: conflictText(e) ?? errorText(e) });
+      warm.reload(); // state may have moved under us — resync
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  if (disabled) {
+    return (
+      <div className="card" role="region" aria-label="Warm state">
+        <div className="card-head"><strong>養號狀態 (WA-WARMING)</strong></div>
+        <p className="muted">
+          Not available on this API build — <code className="mono">WARM_STATE_DISABLED</code> (503):
+          the identities.warm_state columns are missing (run prisma migrate deploy).
+        </p>
+      </div>
+    );
+  }
+
+  const w = warm.data?.warm ?? null;
+  // Today's deterministic plan (client-side mirror of the scheduler — same
+  // seed, zero API cost). DEFAULT window only: AppSetting warm.schedule can
+  // move the real dispatch window (the plan card says so honestly).
+  const now = new Date();
+  const dayPlan = w && w.storedState === 'warming' ? planWarmingDay({ identityId, date: hkDateString(now), now }) : null;
+
+  return (
+    <div className="stack">
+      <div className="card" role="region" aria-label="Warm state">
+        <div className="card-head">
+          <strong>養號狀態 (WA-WARMING — Google/FB 防封門檻)</strong>
+          <span className="muted">cold → warming → warm；非 warm 身份業務派發會被閘 409</span>
+        </div>
+        <StateFrame loading={warm.loading} error={warm.error} empty={!warm.loading && !warm.error && !w} emptyTitle="No warm state">
+          {w ? (
+            <>
+              <dl className="kv">
+                <dt>state</dt>
+                <dd>
+                  <span className={`pill ${pillClass(WARM_STATE_PILL, w.effectiveState)}`}>
+                    {w.effectiveState} · {WARM_STATE_LABELS[w.effectiveState] ?? ''}
+                  </span>
+                  {w.storedState !== w.effectiveState ? (
+                    <span className="muted"> (stored: {w.storedState} — 已屆滿，下次讀取/派發時自動升級)</span>
+                  ) : null}
+                </dd>
+                <dt>threshold</dt>
+                <dd>{w.thresholdDays} 天（AppSetting 可調，逐帳號可覆蓋）</dd>
+                <dt>clock start</dt><dd>{w.startedAt ? fmtDateTime(w.startedAt) : '—（未開始養號）'}</dd>
+                <dt>ready at</dt><dd>{w.readyAt ? fmtDateTime(w.readyAt) : '—'}</dd>
+                {w.effectiveState === 'warming' ? (
+                  <>
+                    <dt>progress</dt>
+                    <dd>
+                      <div style={{ height: 6, background: 'var(--border)', borderRadius: 4, maxWidth: 320 }}>
+                        <div style={{ height: 6, width: `${w.progressPct}%`, background: 'var(--warn)', borderRadius: 4 }} />
+                      </div>
+                      <span className="muted">{w.elapsedDays} / {w.thresholdDays} 天 — 剩返 {w.daysRemaining} 日</span>
+                    </dd>
+                  </>
+                ) : null}
+              </dl>
+              <div className="row-actions" style={{ marginTop: 10 }}>
+                {canOp && w.storedState === 'cold' ? (
+                  <button type="button" className="btn" disabled={busy !== null} onClick={() => act('start', () => warmState.start(identityId))}>
+                    {busy === 'start' ? 'Saving…' : '→ warming（開始養號，時鐘由這一刻起）'}
+                  </button>
+                ) : null}
+                {canOp && w.storedState === 'warming' ? (
+                  <button type="button" className="btn btn-ghost" disabled={busy !== null} onClick={() => act('reset', () => warmState.reset(identityId))}>
+                    {busy === 'reset' ? 'Saving…' : '→ cold（重設時鐘）'}
+                  </button>
+                ) : null}
+                {isAdmin ? (
+                  <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+                    <input
+                      className="input"
+                      placeholder="force reason（必要，入審計）"
+                      value={reason}
+                      onChange={(e) => setReason(e.target.value)}
+                      style={{ width: 240 }}
+                    />
+                    <button
+                      type="button"
+                      className="btn"
+                      disabled={busy !== null || reason.trim().length < 3}
+                      onClick={() => act('force', () => warmState.force(identityId, reason.trim()))}
+                    >
+                      {busy === 'force' ? 'Saving…' : '→ warm（admin 越權）'}
+                    </button>
+                  </span>
+                ) : null}
+              </div>
+              {note ? <p className={note.kind === 'ok' ? 'status-ok' : 'status-degraded'}>{note.text}</p> : null}
+            </>
+          ) : null}
+        </StateFrame>
+      </div>
+
+      {dayPlan ? (
+        <div className="card" role="region" aria-label="Today warming plan">
+          <div className="card-head">
+            <strong>今日養號計劃（{dayPlan.date}，預設視窗 09–21 HKT）</strong>
+            <span className="muted">deterministic mirror of the scheduler — 實際派發受 warm.schedule AppSetting 調整</span>
+          </div>
+          {dayPlan.sessions.length ? (
+            <div className="table-wrap">
+              <table className="list-table">
+                <thead>
+                  <tr><th>HK 時間</th><th>模板</th><th>min</th><th>狀態</th><th>seeded query</th></tr>
+                </thead>
+                <tbody>
+                  {dayPlan.sessions.map((s) => (
+                    <tr key={s.idempotencyKey}>
+                      <td className="mono">{new Date(s.startAt).toLocaleTimeString('zh-HK', { timeZone: 'Asia/Hong_Kong', hour: '2-digit', minute: '2-digit' })}</td>
+                      <td>{s.templateLabel} ({s.template})</td>
+                      <td>{s.durationMinutes}</td>
+                      <td><span className={`pill ${pillClass(WARM_SESSION_STATUS_PILL, s.status)}`}>{s.status}</span></td>
+                      <td className={LONG_TEXT_CLASS}>{s.query ?? '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : <p className="muted">今日無 session（視窗/配額）</p>}
+        </div>
+      ) : null}
     </div>
   );
 }
