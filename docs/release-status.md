@@ -125,7 +125,8 @@
 | 項 | 狀態 | Evidence / 備註 |
 |---|---|---|
 | 指紋生成/審計 UI+API | PASS(live-stack) | `docs/audits/ui-surfacy-report.md` v2 §05（chip 0→N + POST 200 真斷言）；collision 409 UI = §06b；生成器/碰撞矩陣 hermetic @npm test（W1b） |
-| 指紋 ro.* 定製 image 映射（自製 image 路線） | NOT VERIFIED | 原因：真機斷言列 `docs/w1b-realdevice-todo.md` 待辦（老細拍板 (b) 自製 image + init 映射）。下一步：真機單。不可推斷：平台對 Google/Meta 嘅 ro.* 防指紋能力 |
+| 指紋 ro.* 定製 image 映射 — **新 tag `water-army/redroid:14.0.0-240527-gms-mtg-oemprop`**（oem-propctl 解碼層） | PASS(real-device) | WA-OEMPROP S3 真機驗收（redroid-rdfp-01 fresh first-boot）：getprop **12/12** = P1 profile 值（p1-09 同口徑，含 persist.sys.timezone）+ 非指紋 ro.* 基線 13/13 唔變 + GMS wa-attest p1-28 口徑 ok（GMS 22.21.16 / Play 30.4.17 / gsf 14 同 P1）+ boot 17.8s（1.78x P1，fresh first-boot overhead）；digest `sha256:2d82732b…`（build-record 在檔）；新 tag 已入 `batch.container_image_allowlist`（預設切換**未做**，等老細拍板）。`docs/audits/oemprop-report.md` | 
+| 指紋 ro.* 定製 image 映射 — **舊 tag `water-army/redroid:14.0.0-240527-gms-mtg`**（無解碼層） | KNOWN LIMITATION | 保留 KL：12 項 ro.* 注入 = 0/12 生效（carrier 22/22 送達 OK + 映射 OK，MTG 影像缺 oem-propctl 解碼器）；真機證據 `docs/audits/realdevice-final/p1/`（p1-09）。舊 tag 零破壞（新 tag 平行新增）；新機建機如用舊 tag = 指紋唔生效 |
 | egress 綁定/解綁 UI+API（格式校驗 + 錯誤誠實） | PASS(live-stack) | `docs/audits/ui-surfacy-report.md` v2 §06a（POST 200→chips 0→1→unbind）；非法格式 400/409 面 = v2 fail 集 §06b + surfacy-ui.test.js |
 | egress 真出口核對（VERIFIED / DRIFTED watchdog / 409 衝突） | PASS(real-device，測試出口) | W3 D1–D10 10/10（真機雙身份出口獨立、drift 30s→DRIFTED+escalation、canary 19 surfaces 零洩漏；`logs/waterarmy-w3-progress.md` workspace、HEARTBEAT 151 行記錄）；2026-10-28 WA-REALDEVICE-FINAL P1 新機複核（redroid-rdfa-01 機內出口 = 103.194.185.206，報告 §2 P1.5）；**出口本身 = 自建（gost/mihomo 測試代理）**，唔係真住宅出口池（見 §3.7）。
 | 帳號生命週期狀態機（代碼+transition 守門） | PASS(mock-hermetic) | T5 `48c3d2d`（狀態機 + CAPTCHA 人工口 + 節流/保管庫；全流程 mock 5 測）@npm test。UI 面 = §3.6。不可推斷：真機驅動力（真註冊自動化 driver = DEFERRED，見 §3.5） |
