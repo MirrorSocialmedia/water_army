@@ -601,6 +601,8 @@ export {
 
 // WA-VMSTEALTH (2026-10-29): per-identity device MAC planning (S2)
 export * from './device-mac.js';
+// WA-FIX2B (R3): per-device canvas raster fingerprint (font variant).
+export * from './canvas-font.js';
 export * from './stealth-battery.js';
 export * from './stealth-browser.js';
 export * from './region.js';

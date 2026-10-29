@@ -36,3 +36,4 @@ images/*/vendor/*.zip
 attest-app/build/
 attest-app/libs/
 attest-app/debug.keystore
+images/*/patches/*.so

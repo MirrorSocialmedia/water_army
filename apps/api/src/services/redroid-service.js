@@ -23,7 +23,7 @@ import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 
-import { DOCKER_ERROR, encryptSecret, decryptSecret, resolveProviderKey, buildRoCmdArgs, profileToRoOverrides, templateProfileToRoOverrides, mergeRoOverrides, validateRoOverridesMap, deviceDisplayArgs, profileProcCmdArgs, planDeviceMac, deriveStealthRoOverrides, buildStealthBatteryProfile, buildStealthBatteryScript, BATTERY_STEALTH_MARKER, buildBatteryDriftScript, batteryDriftLevel, BATTERY_DRIFT_MARKER, buildBrowserArgsProvisionScript, BROWSER_ARGS_MARKER } from '@water-army/shared';
+import { DOCKER_ERROR, encryptSecret, decryptSecret, resolveProviderKey, buildRoCmdArgs, profileToRoOverrides, templateProfileToRoOverrides, mergeRoOverrides, validateRoOverridesMap, deviceDisplayArgs, profileProcCmdArgs, planDeviceMac, canvasFontPlanForProfile, CANVAS_FONT_TARGET, deriveStealthRoOverrides, buildStealthBatteryProfile, buildStealthBatteryScript, BATTERY_STEALTH_MARKER, buildBatteryDriftScript, batteryDriftLevel, BATTERY_DRIFT_MARKER, buildBrowserArgsProvisionScript, BROWSER_ARGS_MARKER } from '@water-army/shared';
 
 import { DockerServiceError, classifyDockerError } from './docker-service.js';
 import { GOST_HOST_BIND, deviceNetwork, withDeviceNetwork, ensureDeviceNetwork } from './device-network.js';
@@ -2423,6 +2423,26 @@ export function createRedroidService({
         deviceMac = plan.mac;
         row = await db.device.update({ where: { id: row.id }, data: { macAddress: plan.mac } });
       }
+      // WA-FIX2B (R3): per-device canvas raster — a real Roboto weight variant
+      // bind-mounted over the image's sans-serif file. Seed = stored identity
+      // profile (deterministic: same identity → same variant on every create).
+      // Gate OFF / profile-less rows keep Mounts byte-identical (legacy).
+      let canvasFontFile = null; // in-container bind source once staged
+      if (config?.redroidStealthEnabled && identityIdForDevice && identityProfile) {
+        const cplan = canvasFontPlanForProfile(identityProfile);
+        if (cplan.file) {
+          const assetsDir = process.env.CANVAS_FONT_ASSETS_DIR
+            || path.join(process.cwd(), 'images', 'fonts', 'canvas-weights');
+          const staged = path.join(dataDir, 'canvas-font.ttf');
+          try {
+            await fs.promises.copyFile(path.join(assetsDir, cplan.file), staged);
+          } catch (err) {
+            await rollback(row, dataDir, createdDir);
+            throw fail('REDROID_CANVAS_FONT', 500, `canvas font variant '${cplan.variant}' not staged from ${assetsDir}: ${err?.message ?? err}`);
+          }
+          canvasFontFile = staged;
+        }
+      }
       const HostConfig = {
         // (no NetworkMode — the explicit device-network endpoint wins)
         PortBindings: {
@@ -2431,7 +2451,10 @@ export function createRedroidService({
           // input that can change it (route schema has no bind field).
           [`${REDROID_ADB_CONTAINER_PORT}/tcp`]: [{ HostIP: REDROID_LOOPBACK_BIND, HostPort: String(row.adbPort) }],
         },
-        Mounts: [{ Type: 'bind', Source: dataDir, Target: '/data', ReadOnly: false }],
+        Mounts: [
+          { Type: 'bind', Source: dataDir, Target: '/data', ReadOnly: false },
+          ...(canvasFontFile ? [{ Type: 'bind', Source: canvasFontFile, Target: CANVAS_FONT_TARGET, ReadOnly: false }] : []),
+        ],
         // MD §7: privileged comes ONLY from the template.
         Privileged: Boolean(template.privileged),
       };
