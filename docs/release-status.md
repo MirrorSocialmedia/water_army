@@ -38,13 +38,13 @@
 
 > **口徑澄清**：過往記錄（工單、HEARTBEAT）偶見「1606 tests（1600 pass + 6 skip）」— 實測基準下 **1606 = pass 數**，全套 tests 總數 = **1612 = 1606 pass + 6 skip**；引用時請以「tests / pass / fail / skip」四欄分列，避免 pass-vs-total 混用。
 >
-> 實跑快照：`bash scripts/release-status-provenance.sh` @`a5f928b`（2026-10-29 21:4x HKT，WA-STEALTH-FIX2 s1–s4）輸出 = `suite total=1734 pass=1728 fail=0 skip=6；unit 1269/1269/0/0；integration 465/459/0/6`。（上一快照 @`f6c9b70` = 1717/1711/0/6，WA-WARMING；再前 @`273c65c` = 1693/1687/0/6。）
+> 實跑快照：`bash scripts/release-status-provenance.sh` @`4c70068`（2026-10-29 23:5x HKT，WA-FIX2B R2b/R4）輸出 = `suite total=1742 pass=1736 fail=0 skip=6；unit 1273/1273/0/0；integration 469/463/0/6`。（上一快照 @`a5f928b` = 1734/1728/0/6，WA-STEALTH-FIX2 s1–s4；再前 @`f6c9b70` = 1717/1711/0/6，WA-WARMING。）
 
 | 層 | 命令 | 測試數 | 結果 |
 |---|---|---|---|
-| 全套 npm test | `npm test` | 1734 | 1728 pass / 0 fail / 6 skip（skip 全部在 integration 層 = 環境門控：real-redis gated、真機窗口 gated；**非跳過失敗**） |
-| unit | `npm run test:unit`（95 files） | 1269 | 1269 pass / 0 fail / 0 skip |
-| integration | `npm run test:integration`（48 files） | 465 | 459 pass / 0 fail / 6 skip |
+| 全套 npm test | `npm test` | 1742 | 1736 pass / 0 fail / 6 skip（skip 全部在 integration 層 = 環境門控：real-redis gated、真機窗口 gated；**非跳過失敗**） |
+| unit | `npm run test:unit`（96 files） | 1273 | 1273 pass / 0 fail / 0 skip |
+| integration | `npm run test:integration`（49 files） | 469 | 463 pass / 0 fail / 6 skip |
 | web build | `npm run build` | vite | 綠（build green ≠ 功能 PASS，只證可打包） |
 
 **E2E harness（獨立於 npm test，全部對真 web/API 部署打）**：

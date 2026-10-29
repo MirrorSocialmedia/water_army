@@ -4,6 +4,9 @@
 - **postBootTarget 5400→2100，老細 10-29 22:15 選 B**（WA-FIX2B R1；hardFloor 4096 照舊唔郁；perBootBudget 1200 照舊）
 - 載體：AppSetting `ram_gate.config` = `{"hardFloorMiB":4096,"postBootTargetMiB":2100}`（psql operator update，無 admin API 凭證；gate 每decision 即時重讀 = live）；審計行 `audit_events.ramgate.config_updated`（actor=admin 927b788c，details 含 merged/previous/derivation）。
 - env `RAM_GATE_*` 實查零設定 → AppSetting 即 effective（無更高優先序覆蓋）。
+- **10-29 23:46 拆 a4（老細批准，CEO 執行）**：產品 API DELETE confirm 逐字 + removeData；data dir 同遭 `DATA_DIR_PERM_DENIED`（root-owned），CEO 一次性 alpine chown+purge 清淨（紀律同 batch-rerun 先例）→ 窗口 9,425 MiB 曾開（fx-3 attempt 窗口淺，後跌返 8.6G）。
+- **10-30 00:0x fx-2 teardown（WA-FIX2B R5）**：產品 API DELETE confirm="redroid-rdev-fx-2" + removeData:true → container/gost/proxy 經 API 清；data dir `DATA_DIR_PERM_DENIED`（dalvik-cache root-owned，同款先例）→ alpine:latest chown+purge 清淨；零殘留核對 = devices 0 行、stream/resource leases 0（fx）、identity_data_dir_claims 無 fx 行、fx containers 0。
+- **postBootTarget 2100 = 老細批准配置，留低唔撤**（override 賬目收口口徑）。
 
 ## 定值算式（按 gate 代碼 projected 公式，唔係估）
 公式（`packages/shared/src/ram-gate.js` §ADMISSION）：
