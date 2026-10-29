@@ -1,0 +1,6 @@
+== props / native GLES (dumpsys glGetString face) ==
+lvp
+mesa
+taro
+GLES: ARM, AMD Radeon Graphics, OpenGL ES 3.2 V@0615
+GLES: ARM, AMD Radeon Graphics, OpenGL ES 3.2 V@0615

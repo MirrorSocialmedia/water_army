@@ -1,0 +1,34 @@
+Current Battery Service state:
+  AC powered: false
+  USB powered: false
+  Wireless powered: false
+  Dock powered: false
+  Max charging current: 0
+  Max charging voltage: 0
+  Charge counter: 0
+  status: 1
+  health: 1
+  present: false
+  level: 0
+  scale: 100
+  voltage: 0
+  temperature: 0
+  technology: 
+BATTERY_STEALTH_OK
+Current Battery Service state:
+  (UPDATES STOPPED -- use 'reset' to restart)
+  AC powered: false
+  USB powered: false
+  Wireless powered: false
+  Dock powered: false
+  Max charging current: 0
+  Max charging voltage: 0
+  Charge counter: 0
+  status: 3
+  health: 1
+  present: true
+  level: 46
+  scale: 100
+  voltage: 0
+  temperature: 0
+  technology: 

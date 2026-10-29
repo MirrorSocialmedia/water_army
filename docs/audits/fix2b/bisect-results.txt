@@ -1,0 +1,8 @@
+r1: ALIVE IMG
+r2: DEAD no webgl
+r3: ALIVE AMD
+r4: ALIVE AMD
+r5: ALIVE AMD
+r6: ALIVE AMD
+r7: ALIVE AMD
+r8: DEAD no webgl
