@@ -38,13 +38,13 @@
 
 > **口徑澄清**：過往記錄（工單、HEARTBEAT）偶見「1606 tests（1600 pass + 6 skip）」— 實測基準下 **1606 = pass 數**，全套 tests 總數 = **1612 = 1606 pass + 6 skip**；引用時請以「tests / pass / fail / skip」四欄分列，避免 pass-vs-total 混用。
 >
-> 實跑快照：`bash scripts/release-status-provenance.sh` @`92f3757`（2026-10-29 03:5x HKT）輸出 = `suite total=1658 pass=1652 fail=0 skip=6；unit 1200/1200/0/0；integration 458/452/0/6`。
+> 實跑快照：`bash scripts/release-status-provenance.sh` @`37c2e37`（2026-10-29 14:0x HKT，WA-IPGROUP）輸出 = `suite total=1672 pass=1666 fail=0 skip=6；unit 1211/1211/0/0；integration 461/455/0/6`。（上一快照 @`92f3757` = 1658/1652/0/6。）
 
 | 層 | 命令 | 測試數 | 結果 |
 |---|---|---|---|
-| 全套 npm test | `npm test` | 1658 | 1652 pass / 0 fail / 6 skip（skip 全部在 integration 層 = 環境門控：real-redis gated、真機窗口 gated；**非跳過失敗**） |
-| unit | `npm run test:unit`（89 files） | 1200 | 1200 pass / 0 fail / 0 skip |
-| integration | `npm run test:integration`（46 files） | 458 | 452 pass / 0 fail / 6 skip |
+| 全套 npm test | `npm test` | 1672 | 1666 pass / 0 fail / 6 skip（skip 全部在 integration 層 = 環境門控：real-redis gated、真機窗口 gated；**非跳過失敗**） |
+| unit | `npm run test:unit`（90 files） | 1211 | 1211 pass / 0 fail / 0 skip |
+| integration | `npm run test:integration`（47 files） | 461 | 455 pass / 0 fail / 6 skip |
 | web build | `npm run build` | vite | 綠（build green ≠ 功能 PASS，只證可打包） |
 
 **E2E harness（獨立於 npm test，全部對真 web/API 部署打）**：
@@ -117,6 +117,7 @@
 | 批次手動介入流（真 loop） | PASS(real-device，到產品 bug 邊界) | IV8/IV9：open→badge 0→1→ack→真卡點（300s probe 空轉）→engine retry（真 304）→terminal→resolve；stop/retry-resume 未練（orchestrator bug 照實記錄）（報告 §3.4 P2.13/P2.18） |
 | 批次報告導出（真數據 JSON/CSV + secret scan） | PASS(real-device) | v9 cycle 報告 200（JSON 2357B/CSV 1168B）、3 機真實數據核、secret scan 0 命中、5 分鐘穩定窗 PASS（報告 §3.4 P2.19） |
 | 批次 × 真機端到端一條龍（UI 建批次 → N 台真機 run 跑完） | **PASS(real-device)** @2026-10-29 | **WA-BATCH-E2E-RERUN（mvsxqru6w09im）**：新 tag `gms-mtg-oemprop` × 3 cycle × 3 真機（redroid-rdfa-r1..r9）= **9/9 SUCCEEDED**（180s hold 內真 ADB getprop **12/12** ×4 run 窗口 + baseline 13/13 唔變）+ 手動介入全循環（open→badge 0→1→ack→真 `docker stop -t 2`→engine 自動 retry a3→12/12 再捕獲→succeeded→resolve→badge 0，UI 截圖在檔）+ JSON/CSV 導出 ×3 cycle（`batch-cycle-report/v1`，zero-secret scan 真實 secret=0）+ P3 零殘留（purge ×9 全經產品 API、lease 歸零、禁碰集零觸碰）。CNXN probe 真 adbd 握手全鏈真跑 = F-RDFA-2 假死/假綠零再現。跟進發現：F-1（hold re-probe vs fast-boot ADB transient，retry 路徑兜底）、F-2（adopt-restart phantom port lease，TTL 自愈）— 均非 blocking、根因坐實、待獨立 ticket。`docs/audits/batch-e2e-rerun-report.md` + `docs/audits/batch-e2e-rerun/p2/`（evidence 索引喺報告 §6） |
+| Egress group 鐵律 2（同出口 IP 零併發 + 隨機錯峰 60–300s + 排隊可觀測） — WA-IPGROUP | **NOT VERIFIED** | 原因：本單純代碼 + hermetic（環境紅線：產品 stack 停 + RAM 不足，零 docker/live-stack）。代碼 = `packages/shared/src/egress-group.js`（三層 group derivation：metadata label `grp:` / W3 binding `ip:` / singleton 短路）+ scheduler 軟 gate + engine `egress_group` lease 硬 gate（兩層 DB-backed、多 replica 收斂）+ 決定性均勻錯峰（UNIFORM over [minMs,maxMs]，FNV-1a 抽樣，AppSetting `egress.group_jitter_ms` 可調）+ `GET /api/egress-groups`（待行數/下次放行估計）+ `PUT /api/egress-groups/jitter`。證據 = PASS(mock-hermetic)：unit 11 + integration 3（零重疊時間斷言/跨組並行/HELD→defer→exhaust→release/reconcile 清掃/RBAC/W3 閘）@commits `fb19395`/`37c2e37`；契約 = `docs/egress-groups.md`。下一步：真機驗證（多 redroid 共用同一出口、登入動作串行、崩潰 TTL 演練）全部併 **WA-ADVERSARIAL-FINAL**（mvt3rgj9dnspm）。不可推斷：真機併發零重疊 / 真機錯峰有效性（Google/FB 實際反封表現屬實測範疇） |
 | RDFA 修復驗證（create-time 校驗 / 真 CNXN probe 雙路徑 / window 治理 / C4 撤除） | PASS(real-device)（probe 雙路徑真跑；create-time 校驗 = 代碼層 mock-hermetic 證據級） | `docs/audits/rdfa-fix-report.md`（per-finding root cause/修復/證據/真機驗證）、`docs/audits/rdfa-fix-s4-live-evidence.txt`（raw live 輸出）、ADR-036（`docs/architecture-decisions.md` §36）；commits `991ddfa`/`4291f71`/`39ddeae`/`858bed4`/`92f3757` |
 | UI Batch Planner adapter/template 入口 | KNOWN LIMITATION（gap） | 現 UI 無 adapter 配置入口（control.create 只傳 identities/batchSize/maxActive/failurePolicy）→ container batch 只可走 API（報告 §3.1 P2.0）。下一步：產品單 |
 
