@@ -1,0 +1,12 @@
+=== S3 GMS probe (wa-attest, p1-28 calibre) 2026-10-29T00:25:37Z ===
+attest-app/dist/wa-attest.apk: 1 file pushed, 0 skipped. 321.2 MB/s (319915 bytes in 0.001s)
+Success
+package:com.waterarmy.attest
+Starting: Intent { cmp=com.waterarmy.attest/.AttestActivity }
+10-29 09:27:18.075  4214  4235 I WA-INTEGRITY: {"probe":"gms","com.google.android.gms":"22.21.16 (140800-454906765)+222116056","com.android.vending":"30.4.17-21 [0] [PR] 445549118+83041710","com.google.android.gsf":"14-10347885+34","status":"ok"}
+10-29 09:27:18.075  4214  4235 I WA-INTEGRITY: {"probe":"bind","com.google.android.gms.atom.attest.BIND":"NO_RESOLVER","com.google.android.gms.safetynet.BIND":"NO_RESOLVER","com.google.android.gms.auth.api.zinzi.BIND":"NO_RESOLVER","status":"ok"}
+10-29 09:27:18.075  4214  4235 I WA-INTEGRITY: {"probe":"legacyapi","com.google.android.gms.integrity.IntegrityApi":"absent","com.google.android.gms.integrity.IntegrityStatusCodes":"absent","com.google.android.play.core.integrity.StandardIntegrityManager":"present:[\"prepareIntegrityToken\"]","standard_prepare":"task_error","standard_prepare_err":{"err_class":"com.google.android.play.core.integrity.StandardIntegrityException","err_msg":"-9: Standard Integrity API error (-9): Binding to the service in the Play Store has failed. This can be due to having an old Play Store version installed on the device.\nAsk the user to update Play Store.\n (https:\/\/developer.android.com\/google\/play\/integrity\/reference\/com\/google\/android\/play\/core\/int...","err_status":-9,"err_cause":"com.google.android.play.integrity.internal.af: Failed to bind to the service."},"status":"ok"}
+10-29 09:27:18.075  4214  4235 I WA-INTEGRITY: {"probe":"safety","nonce":"IZvok\/VYwg\/7Lazje3IAwg","status":"task_error","err":"unknown\/incomplete"}
+10-29 09:27:18.075  4214  4235 I WA-INTEGRITY: {"probe":"integrity","nonce":"hIp0oBNodevy8_xaNAgCiciUNZum4whO","status":"task_error","err":"unknown\/incomplete"}
+10-29 09:27:18.075  4214  4235 I WA-INTEGRITY: {"probe":"summary","ts":1793233638075,"elapsed_ms":90007,"gms":"ok","bind":"ok","legacyapi":"ok","safety":"task_error","integrity":"task_error"}
+10-29 09:27:18.075  4214  4235 I WA-INTEGRITY: {"error":"java.io.FileNotFoundException: \/data\/local\/tmp\/wa-attest-result.json: open failed: EACCES (Permission denied)"}

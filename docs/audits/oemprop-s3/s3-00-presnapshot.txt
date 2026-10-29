@@ -1,0 +1,44 @@
+=== S3.0 pre-snapshot @ 2026-10-28T23:28:51Z ===
+--- RAM gate (baseline) ---
+{"enabled":true,"config":{"enabled":true,"maxParallel":10,"hardFloorMiB":4096,"postBootTargetMiB":5400,"perBootBudgetMiB":1200,"metricsMaxAgeMs":30000,"leaseTtlMs":86400000},"configErrors":null,"metrics":{"ok":true,"ts":1793230131694,"memAvailableMiB":39817.2,"memTotalMiB":94179.2,"memFreeMiB":9220.3,"swapTotalMiB":8192,"swapFreeMiB":2924.4,"loadAvg":[2.16,2.33,2.29],"source":"proc-meminfo","ageMs":0,"stale":false},"counts":{"liveLeases":1,"running":1,"inProgress":0,"runningWithLease":1,"reservedMiB":1200},"wouldAdmitNext":{"admitted":true,"reason":"ADMITTED","liveCount":1,"projectedMiB":37417,"currentMiB":39817.2,"config":{"enabled":true,"maxParallel":10,"hardFloorMiB":4096,"postBootTargetMiB":5400,"perBootBudgetMiB":1200,"metricsMaxAgeMs":30000,"leaseTtlMs":86400000}},"store":{"redis":true},"ts":1793230131697}
+--- docker ps (禁碰集在檔) ---
+water-army-api-1	water-army/api:local	Up 4 hours (healthy)
+water-army-worker-1	water-army/worker:local	Up 4 hours (healthy)
+sglang-fixed-run	sglang-fixed:latest	Up 12 hours (healthy)
+water-army-web-1	water-army/web:local	Up 12 hours (healthy)
+rdev-f1	water-army/redroid:14.0.0-240527-gms-mtg	Up 16 hours
+redroid-mc-dogfood-2	redroid/redroid:14.0.0-240527	Up 19 hours
+water-army-redis-1	redis:7.4.5	Up 20 hours (healthy)
+water-army-postgres-1	postgres:17.6	Up 20 hours (healthy)
+rdev-e1-gost	gogost/gost:3.3.0	Up 33 hours
+--- devices (API) ---
+{
+    "devices": [
+        {
+            "id": "af4d0b5f-3e89-4fe6-8015-f2991b94c455",
+            "name": "redroid-mc-dogfood-1",
+            "templateName": "mc-dogfood-gmsmtg",
+            "image": "water-army/redroid:14.0.0-240527-gms-mtg",
+            "androidVersion": "14",
+            "width": 720,
+            "height": 1280,
+            "dpi": 320,
+            "fps": 30,
+            "adbPort": 16800,
+            "adbBind": "127.0.0.1",
+            "gpuMode": "host",
+            "gpuStatus": "unverified",
+            "containerName": "redroid-mc-dogfood-1",
+            "containerId": "d7f08181780504046d62ac39575b9968945b0f8adca09fbb6de3d910082f9786",
+            "containerState": "exited",
+            "adbState": "unknown",
+            "proxy": {
+                "configured": false,
+                "gostPort": null,
+                "state": "off",
+                "hasUrl": false,
+                "binaryState": null,
+                "binaryVersion": null,
+                "network": null
+            },
+            "lastDiagnosedAt": null,

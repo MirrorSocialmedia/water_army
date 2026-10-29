@@ -7,10 +7,13 @@
 # oem-propctl (resetprop-rs writes the property area directly, bypassing the
 # ro.* one-time-write rule; ro.build.* are already loaded from build.prop
 # before early-init). Absent carrier = no action.
-# post-fs-data: persist.* targets (timezone) map HERE, not early-init —
-# init re-loads stored persistent properties from /data during the fs stage,
-# so a post-fs-data write is the first deterministic one (and still before
-# zygote reads persist.sys.timezone).
+# load_persist_props_action: persist.* targets (timezone) map HERE via the
+# stock setprop (resetprop-rs cannot write persist.* — real-device,
+# WA-OEMPROP S3), not in early-init/post-fs-data: init.rc loads stored
+# persistent properties from /data/property via `load_persist_props` inside
+# its own `on post-fs-data` section and then fires this trigger. Mapping on
+# the trigger is the ordering-guaranteed hook; it still fires strictly
+# before zygote reads persist.sys.timezone.
 
 on early-init && property:ro.boot.oem_ro_product_brand=*
     exec -- /vendor/bin/oem-propctl ro.product.brand ${ro.boot.oem_ro_product_brand}
@@ -34,5 +37,5 @@ on early-init && property:ro.boot.oem_ro_product_name=*
     exec -- /vendor/bin/oem-propctl ro.product.name ${ro.boot.oem_ro_product_name}
 on early-init && property:ro.boot.oem_ro_serialno=*
     exec -- /vendor/bin/oem-propctl ro.serialno ${ro.boot.oem_ro_serialno}
-on post-fs-data && property:ro.boot.oem_persist_sys_timezone=*
-    exec -- /vendor/bin/oem-propctl persist.sys.timezone ${ro.boot.oem_persist_sys_timezone}
+on load_persist_props_action && property:ro.boot.oem_persist_sys_timezone=*
+    exec -- /system/bin/setprop persist.sys.timezone ${ro.boot.oem_persist_sys_timezone}

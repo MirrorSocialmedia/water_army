@@ -189,20 +189,27 @@ test('rc artifact: parses back to exactly the 12-entry mapping table (non-empty 
   assert.ok(table.length === 12, 'mapping table must be 12 rows — a silently empty/short table is the vacuous-assertion failure mode');
   assert.deepEqual([...rows].sort((a, b) => (a.target < b.target ? -1 : 1)), table);
   assert.equal(rows.length, 12);
-  // L2 wave-1 phase discipline: persist.* maps in post-fs-data ONLY (ro.* in
-  // early-init) — enforced by the parser too, but assert it here at source
+  // L2 wave-1 phase discipline: persist.* maps in load_persist_props_action
+  // ONLY (ro.* in early-init) — enforced by the parser too, but assert it
+  // here at source (WA-OEMPROP S3: post-fs-data is NOT a safe phase for
+  // persist.* — init.rc's load_persist_props builtin can run after it)
   const rc = generateWaRoMapRc();
-  assert.match(rc, /on post-fs-data && property:ro\.boot\.oem_persist_sys_timezone=\*/);
-  assert.ok(!/^on early-init && property:ro\.boot\.oem_persist_/m.test(rc), 'persist.* carrier must NOT map in early-init (load_persistent_properties races it)');
+  assert.match(rc, /on load_persist_props_action && property:ro\.boot\.oem_persist_sys_timezone=\*/);
+  assert.match(rc, /on load_persist_props_action && property:ro\.boot\.oem_persist_sys_timezone=\*\n    exec -- \/system\/bin\/setprop persist\.sys\.timezone \$\{ro\.boot\.oem_persist_sys_timezone\}/, 'persist.* target must use stock setprop (resetprop-rs cannot write persist.*)');
+  assert.ok(!/oem-propctl persist\./m.test(rc), 'persist.* target must NOT be written by oem-propctl (real-device: silent no-op)');
+  assert.ok(!/^on (early-init|post-fs-data) && property:ro\.boot\.oem_persist_/m.test(rc), 'persist.* carrier must NOT map in early-init or post-fs-data (the persist-area reload erases it)');
 });
 
 test('rc parser: catches tampering (dangling trigger / foreign content / carrier mismatch / wrong phase)', () => {
   assert.ok(parseWaRoMapRc('on early-init && property:ro.boot.oem_x=*\n').problems.some((m) => /dangling/.test(m)));
   assert.ok(parseWaRoMapRc('service sneaky /system/bin/sneaky\n').problems.some((m) => /unexpected/.test(m)));
   assert.ok(parseWaRoMapRc('on early-init && property:ro.boot.oem_a=*\n    exec -- /vendor/bin/oem-propctl ro.x ${ro.boot.oem_b}').problems.some((m) => /does not match trigger/.test(m)));
-  // phase tampering: persist.* in early-init / ro.* in post-fs-data both rejected
-  assert.ok(parseWaRoMapRc('on early-init && property:ro.boot.oem_persist_sys_timezone=*\n    exec -- /vendor/bin/oem-propctl persist.sys.timezone ${ro.boot.oem_persist_sys_timezone}').problems.some((m) => /must be post-fs-data/.test(m)));
-  assert.ok(parseWaRoMapRc('on post-fs-data && property:ro.boot.oem_ro_serialno=*\n    exec -- /vendor/bin/oem-propctl ro.serialno ${ro.boot.oem_ro_serialno}').problems.some((m) => /must be early-init/.test(m)));
+  // phase tampering: persist.* in early-init / ro.* in load_persist_props_action both rejected
+  assert.ok(parseWaRoMapRc('on early-init && property:ro.boot.oem_persist_sys_timezone=*\n    exec -- /vendor/bin/oem-propctl persist.sys.timezone ${ro.boot.oem_persist_sys_timezone}').problems.some((m) => /must be load_persist_props_action/.test(m)));
+  assert.ok(parseWaRoMapRc('on load_persist_props_action && property:ro.boot.oem_ro_serialno=*\n    exec -- /vendor/bin/oem-propctl ro.serialno ${ro.boot.oem_ro_serialno}').problems.some((m) => /must be early-init/.test(m)));
+  // writer tampering: persist.* via oem-propctl / ro.* via setprop both rejected
+  assert.ok(parseWaRoMapRc('on load_persist_props_action && property:ro.boot.oem_persist_sys_timezone=*\n    exec -- /vendor/bin/oem-propctl persist.sys.timezone ${ro.boot.oem_persist_sys_timezone}').problems.some((m) => /writer .* wrong for target persist\.sys\.timezone \(must be \/system\/bin\/setprop\)/.test(m)));
+  assert.ok(parseWaRoMapRc('on early-init && property:ro.boot.oem_ro_serialno=*\n    exec -- /system/bin/setprop ro.serialno ${ro.boot.oem_ro_serialno}').problems.some((m) => /must be \/vendor\/bin\/oem-propctl/.test(m)));
 });
 
 // ---------------------------------------------------------------------------

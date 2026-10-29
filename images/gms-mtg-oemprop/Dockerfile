@@ -37,6 +37,11 @@ RUN sha256sum /src/propctl-wrapper.c \
  && gcc -O2 -static -Wall -Wextra -o /oem-propctl /src/propctl-wrapper.c \
  && sha256sum /oem-propctl
 
+# --- stage 0: base as pure file source (no RUN possible — stock redroid
+#     base has no usable /bin/sh; this stage exists only to let stage 2
+#     COPY the hwcomposer HAL out of the base image, see below) ---------
+FROM water-army/redroid:14.0.0-240527-gms-mtg AS base-libs
+
 # --- stage 2: image ----------------------------------------------------------
 FROM water-army/redroid:14.0.0-240527-gms-mtg
 
@@ -48,3 +53,19 @@ FROM water-army/redroid:14.0.0-240527-gms-mtg
 COPY images/redroid-w1b/vendor/oem-propctl-x86_64 /vendor/bin/oem-propctl-real
 COPY --from=wrapper /oem-propctl /vendor/bin/oem-propctl
 COPY images/redroid-w1b/oem-ro-map.rc /vendor/etc/init/oem-ro-map.rc
+
+# HAL fallback chain (S3 real-device finding 2026-10-29, redroid-rdfp-01
+# first boot): the HWComposer HAL is named after the BASE hardware name —
+# hwcomposer.redroid.so — and the image ships NO hwcomposer.default.so
+# (ro.board.platform is empty on this image). AOSP hw_get_module resolves
+# {ro.hardware -> ro.board.platform -> "default"}, so the moment a
+# fingerprint profile maps ro.hardware to a real device name (P1 profile:
+# redmi-1ba) the chain misses all three, the composer HAL fails to load,
+# the fallback path tries /dev/fb0 (EINVAL), and SurfaceFlinger never
+# comes up -> 5s zygote/composer restart loop, no boot_completed.
+# Fix: provide .default as an exact copy of the redroid HAL. ZERO behavior
+# change for ro.hardware=redroid (chain hits .redroid first); for any other
+# ro.hardware value it restores the standard AOSP fallback instead of a
+# boot loop. Pinned in build.sh (sha256) + asserted in finalize.sh.
+COPY --from=base-libs /vendor/lib64/hw/hwcomposer.redroid.so /vendor/lib64/hw/hwcomposer.default.so
+COPY --from=base-libs /vendor/lib/hw/hwcomposer.redroid.so /vendor/lib/hw/hwcomposer.default.so

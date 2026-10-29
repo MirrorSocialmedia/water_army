@@ -1,0 +1,32 @@
+=== 12/12 fingerprint targets (p1-09 calibre) ===
+OK   ro.product.brand: got='motorola' exp='motorola'
+OK   ro.product.manufacturer: got='Motorola' exp='Motorola'
+OK   ro.product.model: got='Redmi1BA' exp='Redmi1BA'
+OK   ro.product.device: got='redmi-1ba' exp='redmi-1ba'
+OK   ro.product.name: got='redmi-1ba' exp='redmi-1ba'
+OK   ro.build.id: got='V9AB2GJ' exp='V9AB2GJ'
+OK   ro.build.display.id: got='14.V9AB2GJ.Y2MKJ.keys' exp='14.V9AB2GJ.Y2MKJ.keys'
+OK   ro.build.fingerprint: got='motorola/redmi-1ba/redmi-1barcqv23p7xy:14/V9AB2GJ/633188:userdebug/dev-keys' exp='motorola/redmi-1ba/redmi-1barcqv23p7xy:14/V9AB2GJ/633188:userdebug/dev-keys'
+OK   ro.serialno: got='MOTO-616277-P6V8' exp='MOTO-616277-P6V8'
+FAIL persist.sys.timezone: got='GMT' exp='Asia/Tokyo'
+OK   ro.hardware: got='redmi-1ba' exp='redmi-1ba'
+OK   ro.boot.hardware: got='redmi-1ba' exp='redmi-1ba'
+=> 11/12
+
+=== non-fingerprint ro.* sample vs P1 old-image baseline (p1-25 context) ===
+OK   init.svc.zygote: new='running' old='running'
+OK   ro.adb.secure: new='0' old='0'
+OK   ro.build.description: new='redroid_x86_64-userdebug 14 UD2A.240505.001.W1 eng.frank.20240527.141332 test-keys' old='redroid_x86_64-userdebug 14 UD2A.240505.001.W1 eng.frank.20240527.141332 test-keys'
+OK   ro.build.tags: new='test-keys' old='test-keys'
+OK   ro.build.type: new='userdebug' old='userdebug'
+OK   ro.build.version.release: new='14' old='14'
+OK   ro.build.version.sdk: new='34' old='34'
+OK   ro.build.version.security_patch: new='2024-05-05' old='2024-05-05'
+OK   ro.debuggable: new='1' old='1'
+OK   ro.product.build.fingerprint: new='redroid/redroid_x86_64/redroid_x86_64:14/UD2A.240505.001.W1/frank05271411:userdebug/test-keys' old='redroid/redroid_x86_64/redroid_x86_64:14/UD2A.240505.001.W1/frank05271411:userdebug/test-keys'
+OK   ro.product.cpu.abi: new='x86_64' old='x86_64'
+OK   ro.system.build.fingerprint: new='redroid/redroid_x86_64/redroid_x86_64:14/UD2A.240505.001.W1/frank05271411:userdebug/test-keys' old='redroid/redroid_x86_64/redroid_x86_64:14/UD2A.240505.001.W1/frank05271411:userdebug/test-keys'
+OK   ro.vendor.build.fingerprint: new='redroid/redroid_x86_64/redroid_x86_64:14/UD2A.240505.001.W1/frank05271411:userdebug/test-keys' old='redroid/redroid_x86_64/redroid_x86_64:14/UD2A.240505.001.W1/frank05271411:userdebug/test-keys'
+=> 13/13 baseline-sampled props unchanged
+
+extra: {'ro.build.type': 'userdebug', 'ro.build.tags': 'test-keys', 'ro.debuggable': '1', 'ro.secure': '1', 'ro.product.cpu.abi': 'x86_64', 'init.svc.zygote': 'running'}

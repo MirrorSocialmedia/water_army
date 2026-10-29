@@ -1,0 +1,13 @@
+=== S3.2 allowlist append @ 2026-10-28T23:29:16Z ===
+--- BEFORE ---
+               key               |                                                                                                                                         value_json                                                                                                                                          
+---------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ batch.container_image_allowlist | [{"image": "water-army/redroid:14.0.0-240527-gms-mtg", "reason": "WA-REALDEVICE-FINAL (mvs2iknd60sig): redroid requires privileged for KVM/device access (device-creation path runs Privileged=true, e.g. redroid-rdfa-01)", "nanoCpus": 2, "privileged": true, "memoryBytes": 4294967296}]
+(1 row)
+
+--- AFTER ---
+                                                                                                                                         value_json                                                                                                                                          
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ [{"image": "water-army/redroid:14.0.0-240527-gms-mtg", "reason": "WA-REALDEVICE-FINAL (mvs2iknd60sig): redroid requires privileged for KVM/device access (device-creation path runs Privileged=true, e.g. redroid-rdfa-01)", "nanoCpus": 2, "privileged": true, "memoryBytes": 4294967296}]
+(1 row)
+

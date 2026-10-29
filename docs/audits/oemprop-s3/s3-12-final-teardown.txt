@@ -1,0 +1,1 @@
+{"deleted":true,"name":"redroid-rdfp-01","containerRemoved":true,"removeData":true,"dataRemoved":false,"dataRemoveErrorCode":"DATA_DIR_PERM_DENIED","dataRemoveError":"EACCES: permission denied, scandir '/var/lib/water-army/redroid/redroid-rdfp-01/dalvik-cache'","claimReleased":false}

@@ -17,7 +17,11 @@
  * drift apart silently.
  *
  * Trigger design (stock redroid 14 verified against its init.rc import chain;
- * ADR-031 adds the post-fs-data phase for persist.* targets):
+ * ADR-031 adds the load_persist_props_action phase for persist.* targets —
+ * WA-OEMPROP S3 real-device: the post-fs-data stage does NOT guarantee
+ * ordering after init.rc's load_persist_props builtin, and that reload
+ * erased an early persist.* write — see the S3 finding in
+ * docs/audits/oemprop-report.md):
  *  - one `on <phase> && property:<carrier>=*` action per prop: the action
  *    only runs when THAT carrier is actually present (partial maps legal,
  *    absent props leave the image default untouched);
@@ -58,16 +62,40 @@ export function carrierMappingTable() {
 }
 
 /**
- * Init phase for a target prop (ADR-031):
+ * Init phase for a target prop (ADR-031, amended WA-OEMPROP S3 2026-10-29):
  *  - ro.* → early-init (the W1b-verified path: before any consumer starts);
- *  - persist.* → post-fs-data. persistent properties are re-loaded from
- *    /data/property during the fs stage; setting persist.* in early-init
- *    races that load (a stale stored value could win), while post-fs-data
- *    runs strictly AFTER it and still strictly before zygote — the one
- *    phase where a fresh write to persist.* is deterministic.
+ *  - persist.* → load_persist_props_action. init.rc runs its
+ *    `load_persist_props` builtin inside the `on post-fs-data` section and
+ *    then fires `trigger load_persist_props_action` — that trigger is the
+ *    canonical, ordering-guaranteed "stored persist props are loaded" hook
+ *    (init.rc comment: "Some existing vendor rc files use 'on
+ *    load_persist_props_action' to know when the persist properties have
+ *    been loaded"). A bare `on post-fs-data` section can queue BEFORE that
+ *    builtin runs (section order across rc files), so its persist.* write
+ *    gets erased when the persist area is re-initialized from /data/property
+ *    (real-device observed: persist.sys.timezone reverted to GMT).
+ *    The hook still fires strictly before zygote, so every process
+ *    resolves the identity timezone.
  */
 export function rcPhaseFor(prop) {
-  return String(prop).startsWith('persist.') ? 'post-fs-data' : 'early-init';
+  return String(prop).startsWith('persist.') ? 'load_persist_props_action' : 'early-init';
+}
+
+/**
+ * Writer binary per target type (WA-OEMPROP S3 2026-10-29, real-device):
+ *  - ro.* → oem-propctl (resetprop-rs raw property-area write — the only
+ *    path that can bypass the ro.* one-time-write rule);
+ *  - persist.* → /system/bin/setprop. resetprop-rs can NOT write persist.*
+ *    (real-device: exit 0, area + /data/property untouched — its raw-area
+ *    write path does not cover persist entries, which need the bionic
+ *    setprop path that also journals /data/property). setprop is present
+ *    and usable at load_persist_props_action (APEX/bionic is mounted since
+ *    early-fs). No %20 concern: the only persist target (timezone) contains
+ *    no spaces, and init performs the ${carrier} substitution itself.
+ */
+export const SETPROP_BIN = '/system/bin/setprop';
+export function rcWriterFor(prop) {
+  return String(prop).startsWith('persist.') ? SETPROP_BIN : PROPCTL_BIN;
 }
 
 /**
@@ -92,14 +120,17 @@ export function generateWaRoMapRc() {
   out.push('# oem-propctl (resetprop-rs writes the property area directly, bypassing the');
   out.push('# ro.* one-time-write rule; ro.build.* are already loaded from build.prop');
   out.push('# before early-init). Absent carrier = no action.');
-  out.push('# post-fs-data: persist.* targets (timezone) map HERE, not early-init —');
-  out.push('# init re-loads stored persistent properties from /data during the fs stage,');
-  out.push('# so a post-fs-data write is the first deterministic one (and still before');
-  out.push('# zygote reads persist.sys.timezone).');
+  out.push('# load_persist_props_action: persist.* targets (timezone) map HERE via the');
+  out.push('# stock setprop (resetprop-rs cannot write persist.* — real-device,');
+  out.push('# WA-OEMPROP S3), not in early-init/post-fs-data: init.rc loads stored');
+  out.push('# persistent properties from /data/property via `load_persist_props` inside');
+  out.push('# its own `on post-fs-data` section and then fires this trigger. Mapping on');
+  out.push('# the trigger is the ordering-guaranteed hook; it still fires strictly');
+  out.push('# before zygote reads persist.sys.timezone.');
   out.push('');
   for (const r of rows) {
     out.push(`on ${r.phase} && property:${r.carrier}=*`);
-    out.push(`    exec -- ${PROPCTL_BIN} ${r.target} \${${r.carrier}}`);
+    out.push(`    exec -- ${rcWriterFor(r.target)} ${r.target} \${${r.carrier}}`);
   }
   out.push('');
   return out.join('\n');
@@ -115,19 +146,21 @@ export function parseWaRoMapRc(text) {
   const lines = String(text ?? '').split('\n');
   let pending = null;
   for (const [i, line] of lines.entries()) {
-    const trig = line.match(/^on (early-init|post-fs-data) && property:([A-Za-z0-9_.]+)=\*$/);
+    const trig = line.match(/^on (early-init|load_persist_props_action) && property:([A-Za-z0-9_.]+)=\*$/);
     if (trig) {
       if (pending) problems.push(`line ${i}: trigger without matching exec (previous: ${pending.carrier})`);
       pending = { carrier: trig[2], phase: trig[1] };
       continue;
     }
-    const exec = line.match(/^ {4}exec -- \/vendor\/bin\/oem-propctl ([A-Za-z0-9_.]+) \$\{([A-Za-z0-9_.]+)\}$/);
+    const exec = line.match(/^ {4}exec -- (\/vendor\/bin\/oem-propctl|\/system\/bin\/setprop) ([A-Za-z0-9_.]+) \$\{([A-Za-z0-9_.]+)\}$/);
     if (exec) {
       if (!pending) { problems.push(`line ${i}: exec without trigger`); continue; }
-      if (exec[2] !== pending.carrier) problems.push(`line ${i}: exec carrier ${exec[2]} does not match trigger ${pending.carrier}`);
-      const wantPhase = rcPhaseFor(exec[1]);
-      if (pending.phase !== wantPhase) problems.push(`line ${i}: trigger phase ${pending.phase} wrong for target ${exec[1]} (must be ${wantPhase})`);
-      rows.push({ carrier: pending.carrier, target: exec[1] });
+      if (exec[3] !== pending.carrier) problems.push(`line ${i}: exec carrier ${exec[3]} does not match trigger ${pending.carrier}`);
+      const wantPhase = rcPhaseFor(exec[2]);
+      if (pending.phase !== wantPhase) problems.push(`line ${i}: trigger phase ${pending.phase} wrong for target ${exec[2]} (must be ${wantPhase})`);
+      const wantWriter = rcWriterFor(exec[2]);
+      if (exec[1] !== wantWriter) problems.push(`line ${i}: writer ${exec[1]} wrong for target ${exec[2]} (must be ${wantWriter})`);
+      rows.push({ carrier: pending.carrier, target: exec[2] });
       pending = null;
       continue;
     }

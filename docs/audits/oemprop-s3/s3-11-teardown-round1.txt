@@ -1,0 +1,338 @@
+=== S3 teardown (product API) @ 2026-10-29T00:03:53Z ===
+--- DELETE redroid-rdfp-01 (boot-loop v1 image) ---
+{"deleted":true,"name":"redroid-rdfp-01","containerRemoved":true,"removeData":true,"dataRemoved":false,"dataRemoveErrorCode":"DATA_DIR_PERM_DENIED","dataRemoveError":"EACCES: permission denied, scandir '/var/lib/water-army/redroid/redroid-rdfp-01/fonts'","claimReleased":false}
+--- DELETE redroid-rdfp-02 (baseline control) ---
+{"deleted":true,"name":"redroid-rdfp-02","containerRemoved":true,"removeData":true,"dataRemoved":false,"dataRemoveErrorCode":"DATA_DIR_PERM_DENIED","dataRemoveError":"EACCES: permission denied, scandir '/var/lib/water-army/redroid/redroid-rdfp-02/dalvik-cache'","claimReleased":false}
+--- data dirs BEFORE ---
+/var/lib/water-army/redroid/redroid-rdfp-01
+/var/lib/water-army/redroid/redroid-rdfp-02
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-01/local': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-01/nfc': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-01/fonts': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-01/vendor_de': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-01/vendor': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-01/property': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-01/dalvik-cache': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-01/apex/backup': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-01/apex/sessions': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-01/apex/decompressed': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-01/apex/active': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-01/apex/hashtree': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-01/apex/ota_reserved': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-01/gsi': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-01/misc_de/0/apexdata': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-01/misc/net': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-01/misc/nfc': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-01/misc/wifi': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-01/misc/logd': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-01/misc/user': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-01/misc/installd': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-01/misc/keystore': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-01/misc/odsign': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-01/misc/apexdata': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-01/misc/perfetto-traces': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-01/misc/bluetooth': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-01/misc/profcollectd': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-01/media': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/local': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/nfc': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/fonts': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/vendor_de': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/vendor': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/property': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/misc_ce/0/apexdata': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.internal.display.cutout.emulation.hole': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.healthconnect.controller': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.printspooler': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.bluetooth': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.hotspot2.osulogin': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.google.android.syncadapters.contacts': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.permissioncontroller': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.google.android.projection.gearhead': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.google.android.syncadapters.calendar': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.nearby.halfsheet': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.safetycenter.resources': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.gallery3d': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.systemui': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.wifi.dialog': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.google.android.partnersetup': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.dreams.basic': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.smspush': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.cameraextensions': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.rkpdapp': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.google.android.gsf': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/android.ext.shared': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.devicelockcontroller': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.webview': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.providers.calendar': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.storagemanager': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.mms.service': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.internal.display.cutout.emulation.corner': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.google.android.setupwizard': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.wifi.resources': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.captiveportallogin': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.dreams.phototable': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.se': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.externalstorage': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.providers.contacts': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.bluetoothmidiservice': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.google.android.feedback': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.uwb.resources': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.internal.systemui.navbar.gestural_narrow_back': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.role.notes.enabled': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.backupconfirm': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.deskclock': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.providers.blockednumber': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.sharedstoragebackup': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.networkstack.tethering': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.google.android.gm.exchange': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.bips': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/android.ext.services': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.modulemetadata': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.quicksearchbox': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.settings.intelligence': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.vending': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.musicfx': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.phone': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.provision': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.mtg.gmsoverlay': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.music': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.vpndialogs': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.soundpicker': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.connectivity.resources': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.pacprocessor': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.nfc': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.egg': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.certinstaller': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.companiondevicemanager': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.adservices.api': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.networkstack': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.htmlviewer': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.statementservice': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.providers.telephony': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.internal.systemui.navbar.threebutton': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.providers.media': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.mtg.gmssetupwizardoverlay': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.mtp': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.bookmarkprovider': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.systemui.accessibility.accessibilitymenu': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.wallpapercropper': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.documentsui': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.mtg.gmssettingsprovideroverlay': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.providers.userdictionary': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/org.chromium.webview_shell': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.credentialmanager': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.simappdialog': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.internal.systemui.navbar.gestural_wide_back': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.google.android.gms': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.ext.adservices.api': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.launcher3': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.federatedcompute.services': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.camera2': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.internal.display.cutout.emulation.double': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.shell': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.providers.media.module': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.providers.downloads.ui': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.packageinstaller': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.internal.systemui.navbar.transparent': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.health.connect.backuprestore': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.calendar': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.google.android.apps.restore': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.cts.ctsshim': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.virtualmachine.res': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.contacts': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.internal.systemui.navbar.gestural': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.theme.font.notoserifsource': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.cts.priv.ctsshim': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.inputmethod.latin': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.internal.display.cutout.emulation.tall': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.ondevicepersonalization.services': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.internal.display.cutout.emulation.waterfall': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.proxyhandler': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.providers.downloads': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.google.android.googlequicksearchbox': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.mtg.gmssettingsoverlay': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.printservice.recommendation': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.wallpaper.livepicker': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.google.android.apps.wellbeing': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.managedprovisioning': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.traceur': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.internal.systemui.navbar.gestural_extra_wide_back': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/data/com.android.intentresolver': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.internal.display.cutout.emulation.hole': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.healthconnect.controller': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.printspooler': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.bluetooth': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.hotspot2.osulogin': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.google.android.syncadapters.contacts': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.permissioncontroller': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.google.android.projection.gearhead': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.google.android.syncadapters.calendar': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.nearby.halfsheet': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.safetycenter.resources': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.gallery3d': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.systemui': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.wifi.dialog': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.google.android.partnersetup': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.dreams.basic': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.smspush': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.cameraextensions': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.rkpdapp': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.google.android.gsf': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/android.ext.shared': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.devicelockcontroller': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.webview': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.providers.calendar': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.storagemanager': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.mms.service': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.internal.display.cutout.emulation.corner': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.google.android.setupwizard': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.wifi.resources': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.captiveportallogin': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.dreams.phototable': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.se': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.externalstorage': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.providers.contacts': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.bluetoothmidiservice': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.google.android.feedback': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.uwb.resources': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.internal.systemui.navbar.gestural_narrow_back': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.role.notes.enabled': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.backupconfirm': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.deskclock': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.providers.blockednumber': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.sharedstoragebackup': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.networkstack.tethering': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.google.android.gm.exchange': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.bips': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/android.ext.services': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.modulemetadata': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.quicksearchbox': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.settings.intelligence': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.vending': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.musicfx': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.phone': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.provision': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.mtg.gmsoverlay': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.music': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.vpndialogs': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.soundpicker': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.connectivity.resources': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.pacprocessor': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.nfc': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.egg': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.certinstaller': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.companiondevicemanager': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.adservices.api': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.networkstack': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.htmlviewer': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.statementservice': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.providers.telephony': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.internal.systemui.navbar.threebutton': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.providers.media': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.mtg.gmssetupwizardoverlay': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.mtp': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.bookmarkprovider': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.systemui.accessibility.accessibilitymenu': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.wallpapercropper': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.documentsui': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.mtg.gmssettingsprovideroverlay': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.providers.userdictionary': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/org.chromium.webview_shell': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.credentialmanager': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.simappdialog': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.internal.systemui.navbar.gestural_wide_back': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.google.android.gms': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.ext.adservices.api': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.launcher3': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.federatedcompute.services': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.camera2': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.internal.display.cutout.emulation.double': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.shell': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.providers.media.module': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.providers.downloads.ui': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.packageinstaller': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.internal.systemui.navbar.transparent': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.health.connect.backuprestore': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.calendar': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.google.android.apps.restore': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.cts.ctsshim': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.virtualmachine.res': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.contacts': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.internal.systemui.navbar.gestural': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.theme.font.notoserifsource': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.cts.priv.ctsshim': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.inputmethod.latin': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.internal.display.cutout.emulation.tall': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.ondevicepersonalization.services': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.internal.display.cutout.emulation.waterfall': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.proxyhandler': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.providers.downloads': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.google.android.googlequicksearchbox': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.mtg.gmssettingsoverlay': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.printservice.recommendation': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.wallpaper.livepicker': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.google.android.apps.wellbeing': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.managedprovisioning': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.traceur': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.internal.systemui.navbar.gestural_extra_wide_back': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/user_de/0/com.android.intentresolver': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/dalvik-cache': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/apex/backup': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/apex/sessions': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/apex/decompressed': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/apex/active': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/apex/hashtree': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/apex/ota_reserved': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/gsi': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/misc_de/0/apexdata': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/vendor_ce': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/misc/net': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/misc/nfc': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/misc/wifi': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/misc/logd': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/misc/user': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/misc/dmesgd': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/misc/installd': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/misc/keystore': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/misc/odsign': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/misc/profiles/cur/0/com.android.permissioncontroller': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/misc/profiles/cur/0/com.android.systemui': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/misc/profiles/cur/0/com.android.vending': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/misc/profiles/cur/0/com.google.android.gms': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/misc/profiles/cur/0/com.google.android.googlequicksearchbox': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/misc/apexdata': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/misc/shared_relro': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/misc/perfetto-traces': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/misc/bluetooth': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/misc/profcollectd': Permission denied
+rm: cannot remove '/var/lib/water-army/redroid/redroid-rdfp-02/media': Permission denied
+--- data dirs AFTER ---
+/var/lib/water-army/redroid/redroid-rdfp-01
+/var/lib/water-army/redroid/redroid-rdfp-02
+--- claims BEFORE ---
+                  id                  |   device_name   |             identity_id              
+--------------------------------------+-----------------+--------------------------------------
+ 7d79faf4-8178-4fd3-b151-4de621c88138 | redroid-rdfp-01 | 9c931b40-a100-4300-906b-232c97e413ec
+(1 row)
+
+--- claim cleanup (2 rows: our test devices only) ---
+   device_name   
+-----------------
+ redroid-rdfp-01
+(1 row)
+
+DELETE 1
+--- claims AFTER ---
+ id | data_dir | identity_id | device_name | created_at | updated_at 
+----+----------+-------------+-------------+------------+------------
+(0 rows)
+
+
+--- data dir cleanup (docker-run alpine root, 2026-10-29): api removeData EACCES (root-owned subdirs, api runs uid 1000) -> host-side find -delete via alpine + rmdir ---
+ls: cannot access '/var/lib/water-army/redroid/redroid-rdfp-0?': No such file or directory
+(absent = cleaned)
+--- claim state: 0 rows (cleaned above) ---
+--- gate: liveLeases=1 reserved=1200 (baseline restored) ---
+
+=== S3 round-2 teardown (v3 container) 2026-10-29T00:23:51Z ===

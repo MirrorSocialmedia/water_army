@@ -48,9 +48,10 @@ export const PROFILE_PROP_MAP = Object.freeze({
   displayId: 'ro.build.display.id',
   fingerprint: 'ro.build.fingerprint',
   serial: 'ro.serialno',
-  // L2 wave-1 (ADR-031): timezone falls to the device — persist.sys.timezone
-  // rides the SAME androidboot carrier; the generated rc maps it in the
-  // post-fs-data phase (AFTER init loads stored persistent properties, so a
+  // L2 wave-1 (ADR-031, amended WA-OEMPROP S3): timezone falls to the device —
+  // persist.sys.timezone rides the SAME androidboot carrier; the generated rc
+  // maps it on the load_persist_props_action trigger (the ordering-guaranteed
+  // hook AFTER init reloads stored persistent properties from /data, so a
   // stale /data value can never out-rank the identity story; and BEFORE
   // zygote, so every process resolves the identity timezone).
   timezone: 'persist.sys.timezone',

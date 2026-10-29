@@ -1,0 +1,24 @@
+=== S3.1 stale claim removal @ 2026-10-28T23:29:08Z ===
+--- BEFORE (claims table) ---
+                  id                  |                  data_dir                   |             identity_id              |   device_name   |       created_at        |       updated_at        
+--------------------------------------+---------------------------------------------+--------------------------------------+-----------------+-------------------------+-------------------------
+ 19337dc6-6535-49ba-ac6f-399efd766c18 | /var/lib/water-army/redroid/redroid-rdfa-01 | 9c931b40-a100-4300-906b-232c97e413ec | redroid-rdfa-01 | 2026-10-28 12:36:10.715 | 2026-10-28 12:36:10.715
+(1 row)
+
+--- device check (redroid-rdfa-01 must be GONE) ---
+ name 
+------
+(0 rows)
+
+--- DELETE (single row: identity 9c931b40... x dataDir .../redroid-rdfa-01) ---
+                  id                  |             identity_id              |                  data_dir                   
+--------------------------------------+--------------------------------------+---------------------------------------------
+ 19337dc6-6535-49ba-ac6f-399efd766c18 | 9c931b40-a100-4300-906b-232c97e413ec | /var/lib/water-army/redroid/redroid-rdfa-01
+(1 row)
+
+DELETE 1
+--- AFTER ---
+ id | data_dir | identity_id | device_name | created_at | updated_at 
+----+----------+-------------+-------------+------------+------------
+(0 rows)
+
