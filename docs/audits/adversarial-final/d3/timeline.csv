@@ -1,0 +1,13 @@
+grp,batch,ident,status,error_code,queued_at,started_at,finished_at
+adv-e2,adv-d3 gate ovr b2 #1,redroid-rdev-adv-b2,succeeded,,2026-10-29T11:24:58.706Z,2026-10-29T11:24:58.721Z,2026-10-29T11:25:00.229Z
+adv-e1,adv-D3 warm a1 s1 #1,redroid-rdev-adv-a1,succeeded,,2026-10-29T11:25:23.715Z,2026-10-29T11:25:23.726Z,2026-10-29T11:25:25.233Z
+adv-e2,adv-d3 gate warmpass b1 #1,redroid-rdev-adv-b1,succeeded,,2026-10-29T11:27:28.750Z,2026-10-29T11:27:28.765Z,2026-10-29T11:27:30.272Z
+adv-e1,adv-D3 warm a2 s1 #1,redroid-rdev-adv-a2,succeeded,,2026-10-29T11:30:18.818Z,2026-10-29T11:30:18.832Z,2026-10-29T11:30:20.337Z
+adv-e1,adv-D3 warm a4 s1 #1,redroid-rdev-adv-a4,succeeded,,2026-10-29T11:33:28.864Z,2026-10-29T11:33:28.877Z,2026-10-29T11:33:30.383Z
+adv-e1,adv-D3 warm a3 s1 #1,redroid-rdev-adv-a3,succeeded,,2026-10-29T11:37:59.005Z,2026-10-29T11:37:59.016Z,2026-10-29T11:38:00.521Z
+adv-e1,adv-D3 warm a1x s1 #1,redroid-rdev-adv-a1x,succeeded,,2026-10-29T11:51:23.385Z,2026-10-29T11:51:23.406Z,2026-10-29T11:52:08.414Z
+adv-e2,adv-D3 warm b1x s1 #1,redroid-rdev-adv-b1x,succeeded,,2026-10-29T11:51:23.431Z,2026-10-29T11:52:08.425Z,2026-10-29T11:52:53.429Z
+adv-e2,adv-D3 warm b2x s1 #1,redroid-rdev-adv-b2x,succeeded,,2026-10-29T11:55:18.433Z,2026-10-29T11:55:18.450Z,2026-10-29T11:56:03.454Z
+adv-e1,adv-D3 warm a2x s1 #1,redroid-rdev-adv-a2x,succeeded,,2026-10-29T11:55:33.438Z,2026-10-29T11:56:03.460Z,2026-10-29T11:56:48.464Z
+adv-e1,adv-D3 warm a3x s1 #1,redroid-rdev-adv-a3x,succeeded,,2026-10-29T12:01:38.560Z,2026-10-29T12:01:38.575Z,2026-10-29T12:02:23.579Z
+adv-e1,adv-D3 warm a4x s1 #1,redroid-rdev-adv-a4x,succeeded,,2026-10-29T12:04:43.625Z,2026-10-29T12:04:43.637Z,2026-10-29T12:05:28.640Z

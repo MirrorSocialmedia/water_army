@@ -1,0 +1,7 @@
+redroid-rdev-adv-a1x|b02132fb-4ace-4e47-beb3-a08a110b4822
+redroid-rdev-adv-a2x|2ff5de41-e668-4757-a44d-1faae38c3838
+redroid-rdev-adv-a3x|f47ba956-536d-4838-8760-5c39fb4e03ac
+redroid-rdev-adv-a4x|1b72f5d4-c7fd-4cda-89a7-507318497514
+redroid-rdev-adv-b1x|1ecd4f2d-69de-46f5-92f3-cb77f1a20b5b
+redroid-rdev-adv-b2x|d4883771-a2d5-48ad-b31d-ae2519687664
+INSERT 0 6

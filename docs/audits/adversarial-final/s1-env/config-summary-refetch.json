@@ -1,0 +1,46 @@
+{
+ "status": 200,
+ "body": {
+  "egress": {
+   "bindingEnabled": false,
+   "echoHost": null,
+   "echoPort": null,
+   "probeTimeoutMs": 10000,
+   "staleMs": 90000,
+   "failThreshold": 2,
+   "note": "probe echo endpoint only — per-identity proxy credentials never surface here (ADR-027 zero-credential)"
+  },
+  "ramGate": {
+   "available": true,
+   "config": {
+    "enabled": true,
+    "maxParallel": 10,
+    "hardFloorMiB": 4096,
+    "postBootTargetMiB": 5400,
+    "perBootBudgetMiB": 1200,
+    "metricsMaxAgeMs": 30000,
+    "leaseTtlMs": 86400000
+   },
+   "source": "app_setting+env"
+  },
+  "registration": {
+   "provisionEnabled": false,
+   "perIpDailyCap": 2,
+   "perIdentityDailyCap": 1,
+   "minIntervalMs": 300000,
+   "maxIntervalMs": 900000,
+   "recoveryPoolSize": 0
+  },
+  "sms": {
+   "autoSolveAllowed": false,
+   "policy": "SMS / CAPTCHA / TOS / RECOVERY gates always route to the human intervention console (category EXTERNAL_VERIFICATION) — AUTO-SOLVE is a contract violation (ADR-030 §人肉閘)",
+   "captchaTimeoutMs": 7200000
+  },
+  "fingerprint": {
+   "roOverridesEnabled": true,
+   "stealthEnabled": true,
+   "templateProfilesEnabled": false,
+   "appOpsEnabled": true
+  }
+ }
+}

@@ -1,0 +1,67 @@
+{
+ "status": 200,
+ "body": {
+  "decisions": [
+   {
+    "ts": 1793267912815,
+    "action": "deny",
+    "kind": "device",
+    "entity": "redroid-rdev-adv-b1",
+    "admitted": false,
+    "reason": "PROJECTED_BELOW_TARGET",
+    "currentMiB": 11743.4,
+    "liveCount": 5,
+    "projectedMiB": 4543,
+    "source": "redroid-create"
+   },
+   {
+    "ts": 1793267910746,
+    "action": "admit",
+    "kind": "device",
+    "entity": "redroid-rdev-adv-a4",
+    "admitted": true,
+    "reason": "ADMITTED",
+    "currentMiB": 12330,
+    "liveCount": 5,
+    "projectedMiB": 6330,
+    "source": "redroid-create"
+   },
+   {
+    "ts": 1793267909074,
+    "action": "admit",
+    "kind": "device",
+    "entity": "redroid-rdev-adv-a3",
+    "admitted": true,
+    "reason": "ADMITTED",
+    "currentMiB": 12901,
+    "liveCount": 4,
+    "projectedMiB": 8101,
+    "source": "redroid-create"
+   },
+   {
+    "ts": 1793267907450,
+    "action": "admit",
+    "kind": "device",
+    "entity": "redroid-rdev-adv-a2",
+    "admitted": true,
+    "reason": "ADMITTED",
+    "currentMiB": 13102,
+    "liveCount": 3,
+    "projectedMiB": 9502,
+    "source": "redroid-create"
+   },
+   {
+    "ts": 1793267407049,
+    "action": "admit",
+    "kind": "device",
+    "entity": "redroid-rdev-adv-a1",
+    "admitted": true,
+    "reason": "ADMITTED",
+    "currentMiB": 13811,
+    "liveCount": 2,
+    "projectedMiB": 11411,
+    "source": "redroid-create"
+   }
+  ]
+ }
+}

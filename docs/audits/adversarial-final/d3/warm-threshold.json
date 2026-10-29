@@ -1,0 +1,1 @@
+{"thresholdDays":14,"key":"warm.threshold_days","source":"default","formula":"effective = identity.metadataJson.warmThresholdDays ?? AppSetting ?? default","note":"A warming identity needs 14 days of warming clock before business dispatch is allowed (per-identity override supported)."}

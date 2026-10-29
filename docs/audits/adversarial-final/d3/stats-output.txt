@@ -1,0 +1,37 @@
+runs in timeline: 12
+== group adv-e1: 8 runs ==
+  pairs=28 max_overlap=0.000s -> ZERO_OVERLAP=PASS
+  adjacent gaps (prev finish -> next start), jitter window [60,300]s:
+    v-a1/#1 -> v-a2/#1:   293.6s ok
+    v-a2/#1 -> v-a4/#1:   188.5s ok
+    v-a4/#1 -> v-a3/#1:   268.6s ok
+    v-a3/#1 -> v-a1x/#1:   802.9s OUT-OF-RANGE
+    v-a1x/#1 -> v-a2x/#1:   235.0s ok
+    v-a2x/#1 -> v-a3x/#1:   290.1s ok
+    v-a3x/#1 -> v-a4x/#1:   140.1s ok
+  gaps in [60,300]s: 6/7 mean=317.0s min=140.1 max=802.9
+    120-179s: #
+    180-239s: ##
+    240-299s: ###
+    780-839s: #
+== group adv-e2: 4 runs ==
+  pairs=6 max_overlap=0.000s -> ZERO_OVERLAP=PASS
+  adjacent gaps (prev finish -> next start), jitter window [60,300]s:
+    v-b2/#1 -> v-b1/#1:   148.5s ok
+    v-b1/#1 -> v-b1x/#1:  1478.2s OUT-OF-RANGE
+    v-b1x/#1 -> v-b2x/#1:   145.0s ok
+  gaps in [60,300]s: 2/3 mean=590.6s min=145.0 max=1478.2
+    120-179s: ##
+    1440-1499s: #
+== cross-group parallelism (D3-2) ==
+  concurrent e1/e2 run-pairs: 0 -> CROSS_GROUP_PARALLEL=NOT PROVEN
+== behavior.log (PROD) ==
+  swipe        n=20 mean=0.129s sd=0.001 min=0.128 max=0.131 CV=0.005 within1sd=90%
+  tap1         n=20 mean=0.009s sd=0.000 min=0.008 max=0.009 CV=0.055 within1sd=65%
+  tap2         n=20 mean=0.007s sd=0.000 min=0.007 max=0.008 CV=0.063 within1sd=70%
+  text         n=20 mean=10.018s sd=0.002 min=10.014 max=10.020 CV=0.000 within1sd=80%
+== humanref.log (HUMANREF) ==
+  swipe        n=10 mean=0.295s sd=0.083 min=0.146 max=0.383 CV=0.283 within1sd=70%
+  tap1         n=10 mean=0.449s sd=0.156 min=0.309 max=0.710 CV=0.348 within1sd=70%
+  tap2         n=10 mean=0.009s sd=0.000 min=0.009 max=0.010 CV=0.033 within1sd=90%
+  text6chars   n=10 mean=62.155s sd=0.292 min=61.820 max=62.681 CV=0.005 within1sd=60%

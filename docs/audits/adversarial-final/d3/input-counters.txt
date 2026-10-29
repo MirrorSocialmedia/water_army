@@ -1,0 +1,6 @@
+  Show Touches: false
+      MultitouchSettleInterval: 100.0ms
+      MultitouchMinDistance: 15.0px
+  mPreferStylusOverTouchBlocker:
+    mLastTouchEvents: 
+  TouchStates: <no displays touched>

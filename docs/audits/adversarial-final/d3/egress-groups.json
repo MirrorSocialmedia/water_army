@@ -1,0 +1,1 @@
+{"error":{"code":"EGRESS_BINDING_DISABLED","message":"identity egress binding (W3) is disabled on this host — set WA_W3_EGRESS_BINDING_ENABLED=true after reviewing ADR-027 (real-device matrix NOT VERIFIED)"}}

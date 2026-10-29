@@ -1,0 +1,7 @@
+== probe 2026-10-29T11:27:09Z ==
+-- /dev/input (container a1):
+-- getevent -i devices:
+0
+-- dumpsys input Device context:
+-- sendevent probe (no nodes):
+sendevent: /dev/input/event99: No such file or directory

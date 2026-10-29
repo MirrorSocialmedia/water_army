@@ -194,6 +194,9 @@ services:
       # WA-ADVERSARIAL-FINAL (Kairo mvt3rgj9dnspm) env override, 2026-10-29.
       # Teardown ledger: remove this line + the WA_* line in .env.
       WA_WARMING_SCHEDULE_ENABLED: ${WA_WARMING_SCHEDULE_ENABLED:-false}
+      # WA-ADVERSARIAL-FINAL D3 test instrumentation (2026-10-29, gen2).
+      # Teardown ledger: remove this line in s5 收口 (noop adapter default is 1500ms).
+      NOOP_DURATION_MS: "45000"
       WORKER_HEALTH_PORT: "3001"
       TASK_MAX_CONCURRENCY: ${TASK_MAX_CONCURRENCY:-4}
       # P6 flag #5: concurrency_key mutual exclusion — the worker gate defers

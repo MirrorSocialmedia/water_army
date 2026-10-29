@@ -1,0 +1,60 @@
+{
+ "status": 200,
+ "body": {
+  "enabled": true,
+  "config": {
+   "enabled": true,
+   "maxParallel": 10,
+   "hardFloorMiB": 4096,
+   "postBootTargetMiB": 5400,
+   "perBootBudgetMiB": 1200,
+   "metricsMaxAgeMs": 30000,
+   "leaseTtlMs": 86400000
+  },
+  "configErrors": null,
+  "metrics": {
+   "ok": true,
+   "ts": 1793270029132,
+   "memAvailableMiB": 10210.1,
+   "memTotalMiB": 94179.2,
+   "memFreeMiB": 968.8,
+   "swapTotalMiB": 8192,
+   "swapFreeMiB": 3396.2,
+   "loadAvg": [
+    12.26,
+    6.67,
+    3.39
+   ],
+   "source": "proc-meminfo",
+   "ageMs": 0,
+   "stale": false
+  },
+  "counts": {
+   "liveLeases": 5,
+   "running": 5,
+   "inProgress": 0,
+   "runningWithLease": 5,
+   "reservedMiB": 6000
+  },
+  "wouldAdmitNext": {
+   "admitted": false,
+   "reason": "PROJECTED_BELOW_TARGET",
+   "liveCount": 5,
+   "projectedMiB": 3010,
+   "currentMiB": 10210.1,
+   "config": {
+    "enabled": true,
+    "maxParallel": 10,
+    "hardFloorMiB": 4096,
+    "postBootTargetMiB": 5400,
+    "perBootBudgetMiB": 1200,
+    "metricsMaxAgeMs": 30000,
+    "leaseTtlMs": 86400000
+   }
+  },
+  "store": {
+   "redis": true
+  },
+  "ts": 1793270029134
+ }
+}
