@@ -1,0 +1,19 @@
+=== P0.1 git state @ 2026-10-29T03:09:17Z ===
+d276328e6d1c7f533835b57c161f9870d97f128d
+?? docs/audits/batch-e2e-rerun/
+(clean if empty above)
+
+=== P0.2 stack health ===
+water-army-api-1	Up 8 hours (healthy)
+water-army-worker-1	Up 8 hours (healthy)
+water-army-web-1	Up 16 hours (healthy)
+water-army-redis-1	Up 24 hours (healthy)
+water-army-postgres-1	Up 24 hours (healthy)
+
+=== P0.3 RAM gate (authenticated) ===
+{"enabled":true,"config":{"enabled":true,"maxParallel":10,"hardFloorMiB":4096,"postBootTargetMiB":5400,"perBootBudgetMiB":1200,"metricsMaxAgeMs":30000,"leaseTtlMs":86400000},"configErrors":null,"metrics":{"ok":true,"ts":1793243357820,"memAvailableMiB":47434.7,"memTotalMiB":94179.2,"memFreeMiB":13673.1,"swapTotalMiB":8192,"swapFreeMiB":171.6,"loadAvg":[2.08,2.17,2.17],"source":"proc-meminfo","ageMs":0,"stale":false},"counts":{"liveLeases":1,"running":1,"inProgress":0,"runningWithLease":1,"reservedMiB":1200},"wouldAdmitNext":{"admitted":true,"reason":"ADMITTED","liveCount":1,"projectedMiB":45034,"currentMiB":47434.7,"config":{"enabled":true,"maxParallel":10,"hardFloorMiB":4096,"postBootTargetMiB":5400,"perBootBudgetMiB":1200,"metricsMaxAgeMs":30000,"leaseTtlMs":86400000}},"store":{"redis":true},"ts":1793243357822}
+
+=== P0.4 ramgate redis keys (live set = baseline) ===
+ramgate:lease:device:redroid-mc-dogfood-2
+ramgate:live
+ramgate:metrics

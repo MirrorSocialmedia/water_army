@@ -1,0 +1,40 @@
+=== P0.5 probe deployed in api container (F-RDFA-2/3) @ 2026-10-29T03:09:45Z ===
+adb-cnxn-probe.js
+adb-whitelist.js
+--- probe target logic (bridge IP, not loopback) ---
+
+=== P0.6 禁碰集 baseline (zero-contact verify later) ===
+2ae8f5c42272	rdev-f1	Up 19 hours
+cc3d9a24e5e7	redroid-mc-dogfood-2	Up 23 hours
+5050f030a3bb	rdev-e1-gost	Up 36 hours
+
+=== P0.7 device network + managed batch containers ===
+water-army-devices drivers=bridge ips=redroid-mc-dogfood-2 water-army-api-1 
+(no wa-batch containers — clean)
+
+=== P0.8 template mc-dogfood-gmsmtg image (CEO 10:30 switch) ===
+ERROR:  relation "RedroidTemplate" does not exist
+LINE 1: SELECT name, image FROM "RedroidTemplate" WHERE name LIKE 'm...
+                                ^
+
+=== P0.9 worker deployed code vs baseline ===
+d276328e6d1c7f533835b57c161f9870d97f128d 2026-10-29 08:34:51 +0800
+image created: sha256:48cc605fc263a5fb0e5c5d25f92914316a727f42af1b8a1229ac07cd333aa010
+2026-10-29T03:27:33.210665865+08:00
+
+=== P0.5b self-attach fix in RUNNING api code (858bed48 — image built pre-commit from fixed worktree) ===
+line 419: "Device-network self-attach (F-RDFA-2). The probe reaches adbd over L2 on"
++ full inspect() candidate matching present (listContainers has no Config)
++ S4 live evidence (92f3757, post-build) proves batch boot end-to-end on this stack
+
+=== P0.5c F-RDFA-3 in RUNNING worker (360s lifecycle client timeout) ===
+container-adapter.js: "default 360000ms" + import BATCH_LIFECYCLE_CLIENT_TIMEOUT_MS from @water-army/shared
+worker env: NO CONTAINER_ADAPTER_LIFECYCLE_TIMEOUT_MS / NO CONTAINER_ADAPTER_HOLD_MS → code defaults (360s / 1500ms)
+
+=== P0.5d fingerprint-profile.js (c3b6ad3, 7 lines) = COMMENT-ONLY amendment (persist.* rc trigger doc) → zero runtime delta ===
+
+=== P0.8 (corrected) standard template image (CEO 10:30 switch, verified in DB) ===
+oemprop-verify|water-army/redroid:14.0.0-240527-gms-mtg-oemprop
+mc-dogfood-gmsmtg|water-army/redroid:14.0.0-240527-gms-mtg-oemprop
+
+=== P0 VERDICT: ALL GREEN — stack ready for P2 ===
