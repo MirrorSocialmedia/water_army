@@ -66,6 +66,9 @@ export function makeBatchApiDb({ users = [], batch = {}, clock } = {}) {
   db.stateEvent = bdb.stateEvent;
   db.resourceLease = bdb.resourceLease;
   db.taskRun = bdb.taskRun;
+  // WA-IPGROUP: delegate the W3 bindings table too, so the API fake can
+  // exercise egress-group derivation via expectedEgressIp (layer 2).
+  if (bdb.identityEgress) db.identityEgress = bdb.identityEgress;
 
   // ---- taskRun: + batchId / orderBy / take / skip --------------------------
   const trFindMany = bdb.taskRun.findMany.bind(bdb.taskRun);

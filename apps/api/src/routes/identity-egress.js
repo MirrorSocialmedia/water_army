@@ -19,6 +19,7 @@
  * EGRESS_BINDING_DISABLED until WA_W3_EGRESS_BINDING_ENABLED is on. With the
  * switch off, W3 is byte-identical inert — no configuration surface either.
  */
+import { egressGroupStatus, APP_SETTING_EGRESS_GROUP_JITTER_MS, EGRESS_GROUP_JITTER_DEFAULTS } from '@water-army/shared';
 
 const IDENTITY_ID = {
   type: 'string',
@@ -59,6 +60,66 @@ function requireEgressEnabled(app, req, reply) {
 }
 
 export function identityEgressRoutes(app) {
+  // WA-IPGROUP 鐵律 2 observability: per-group scheduling status — queue
+  // depth (待行數) + next-eligible estimate (下次放行估計). Viewer reads;
+  // secret-free by construction (labels / IPs / uuids only). Behind the
+  // same W3 switch as the binding surface (one feature, one gate).
+  app.get(
+    '/api/egress-groups',
+    { preHandler: app.requireRole('viewer') },
+    async (req, reply) => {
+      if (!requireEgressEnabled(app, req, reply)) return undefined;
+      return { groups: await egressGroupStatus(app.db, { now: () => new Date(), log: app.log }) };
+    },
+  );
+
+  // WA-IPGROUP: admin tuning of the stagger window (錯峰窗口). Distribution
+  // is fixed and DOCUMENTED (uniform over the closed integer range
+  // [minMs,maxMs], deterministic draw keyed on <groupKey>|<prevRunId>);
+  // this route moves the WINDOW, not the shape. NOT gated by the W3 binding
+  // switch — the scheduler gate works from labels alone (ADR-027 is the
+  // binding surface; group scheduling is the IPGROUP surface).
+  app.put(
+    '/api/egress-groups/jitter',
+    {
+      preHandler: app.requireRole('admin'),
+      schema: {
+        body: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['minMs', 'maxMs'],
+          properties: {
+            minMs: { type: 'integer', minimum: 0, maximum: 3_600_000 },
+            maxMs: { type: 'integer', minimum: 0, maximum: 3_600_000 },
+          },
+        },
+      },
+    },
+    async (req) => {
+      if (!app.db?.appSetting) {
+        return { error: { code: 'INTERNAL', message: 'app setting surface unavailable' }, statusCode: 503 };
+      }
+      // Same normalisation the scheduler reads with (min>max → swap): the
+      // stored row is always self-consistent — no hidden surprises later.
+      let { minMs, maxMs } = req.body;
+      if (minMs > maxMs) [minMs, maxMs] = [maxMs, minMs];
+      const valueJson = { value: { minMs, maxMs } };
+      const existed = await app.db.appSetting.findUnique({ where: { key: APP_SETTING_EGRESS_GROUP_JITTER_MS } });
+      if (existed) await app.db.appSetting.update({ where: { key: APP_SETTING_EGRESS_GROUP_JITTER_MS }, data: { valueJson, updatedBy: req.user.id } });
+      else await app.db.appSetting.create({ data: { key: APP_SETTING_EGRESS_GROUP_JITTER_MS, valueJson, updatedBy: req.user.id } });
+      await app.audit({
+        actorUserId: req.user?.id ?? null,
+        action: 'egress.group_jitter_set',
+        resourceType: 'app_setting',
+        resourceId: APP_SETTING_EGRESS_GROUP_JITTER_MS,
+        requestId: req.id,
+        ip: req.ip,
+        details: { minMs, maxMs },
+      });
+      return { jitterWindowMs: { minMs, maxMs }, key: APP_SETTING_EGRESS_GROUP_JITTER_MS, defaults: EGRESS_GROUP_JITTER_DEFAULTS };
+    },
+  );
+
   // Static route first (fastify matches static above parametric — keep the
   // literal 'egress' segment from being eaten by :id).
   app.get(
