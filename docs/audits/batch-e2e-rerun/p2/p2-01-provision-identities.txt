@@ -1,0 +1,16 @@
+=== P2.1 provision identities r1/r2/r3 (qa_device) @ 2026-10-29T03:20:32Z ===
+--- provision response ---
+{"items":[{"name":"redroid-rdfa-r1","identityId":"<UUID>","action":"created","dataPath":"/var/lib/water-army/redroid/redroid-rdfa-r1","fingerprint":"ensured","egressIp":null},{"name":"redroid-rdfa-r2","identityId":"<UUID>","action":"created","dataPath":"/var/lib/water-army/redroid/redroid-rdfa-r2","fingerprint":"ensured","egressIp":null},{"name":"redroid-rdfa-r3","identityId":"<UUID>","action":"created","dataPath":"/var/lib/water-army/redroid/redroid-rdfa-r3","fingerprint":"ensured","egressIp":null}],"created":3,"replayed":0,"dryRun":false}
+HTTP_STATUS=200
+
+--- identity rows ---
+redroid-rdfa-r1 | 6ec12568-1134-4d4f-9016-6737c8c29614 | qa_device | READY | PENDING_LOGIN | /var/lib/water-army/redroid/redroid-rdfa-r1
+redroid-rdfa-r2 | 71e69433-f125-417d-876e-ce6819ad2bac | qa_device | READY | PENDING_LOGIN | /var/lib/water-army/redroid/redroid-rdfa-r2
+redroid-rdfa-r3 | 536934e3-add2-4811-91ee-94062d00be95 | qa_device | READY | PENDING_LOGIN | /var/lib/water-army/redroid/redroid-rdfa-r3
+
+--- assigned W1 fingerprint profiles (auto-generated, deterministic per identity; the product record) ---
+redroid-rdfa-r1: {"brand":"xiaomi","model":"Z-Pro2DY","device":"zpro-2dy","serial":"XIAO-807633-JG3S","buildId":"Y5ABWAX","displayId":"14.Y5ABWAX.NDBJX.keys","fingerprint":"xiaomi/zpro-2dy/zpro-2dy74fx6rmqye:14/Y5ABWAX/273107:userdebug/dev-keys","hardware":"zpro-2dy","timezone":"America/New_York","manufacturer":"Xiaomi","productName":"zpro-2dy"}
+redroid-rdfa-r2: {"brand":"sony","model":"Magic96F","device":"magic-96f","serial":"SONY-352923-2A66","buildId":"G3ABX4F","displayId":"14.G3ABX4F.E993A.keys","fingerprint":"sony/magic-96f/magic-96fvg6fbcbnex:14/G3ABX4F/198263:userdebug/dev-keys","hardware":"magic-96f","timezone":"Asia/Bangkok","manufacturer":"Sony","productName":"magic-96f"}
+redroid-rdfa-r3: {"brand":"realme","model":"Pixel6GE","device":"pixel-6ge","serial":"REAL-954650-3MA9","buildId":"E1ABKST","displayId":"15.E1ABKST.WZBS6.keys","fingerprint":"realme/pixel-6ge/pixel-6gemj6wsjqkyp:15/E1ABKST/828273:userdebug/dev-keys","hardware":"pixel-6ge","timezone":"Asia/Shanghai","manufacturer":"realme","productName":"pixel-6ge"}
+
+NOTE: container-surface fingerprint (what the 3 batch machines actually run) = P1 profile, injected via the oemprop allowlist entry's cmd carrier (batch-surface injection — the identity rows carry their own deterministic W1 profiles as product record; the 12/12 AC is machine getprop vs P1 profile, same calibre as oemprop S3 / p1-09).

@@ -1,0 +1,7 @@
+=== P2.1c provision identities r7/r8/r9 (qa_device) @ 2026-10-29T03:51:23Z ===
+{"items":[{"name":"redroid-rdfa-r7","identityId":"e66ff36c-f7d7-45bf-a45e-c5854bed0208","action":"created","dataPath":"/var/lib/water-army/redroid/redroid-rdfa-r7","suggestedDeviceName":"redroid-rdfa-r7","fingerprint":"ensured","egressIp":null},{"name":"redroid-rdfa-r8","identityId":"ff8ebfd0-edd1-4598-a200-e74a971960e3","action":"created","dataPath":"/var/lib/water-army/redroid/redroid-rdfa-r8","suggestedDeviceName":"redroid-rdfa-r8","fingerprint":"ensured","egressIp":null},{"name":"redroid-rdfa-r9","identityId":"55b4920e-942b-4bab-a690-1df8f6383619","action":"created","dataPath":"/var/lib/water-army/redroid/redroid-rdfa-r9","suggestedDeviceName":"redroid-rdfa-r9","fingerprint":"ensured","egressIp":null}],"created":3,"replayed":0,"dryRun":false}
+HTTP_STATUS=200
+--- identity rows ---
+redroid-rdfa-r7 | e66ff36c-f7d7-45bf-a45e-c5854bed0208 | qa_device | READY
+redroid-rdfa-r8 | ff8ebfd0-edd1-4598-a200-e74a971960e3 | qa_device | READY
+redroid-rdfa-r9 | 55b4920e-942b-4bab-a690-1df8f6383619 | qa_device | READY

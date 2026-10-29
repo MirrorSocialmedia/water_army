@@ -1,0 +1,4 @@
+cycle_id,batch_no,batch_id,position,identity_id,external_ref,display_name,final_status,attempts,failure_code,failure_summary,skip_reason,container_id,started_at,finished_at,duration_ms
+2f574ec4-41fd-4605-946e-d0cdfbb746e9,1,67970e5a-cf44-49ab-815b-9a3257ba38a9,1,e66ff36c-f7d7-45bf-a45e-c5854bed0208,redroid-rdfa-r7,redroid-rdfa-r7,COMPLETED,2,,,,0b682834db9c,2026-10-29T03:52:26.573Z,2026-10-29T03:55:38.380Z,191807
+2f574ec4-41fd-4605-946e-d0cdfbb746e9,1,67970e5a-cf44-49ab-815b-9a3257ba38a9,2,ff8ebfd0-edd1-4598-a200-e74a971960e3,redroid-rdfa-r8,redroid-rdfa-r8,COMPLETED,3,,,,a88b8dd71f0a,2026-10-29T03:54:22.966Z,2026-10-29T03:57:34.608Z,191642
+2f574ec4-41fd-4605-946e-d0cdfbb746e9,1,67970e5a-cf44-49ab-815b-9a3257ba38a9,3,55b4920e-942b-4bab-a690-1df8f6383619,redroid-rdfa-r9,redroid-rdfa-r9,COMPLETED,2,,,,ae2d9cb0316c,2026-10-29T03:52:26.577Z,2026-10-29T03:55:38.367Z,191790

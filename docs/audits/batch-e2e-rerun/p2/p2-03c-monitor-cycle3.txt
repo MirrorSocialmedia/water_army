@@ -1,0 +1,31 @@
+2026-10-29T03:52:58Z run[r7] = [e66ff36c-f7d7-45bf-a45e-c5854bed0208]
+2026-10-29T03:52:58Z run[r8] = [ff8ebfd0-edd1-4598-a200-e74a971960e3]
+2026-10-29T03:52:58Z run[r9] = [55b4920e-942b-4bab-a690-1df8f6383619]
+2026-10-29T03:52:58Z monitor start t0=1793245978 batch=67970e5a-cf44-49ab-815b-9a3257ba38a9 names=r7 r8 r9
+2026-10-29T03:52:58Z [r7] running attempt=2
+2026-10-29T03:52:58Z [r8] running attempt=2
+2026-10-29T03:52:58Z [r9] running attempt=2
+2026-10-29T03:53:02Z [r8 a2] capture done rc=0 (file: docs/audits/batch-e2e-rerun/p2/p2-12-gt-r8-a2.txt)
+=> 12/12
+=> 13/13 baseline-sampled props unchanged
+2026-10-29T03:53:02Z [r7 a2] capture done rc=0 (file: docs/audits/batch-e2e-rerun/p2/p2-12-gt-r7-a2.txt)
+=> 12/12
+=> 13/13 baseline-sampled props unchanged
+2026-10-29T03:53:02Z [r9 a2] capture done rc=0 (file: docs/audits/batch-e2e-rerun/p2/p2-12-gt-r9-a2.txt)
+=> 12/12
+=> 13/13 baseline-sampled props unchanged
+2026-10-29T03:54:14Z [r8] queued attempt=3
+2026-10-29T03:54:24Z [r8] running attempt=3
+2026-10-29T03:54:37Z [r8 a3] capture done rc=0 (file: docs/audits/batch-e2e-rerun/p2/p2-12-gt-r8-a3.txt)
+=> 12/12
+=> 13/13 baseline-sampled props unchanged
+2026-10-29T03:55:39Z [r7] succeeded attempt=2
+2026-10-29T03:55:39Z [r9] succeeded attempt=2
+2026-10-29T03:57:36Z [r8] succeeded attempt=3
+2026-10-29T03:57:36Z ALL TERMINAL
+2026-10-29T03:57:36Z monitor end 2026-10-29T03:57:36Z (t+278s)
+redroid-rdfa-r7|succeeded|2||2026-10-29 03:52:26.573|2026-10-29 03:55:38.38|191807|container ok (held 180000ms, 11 health checks)
+redroid-rdfa-r8|succeeded|3||2026-10-29 03:54:22.966|2026-10-29 03:57:34.608|191642|container ok (held 180000ms, 11 health checks)
+redroid-rdfa-r9|succeeded|2||2026-10-29 03:52:26.577|2026-10-29 03:55:38.367|191790|container ok (held 180000ms, 11 health checks)
+2026-10-29T03:57:36Z final rows appended to docs/audits/batch-e2e-rerun/p2/p2-03c-monitor-cycle3.txt
+2026-10-29T03:57:36Z captures drained

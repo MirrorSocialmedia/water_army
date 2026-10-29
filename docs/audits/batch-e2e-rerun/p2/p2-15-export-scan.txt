@@ -1,0 +1,20 @@
+=== P2.6 exports (cycle 1/2/3) @ 2026-10-29T04:03:46Z ===
+--- cycle 1 () json ---
+json HTTP=200 bytes=1901
+--- cycle 1 csv ---
+csv  HTTP=200 bytes=881
+--- cycle 2 () json ---
+json HTTP=200 bytes=1901
+--- cycle 2 csv ---
+csv  HTTP=200 bytes=881
+--- cycle 3 () json ---
+json HTTP=200 bytes=1901
+--- cycle 3 csv ---
+csv  HTTP=200 bytes=881
+--- zero-secret scan (all exports + getprop dumps + intervention/monitor files) ---
+SECRET_HITS=16
+docs/audits/batch-e2e-rerun/p2/p2-12-gt-r7-a2-props-adb.txt:240:[persist.netd.stable_secret]: [1a68:ae57:2f94:9120:e94f:e251:4c17:fe07]
+docs/audits/batch-e2e-rerun/p2/p2-12-gt-r7-a2-props-exec.txt:240:[persist.netd.stable_secret]: [1a68:ae57:2f94:9120:e94f:e251:4c17:fe07]
+docs/audits/batch-e2e-rerun/p2/p2-12-gt-r8-a2-props-adb.txt:240:[persist.netd.stable_secret]: [738:9511:4033:4969:4e0e:3a5c:604:a9b4]
+docs/audits/batch-e2e-rerun/p2/p2-12-gt-r8-a2-props-exec.txt:240:[persist.netd.stable_secret]: [738:9511:4033:4969:4e0e:3a5c:604:a9b4]
+docs/audits/batch-e2e-rerun/p2/p2-12-gt-r8-a3-props-adb.txt:240:[persist.netd.stable_secret]: [738:9511:4033:4969:4e0e:3a5c:604:a9b4]

@@ -1,0 +1,9 @@
+=== ack + REAL STUCK EVENT @ 2026-10-29T03:54:02Z ===
+ack HTTP_STATUS=200
+{"id":"e2a99208-a1b8-4bbe-ac77-656a5345b881","deviceId":null,"deviceNameSnapshot":"redroid-rdfa-r8","source":"operator_report","category":"DEVICE_OFFLINE","severity":"high","status":"acknowledged","automationDisposition":"blocked_pending_review","title":"batch WA-BATCH-E2E-RERUN-r3: identity r8 cont
+--- REAL STUCK EVENT: docker stop -t 2 a88b8dd71f0a @ 2026-10-29T03:54:02Z ---
+a88b8dd71f0a5998c0802ee59cf967d967bbe2f0df6ec45f972fc9520ae217c7
+stop_exit=0
+container state after stop: exited (exit=137)
+--- badge AFTER ack (expect 0: ack removes attention) ---
+{"count":0}

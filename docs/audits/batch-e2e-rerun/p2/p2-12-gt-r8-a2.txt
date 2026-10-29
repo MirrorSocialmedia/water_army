@@ -1,0 +1,48 @@
+=== P2.3 ground-truth r8 attempt 2 @ 2026-10-29T03:52:58Z (t+0s) ===
+RUN=54e7745f-b827-4d18-b685-6ea2c311dcc9  CTN=a88b8dd71f0a5998c0802ee59cf967d967bbe2f0df6ec45f972fc9520ae217c7  PORT=16373
+--- run window (DB, at capture time) ---
+2026-10-29 03:52:26.57||running|2
+--- host ADB connect (product probe channel, 127.0.0.1:16373) ---
+connected to 127.0.0.1:16373
+--- boot_completed poll (host ADB) ---
+boot_completed=1 after ~2s
+--- getprop dump (host ADB) @ 2026-10-29T03:53:01Z ---
+adb props lines: 586
+--- getprop dump (docker exec, secondary channel) ---
+exec props lines: 586
+--- 12/12 + baseline (host ADB dump) ---
+=== 12/12 fingerprint targets (r8-a2 (host ADB), p1-09 calibre) ===
+OK   ro.product.brand: got='motorola' exp='motorola'
+OK   ro.product.manufacturer: got='Motorola' exp='Motorola'
+OK   ro.product.model: got='Redmi1BA' exp='Redmi1BA'
+OK   ro.product.device: got='redmi-1ba' exp='redmi-1ba'
+OK   ro.product.name: got='redmi-1ba' exp='redmi-1ba'
+OK   ro.build.id: got='V9AB2GJ' exp='V9AB2GJ'
+OK   ro.build.display.id: got='14.V9AB2GJ.Y2MKJ.keys' exp='14.V9AB2GJ.Y2MKJ.keys'
+OK   ro.build.fingerprint: got='motorola/redmi-1ba/redmi-1barcqv23p7xy:14/V9AB2GJ/633188:userdebug/dev-keys' exp='motorola/redmi-1ba/redmi-1barcqv23p7xy:14/V9AB2GJ/633188:userdebug/dev-keys'
+OK   ro.serialno: got='MOTO-616277-P6V8' exp='MOTO-616277-P6V8'
+OK   persist.sys.timezone: got='Asia/Tokyo' exp='Asia/Tokyo'
+OK   ro.hardware: got='redmi-1ba' exp='redmi-1ba'
+OK   ro.boot.hardware: got='redmi-1ba' exp='redmi-1ba'
+=> 12/12
+
+=== non-fingerprint stock props (vs P1 old-image baseline, s3-07b calibre) ===
+OK   init.svc.zygote: got='running' exp='running'
+OK   ro.adb.secure: got='0' exp='0'
+OK   ro.build.tags: got='test-keys' exp='test-keys'
+OK   ro.build.type: got='userdebug' exp='userdebug'
+OK   ro.build.version.release: got='14' exp='14'
+OK   ro.build.version.sdk: got='34' exp='34'
+OK   ro.build.version.security_patch: got='2024-05-05' exp='2024-05-05'
+OK   ro.debuggable: got='1' exp='1'
+OK   ro.product.cpu.abi: got='x86_64' exp='x86_64'
+OK   ro.build.description: got='redroid_x86_64-userdebug 14 UD2A.240505.001.W1 eng.frank.20240527.141332 test-keys' exp='redroid_x86_64-userdebug 14 UD2A.240505.001.W1 eng.frank.20240527.141332 test-keys'
+OK   ro.product.build.fingerprint: got='redroid/redroid_x86_64/redroid_x86_64:14/UD2A.240505.001.W1/frank05271411:userdebug/test-keys' exp='redroid/redroid_x86_64/redroid_x86_64:14/UD2A.240505.001.W1/frank05271411:userdebug/test-keys'
+OK   ro.system.build.fingerprint: got='redroid/redroid_x86_64/redroid_x86_64:14/UD2A.240505.001.W1/frank05271411:userdebug/test-keys' exp='redroid/redroid_x86_64/redroid_x86_64:14/UD2A.240505.001.W1/frank05271411:userdebug/test-keys'
+OK   ro.vendor.build.fingerprint: got='redroid/redroid_x86_64/redroid_x86_64:14/UD2A.240505.001.W1/frank05271411:userdebug/test-keys' exp='redroid/redroid_x86_64/redroid_x86_64:14/UD2A.240505.001.W1/frank05271411:userdebug/test-keys'
+=> 13/13 baseline-sampled props unchanged
+compare12 exit=0
+--- display (docker exec wm) ---
+size: Physical size: 1080x2400  density: Physical density: 420
+--- disconnect ---
+=== capture done r8 a2 exit=0 2026-10-29T03:53:02Z ===

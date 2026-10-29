@@ -1,0 +1,6 @@
+=== P2.2c API create batch CYCLE 3 (r7/r8/r9, new tag, maxAttempts=3) @ 2026-10-29T03:51:46Z ===
+maxAttempts=3 rationale: attempt 1 consumed by structural ADB-boot transient (F-1); intervention machine (r8) attempt 2 consumed by deliberate docker stop; attempt 3 = resume-success. v8/v9 used 2 because their stop was attempt-1.
+--- response ---
+{"replay":false,"cycleId":"2f574ec4-41fd-4605-946e-d0cdfbb746e9","batches":[{"id":"67970e5a-cf44-49ab-815b-9a3257ba38a9","batchNo":1}],"plan":{"batchSize":3,"batchCount":1,"batches":[{"batchNo":1,"size":3,"members":[{"identityId":"e66ff36c-f7d7-45bf-a45e-c5854bed0208","position":1,"state":"PENDING","skipReason":null},{"identityId":"ff8ebfd0-edd1-4598-a200-e74a971960e3","position":2,"state":"PENDING","skipReason":null},{"identityId":"55b4920e-942b-4bab-a690-1df8f6383619","position":3,"state":"PENDING","skipReason":null}]}],"stats":{"total":3,"included":3,"skipped":0}}}
+HTTP_STATUS=201
+BATCH3=67970e5a-cf44-49ab-815b-9a3257ba38a9

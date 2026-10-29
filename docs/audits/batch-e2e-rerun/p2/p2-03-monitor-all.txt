@@ -1,0 +1,14 @@
+2026-10-29T03:49:03Z run[r4] = 2bc44020-e239-4de0-924e-ddec3b1206cb
+2026-10-29T03:49:03Z run[r5] = 520ea1c6-c75e-40b5-83e9-62b1dce49189
+2026-10-29T03:49:03Z run[r6] = 380b715e-9ca4-4233-8de7-9ea5ed5cbf7f
+2026-10-29T03:49:03Z monitor start t0=1793245743 batch=ad310585-02b7-48b1-8366-047650e22201 names=r4 r5 r6
+2026-10-29T03:49:03Z [r4] succeeded attempt=2
+2026-10-29T03:49:03Z [r5] succeeded attempt=2
+2026-10-29T03:49:04Z [r6] succeeded attempt=2
+2026-10-29T03:49:04Z ALL TERMINAL
+2026-10-29T03:49:04Z monitor end 2026-10-29T03:49:04Z (t+1s)
+redroid-rdfa-r4|succeeded|2||2026-10-29 03:38:11.461|2026-10-29 03:41:22.969|191508|container ok (held 180000ms, 11 health checks)
+redroid-rdfa-r5|succeeded|2||2026-10-29 03:38:11.568|2026-10-29 03:41:23.326|191758|container ok (held 180000ms, 11 health checks)
+redroid-rdfa-r6|succeeded|2||2026-10-29 03:38:11.56|2026-10-29 03:41:23.308|191748|container ok (held 180000ms, 11 health checks)
+2026-10-29T03:49:04Z final rows appended to docs/audits/batch-e2e-rerun/p2/p2-03-monitor-all.txt
+2026-10-29T03:49:04Z captures drained

@@ -1,0 +1,12 @@
+=== P2.1b provision identities r4/r5/r6 (qa_device) @ 2026-10-29T03:37:13Z ===
+cycle-2 machines: cycle-1 (r1/r2/r3) identities reached COMPLETED (closed-leaf FSM state, no re-arm edge — MD §6.1); product-compat path = fresh identities, same prefix/profile/tag.
+{"items":[{"name":"redroid-rdfa-r4","identityId":"36f55eae-9040-4c0e-95a0-b80068bc2991","action":"created","dataPath":"/var/lib/water-army/redroid/redroid-rdfa-r4","suggestedDeviceName":"redroid-rdfa-r4","fingerprint":"ensured","egressIp":null},{"name":"redroid-rdfa-r5","identityId":"99512824-2250-45e4-8d01-fcf81982535d","action":"created","dataPath":"/var/lib/water-army/redroid/redroid-rdfa-r5","suggestedDeviceName":"redroid-rdfa-r5","fingerprint":"ensured","egressIp":null},{"name":"redroid-rdfa-r6","identityId":"b66953a4-3210-4a52-90b8-cd00a4b7794a","action":"created","dataPath":"/var/lib/water-army/redroid/redroid-rdfa-r6","suggestedDeviceName":"redroid-rdfa-r6","fingerprint":"ensured","egressIp":null}],"created":3,"replayed":0,"dryRun":false}
+HTTP_STATUS=200
+
+--- identity rows ---
+redroid-rdfa-r1 | 6ec12568-1134-4d4f-9016-6737c8c29614 | qa_device | COMPLETED | PENDING_LOGIN
+redroid-rdfa-r2 | 71e69433-f125-417d-876e-ce6819ad2bac | qa_device | COMPLETED | PENDING_LOGIN
+redroid-rdfa-r3 | 536934e3-add2-4811-91ee-94062d00be95 | qa_device | COMPLETED | PENDING_LOGIN
+redroid-rdfa-r4 | 36f55eae-9040-4c0e-95a0-b80068bc2991 | qa_device | READY | PENDING_LOGIN
+redroid-rdfa-r5 | 99512824-2250-45e4-8d01-fcf81982535d | qa_device | READY | PENDING_LOGIN
+redroid-rdfa-r6 | b66953a4-3210-4a52-90b8-cd00a4b7794a | qa_device | READY | PENDING_LOGIN
