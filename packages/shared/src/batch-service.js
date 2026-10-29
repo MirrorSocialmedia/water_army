@@ -541,6 +541,8 @@ export function createBatchService({ db, log = console, now = () => new Date(), 
     reserveIdentityForRun,
     // completion
     evaluateBatchCompletion,
+    // state_events audit stream (scheduler terminal drain writes through it)
+    recordStateEvent,
     // identity rows
     createIdentity,
   };

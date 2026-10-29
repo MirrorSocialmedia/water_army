@@ -616,3 +616,66 @@ test('tick: a failing pass is contained (other passes still run) — MD §12.3 �
   assert.equal(t.staleCancelled, 0, 'later passes still ran');
   assert.equal(jobsOf(w.queue).length, 1, 'world still consistent');
 });
+
+// ------------------------------------------------- WA-STEALTH-FIX2 D3 limbo
+test('s4 terminal drain: PENDING membership under a COMPLETED identity → SKIPPED + audit + batch auto-closes (limbo fix)', async () => {
+  const w = makeWorld();
+  // Cycle A: one identity, run it to success → identity COMPLETED (closed leaf).
+  const a = await seedCycle(w, { identities: 1 });
+  await w.scheduler.startBatch({ batchId: a.batches[0].id });
+  const runA = (await runsOf(w.db, { batchId: a.batches[0].id }))[0];
+  await claim(w, runA);
+  await finish(w, runA.id, { status: 'succeeded' });
+  assert.equal(await identityStatus(w, a.identities[0].id), 'COMPLETED');
+
+  // Cycle B: the SAME identity gets a fresh PENDING membership — the D3 limbo
+  // shape (a COMPLETED identity can never dispatch again).
+  const b = await w.batchSvc.createCycle({
+    name: `cycle-b-limbo-${identitySeq}`,
+    idempotencyKey: `cycle-b-limbo-${Math.random().toString(36).slice(2, 10)}`,
+    identities: [{ id: a.identities[0].id }],
+    batchSize: 1,
+    maxActiveContainers: 1,
+    failurePolicy: 'continue_and_report',
+    config: { adapter: { type: 'noop' }, timeoutSeconds: 30, maxAttempts: 3, interBatchCooldownSeconds: 0 },
+  }, { id: 'tester' });
+  const bBatch = (await w.db.batch.findMany({ where: { cycleId: b.cycleId }, orderBy: { batchNo: 'asc' } }))[0];
+
+  const t = await w.scheduler.startBatch({ batchId: bBatch.id });
+  assert.equal(t.drained, 1, 'terminal drain counted in the ensure result');
+  assert.equal(t.dispatched, 0, 'no phantom run dispatched for a closed leaf');
+  const m = w.db.__state.batchIdentities.find((r) => r.batchId === bBatch.id && r.identityId === a.identities[0].id);
+  assert.equal(m.status, 'SKIPPED');
+  assert.match(m.skipReason || '', /closed leaf/);
+  const ev = w.db.__state.stateEvents.filter((e) => e.entityId === a.identities[0].id && e.toState === 'SKIPPED');
+  assert.equal(ev.length, 1, 'exactly one state_events audit row');
+  assert.match(ev[0].reason, /terminal drain/);
+
+  const t2 = await w.scheduler.tick();
+  assert.equal(t2.recovered.drained, 0, 'drain is idempotent (membership already terminal)');
+  const after = await w.db.batch.findUnique({ where: { id: bBatch.id } });
+  assert.equal(after.status, 'COMPLETED', 'batch auto-closes on the next tick (Pass 4, membership terminal = truth)');
+});
+
+test('s4 non-READY MOVABLE identity states stay skip-and-retry (no drain) — FAILED_FINAL manual-retry semantics preserved', async () => {
+  const w = makeWorld();
+  for (const status of ['FAILED_FINAL', 'DISABLED', 'RECOVERING']) {
+    const id = await seedIdentity(w.db, { status });
+    const res = await w.batchSvc.createCycle({
+      name: `cycle-movable-${status}`,
+      idempotencyKey: `cycle-movable-${status}-${Math.random().toString(36).slice(2, 10)}`,
+      identities: [{ id: id.id }],
+      batchSize: 1,
+      maxActiveContainers: 1,
+      failurePolicy: 'continue_and_report',
+      config: { adapter: { type: 'noop' }, timeoutSeconds: 30, maxAttempts: 3, interBatchCooldownSeconds: 0 },
+    }, { id: 'tester' });
+    const batch = (await w.db.batch.findMany({ where: { cycleId: res.cycleId }, orderBy: { batchNo: 'asc' } }))[0];
+    const t = await w.scheduler.tick();
+    assert.equal(t.recovered.drained, 0, `${status}: no drain`);
+    const m = w.db.__state.batchIdentities.find((r) => r.batchId === batch.id && r.identityId === id.id);
+    assert.equal(m.status, 'PENDING', `${status}: membership stays PENDING (retry next tick / manual retry)`);
+    const b = await w.db.batch.findUnique({ where: { id: batch.id } });
+    assert.ok(['PLANNED', 'RUNNING'].includes(b.status), `${status}: batch not auto-closed`);
+  }
+});

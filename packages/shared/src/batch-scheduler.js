@@ -249,12 +249,12 @@ export function createBatchScheduler({
    *   - no runs at all           → reserve (CAS) → create run → membership
    *                                 ACTIVE → enqueue
    *
-   * @returns {Promise<{dispatched:number, reused:number, skipped:number}>}
+   * @returns {Promise<{dispatched:number, reused:number, skipped:number, drained:number, groupDeferred:Array}>}
    */
   async function ensureRuns(batch, { actor = 'scheduler' } = {}) {
     const members = await db.batchIdentity.findMany({ where: { batchId: batch.id } });
     members.sort((a, b) => a.position - b.position);
-    const out = { dispatched: 0, reused: 0, skipped: 0, groupDeferred: [] };
+    const out = { dispatched: 0, reused: 0, skipped: 0, drained: 0, groupDeferred: [] };
 
     // WA-IPGROUP 鐵律 2: stagger window per dispatch pass (AppSetting read
     // is one cheap PK read; an admin change applies at the next dispatch).
@@ -337,6 +337,41 @@ export function createBatchScheduler({
 
       // Fresh membership: identity must be READY (the plan cycle SKIPPED everything else).
       if (identity.status !== 'READY') {
+        if (identity.status === 'COMPLETED') {
+          // WA-STEALTH-FIX2 D3 (terminal drain): COMPLETED is the CLOSED leaf
+          // (IDENTITY_TRANSITIONS['COMPLETED'] = [] — one identity, one cycle).
+          // A PENDING membership there can NEVER dispatch: the old silent skip
+          // left the batch RUNNING forever (limbo, D3 audit finding) and tick
+          // after tick re-skipped without a trace. Drain HONESTLY: membership
+          // PENDING → SKIPPED (MD §3.3 treats SKIPPED as terminal — “an approved
+          // skip”, here approved by the closed leaf itself) with skipReason + a
+          // state_events audit row, so Pass 4 (evaluateBatchCompletion, membership
+          // terminal = truth) closes the batch in the SAME tick. Re-arming such
+          // work = a new identity / new cycle (manual policy, documented) — never
+          // implicit, never a silent re-run (BR-B6 re-arm lesson).
+          const drained = await db.batchIdentity.updateMany({
+            where: { batchId: batch.id, identityId: m.identityId, status: 'PENDING' },
+            data: { status: 'SKIPPED', skipReason: 'identity COMPLETED (closed leaf) — terminal drain' },
+          });
+          if (Number(drained.count) > 0) {
+            out.drained += 1;
+            out.skipped += 1;
+            await batchSvc.recordStateEvent({
+              entityType: 'identity',
+              entityId: identity.id,
+              fromState: 'PENDING',
+              toState: 'SKIPPED',
+              reason: 'terminal drain: identity COMPLETED (closed leaf) — PENDING membership can never dispatch (WA-STEALTH-FIX2 D3)',
+              actor,
+              correlationId: batch.cycleId,
+              details: { batchId: batch.id, scope: 'membership' },
+            });
+            log.warn?.({ batchId: batch.id, identityId: identity.id }, 'ensureRuns: identity COMPLETED (closed leaf) — PENDING membership drained to SKIPPED (audited)');
+          }
+          continue;
+        }
+        // Non-READY but MOVABLE states (DISABLED/RECOVERING/RUNNING/FAILED_FINAL…):
+        // honest skip, retry next tick — they can still reach READY/RESERVED edges.
         out.skipped += 1;
         continue;
       }
@@ -617,16 +652,18 @@ export function createBatchScheduler({
     const running = await db.batch.findMany({ where: { status: 'RUNNING' } });
     let dispatched = 0;
     let reused = 0;
+    let drained = 0;
     for (const batch of running) {
       try {
         const res = await ensureRuns(batch, { actor: 'scheduler' });
         dispatched += res.dispatched;
         reused += res.reused;
+        drained += res.drained ?? 0;
       } catch (err) {
         log.error?.({ batchId: batch.id, error: err.message }, 'recoverOrphanedRuns: ensure failed');
       }
     }
-    return { dispatched, reused };
+    return { dispatched, reused, drained };
   }
 
   /**
