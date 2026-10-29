@@ -1,0 +1,31 @@
+=== getprop ro.* leak scan @ 2026-10-30T00:38:14+08:00 ===
+ro.build.fingerprint = realme/redmi-4pd/redmi-4pdn4bwqyh9dm:14/Q9ABNG2/262369:userdebug/dev-keys
+ro.build.product = redmi-4pd
+ro.build.display.id = 14.Q9ABNG2.DGB34.keys
+ro.product.model = Redmi4PD
+ro.product.brand = realme
+ro.product.manufacturer = realme
+ro.product.device = redmi-4pd
+ro.hardware = redmi-4pd
+ro.soc.model = 
+ro.soc.manufacturer = 
+ro.boot.hardware = redmi-4pd
+ro.kernel.qemu = 
+gsm.version.baseband = 
+ro.gfx.driver.0 = 
+=== TZ / locale / DNS ===
+persist.sys.timezone = Asia/Singapore
+locale = 
+net.dns = 
+resolv = 
+=== MAC (eth0 live) ===
+    link/ether d4:ba:fa:9a:87:c4 brd ff:ff:ff:ff:ff:ff link-netnsid 0
+settings secure wifi/mac = null
+=== sensors (sensorservice summary) ===
+No Sensors on the device
+devInitCheck : -19
+sensor count: 0
+=== GLES (SurfaceFlinger) ===
+GLES: IMG, AMD Radeon Graphics, OpenGL ES 3.2 V@0615
+=== EGL strings (libGLESv2 count AMD) ===
+0

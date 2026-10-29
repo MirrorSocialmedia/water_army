@@ -1,0 +1,27 @@
+{
+ "ts": "2026-10-29T16:37:41.288Z",
+ "env": {
+  "ua": "Mozilla/5.0 (Linux; Android 14; Redmi4PD Build/Q9ABNG2; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/125.0.6422.113 Mobile Safari/537.36",
+  "lang": "en-US",
+  "dpr": 2.46875,
+  "tz": "Asia/Singapore"
+ },
+ "gl": {
+  "vendor": "WebKit",
+  "renderer": "WebKit WebGL",
+  "unmaskedVendor": "IMG",
+  "unmaskedRenderer": "AMD Radeon Graphics",
+  "version": "WebGL 1.0 (OpenGL ES 2.0 Chromium)"
+ },
+ "canvas": {
+  "len": 1970,
+  "sha256": "8b97a89dc7ea2c4a2710abb55461656fdf58bf788de3b5c31f971693fafe5770"
+ },
+ "webrtc": {
+  "candidates": [
+   "candidate:3684330010 1 udp 2113937151 172.38.200.7 49929 typ host generation 0 ufrag mLWo network-cost 999",
+   "candidate:1264943680 1 udp 1677729535 27.45.51.73 4818 typ srflx raddr 172.38.200.7 rport 49929 generation 0 ufrag mLWo network-cost 999"
+  ],
+  "err": null
+ }
+}

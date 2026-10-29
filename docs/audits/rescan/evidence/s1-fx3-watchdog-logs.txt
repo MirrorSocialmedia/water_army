@@ -1,0 +1,8 @@
+# production API log (watchdog readback/replay) — fx-3, UTC epoch ms in time field
+## boot-window replays + live wipe race replay (manual dumpsys battery reset @ 00:28:38 HKT)
+{"level":30,"time":1793291133398,"pid":1,"hostname":"27af015ee52e","device":"redroid-rdev-fx-3","level":57,"base":57,"replay":true,"msg":"vmstealth: battery story REPLAYED (boot wipe detected)"}
+{"level":30,"time":1793291163253,"pid":1,"hostname":"27af015ee52e","device":"redroid-rdev-fx-3","level":57,"base":57,"replay":true,"msg":"vmstealth: battery story REPLAYED (boot wipe detected)"}
+{"level":30,"time":1793291343275,"pid":1,"hostname":"27af015ee52e","device":"redroid-rdev-fx-3","level":57,"base":57,"replay":true,"msg":"vmstealth: battery story REPLAYED (boot wipe detected)"}
+## mc-dogfood-2 degraded readback path (stopped container, non-fatal fallback proof)
+{"level":40,"time":1793291913226,"pid":1,"hostname":"27af015ee52e","device":"redroid-mc-dogfood-2","error":"(HTTP code 409) container stopped/paused - container cc3d9a24e5e7b8c941eeaa1b886b3b8560a221e4294034dbf0a87011277e66c2 is not running ","msg":"vmstealth: battery readback failed (non-fatal, drift falls back to level-only)"}
+{"level":40,"time":1793291943228,"pid":1,"hostname":"27af015ee52e","device":"redroid-mc-dogfood-2","error":"(HTTP code 409) container stopped/paused - container cc3d9a24e5e7b8c941eeaa1b886b3b8560a221e4294034dbf0a87011277e66c2 is not running ","msg":"vmstealth: battery readback failed (non-fatal, drift falls back to level-only)"}
