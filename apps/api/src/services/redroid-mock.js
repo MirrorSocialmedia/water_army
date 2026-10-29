@@ -19,6 +19,7 @@ import { EventEmitter } from 'node:events';
 import fs from 'node:fs';
 
 import { removeRedroidDataDir, T2S_SETUP_FILE, T2S_NETCHECK_MARKER, T2S_CANARY_MARKER, T2S_EGRESS_MARKER, TUN2SOCKS_CHECK_MARKER, TUN2SOCKS_PIN, GOST_HOST_BIND } from './redroid-service.js';
+import { BATTERY_STEALTH_MARKER, BATTERY_DRIFT_MARKER, BATTERY_READBACK_MARKER } from '@water-army/shared';
 
 let mockIdSeq = 9000;
 
@@ -486,9 +487,57 @@ export function createMockExec({ fail = false, binaryCheck, netcheck, canary, eg
   let lastStagedB64 = null;
   // Mutable behavior (tests flip failure shapes mid-scenario):
   const behavior = { fail, binaryCheck, netcheck, canary, egress, stageFail };
+  // WA-RESCAN (S1): emulated BatteryService override state. Defaults = the
+  // container values the real image reports pre-override (fx-2 measured:
+  // status:1 / present:false / level:0). Tests simulate a boot WIPE by
+  // resetting this mid-scenario; the readback handler answers from here.
+  const battery = { level: 0, status: 1, present: false, ac: false, usb: false, wireless: false, dock: false };
+  const resetBattery = () => Object.assign(battery, { level: 0, status: 1, present: false, ac: false, usb: false, wireless: false, dock: false });
   async function exec(containerId, script) {
     calls.push({ containerId, script, at: Date.now() });
     if (behavior.fail) return { exitCode: 1, stdout: 'mock exec: forced failure', stderr: 'TUNNEL_TEARDOWN_FAILED' };
+    // WA-RESCAN (S1): battery story emulation. The mock device starts at the
+    // container DEFAULTS the real image reports pre-override (fx-2 measured:
+    // status:1 / present:false / level:0). The full story script (stealth
+    // marker) sets the knobs it carries; the drift script moves level only;
+    // the readback script answers with a realistic dump of current state.
+    // Tests wipe the story by assigning battery.* (boot-event simulation).
+    if (script.includes(BATTERY_STEALTH_MARKER)) {
+      const lvl = /set level (\d+)/.exec(script)?.[1];
+      const st = /set status (\d+)/.exec(script)?.[1];
+      if (lvl !== undefined) battery.level = Number(lvl);
+      if (st !== undefined) battery.status = Number(st);
+      if (/set present 1/.test(script)) battery.present = true;
+      for (const k of ['ac', 'usb', 'wireless', 'dock']) if (new RegExp(`set ${k} 0`).test(script)) battery[k] = false;
+      return { exitCode: 0, stdout: `${BATTERY_STEALTH_MARKER}\n`, stderr: '' };
+    }
+    if (script.includes(BATTERY_DRIFT_MARKER)) {
+      const lvl = /set level (\d+)/.exec(script)?.[1];
+      if (lvl !== undefined) battery.level = Number(lvl);
+      return { exitCode: 0, stdout: `${BATTERY_DRIFT_MARKER}\n`, stderr: '' };
+    }
+    if (script.includes(BATTERY_READBACK_MARKER)) {
+      const lines = [
+        'Current Battery Service state:',
+        `  AC powered: ${battery.ac}`,
+        `  USB powered: ${battery.usb}`,
+        `  Wireless powered: ${battery.wireless}`,
+        `  Dock powered: ${battery.dock}`,
+        '  Max charging current: 0',
+        '  Max charging voltage: 0',
+        '  Charge counter: 0',
+        `  status: ${battery.status}`,
+        '  health: 1',
+        `  present: ${battery.present}`,
+        `  level: ${battery.level}`,
+        '  scale: 100',
+        '  voltage: 0',
+        '  temperature: 0',
+        '  technology: ',
+        BATTERY_READBACK_MARKER,
+      ];
+      return { exitCode: 0, stdout: `${lines.join('\r\n')}\n`, stderr: '' };
+    }
     // R1: tun2socks binary diagnostic check
     if (script.includes(TUN2SOCKS_CHECK_MARKER)) {
       const bc = behavior.binaryCheck ?? { state: 'ready', version: `tun2socks-${TUN2SOCKS_PIN.version}` };
@@ -584,6 +633,9 @@ export function createMockExec({ fail = false, binaryCheck, netcheck, canary, eg
       behavior.egress = b.egress;
       behavior.stageFail = Boolean(b.stageFail);
     },
+    // WA-RESCAN (S1): live handle into the emulated battery story + wipe helper.
+    battery,
+    resetBattery,
   };
 }
 

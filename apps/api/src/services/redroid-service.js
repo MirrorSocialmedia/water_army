@@ -23,7 +23,7 @@ import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 
-import { DOCKER_ERROR, encryptSecret, decryptSecret, resolveProviderKey, buildRoCmdArgs, profileToRoOverrides, templateProfileToRoOverrides, mergeRoOverrides, validateRoOverridesMap, deviceDisplayArgs, profileProcCmdArgs, planDeviceMac, canvasFontPlanForProfile, CANVAS_FONT_TARGET, deriveStealthRoOverrides, buildStealthBatteryProfile, buildStealthBatteryScript, BATTERY_STEALTH_MARKER, buildBatteryDriftScript, batteryDriftLevel, BATTERY_DRIFT_MARKER, buildBrowserArgsProvisionScript, BROWSER_ARGS_MARKER } from '@water-army/shared';
+import { DOCKER_ERROR, encryptSecret, decryptSecret, resolveProviderKey, buildRoCmdArgs, profileToRoOverrides, templateProfileToRoOverrides, mergeRoOverrides, validateRoOverridesMap, deviceDisplayArgs, profileProcCmdArgs, planDeviceMac, canvasFontPlanForProfile, CANVAS_FONT_TARGET, deriveStealthRoOverrides, buildStealthBatteryProfile, buildStealthBatteryScript, BATTERY_STEALTH_MARKER, buildBatteryDriftScript, batteryDriftLevel, BATTERY_DRIFT_MARKER, buildBatteryReadbackScript, BATTERY_READBACK_MARKER, parseBatteryReadback, batteryStoryNeedsReplay, buildBrowserArgsProvisionScript, BROWSER_ARGS_MARKER } from '@water-army/shared';
 
 import { DockerServiceError, classifyDockerError } from './docker-service.js';
 import { GOST_HOST_BIND, deviceNetwork, withDeviceNetwork, ensureDeviceNetwork } from './device-network.js';
@@ -1883,11 +1883,20 @@ export function createRedroidService({
   }
 
   /**
-   * WA-STEALTH-FIX2 (A, drift leg): slow deterministic LEVEL drift riding the
-   * net watchdog tick — pure function of (profile seed, device age), so a
-   * recompute never fights itself; exec fires ONLY when the planned level
-   * moved (per-process map). Status/present knobs are NOT touched here —
-   * they live in BatteryService memory and are re-applied wholesale by the
+   * WA-STEALTH-FIX2 (A, drift leg) + WA-RESCAN (S1, wipe-race repair): slow
+   * deterministic LEVEL drift riding the net watchdog tick — pure function of
+   * (profile seed, device age), so a recompute never fights itself.
+   *
+   * RESCAN S1: the drift leg used to trust its own per-process map, but the
+   * BatteryService override lives in SYSTEM-SERVER memory — any boot event
+   * wipes it and the map kept saying "steady", so the app surface read the
+   * container defaults (status:1/present:false/level:0, fx-2 measured) until
+   * the next drift step. The tick now READS THE DEVICE BACK first and, on any
+   * divergence, force-replays the FULL story (level at the drifted value,
+   * status, present, ac/usb/wireless/dock — idempotent, same builder as
+   * provisioning). Level-only execs remain for the plain drift step.
+   * Exec fires only when reality demands it (readback clean + steady → zero
+   * execs). Status/present knobs are otherwise only re-applied by the
    * create/start provisioning pass.
    */
   async function batteryDriftTick(row) {
@@ -1899,12 +1908,33 @@ export function createRedroidService({
     const profile = buildStealthBatteryProfile({ seed: String(row.identityId ?? row.name) });
     const anchorMs = row.createdAt ? new Date(row.createdAt).getTime() : Date.now();
     const planned = batteryDriftLevel({ profile, anchorMs, nowMs: Date.now(), stepMinutes: config.redroidBatteryDriftStepMinutes ?? 30 });
-    if (batteryDriftApplied.get(row.id) === planned) return { skipped: 'steady' };
-    const r = await execInContainer(row.containerId, buildBatteryDriftScript(planned), { timeoutMs: 15_000 });
-    if (r.exitCode === 0 && String(r.stdout ?? '').includes(BATTERY_DRIFT_MARKER)) {
+    // RESCAN S1: readback BEFORE deciding — the device is the authority, not
+    // the map. Readback failure (exec error / unreadable dump) is NOT treated
+    // as "wiped" (that would spam replays on a flaky exec); it degrades to
+    // the pre-RESCAN level-only semantics below.
+    let wiped = null;
+    try {
+      const rb = await execInContainer(row.containerId, buildBatteryReadbackScript(), { timeoutMs: 15_000 });
+      if (rb.exitCode === 0 && String(rb.stdout ?? '').includes(BATTERY_READBACK_MARKER)) {
+        wiped = batteryStoryNeedsReplay({ profile, plannedLevel: planned, readback: parseBatteryReadback(rb.stdout) });
+      }
+    } catch (err) {
+      log.warn({ device: row.name, error: err?.message }, 'vmstealth: battery readback failed (non-fatal, drift falls back to level-only)');
+    }
+    const steady = batteryDriftApplied.get(row.id) === planned;
+    if (wiped === false && steady) return { skipped: 'steady' };
+    const replay = wiped === true;
+    // Full replay carries the story at the DRIFTED level (not the profile
+    // base) so one exec restores everything; level-only ticks stay cheap.
+    const script = replay
+      ? buildStealthBatteryScript({ level: planned, status: profile.status })
+      : buildBatteryDriftScript(planned);
+    const marker = replay ? BATTERY_STEALTH_MARKER : BATTERY_DRIFT_MARKER;
+    const r = await execInContainer(row.containerId, script, { timeoutMs: 15_000 });
+    if (r.exitCode === 0 && String(r.stdout ?? '').includes(marker)) {
       batteryDriftApplied.set(row.id, planned);
-      log.info({ device: row.name, level: planned, base: profile.level }, 'vmstealth: battery drift applied');
-      return { applied: planned };
+      log.info({ device: row.name, level: planned, base: profile.level, replay }, replay ? 'vmstealth: battery story REPLAYED (boot wipe detected)' : 'vmstealth: battery drift applied');
+      return replay ? { replayed: planned } : { applied: planned };
     }
     log.warn({ device: row.name, exit: r.exitCode, out: String(r.stdout ?? r.stderr).slice(0, 120) }, 'vmstealth: battery drift tick failed (non-fatal)');
     return null;

@@ -21,6 +21,7 @@ import { stealthRng } from './device-mac.js';
 
 export const BATTERY_STEALTH_MARKER = 'BATTERY_STEALTH_OK';
 export const BATTERY_DRIFT_MARKER = 'BATTERY_DRIFT_OK';
+export const BATTERY_READBACK_MARKER = 'BATTERY_READBACK_OK';
 
 const INT = (v, name) => {
   if (!Number.isInteger(v)) throw new Error(`stealth battery: ${name} must be an integer, got ${String(v)}`);
@@ -110,4 +111,72 @@ export function buildBatteryDriftScript(level) {
   INT(level, 'level');
   if (level < 0 || level > 100) throw new Error(`stealth battery drift: level out of range: ${level}`);
   return `dumpsys battery set level ${level}; echo ${BATTERY_DRIFT_MARKER}`;
+}
+
+/* -----------------------------------------------------------------------
+ * WA-RESCAN (S1, 2026-10-30) — battery wipe-race self-healing.
+ *
+ * The BatteryService override lives ONLY in system-server memory. Any boot
+ * event (container restart, framework restart, late boot-flow `dumpsys
+ * battery reset`) WIPES the story, and pre-RESCAN the watchdog only moved
+ * `level` at a drift-step boundary — so the app surface read the container
+ * DEFAULTS (status:1 / present:false / level:0 — measured on fx-2:
+ * docs/audits/fix2b/redroid-rdev-fx-2-battery.txt) for up to a full drift
+ * step (30 min worst case). The fix: every watchdog tick reads the real
+ * device state back and force-REPLAYS the full story (idempotent) whenever
+ * the readback diverges. Read values, not assumptions.
+ * --------------------------------------------------------------------- */
+
+/**
+ * Readback probe script (exec seam, fixed argv). `tr -d '\r'` normalises
+ * the CRLF the real device dump carries (same treatment the fx probe driver
+ * used: `dumpsys battery | sed -n "s/\r//g"`).
+ * @returns {string} sh script ending in the BATTERY_READBACK_OK marker
+ */
+export function buildBatteryReadbackScript() {
+  return `dumpsys battery | tr -d '\\r'; echo ${BATTERY_READBACK_MARKER}`;
+}
+
+const lastMatch = (text, re) => {
+  let out = null;
+  let m;
+  const g = new RegExp(re.source, `${re.flags}g`);
+  while ((m = g.exec(text)) !== null) out = m;
+  return out;
+};
+
+/**
+ * Parse the app-visible knobs from a `dumpsys battery` dump. LAST occurrence
+ * per key wins (the dump can carry a second `UPDATES STOPPED` block with the
+ * same keys). Keys on the real image are lowercase (`status: 3`,
+ * `present: false`, `level: 0`). Unparseable fields come back null — the
+ * caller treats null as "story absent" (needs replay), never as "fine".
+ * @returns {{ level: number|null, status: number|null, present: boolean|null }}
+ */
+export function parseBatteryReadback(stdout) {
+  const text = String(stdout ?? '');
+  const levelM = lastMatch(text, /(?:^|\n)\s*level:\s*(-?\d+)/);
+  const statusM = lastMatch(text, /(?:^|\n)\s*status:\s*(-?\d+)/);
+  const presentM = lastMatch(text, /(?:^|\n)\s*present:\s*(true|false)/);
+  return {
+    level: levelM ? Number(levelM[1]) : null,
+    status: statusM ? Number(statusM[1]) : null,
+    present: presentM ? presentM[1] === 'true' : null,
+  };
+}
+
+/**
+ * Wipe detection: does the device state match the planned story?
+ * Any divergence — wiped defaults, drifted level, unparseable dump — says
+ * REPLAY. Replay itself is the idempotent full provisioning script, so this
+ * predicate never fights the device: once replayed, it reads back clean.
+ * @returns {boolean}
+ */
+export function batteryStoryNeedsReplay({ profile, plannedLevel, readback } = {}) {
+  if (!readback) return true;
+  const { level, status, present } = readback;
+  if (!Number.isInteger(level) || level !== plannedLevel) return true;
+  if (!Number.isInteger(status) || status !== profile?.status) return true;
+  if (present !== true) return true;
+  return false;
 }
