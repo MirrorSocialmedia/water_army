@@ -1,0 +1,19 @@
+{
+ "ts": "2026-10-29T11:06:49.127Z",
+ "dev": "a1",
+ "egress": "27.45.51.73",
+ "geo": {
+  "ip": "27.45.51.73",
+  "city": "Guangzhou",
+  "country": "CN",
+  "org": "AS17816 China Unicom IP network China169 Guangdong province"
+ },
+ "dnsWhoami": "ERR:SyntaxError: Unexpected token '<', \"<!DOCTYPE \"... is not valid JSON",
+ "tlsProbe": "httpbin:200",
+ "loc": {
+  "lang": "en-US",
+  "tz": "Europe/Paris"
+ },
+ "dns": null,
+ "ts_end": "2026-10-29T11:06:51.334Z"
+}

@@ -1,0 +1,3 @@
+=== b1 create attempt (RAM gate live) 2026-10-29T19:07:47+08:00 ===
+MemAvailableMiB=9318
+{"status":409,"body":{"error":{"code":"RAM_GATE_DENIED","message":"Device create 'redroid-rdev-adv-b1' denied by RAM gate (PROJECTED_BELOW_TARGET) — MemAvailable 9,292 MiB, projected 2,091 MiB; see Settings → RAM Gate for the policy and decision log","requestId":"14cf8ae3-bb82-4b1e-95e8-d3ee017175f1","details":{"reason":"PROJECTED_BELOW_TARGET","currentMiB":9291.9,"projectedMiB":2091,"liveCount":5}}}}

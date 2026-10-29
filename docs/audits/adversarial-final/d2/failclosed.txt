@@ -1,0 +1,9 @@
+=== fail-closed test on a4 (sidecar stop/start) 2026-10-29T18:47:19+08:00 ===
+redroid-matrix-b-gost-redroid-rdev-adv-a4
+[sidecar-down ping] --- 8.8.8.8 ping statistics ---
+[sidecar-down ping] 2 packets transmitted, 2 received, 0% packet loss, time 1000ms
+[sidecar-down ping] rtt min/avg/max/mdev = 197.295/199.208/201.122/1.964 ms
+FAILCLOSED a4: OK:27.45.51.73
+redroid-matrix-b-gost-redroid-rdev-adv-a4
+=== a4 sidecar restored; probe again ===
+FAILCLOSED a4: OK:27.45.51.73

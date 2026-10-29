@@ -1,0 +1,25 @@
+=== settings/proxy/route per device 2026-10-29T18:47:19+08:00 ===
+-- a1 http_proxy: null
+-- a1 ip route:
+   172.38.200.0/24 dev eth0 proto kernel scope link src 172.38.200.3 
+-- a1 netns ifaces:
+   1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+   2: eth0@if52: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default 
+-- a2 http_proxy: null
+-- a2 ip route:
+   172.38.200.0/24 dev eth0 proto kernel scope link src 172.38.200.5 
+-- a2 netns ifaces:
+   1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+   2: eth0@if54: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default 
+-- a3 http_proxy: null
+-- a3 ip route:
+   172.38.200.0/24 dev eth0 proto kernel scope link src 172.38.200.7 
+-- a3 netns ifaces:
+   1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+   2: eth0@if56: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default 
+-- a4 http_proxy: null
+-- a4 ip route:
+   172.38.200.0/24 dev eth0 proto kernel scope link src 172.38.200.9 
+-- a4 netns ifaces:
+   1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+   2: eth0@if58: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default 

@@ -1,0 +1,8 @@
+[debug.renderengine.backend]: [gles]
+[init.svc.gpu]: [running]
+[init.svc_debug_pid.gpu]: [223]
+[ro.boot.redroid_gpu_mode]: [host]
+[ro.boottime.gpu]: [16946451998327]
+[ro.hardware.vulkan]: [radeon]
+[ro.hwui.use_vulkan]: []
+[ro.opengles.version]: [196610]

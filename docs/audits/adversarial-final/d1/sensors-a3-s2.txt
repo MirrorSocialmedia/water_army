@@ -1,0 +1,2 @@
+No Sensors on the device
+devInitCheck : -19

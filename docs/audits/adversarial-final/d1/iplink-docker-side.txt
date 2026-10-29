@@ -1,0 +1,8 @@
+-- a1 docker-exec ip link:
+    link/ether 64:ec:65:75:c3:83 brd ff:ff:ff:ff:ff:ff link-netnsid 0
+-- a2 docker-exec ip link:
+    link/ether 0c:b9:83:56:7a:01 brd ff:ff:ff:ff:ff:ff link-netnsid 0
+-- a3 docker-exec ip link:
+    link/ether d8:da:f1:15:42:02 brd ff:ff:ff:ff:ff:ff link-netnsid 0
+-- a4 docker-exec ip link:
+    link/ether 60:70:6c:e6:24:72 brd ff:ff:ff:ff:ff:ff link-netnsid 0

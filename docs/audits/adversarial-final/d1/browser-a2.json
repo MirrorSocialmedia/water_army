@@ -1,0 +1,44 @@
+{
+ "env": {
+  "ua": "Mozilla/5.0 (Linux; Android 14; Magic65P Build/O8ABMXJ; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/125.0.6422.113 Mobile Safari/537.36",
+  "lang": "en-US",
+  "langs": [
+   "en-US"
+  ],
+  "mtp": 1,
+  "screen": {
+   "w": 438,
+   "h": 948,
+   "aw": 438,
+   "ah": 948
+  },
+  "dpr": 2.46875,
+  "tz": "Australia/Sydney",
+  "offset": -660
+ },
+ "gl": {
+  "vendor": "WebKit",
+  "renderer": "WebKit WebGL",
+  "unmaskedVendor": "AMD",
+  "unmaskedRenderer": "AMD Radeon Graphics (radeonsi, raphael_mendocino, ACO, DRM 3.57, 6.8.0-117-generic)",
+  "version": "WebGL 1.0 (OpenGL ES 2.0 Chromium)"
+ },
+ "canvas": {
+  "len": 1774,
+  "sha256": "298d28a3cc70a30a9dbfe5852d289f51a4ff84ffcc154dc492539562fbeb04ae"
+ },
+ "webrtc": {
+  "candidates": [
+   "candidate:4282221977 1 udp 2113937151 172.38.200.5 47646 typ host generation 0 ufrag JtLT network-cost 999",
+   "candidate:4222428659 1 udp 1677729535 27.45.51.73 5388 typ srflx raddr 172.38.200.5 rport 47646 generation 0 ufrag JtLT network-cost 999"
+  ],
+  "sdpHasPrivate": false,
+  "err": null
+ },
+ "touch": {
+  "registered": true,
+  "count": 0,
+  "g": 1
+ },
+ "ts": "2026-10-29T10:44:46.698Z"
+}

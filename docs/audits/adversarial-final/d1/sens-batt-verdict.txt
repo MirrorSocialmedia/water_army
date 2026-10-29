@@ -1,0 +1,15 @@
+=== D1-3 sensorservice: accel/gyro presence + two-sample numeric diff ===
+[a1] accel sensors: [] | gyro sensors: []
+[a2] accel sensors: [] | gyro sensors: []
+[a3] accel sensors: [] | gyro sensors: []
+[a4] accel sensors: [] | gyro sensors: []
+
+=== D1-4 battery: level/status two-sample ===
+[a1-s1] level=0 status=1 voltage=0 temp=0
+[a1-s2] level=0 status=1 voltage=0 temp=0
+[a2-s1] level=0 status=1 voltage=0 temp=0
+[a2-s2] level=0 status=1 voltage=0 temp=0
+[a3-s1] level=0 status=1 voltage=0 temp=0
+[a3-s2] level=0 status=1 voltage=0 temp=0
+[a4-s1] level=0 status=1 voltage=0 temp=0
+[a4-s2] level=0 status=1 voltage=0 temp=0

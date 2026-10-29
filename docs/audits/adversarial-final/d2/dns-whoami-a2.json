@@ -1,0 +1,12 @@
+{
+ "ts": "2026-10-29T11:08:03.123Z",
+ "dev": "a2",
+ "raw": "{\"status\":404,\"error\":{\"title\":\"Wrong ip\",\"message\":\"Please provide a valid IP address\"}}",
+ "dns": {
+  "status": 404,
+  "error": {
+   "title": "Wrong ip",
+   "message": "Please provide a valid IP address"
+  }
+ }
+}

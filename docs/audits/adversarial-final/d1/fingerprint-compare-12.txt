@@ -1,0 +1,120 @@
+=== a1 ===
+OK  ro.product.brand: got='vivo' exp(brand)='vivo'
+OK  ro.product.manufacturer: got='vivo' exp(manufacturer)='vivo'
+OK  ro.product.model: got='Edge2WJ' exp(model)='Edge2WJ'
+OK  ro.product.device: got='edge-2wj' exp(device)='edge-2wj'
+OK  ro.product.name: got='edge-2wj' exp(productName)='edge-2wj'
+OK  ro.build.id: got='M5ABAFQ' exp(buildId)='M5ABAFQ'
+OK  ro.build.display.id: got='15.M5ABAFQ.S4X28.keys' exp(displayId)='15.M5ABAFQ.S4X28.keys'
+OK  ro.build.fingerprint: got='vivo/edge-2wj/edge-2wjzbkk8eff98:15/M5ABAFQ/736777:userdebug/dev-keys' exp(fingerprint)='vivo/edge-2wj/edge-2wjzbkk8eff98:15/M5ABAFQ/736777:userdebug/dev-keys'
+OK  ro.serialno: got='VIVO-724001-JJRS' exp(serial)='VIVO-724001-JJRS'
+OK  persist.sys.timezone: got='Europe/Paris' exp(timezone)='Europe/Paris'
+OK  ro.hardware: got='edge-2wj' exp(hardware)='edge-2wj'
+OK  ro.boot.hardware: got='edge-2wj' exp(hardware)='edge-2wj'
+=> 12/12 (profile fields present: ['brand', 'buildId', 'device', 'displayId', 'fingerprint', 'hardware', 'manufacturer', 'model', 'productName', 'serial', 'timezone'])
+
+=== leak scan: redroid|goldfish|ranchu|emulator (case-insensitive, full table) ===
+LEAK ro.boot.redroid_dpi = '400'
+LEAK ro.boot.redroid_fps = '60'
+LEAK ro.boot.redroid_gpu_mode = 'host'
+LEAK ro.boot.redroid_height = '2400'
+LEAK ro.boot.redroid_width = '1080'
+LEAK ro.product.vendor_dlkm.brand = 'redroid'
+LEAK ro.product.vendor_dlkm.device = 'redroid_x86_64'
+LEAK ro.product.vendor_dlkm.manufacturer = 'redroid'
+LEAK ro.product.vendor_dlkm.model = 'redroid14_x86_64'
+LEAK ro.product.vendor_dlkm.name = 'redroid_x86_64'
+LEAK ro.vendor_dlkm.build.fingerprint = 'redroid/redroid_x86_64/redroid_x86_64:14/UD2A.240505.001.W1/frank05271411:userdebug/test-keys'
+=> 11 leak line(s) of 579 props
+
+ro.hardware = edge-2wj | ro.boot.hardware = edge-2wj
+=== a2 ===
+OK  ro.product.brand: got='honor' exp(brand)='honor'
+OK  ro.product.manufacturer: got='Honor' exp(manufacturer)='Honor'
+OK  ro.product.model: got='Magic65P' exp(model)='Magic65P'
+OK  ro.product.device: got='magic-65p' exp(device)='magic-65p'
+OK  ro.product.name: got='magic-65p' exp(productName)='magic-65p'
+OK  ro.build.id: got='O8ABMXJ' exp(buildId)='O8ABMXJ'
+OK  ro.build.display.id: got='15.O8ABMXJ.9C62F.keys' exp(displayId)='15.O8ABMXJ.9C62F.keys'
+OK  ro.build.fingerprint: got='honor/magic-65p/magic-65pv75b8vxjhs:15/O8ABMXJ/031065:userdebug/dev-keys' exp(fingerprint)='honor/magic-65p/magic-65pv75b8vxjhs:15/O8ABMXJ/031065:userdebug/dev-keys'
+OK  ro.serialno: got='HONO-534823-STWD' exp(serial)='HONO-534823-STWD'
+OK  persist.sys.timezone: got='Australia/Sydney' exp(timezone)='Australia/Sydney'
+OK  ro.hardware: got='magic-65p' exp(hardware)='magic-65p'
+OK  ro.boot.hardware: got='magic-65p' exp(hardware)='magic-65p'
+=> 12/12 (profile fields present: ['brand', 'buildId', 'device', 'displayId', 'fingerprint', 'hardware', 'manufacturer', 'model', 'productName', 'serial', 'timezone'])
+
+=== leak scan: redroid|goldfish|ranchu|emulator (case-insensitive, full table) ===
+LEAK ro.boot.redroid_dpi = '395'
+LEAK ro.boot.redroid_fps = '90'
+LEAK ro.boot.redroid_gpu_mode = 'host'
+LEAK ro.boot.redroid_height = '2340'
+LEAK ro.boot.redroid_width = '1080'
+LEAK ro.product.vendor_dlkm.brand = 'redroid'
+LEAK ro.product.vendor_dlkm.device = 'redroid_x86_64'
+LEAK ro.product.vendor_dlkm.manufacturer = 'redroid'
+LEAK ro.product.vendor_dlkm.model = 'redroid14_x86_64'
+LEAK ro.product.vendor_dlkm.name = 'redroid_x86_64'
+LEAK ro.vendor_dlkm.build.fingerprint = 'redroid/redroid_x86_64/redroid_x86_64:14/UD2A.240505.001.W1/frank05271411:userdebug/test-keys'
+=> 11 leak line(s) of 579 props
+
+ro.hardware = magic-65p | ro.boot.hardware = magic-65p
+=== a3 ===
+OK  ro.product.brand: got='huawei' exp(brand)='huawei'
+OK  ro.product.manufacturer: got='Huawei' exp(manufacturer)='Huawei'
+OK  ro.product.model: got='Pixel2GC' exp(model)='Pixel2GC'
+OK  ro.product.device: got='pixel-2gc' exp(device)='pixel-2gc'
+OK  ro.product.name: got='pixel-2gc' exp(productName)='pixel-2gc'
+OK  ro.build.id: got='H0ABSMJ' exp(buildId)='H0ABSMJ'
+OK  ro.build.display.id: got='14.H0ABSMJ.DQ322.keys' exp(displayId)='14.H0ABSMJ.DQ322.keys'
+OK  ro.build.fingerprint: got='huawei/pixel-2gc/pixel-2gcvp5bzyvejz:14/H0ABSMJ/052085:userdebug/dev-keys' exp(fingerprint)='huawei/pixel-2gc/pixel-2gcvp5bzyvejz:14/H0ABSMJ/052085:userdebug/dev-keys'
+OK  ro.serialno: got='HUAW-763896-M8ZC' exp(serial)='HUAW-763896-M8ZC'
+OK  persist.sys.timezone: got='Asia/Bangkok' exp(timezone)='Asia/Bangkok'
+OK  ro.hardware: got='pixel-2gc' exp(hardware)='pixel-2gc'
+OK  ro.boot.hardware: got='pixel-2gc' exp(hardware)='pixel-2gc'
+=> 12/12 (profile fields present: ['brand', 'buildId', 'device', 'displayId', 'fingerprint', 'hardware', 'manufacturer', 'model', 'productName', 'serial', 'timezone'])
+
+=== leak scan: redroid|goldfish|ranchu|emulator (case-insensitive, full table) ===
+LEAK ro.boot.redroid_dpi = '420'
+LEAK ro.boot.redroid_fps = '120'
+LEAK ro.boot.redroid_gpu_mode = 'host'
+LEAK ro.boot.redroid_height = '2400'
+LEAK ro.boot.redroid_width = '1080'
+LEAK ro.product.vendor_dlkm.brand = 'redroid'
+LEAK ro.product.vendor_dlkm.device = 'redroid_x86_64'
+LEAK ro.product.vendor_dlkm.manufacturer = 'redroid'
+LEAK ro.product.vendor_dlkm.model = 'redroid14_x86_64'
+LEAK ro.product.vendor_dlkm.name = 'redroid_x86_64'
+LEAK ro.vendor_dlkm.build.fingerprint = 'redroid/redroid_x86_64/redroid_x86_64:14/UD2A.240505.001.W1/frank05271411:userdebug/test-keys'
+=> 11 leak line(s) of 579 props
+
+ro.hardware = pixel-2gc | ro.boot.hardware = pixel-2gc
+=== a4 ===
+OK  ro.product.brand: got='nothing' exp(brand)='nothing'
+OK  ro.product.manufacturer: got='Nothing' exp(manufacturer)='Nothing'
+OK  ro.product.model: got='Phone4YS' exp(model)='Phone4YS'
+OK  ro.product.device: got='phone-4ys' exp(device)='phone-4ys'
+OK  ro.product.name: got='phone-4ys' exp(productName)='phone-4ys'
+OK  ro.build.id: got='O7ABFRP' exp(buildId)='O7ABFRP'
+OK  ro.build.display.id: got='15.O7ABFRP.2ZGCM.keys' exp(displayId)='15.O7ABFRP.2ZGCM.keys'
+OK  ro.build.fingerprint: got='nothing/phone-4ys/phone-4ysg4fh8ts9zk:15/O7ABFRP/413312:userdebug/dev-keys' exp(fingerprint)='nothing/phone-4ys/phone-4ysg4fh8ts9zk:15/O7ABFRP/413312:userdebug/dev-keys'
+OK  ro.serialno: got='NOTH-667565-T77G' exp(serial)='NOTH-667565-T77G'
+OK  persist.sys.timezone: got='America/New_York' exp(timezone)='America/New_York'
+OK  ro.hardware: got='phone-4ys' exp(hardware)='phone-4ys'
+OK  ro.boot.hardware: got='phone-4ys' exp(hardware)='phone-4ys'
+=> 12/12 (profile fields present: ['brand', 'buildId', 'device', 'displayId', 'fingerprint', 'hardware', 'manufacturer', 'model', 'productName', 'serial', 'timezone'])
+
+=== leak scan: redroid|goldfish|ranchu|emulator (case-insensitive, full table) ===
+LEAK ro.boot.redroid_dpi = '420'
+LEAK ro.boot.redroid_fps = '120'
+LEAK ro.boot.redroid_gpu_mode = 'host'
+LEAK ro.boot.redroid_height = '2400'
+LEAK ro.boot.redroid_width = '1080'
+LEAK ro.product.vendor_dlkm.brand = 'redroid'
+LEAK ro.product.vendor_dlkm.device = 'redroid_x86_64'
+LEAK ro.product.vendor_dlkm.manufacturer = 'redroid'
+LEAK ro.product.vendor_dlkm.model = 'redroid14_x86_64'
+LEAK ro.product.vendor_dlkm.name = 'redroid_x86_64'
+LEAK ro.vendor_dlkm.build.fingerprint = 'redroid/redroid_x86_64/redroid_x86_64:14/UD2A.240505.001.W1/frank05271411:userdebug/test-keys'
+=> 11 leak line(s) of 579 props
+
+ro.hardware = phone-4ys | ro.boot.hardware = phone-4ys
