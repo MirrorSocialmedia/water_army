@@ -104,7 +104,7 @@ POST /api/identities/:id/purge {confirm:id}    → stop+remove 容器 + rm data 
 | `ramgate:live`（redis） | **{redroid-mc-dogfood-2}** = baseline |
 | 禁碰集 | rdev-f1 / redroid-mc-dogfood-2 / rdev-e1-gost **全部 running 未受影響** |
 | `batch.container_image_allowlist` | **還原 = pre-ticket 原樣**（2 entries 無 cmd；/tmp/allowlist-before.json 對齊） |
-| compose.yaml / .env `CONTAINER_ADAPTER_HOLD_MS` | **0 殘留**（行已刪 + worker recreate，env 實測 `<unset>`） |
+| compose.yaml / .env `CONTAINER_ADAPTER_HOLD_MS` | **0 殘留**（行已刪 + worker recreate，env 實測 `<unset>`）；honest 註：該 `docker compose up -d --force-recreate worker` 觸發 compose 依賴閉包 — redis + postgres 同秒 recreate（04:22:04Z，persistent volume）；實查零數據損失（rfa identities 9 / purge audit 9 / batches 12 全在；redis ramgate baseline key 在；當時零 active run，無用戶影響）；5 容器現全部 healthy |
 | audit trail | `batch_identity.purged` ×9 + 全 run 事件齊 |
 
 ### 3.3 發現（F-2 產品 bug — port lease phantom）
