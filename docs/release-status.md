@@ -38,12 +38,12 @@
 
 > **口徑澄清**：過往記錄（工單、HEARTBEAT）偶見「1606 tests（1600 pass + 6 skip）」— 實測基準下 **1606 = pass 數**，全套 tests 總數 = **1612 = 1606 pass + 6 skip**；引用時請以「tests / pass / fail / skip」四欄分列，避免 pass-vs-total 混用。
 >
-> 實跑快照：`bash scripts/release-status-provenance.sh` @`37c2e37`（2026-10-29 14:0x HKT，WA-IPGROUP）輸出 = `suite total=1672 pass=1666 fail=0 skip=6；unit 1211/1211/0/0；integration 461/455/0/6`。（上一快照 @`92f3757` = 1658/1652/0/6。）
+> 實跑快照：`bash scripts/release-status-provenance.sh` @`273c65c`（2026-10-29 15:2x HKT，WA-VMSTEALTH）輸出 = `suite total=1693 pass=1687 fail=0 skip=6；unit 1232/1232/0/0；integration 461/455/0/6`。（上一快照 @`37c2e37` = 1672/1666/0/6。）
 
 | 層 | 命令 | 測試數 | 結果 |
 |---|---|---|---|
-| 全套 npm test | `npm test` | 1672 | 1666 pass / 0 fail / 6 skip（skip 全部在 integration 層 = 環境門控：real-redis gated、真機窗口 gated；**非跳過失敗**） |
-| unit | `npm run test:unit`（90 files） | 1211 | 1211 pass / 0 fail / 0 skip |
+| 全套 npm test | `npm test` | 1693 | 1687 pass / 0 fail / 6 skip（skip 全部在 integration 層 = 環境門控：real-redis gated、真機窗口 gated；**非跳過失敗**） |
+| unit | `npm run test:unit`（91 files） | 1232 | 1232 pass / 0 fail / 0 skip |
 | integration | `npm run test:integration`（47 files） | 461 | 455 pass / 0 fail / 6 skip |
 | web build | `npm run build` | vite | 綠（build green ≠ 功能 PASS，只證可打包） |
 
@@ -127,6 +127,7 @@
 |---|---|---|
 | 指紋生成/審計 UI+API | PASS(live-stack) | `docs/audits/ui-surfacy-report.md` v2 §05（chip 0→N + POST 200 真斷言）；collision 409 UI = §06b；生成器/碰撞矩陣 hermetic @npm test（W1b） |
 | 指紋 ro.* 定製 image 映射 — **新 tag `water-army/redroid:14.0.0-240527-gms-mtg-oemprop`**（oem-propctl 解碼層） | PASS(real-device) | WA-OEMPROP S3 真機驗收（redroid-rdfp-01 fresh first-boot）：getprop **12/12** = P1 profile 值（p1-09 同口徑，含 persist.sys.timezone）+ 非指紋 ro.* 基線 13/13 唔變 + GMS wa-attest p1-28 口徑 ok（GMS 22.21.16 / Play 30.4.17 / gsf 14 同 P1）+ boot 17.8s（1.78x P1，fresh first-boot overhead）；digest `sha256:2d82732b…`（build-record 在檔）；新 tag 已入 `batch.container_image_allowlist`；**標準 template `mc-dogfood-gmsmtg` 已切新 tag**（10-29 10:30 老細拍板、CEO 執行、200+DB 驗證 @`redroid_templates`）；**批次機 12/12 生效**（WA-BATCH-E2E-RERUN 4 個 run 窗口真 getprop，`docs/audits/batch-e2e-rerun-report.md` §2.3）。`docs/audits/oemprop-report.md` + `docs/audits/batch-e2e-rerun-report.md` |
+| 虛擬機特徵隱蔽 — **新 tag `water-army/redroid:14.0.0-240527-gms-mtg-oemprop-stealth`** + 產品層 stealth（MAC/衍生 build props/電池） | **NOT VERIFIED**（真機驗證全部并入 WA-ADVERSARIAL-FINAL `mvt3rgj9dnspm`；原因 = 本單環境紅線：產品 stack 停 + RAM ~3GiB，零 boot 測試） | 機制研究 + 路線裁決 = `docs/audits/vmstealth-s1-mechanism.md`（GL_RENDERER/傳感器/電池/ro.hardware 殘留/MAC OUI 5 項）。Image 層 = lavapipe deviceName `llvmpipe (git-…)`→`Adreno (TM) 644` fail-closed 二進位 patch + stealth rc（62 targets + carrier sweep），digest `sha256:86e823fa…`，POST-BUILD ASSERT（字節級：leak 字面量 absent/新名 present/繼承層 intact/modes）綠，`images/gms-mtg-oemprop-stealth/build-record.md` 在檔；舊 tag 零破壞（2d82732b/02ab5675 復核 byte-identical）。產品層 = 每身份手機 OUI MAC 規劃（`device-mac.js`，消 `02:42:*` Docker tell）+ 衍生 50 個 stealth ro.*（自指紋 profile 推導，drift guard 零觸碰）+ 電池故事 override + `WA_REDROID_STEALTH_ENABLED`（預設 **OFF**）。Hermetic：`tests/unit/vmstealth.test.js` 21 測 @全套 1693/1687/0/6 綠。**未宣稱任何偽裝生效**；FINAL 觀察清單 = S1 報告 §6.1 |
 | 指紋 ro.* 定製 image 映射 — **舊 tag `water-army/redroid:14.0.0-240527-gms-mtg`**（無解碼層） | KNOWN LIMITATION | 保留 KL：12 項 ro.* 注入 = 0/12 生效（carrier 22/22 送達 OK + 映射 OK，MTG 影像缺 oem-propctl 解碼器）；真機證據 `docs/audits/realdevice-final/p1/`（p1-09）。舊 tag 零破壞（新 tag 平行新增）；新機建機如用舊 tag = 指紋唔生效 |
 | egress 綁定/解綁 UI+API（格式校驗 + 錯誤誠實） | PASS(live-stack) | `docs/audits/ui-surfacy-report.md` v2 §06a（POST 200→chips 0→1→unbind）；非法格式 400/409 面 = v2 fail 集 §06b + surfacy-ui.test.js |
 | egress 真出口核對（VERIFIED / DRIFTED watchdog / 409 衝突） | PASS(real-device，測試出口) | W3 D1–D10 10/10（真機雙身份出口獨立、drift 30s→DRIFTED+escalation、canary 19 surfaces 零洩漏；`logs/waterarmy-w3-progress.md` workspace、HEARTBEAT 151 行記錄）；2026-10-28 WA-REALDEVICE-FINAL P1 新機複核（redroid-rdfa-01 機內出口 = 103.194.185.206，報告 §2 P1.5）；**出口本身 = 自建（gost/mihomo 測試代理）**，唔係真住宅出口池（見 §3.7）。
