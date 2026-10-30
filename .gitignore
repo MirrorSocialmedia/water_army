@@ -37,3 +37,5 @@ attest-app/build/
 attest-app/libs/
 attest-app/debug.keystore
 images/*/patches/*.so
+images/*/vendor/*.apk
+__pycache__/

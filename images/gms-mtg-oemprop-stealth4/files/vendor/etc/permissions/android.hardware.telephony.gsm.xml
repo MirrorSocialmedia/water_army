@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- WA-FIXALL S2 stealth4 — R42 phone form factor: declare telephony so the
+     framework binds a PhoneInterfaceManager at all (redroid ships none).
+     SIM state stays ABSENT (no rild); that is the accepted first cut. -->
+<permissions>
+    <feature name="android.hardware.telephony" />
+    <feature name="android.hardware.telephony.gsm" />
+</permissions>

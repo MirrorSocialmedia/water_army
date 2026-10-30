@@ -1,0 +1,28 @@
+# WA-FIXALL S2 stealth4 extras — hand-written carrier→prop map ADDED on top of
+# the GENERATED oem-ro-map.rc (stealth chain stays untouched; this file is the
+# independent S2 surface — R42/R43/R52 + display candidate A carriers).
+#
+# Carriers ride the docker Cmd androidboot.* args (template roOverrides /
+# identity profile layer). Keys must pass validateRoOverridesMap (ro.*/persist.*
+# shaped) — hence rw targets are named under ro.stealth4.*:
+#   androidboot.oem_ro_baseband                   -> ro.baseband              (R42 baseband field)
+#   androidboot.oem_ro_radio_noril                -> ro.radio.noril           (R42 phone form: redroid default "yes")
+#   androidboot.oem_ro_stealth4_sf_auto_latch     -> debug.sf.auto_latch_unsignaled   (display candidate A)
+#   androidboot.oem_ro_stealth4_sf_hwc_min_duration -> debug.sf.hwc.min_duration      (display candidate A)
+#   androidboot.oem_ro_stealth4_hostname          -> net.hostname             (R52; written after init's own net.hostname set, hence boot_completed trigger)
+#
+# No carrier sweep here (carrier ro.boot.* props are harmless after boot; the
+# generated rc keeps its sweep semantics).
+#
+# GENERATED companion facts recorded in images/gms-mtg-oemprop-stealth4/build-record.md.
+
+on early-init && property:ro.boot.oem_ro_baseband=*
+    exec -- /vendor/bin/oem-propctl ro.baseband ${ro.boot.oem_ro_baseband}
+on early-init && property:ro.boot.oem_ro_radio_noril=*
+    exec -- /vendor/bin/oem-propctl ro.radio.noril ${ro.boot.oem_ro_radio_noril}
+on early-init && property:ro.boot.oem_ro_stealth4_sf_auto_latch=*
+    exec -- /vendor/bin/oem-propctl debug.sf.auto_latch_unsignaled ${ro.boot.oem_ro_stealth4_sf_auto_latch}
+on early-init && property:ro.boot.oem_ro_stealth4_sf_hwc_min_duration=*
+    exec -- /vendor/bin/oem-propctl debug.sf.hwc.min_duration ${ro.boot.oem_ro_stealth4_sf_hwc_min_duration}
+on property:sys.boot_completed=1 && property:ro.boot.oem_ro_stealth4_hostname=*
+    exec -- /vendor/bin/oem-propctl net.hostname ${ro.boot.oem_ro_stealth4_hostname}
