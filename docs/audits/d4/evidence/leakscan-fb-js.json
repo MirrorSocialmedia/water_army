@@ -1,0 +1,177 @@
+{
+  "cdpBase": "http://127.0.0.1:9322",
+  "targetUrl": "https://m.facebook.com/login/identify/#",
+  "mode": "full",
+  "evaluatedAt": "2026-10-30T05:10:00.255Z",
+  "probe": {
+    "sync": {
+      "_ts": "2026-10-30T05:09:56.740Z",
+      "href": "https://m.facebook.com/login/identify/#",
+      "userAgent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Mobile Safari/537.36",
+      "platform": "Linux armv81",
+      "appVersion": "5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Mobile Safari/537.36",
+      "vendor": "Google Inc.",
+      "languages": [
+        "en-US",
+        "en"
+      ],
+      "language": "en-US",
+      "uaData": {
+        "mobile": true,
+        "platform": "Android",
+        "brands": [
+          {
+            "brand": "Not:A-Brand",
+            "version": "8"
+          },
+          {
+            "brand": "Chromium",
+            "version": "156"
+          },
+          {
+            "brand": "Google Chrome",
+            "version": "156"
+          }
+        ]
+      },
+      "webdriver": false,
+      "chromeRuntime": false,
+      "chromeRuntimeId": false,
+      "hardwareConcurrency": 16,
+      "deviceMemory": 8,
+      "maxTouchPoints": 1,
+      "pluginsLength": 0,
+      "mimeTypesLength": 0,
+      "pdfViewerEnabled": false,
+      "connection": {
+        "effectiveType": "4g",
+        "type": "ethernet",
+        "downlink": 1.65,
+        "rtt": 50,
+        "saveData": false
+      },
+      "cookieEnabled": true,
+      "doNotTrack": null,
+      "screen": {
+        "width": 412,
+        "height": 915,
+        "availWidth": 412,
+        "availHeight": 915,
+        "availLeft": 0,
+        "availTop": 0,
+        "colorDepth": 24,
+        "pixelDepth": 24,
+        "orientationType": "portrait-primary"
+      },
+      "dpr": 2.625,
+      "inner": {
+        "w": 411,
+        "h": 765
+      },
+      "outer": {
+        "w": 412,
+        "h": 915
+      },
+      "visual": {
+        "w": 411.4285583496094,
+        "h": 764.952392578125,
+        "scale": 1
+      },
+      "media": {
+        "fine": false,
+        "coarse": false,
+        "hover": false,
+        "anyHover": false,
+        "anyPointerCoarse": false
+      },
+      "intl": {
+        "locale": "en-US",
+        "calendar": "gregory",
+        "numberingSystem": "latn",
+        "timeZone": "America/Sao_Paulo",
+        "year": "numeric",
+        "month": "numeric",
+        "day": "numeric"
+      },
+      "intlNumberSample": "1,234.5",
+      "collatorLocale": "en-US",
+      "webgl": {
+        "vendor": "WebKit",
+        "renderer": "WebKit WebGL",
+        "unmaskedVendor": "Google Inc. (IMG)",
+        "unmaskedRenderer": "ANGLE (IMG, AMD Radeon Graphics, OpenGL ES 3.2)",
+        "version": "WebGL 1.0 (OpenGL ES 2.0 Chromium)",
+        "shading": "WebGL GLSL ES 1.0 (OpenGL ES GLSL ES 1.0 Chromium)",
+        "maxTextureSize": 8192
+      },
+      "webgl2": true,
+      "fontsCheck": {
+        "Roboto": true,
+        "Noto Sans": true,
+        "Google Sans": true,
+        "Roboto Condensed": true,
+        "Droid Sans": true,
+        "Caveat": true,
+        "Source Sans Pro": true,
+        "Lato": true,
+        "Arial": true,
+        "Helvetica": true,
+        "Segoe UI": true,
+        "Times New Roman": true,
+        "Impact": true,
+        "monospace": true,
+        "serif": true,
+        "sans-serif": true
+      },
+      "fontsStatus": "loaded",
+      "fontsLoadedCount": 46,
+      "ontouchstart": true,
+      "historyLength": 4,
+      "serviceWorker": "supported",
+      "visibility": "hidden",
+      "hidden": true
+    },
+    "phase2": {
+      "sensorCounts": {
+        "devicemotion": 0,
+        "deviceorientation": 0,
+        "deviceorientationabsolute": 0,
+        "devicelight": 0
+      },
+      "sensorWindowMs": 3506,
+      "async": {
+        "pending": false,
+        "uaFullVersionSync": "brands-only"
+      },
+      "perms": {
+        "sensor": "denied-err"
+      }
+    }
+  },
+  "networkRequests": [
+    {
+      "url": "https://m.facebook.com/login/identify/",
+      "method": "HEAD",
+      "initiator": "script",
+      "headers": {
+        "sec-ch-ua-full-version-list": "\"Not:A-Brand\";v=\"8.0.0.0\", \"Chromium\";v=\"156.0.8078.47\", \"Google Chrome\";v=\"156.0.8078.47\"",
+        "sec-ch-ua-platform": "\"Android\"",
+        "Referer": "https://m.facebook.com/login/identify/",
+        "sec-ch-ua": "\"Not:A-Brand\";v=\"8\", \"Chromium\";v=\"156\", \"Google Chrome\";v=\"156\"",
+        "sec-ch-ua-model": "\"Galaxy6FS\"",
+        "sec-ch-ua-mobile": "?1",
+        "sec-ch-prefers-color-scheme": "light",
+        "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Mobile Safari/537.36",
+        "sec-ch-ua-platform-version": "\"14.0.0\""
+      }
+    }
+  ],
+  "secChUaCaptured": [
+    {
+      "url": "https://m.facebook.com/login/identify/",
+      "secChUaPlatform": "\"Android\"",
+      "secChUa": "\"Not:A-Brand\";v=\"8\", \"Chromium\";v=\"156\", \"Google Chrome\";v=\"156\"",
+      "ua": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Mobile Safari/537.36"
+    }
+  ]
+}

@@ -18,3 +18,12 @@
 - 陷阱入账：d4reg.cjs fill wake-hack 喺 Bloks input 會 +1 尾字符（用 native value setter + input event 替代）；Bloks MDC combobox 用 JS pointer 序列（pointerdown/mousedown/pointerup/mouseup/click）先開到 listbox，CDP trusted mouse 對 MDC ripple 環境有时打唔開。
 - 證據：docs/audits/d4/d4ua-01..07（8 檔，PIL 色數 gate 全過）；risk-ledger R38/R39；secrets pilot-003 已更新。
 - 交班判詞：**desktop UA 注入本身成功但改唔到牆局 — 今鋪連 device check 都未撞到，死喺 reg1 Chrome 嘅 JS chunk 牆（R39）**；§E UA 戰術「免牆」維度判死需 R39 解决後先至輪到 B 牆驗證。老細拍板：GMS image 工程 vs 再 replay 證 flaky 率。
+
+## 2026-10-30 leakscan — WA-D4 leak-scan v2「全面掃新洩漏面」段（純讀值）
+- 13:0x 開工：repo HEAD=origin=370c942 核對 ✓；讀 matrix.md 十面＋device-check-research §1/§5＋risk-ledger R1–R39。
+- 機組核對：d4-fb(15000)／d4-gm(15001，需 `adb connect` 先 attach)；**CDP forward 被 adbd root drop 過 → 開工 re-forward 9322/9323**；兩台載體存活（fb Chrome 5-proc＋@chrome_devtools_remote；gm webview_shell＋@webview_devtools_remote_5958）。reg1（15002）gen10 佔住，全程冇碰。
+- **A 層讀值完成**（getprop/dumpsys/settings/pm features，兩台對照）：ABI=x86_64 掛頭＋libndk bridge（R40）、noril=yes 無電台形態（R42）、userdebug/dev-keys/debuggable=1/su（R43）、egl=mesa/gralloc=gbm/vulkan=lvp（R44）、半成品 GMS（client_id=unknown、Accounts 0、authenticator 0，R45）、Widevine 全冇（R49）、android_id／serialno 逐機獨一 ✓、TZ fb=São Paulo／gm=SG（R50）、hostname=localhost（R52）、GMS 22.21.16 staleness（R51）。
+- **B 層 CDP probe 完成**（兩台 JSON 落檔）：零传感器事件 3.5s 全 0（R48，web 側首次坐實）、connection.type=ethernet＋pointer media 全假（R46）、navigator.platform gm=`Linux i686` vs fb=`Linux armv81`（R41）、字體 host 池（R47）、WebGL 兩台底层 token 零差異（R53）、screen 幾何 dpr 小數主流 clean ✓、UA-CH 未注入態全一致 clean ✓（sec-ch-ua-model 照送 Galaxy6FS）。
+- 紅線紀律：冇 register／submit／改設定；JS probe awaitPromise 版 2 次 timeout（背景 tab timer throttling）後**改兩段式 sync 重寫一次過**，冇死磕；reg1 冇碰。
+- 交付：`docs/audits/d4/leak-scan-v2.md`（全表）＋`docs/audits/d4/evidence/leakscan-system-reads.txt`＋`leakscan-fb-js.json`／`leakscan-gm-js.json`＋工具 `docs/audits/d4/scripts/leakprobe.cjs`；**新洩漏入賬 R40–R54（risk-ledger）**。
+- 交班判詞：**新洩漏 14 條（R40–R53）＋1 條工具教訓（R54）；最高 severity（高）= R48 零传感器 web 事件、R46 ethernet＋pointer 全假、R40 ABI=x86_64 mismatch、R42 noril=yes、R41 platform i686/armv81 分歧**。全部讀值即證據，修繕屬 image／prop 工程（等老細拍板邊條值錢先做）。

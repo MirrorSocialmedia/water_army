@@ -1,0 +1,156 @@
+# WA-D4 leak-scan v2 system-layer reads (d4-fb 15000 + d4-gm 15001)
+2026-10-30T05:11:56Z
+
+== getprop ABI/bridge ==
+[persist.sys.timezone]: [America/Sao_Paulo]
+[ro.adb.secure]: [0]
+[ro.build.fingerprint]: [nothing/galaxy-6fs/galaxy-6fsp5d6fsksyq:14/R0ABF9Z/024408:userdebug/dev-keys]
+[ro.build.tags]: [dev-keys]
+[ro.build.type]: [userdebug]
+[ro.dalvik.vm.native.bridge]: [libnb.so]
+[ro.debuggable]: [1]
+[ro.enable.native.bridge.exec]: [1]
+[ro.force.debuggable]: [0]
+[ro.hardware]: [galaxy-6fs]
+[ro.hardware.egl]: [mesa]
+[ro.hardware.gralloc]: [gbm]
+[ro.hardware.vulkan]: [lvp]
+[ro.odm.build.fingerprint]: [nothing/galaxy-6fs/galaxy-6fsp5d6fsksyq:14/R0ABF9Z/024408:userdebug/dev-keys]
+[ro.odm.build.tags]: [dev-keys]
+[ro.odm.build.type]: [userdebug]
+[ro.odm.product.cpu.abilist]: [x86_64,x86,arm64-v8a,armeabi-v7a,armeabi]
+[ro.odm.product.cpu.abilist32]: [x86,armeabi-v7a,armeabi]
+[ro.odm.product.cpu.abilist64]: [x86_64,arm64-v8a]
+[ro.product.brand]: [nothing]
+[ro.product.build.fingerprint]: [nothing/galaxy-6fs/galaxy-6fsp5d6fsksyq:14/R0ABF9Z/024408:userdebug/dev-keys]
+[ro.product.build.tags]: [dev-keys]
+[ro.product.build.type]: [userdebug]
+[ro.product.cpu.abi]: [x86_64]
+[ro.product.cpu.abilist]: [x86_64,arm64-v8a,x86,armeabi-v7a,armeabi]
+[ro.product.cpu.abilist32]: [x86,armeabi-v7a,armeabi]
+[ro.product.cpu.abilist64]: [x86_64,arm64-v8a]
+[ro.product.device]: [galaxy-6fs]
+[ro.product.manufacturer]: [Nothing]
+[ro.product.model]: [Galaxy6FS]
+[ro.product.name]: [galaxy-6fs]
+[ro.product.product.brand]: [nothing]
+[ro.product.product.device]: [galaxy-6fs]
+[ro.product.product.manufacturer]: [Nothing]
+[ro.product.product.model]: [Galaxy6FS]
+[ro.product.product.name]: [galaxy-6fs]
+[ro.product.vndk.version]: [34]
+[ro.radio.noril]: [yes]
+[ro.serialno]: [NOTH-742181-S86Y]
+[ro.system.build.fingerprint]: [nothing/galaxy-6fs/galaxy-6fsp5d6fsksyq:14/R0ABF9Z/024408:userdebug/dev-keys]
+[ro.system.build.tags]: [dev-keys]
+[ro.system.build.type]: [userdebug]
+[ro.system.product.cpu.abilist]: [x86_64,x86,arm64-v8a,armeabi-v7a,armeabi]
+[ro.system.product.cpu.abilist32]: [x86,armeabi-v7a,armeabi]
+[ro.system.product.cpu.abilist64]: [x86_64,arm64-v8a]
+[ro.system_ext.build.fingerprint]: [nothing/galaxy-6fs/galaxy-6fsp5d6fsksyq:14/R0ABF9Z/024408:userdebug/dev-keys]
+[ro.system_ext.build.tags]: [dev-keys]
+[ro.system_ext.build.type]: [userdebug]
+[ro.vendor.build.fingerprint]: [nothing/galaxy-6fs/galaxy-6fsp5d6fsksyq:14/R0ABF9Z/024408:userdebug/dev-keys]
+[ro.vendor.build.tags]: [dev-keys]
+[ro.vendor.build.type]: [userdebug]
+[ro.vendor.product.cpu.abilist]: [x86_64,x86,arm64-v8a,armeabi-v7a,armeabi]
+[ro.vendor.product.cpu.abilist32]: [x86,armeabi-v7a,armeabi]
+[ro.vendor.product.cpu.abilist64]: [x86_64,arm64-v8a]
+[ro.vendor_dlkm.build.fingerprint]: [redroid/redroid_x86_64/redroid_x86_64:14/UD2A.240505.001.W1/frank05271411:userdebug/test-keys]
+[ro.vendor_dlkm.build.tags]: [test-keys]
+[ro.vendor_dlkm.build.type]: [userdebug]
+[ro.vndk.version]: [34]
+
+== gm core ==
+x86_64
+x86_64,arm64-v8a,x86,armeabi-v7a,armeabi
+libnb.so
+yes
+realme/redmi-4pd/redmi-4pdn4bwqyh9dm:14/Q9ABNG2/262369:userdebug/dev-keys
+REAL-667903-MDKV
+userdebug
+dev-keys
+1
+0
+localhost
+Asia/Singapore
+
+== features (fb) ==
+feature:reqGlEsVersion=0x30002 feature:android.hardware.audio.output feature:android.hardware.bluetooth feature:android.hardware.camera feature:android.hardware.ethernet feature:android.hardware.faketouch feature:android.hardware.hardware_keystore=41 feature:android.hardware.location feature:android.hardware.location.network feature:android.hardware.microphone feature:android.hardware.opengles.aep feature:android.hardware.ram.normal feature:android.hardware.screen.landscape feature:android.hardware.screen.portrait feature:android.hardware.security.model.compatible feature:android.hardware.sensor.accelerometer feature:android.hardware.sensor.compass feature:android.hardware.touchscreen feature:android.hardware.usb.accessory feature:android.hardware.vulkan.compute feature:android.hardware.vulkan.level=1 feature:android.hardware.vulkan.version=4198400 feature:android.hardware.wifi feature:android.software.activities_on_secondary_displays feature:android.software.app_enumeration feature:android.software.app_widgets feature:android.software.autofill feature:android.software.backup feature:android.software.cant_save_state feature:android.software.companion_device_setup feature:android.software.controls feature:android.software.credentials feature:android.software.cts feature:android.software.device_admin feature:android.software.device_lock feature:android.software.home_screen feature:android.software.input_methods feature:android.software.ipsec_tunnel_migration feature:android.software.ipsec_tunnels feature:android.software.live_wallpaper feature:android.software.managed_users feature:android.software.picture_in_picture feature:android.software.print feature:android.software.sdksandbox.sdk_install_work_profile feature:android.software.secure_lock_screen feature:android.software.telecom feature:android.software.voice_recognizers feature:android.software.webview feature:android.software.window_magnification feature:com.google.android.apps.dialer.SUPPORTED feature:com.google.android.feature.D2D_CABLE_MIGRATION_FEATURE feature:com.google.android.feature.EXCHANGE_6_2 feature:com.google.android.feature.GOOGLE_BUILD feature:com.google.android.feature.GOOGLE_EXPERIENCE feature:com.google.android.feature.WELLBEING 
+
+== gsf/gms pkgs (fb) ==
+package:com.google.android.partnersetup
+package:com.google.android.gsf
+
+== accounts (fb) ==
+  Accounts: 0
+  Active Sessions: 0
+  RegisteredServicesCache: 0 services
+
+== gservices provider (fb) ==
+Row: 0 name=data_store_version, value=3
+Row: 1 name=use_location_for_services, value=1
+Row: 2 name=client_id, value=unknown
+Row: 3 name=search_client_id, value=ms-unknown
+Row: 4 name=market_client_id, value=am-unknown
+Row: 5 name=voicesearch_client_id, value=ms-unknown
+
+== GMS/GSF versions (fb) ==
+    versionCode=222116056 minSdk=32 targetSdk=33
+    versionName=22.21.16 (140800-454906765)
+    versionName=14-10347885
+
+== telephony (fb) ==
+Can't find service: subscription
+  Phone Id=0
+    mCallState=0
+    mServiceState={mVoiceRegState=1(OUT_OF_SERVICE), mDataRegState=1(OUT_OF_SERVICE), mChannelNumber=0, duplexMode()=0, mCellBandwidths=[], mOperatorAlphaLong=null, mOperatorAlphaShort=null, isManualNetworkSelection=false(automatic), getRilVoiceRadioTechnology=0(Unknown), getRilDataRadioTechnology=0(Unknown), mCssIndicator=unsupported, mNetworkId=0, mSystemId=0, mCdmaRoamingIndicator=0, mCdmaDefaultRoamingIndicator=0, mIsEmergencyOnly=false, isUsingCarrierAggregation=false, mArfcnRsrpBoost=0, mNetworkRegistrationInfos=[], mNrFrequencyRange=0, mOperatorAlphaLongRaw=null, mOperatorAlphaShortRaw=null, mIsDataRoamingFromRegistration=false, mIsIwlanPreferred=false}
+
+== baseband/sim props (fb) ==
+[gsm.current.phone-type]: [1]
+[gsm.network.type]: [Unknown]
+[ro.baseband]: [unknown]
+[ro.radio.noril]: [yes]
+
+== sensorservice (fb) ==
+No Sensors on the device
+devInitCheck : -19
+
+== drm (fb) ==
+ls: /vendor/drm: No such file or directory
+0
+running
+
+== su / root (fb) ==
+-rwsr-x--- 1 root shell 7672 2024-05-27 11:55 /system/xbin/su
+ls: /system/bin/su: No such file or directory
+ls: /sbin/su: No such file or directory
+
+== dev-state (fb) ==
+null
+0
+
+
+== display (both) ==
+Physical size: 1080x2400
+Physical density: 420
+Physical size: 1080x2340
+Physical density: 395
+
+== hostname (both) ==
+localhost
+localhost
+
+== chrome cmdline (fb) ==
+com.android.chrome --webrtc-ip-handling-policy=default_public_interface_only --remote-debugging-port=9222 --disable-dev-shm-usage --no-first-run --no-default-browser-check --proxy-server=socks5://172.38.200.4:1080
+
+== libnb/houdini (fb) ==
+lrwxrwxrwx 1 bluetooth bluetooth 21 2023-03-30 08:24 /system/lib64/libnb.so -> libndk_translation.so
+ls: /system/lib/libhoudini.so: No such file or directory
+ls: /system/lib64/libhoudini.so: No such file or directory
+/system/lib64/libndk_translation_proxy_libc.so
+
+== adb over wifi / secure (fb) ==
+[persist.adb.wifi.guid]: [adb-NOTH-742181-S86Y-SmWhxI]
+[ro.adb.secure]: [0]
+[ro.secure]: [1]
