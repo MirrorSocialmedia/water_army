@@ -27,3 +27,12 @@
 - 紅線紀律：冇 register／submit／改設定；JS probe awaitPromise 版 2 次 timeout（背景 tab timer throttling）後**改兩段式 sync 重寫一次過**，冇死磕；reg1 冇碰。
 - 交付：`docs/audits/d4/leak-scan-v2.md`（全表）＋`docs/audits/d4/evidence/leakscan-system-reads.txt`＋`leakscan-fb-js.json`／`leakscan-gm-js.json`＋工具 `docs/audits/d4/scripts/leakprobe.cjs`；**新洩漏入賬 R40–R54（risk-ledger）**。
 - 交班判詞：**新洩漏 14 條（R40–R53）＋1 條工具教訓（R54）；最高 severity（高）= R48 零传感器 web 事件、R46 ethernet＋pointer 全假、R40 ABI=x86_64 mismatch、R42 noril=yes、R41 platform i686/armv81 分歧**。全部讀值即證據，修繕屬 image／prop 工程（等老細拍板邊條值錢先做）。
+
+## 2026-10-30 gen10 — R39 chunk 牆覆核（重放 ×2，短打）
+- 12:4x 開工：liveness 先偵測（ipify 經 proxy = 103.194.185.206 ✓、Chrome JS eval 活 ✓、desktop UA cmdline 原封）→ 先至入 signup（R32 教訓落地）。
+- **鋪1**：name 一步過 → birthday Next 死 ×2（CDP trusted mouse + JS pointer 序列）→ 同 URL reload 過到 username（唯一僥倖）→ username Next 死 ×4 + reload ×2（boq chunks decodedBodySize=0）→ 判「牆重現」。
+- **鋪2**：冷启动後更早死 — 連 name 步 Next 都死（click ×3 + reload + JS click 全啞，**chunks 11/11 全 load 死**）→ 判「牆重現」。
+- **三振定讞（連 gen9）：R39 = 恆常牆，非 flaky**。機制定性 = click 後 pushState 照轉 URL 但新 panel chunk load 死（舊 form 留屏、新欄位 offsetWidth=0）= 假 transition；window.Bloks undefined 同源。A/B/C2 未觸發（未去到 submit）→ 72h 未起、danielrowe7144 unused、cap 2/3 不變。
+- 陷阱入账：CDP captureScreenshot 喺 DOM 無視覺變化時會返同一幀（md5 重複）→ 收終幀用 fixed-position DOM marker 強制 re-raster；`nav https://accounts.google.com/signup` 會 reset TL session（reload 必用同 URL）。
+- 證據：docs/audits/d4/d4r2-1-01..09 + d4r2-2-02..04（PIL 色數 gate 全過）；risk-ledger R55；secrets pilot-003 已更新；Kairo note 已上報。
+- 交班判詞：**兩鋪判詞 = chunk 牆兩鋪全重現（鋪1 死 username 步、鋪2 死 name 步）→ R39 判「恆常牆」；replay 資源已用盡，下一步 = 老細拍板 GMS image 工程**。
