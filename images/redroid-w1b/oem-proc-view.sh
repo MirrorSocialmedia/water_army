@@ -55,6 +55,11 @@ case "$CLUSTERS" in '' | *[!0-9a-fx:,.]*) log_note "bad cpu_clusters charset"; e
 
 DIR="${OEM_PROC_TMPDIR:-/dev/oem-proc}"
 mkdir -p "$DIR" 2>/dev/null || { log_note "cannot create $DIR"; exit 1; }
+# init runs this at post-fs-data with umask 077 (measured WA-FIXALL S6: the
+# rendered files landed 0600 under a 0700 dir, /proc/meminfo became unreadable
+# below root — system_server died in a crash loop with "SysMemInfo read
+# failed" in ProcessList.<init>). The spoof must stay world-readable.
+chmod 755 "$DIR" 2>/dev/null
 
 # --- render meminfo ----------------------------------------------------------
 # Derived second-order values use fixed integer ratios; per-identity variation
@@ -117,6 +122,7 @@ IFS=$SAVEIFS
 [ "$i" -eq "$CORES" ] || { log_note "cluster expansion rendered $i cores != carrier $CORES - REFUSING"; exit 1; }
 
 # --- bind-mount over the host-penetrating originals --------------------------
+chmod 644 "$DIR/meminfo" "$DIR/cpuinfo" 2>/dev/null
 mount -o bind "$DIR/meminfo" /proc/meminfo || { log_note "bind meminfo FAILED"; exit 1; }
 mount -o bind "$DIR/cpuinfo" /proc/cpuinfo || { log_note "bind cpuinfo FAILED"; exit 1; }
 log_note "proc view active: MemTotal=${T}kB cores=${CORES}"

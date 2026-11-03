@@ -204,9 +204,11 @@ test('rc parser: catches tampering (dangling trigger / foreign content / carrier
   assert.ok(parseWaRoMapRc('on early-init && property:ro.boot.oem_x=*\n').problems.some((m) => /dangling/.test(m)));
   assert.ok(parseWaRoMapRc('service sneaky /system/bin/sneaky\n').problems.some((m) => /unexpected/.test(m)));
   assert.ok(parseWaRoMapRc('on early-init && property:ro.boot.oem_a=*\n    exec -- /vendor/bin/oem-propctl ro.x ${ro.boot.oem_b}').problems.some((m) => /does not match trigger/.test(m)));
-  // phase tampering: persist.* in early-init / ro.* in load_persist_props_action both rejected
+  // phase tampering: persist.* in early-init / ro.* in early-init both rejected
+  // (S6: ro.* now lives in load_persist_props_action — the fresh-/data reload
+  // in init.rc's load_persist_props builtin erases earlier ro.* writes).
   assert.ok(parseWaRoMapRc('on early-init && property:ro.boot.oem_persist_sys_timezone=*\n    exec -- /vendor/bin/oem-propctl persist.sys.timezone ${ro.boot.oem_persist_sys_timezone}').problems.some((m) => /must be load_persist_props_action/.test(m)));
-  assert.ok(parseWaRoMapRc('on load_persist_props_action && property:ro.boot.oem_ro_serialno=*\n    exec -- /vendor/bin/oem-propctl ro.serialno ${ro.boot.oem_ro_serialno}').problems.some((m) => /must be early-init/.test(m)));
+  assert.ok(parseWaRoMapRc('on early-init && property:ro.boot.oem_ro_serialno=*\n    exec -- /vendor/bin/oem-propctl ro.serialno ${ro.boot.oem_ro_serialno}').problems.some((m) => /must be load_persist_props_action/.test(m)));
   // writer tampering: persist.* via oem-propctl / ro.* via setprop both rejected
   assert.ok(parseWaRoMapRc('on load_persist_props_action && property:ro.boot.oem_persist_sys_timezone=*\n    exec -- /vendor/bin/oem-propctl persist.sys.timezone ${ro.boot.oem_persist_sys_timezone}').problems.some((m) => /writer .* wrong for target persist\.sys\.timezone \(must be \/system\/bin\/setprop\)/.test(m)));
   assert.ok(parseWaRoMapRc('on early-init && property:ro.boot.oem_ro_serialno=*\n    exec -- /system/bin/setprop ro.serialno ${ro.boot.oem_ro_serialno}').problems.some((m) => /must be \/vendor\/bin\/oem-propctl/.test(m)));

@@ -62,23 +62,30 @@ export function carrierMappingTable() {
 }
 
 /**
- * Init phase for a target prop (ADR-031, amended WA-OEMPROP S3 2026-10-29):
- *  - ro.* → early-init (the W1b-verified path: before any consumer starts);
- *  - persist.* → load_persist_props_action. init.rc runs its
- *    `load_persist_props` builtin inside the `on post-fs-data` section and
- *    then fires `trigger load_persist_props_action` — that trigger is the
- *    canonical, ordering-guaranteed "stored persist props are loaded" hook
- *    (init.rc comment: "Some existing vendor rc files use 'on
- *    load_persist_props_action' to know when the persist properties have
- *    been loaded"). A bare `on post-fs-data` section can queue BEFORE that
- *    builtin runs (section order across rc files), so its persist.* write
- *    gets erased when the persist area is re-initialized from /data/property
- *    (real-device observed: persist.sys.timezone reverted to GMT).
- *    The hook still fires strictly before zygote, so every process
- *    resolves the identity timezone.
+ * Init phase for a target prop (ADR-031, amended WA-OEMPROP S3 2026-10-29;
+ * amended again WA-FIXALL S6 2026-11-03 with on-device fresh-data evidence):
+ *  - persist.* AND ro.* → load_persist_props_action. The stock `on post-fs-data`
+ *    sequence runs init's `load_persist_props` builtin, which (fresh /data —
+ *    i.e. EVERY new device create) re-initialises the persist area from the
+ *    empty store and re-asserts boot defaults from build.prop. Writes made at
+ *    early-init are erased after that point (S6 measured on-device: stealth5
+ *    fx2 fresh data booted with carriers present but ro.product.model /
+ *    ro.product.brand / ro.serialno / ro.build.fingerprint ALL back to the
+ *    build.prop values — propctl's early-init writes were wiped, while the
+ *    same rc on old-data fx1 had survived its single first-boot wipe, hiding
+ *    the defect fleet-wide). The load_persist_props_action trigger fires from
+ *    init.rc strictly AFTER that builtin (S3 verified ordering hook), so
+ *    writes there are final — and it still fires strictly before zygote and
+ *    before `trigger early-boot` (class_start core: HALs, SurfaceFlinger),
+ *    so no consumer ever resolves identity defaults.
+ *  - everything else (net.hostname — init consumes it during `on init`;
+ *    debug.sf.* — no build.prop default to be re-asserted) stays early-init.
+ *  - persist.* must NOT use resetprop-rs (see rcWriterFor) — the bionic
+ *    setprop path journals /data/property.
  */
 export function rcPhaseFor(prop) {
-  return String(prop).startsWith('persist.') ? 'load_persist_props_action' : 'early-init';
+  const p = String(prop);
+  return p.startsWith('persist.') || p.startsWith('ro.') ? 'load_persist_props_action' : 'early-init';
 }
 
 /**
@@ -99,6 +106,22 @@ export function rcWriterFor(prop) {
 }
 
 /**
+ * Full stealth mapping rows (base carrier table + derived stealth build props,
+ * each row carrying its init phase). Single source for BOTH rc generation
+ * and rc drift parsing (the parse side needs carrier→phase to validate the
+ * sweep sections without re-deriving prop semantics by prefix).
+ */
+export function stealthMappingRows() {
+  return [
+    ...carrierMappingTable(),
+    ...stealthDerivedPropList()
+      .sort()
+      .map((prop) => ({ field: 'stealth', target: prop, carrier: propToCarrierRoKey(prop), phase: rcPhaseFor(prop) })),
+  ];
+}
+const SWEEP_PHASE_BY_CARRIER = new Map(stealthMappingRows().map((r) => [r.carrier, r.phase]));
+
+/**
  * NOTE: no redroid-internal carriers are re-mapped here. Stock redroid's own
  * init logic reads its ro.boot.* knobs directly (redroid.common.rc conditions
  * on property:ro.boot.use_redroid_overlayfs), so only the 12 mapped identity
@@ -115,11 +138,12 @@ export function generateWaRoMapRc() {
   out.push('# regenerate: node scripts/w1b/generate-wa-ro-map-rc.mjs');
   out.push('# source of truth: packages/shared/src/w1b-image-mapping.js (unit-diffed in CI)');
   out.push('#');
-  out.push('# early-init: for every androidboot.oem_* carrier present on the kernel');
-  out.push('# cmdline (init exposes them as ro.boot.oem_*), rewrite the REAL ro.* prop via');
-  out.push('# oem-propctl (resetprop-rs writes the property area directly, bypassing the');
-  out.push('# ro.* one-time-write rule; ro.build.* are already loaded from build.prop');
-  out.push('# before early-init). Absent carrier = no action.');
+  out.push('# load_persist_props_action: for every androidboot.oem_* carrier present on');
+  out.push('# the kernel cmdline (init exposes them as ro.boot.oem_*), rewrite the REAL');
+  out.push('# ro.*/persist.* prop via the writer binary below. The phase is AFTER init.rc');
+  out.push('# re-asserts build.prop defaults + re-initialises the persist area (fresh /data');
+  out.push('# wipes earlier writes — S6 on-device), and still strictly before zygote and');
+  out.push('# class_start core, so no consumer sees defaults. Absent carrier = no action.');
   out.push('# load_persist_props_action: persist.* targets (timezone) map HERE via the');
   out.push('# stock setprop (resetprop-rs cannot write persist.* — real-device,');
   out.push('# WA-OEMPROP S3), not in early-init/post-fs-data: init.rc loads stored');
@@ -127,6 +151,8 @@ export function generateWaRoMapRc() {
   out.push('# its own `on post-fs-data` section and then fires this trigger. Mapping on');
   out.push('# the trigger is the ordering-guaranteed hook; it still fires strictly');
   out.push('# before zygote reads persist.sys.timezone.');
+  out.push('# early-init keeps only non-ro/non-persist targets (net.hostname — init');
+  out.push('# consumes it during `on init`; debug.sf.* — no build.prop default to re-assert).');
   out.push('');
   for (const r of rows) {
     out.push(`on ${r.phase} && property:${r.carrier}=*`);
@@ -151,12 +177,7 @@ export function generateWaRoMapRc() {
  * consumes them later (S1 §4.2(c): FINAL experiment).
  */
 export function generateWaRoMapStealthRc() {
-  const rows = [
-    ...carrierMappingTable(),
-    ...stealthDerivedPropList()
-      .sort()
-      .map((prop) => ({ field: 'stealth', target: prop, carrier: propToCarrierRoKey(prop), phase: rcPhaseFor(prop) })),
-  ];
+  const rows = stealthMappingRows();
   const out = [];
   out.push('# water_army WA-VMSTEALTH — carrier -> ro.*/persist.* mapping + stealth props + carrier sweep (GENERATED — do not hand-edit)');
   out.push('# regenerate: node scripts/w1b/generate-wa-ro-map-rc.mjs --stealth');
@@ -231,8 +252,9 @@ export function parseWaRoMapRc(text) {
     const del = line.match(/^ {4}exec -- \/vendor\/bin\/oem-propctl --delete-if-exist ([A-Za-z0-9_.]+)$/);
     if (del) {
       if (!sweep) { problems.push(`line ${i}: delete exec outside a sweep section`); continue; }
-      const wantPhase = del[1].startsWith('ro.boot.oem_persist_') ? 'load_persist_props_action' : 'early-init';
-      if (sweep !== wantPhase) problems.push(`line ${i}: delete of ${del[1]} in sweep section ${sweep} (belongs to ${wantPhase})`);
+      const wantPhase = SWEEP_PHASE_BY_CARRIER.get(del[1]);
+      if (!wantPhase) problems.push(`line ${i}: delete of unknown carrier ${del[1]} (not in the mapping table)`);
+      else if (sweep !== wantPhase) problems.push(`line ${i}: delete of ${del[1]} in sweep section ${sweep} (belongs to ${wantPhase})`);
       deleted.push(del[1]);
       continue;
     }
