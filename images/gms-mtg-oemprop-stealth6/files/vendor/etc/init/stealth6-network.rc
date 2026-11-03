@@ -1,0 +1,11 @@
+# stealth6-network.rc — eth0→wlan0 rename at boot (post-fs-data, before netd)
+# Runs AFTER redroid.common.rc's ipconfigstore (init processes rc files alphabetically:
+# redroid.common.rc [r] runs before stealth6-network.rc [s])
+#
+# redroid.common.rc sequence: rm ipconfig.txt → ipconfigstore (writes ideth0)
+# stealth6-network.rc sequence: rename eth0→wlan0 → patch ipconfig.txt (ideth0→idwlan0)
+# EthernetTracker (started by netd) then sees wlan0 with id=wlan0 in ipconfig.txt,
+# matches w.*\d regex (SCR.apk patch) → network active with TYPE_ETHERNET via wlan0.
+
+on post-fs-data
+    exec -- /vendor/bin/stealth6-network.sh

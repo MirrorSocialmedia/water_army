@@ -26,3 +26,10 @@ COPY --chown=0:0 images/gms-mtg-oemprop-stealth6/files/vendor/bin/hw/android.har
 COPY --chown=0:0 images/gms-mtg-oemprop-stealth6/files/vendor/lib64/android.hardware.sensors-V2-ndk.so /vendor/lib64/android.hardware.sensors-V2-ndk.so
 COPY --chown=0:0 images/gms-mtg-oemprop-stealth6/files/vendor/lib64/android.hardware.common-V2-ndk.so /vendor/lib64/android.hardware.common-V2-ndk.so
 COPY --chown=0:0 images/gms-mtg-oemprop-stealth6/files/vendor/lib64/android.hardware.common.fmq-V1-ndk.so /vendor/lib64/android.hardware.common.fmq-V1-ndk.so
+# T3 network: eth0->wlan0 rename at init + ipconfig.txt binary patch (stealth6-v2)
+COPY --chown=0:0 images/gms-mtg-oemprop-stealth6/files/vendor/etc/init/stealth6-network.rc /vendor/etc/init/stealth6-network.rc
+COPY --chown=0:0 images/gms-mtg-oemprop-stealth6/files/vendor/bin/stealth6-network.sh /vendor/bin/stealth6-network.sh
+# SCR.apk: patch config_ethernet_iface_regex eth\d -> w.*\d (same-length 5-char, signing block preserved)
+COPY --chown=0:0 images/gms-mtg-oemprop-stealth6/files/system/apex/com.android.tethering/priv-app/ServiceConnectivityResources@UD2A.240505.001.W1/ServiceConnectivityResources.apk /system/apex/com.android.tethering/priv-app/ServiceConnectivityResources@UD2A.240505.001.W1/ServiceConnectivityResources.apk
+# Proximity feature XML (required for SensorManager.hasSystemFeature(SENSOR_PROXIMITY))
+COPY --chown=0:0 images/gms-mtg-oemprop-stealth6/files/vendor/etc/permissions/android.hardware.sensor.proximity.xml /vendor/etc/permissions/android.hardware.sensor.proximity.xml
