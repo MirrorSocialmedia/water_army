@@ -1,0 +1,45 @@
+== features/drm/telephony
+feature:android.hardware.sensor.accelerometer
+feature:android.hardware.sensor.compass
+feature:android.hardware.telephony
+feature:android.hardware.telephony.gsm
+== vendor/drm + widevine lib
+ls: /vendor/drm: No such file or directory
+== mediadrm svc
+running
+== sensorservice
+No Sensors on the device
+devInitCheck : -19
+== accounts
+  Accounts: 0
+  Accounts History
+== android_id + gservices client_id
+f24eadbfadf78da8
+No result found.
+== gsm/sim state
+
+
+Unknown
+1
+== subscription
+Active modem count=1
+== mac
+/system/bin/sh: link: inaccessible or not found
+== battery
+  AC powered: false
+  USB powered: false
+  Max charging voltage: 0
+  status: 3
+  present: true
+  level: 21
+  voltage: 0
+  temperature: 0
+null
+== dns
+null
+
+cat: /etc/resolv.conf: No such file or directory
+== su
+-rwsr-x--- 1 root shell 7672 2024-05-27 11:55 /system/xbin/su
+== chrome/ver
+    versionName=156.0.8078.47

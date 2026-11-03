@@ -1,0 +1,20 @@
+{
+  "_ts": "2026-11-03T08:39:33.047Z",
+  "canvas": {
+    "dataUrlLen": 2306,
+    "sha256": "04831c6413f740758cd98db43e89735b899f7d7313cbe906c70ced69b2429732"
+  },
+  "webgl": {
+    "vendor": "WebKit",
+    "renderer": "WebKit WebGL",
+    "unmaskedVendor": "Google Inc. (IMG)",
+    "unmaskedRenderer": "ANGLE (IMG, AMD Radeon Graphics, OpenGL ES 3.2)",
+    "maxTextureSize": 8192
+  },
+  "webrtc": {
+    "candidates": [],
+    "state": null,
+    "err": null
+  },
+  "_err": null
+}

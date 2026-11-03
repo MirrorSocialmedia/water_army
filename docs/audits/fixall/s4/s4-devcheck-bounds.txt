@@ -1,0 +1,20 @@
+== guest cpuinfo model
+model name	: AMD Ryzen 7 9700X 8-Core Processor
+16
+== guest meminfo
+MemTotal:       96439448 kB
+MemAvailable:   12156020 kB
+== host meminfo
+MemTotal:       96439448 kB
+== battery set current support
+No value specified
+Unknown get option: current
+Unknown set option: current
+Unknown get option: current
+  Max charging current: 0
+  status: 3
+  level: 21
+== cpu capacity (cores story)
+0-15
+== sensors feature vs service (new tell)
+2
