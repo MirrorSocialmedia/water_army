@@ -1,0 +1,32 @@
+=== AFTER T3 hot-patch + restart (gen4 2026-11-03T18:42:19Z) ===
+--- /sys/class/net ---
+lo
+wlan0
+--- ipconfig.txt size+hexdump tail ---
+7
+toybox: Unknown command hexdump (see "toybox --help")
+--- ip addr/route wlan0 ---
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN mode DEFAULT
+2: wlan0@if138: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state U
+--- EthernetTracker logcat ---
+--- connectivity default+eth network ---
+Active default network: none
+  NetworkOffer [ Provider Id (1) Score(Policies : EVER_EVALUATED&IS_UNMETERED&EVER_VALIDATED&IS_VALIDATED ; KeepConnected : 0) Caps [ Transports: ETHERNET Capabilities: NOT_METERED&INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VPN&NOT_ROAMING&NOT_CONGESTED&NOT_SUSPENDED&NOT_VCN_MANAGED LinkUpBandwidth>=100000Kbps LinkDnBandwidth>=100000Kbps Specifier: <EthernetNetworkSpecifier (wlan0)> UnderlyingNetworks: Null] Needed by [28, 69, 46, 20, 88, 50, 1, 66, 52, 59, 16, 18, 30, 61, 44, 22, 83, 81, 48, 85, 14, 33, 35, 79, 37, 41, 7, 54, 76, 74, 64, 57]]
+--- android ping ---
+connect: Network is unreachable
+=== AFTER netd-restart connect (gen4 2026-11-03T18:49:33Z) ===
+---net-class---
+lo
+wlan0
+---ping---
+1 packets transmitted, 1 received, 0% packet loss, time 0ms
+rtt min/avg/max/mdev = 158.735/158.735/158.735/0.000 ms
+---eth-agent---
+  NetworkAgentInfo{network{100}  handle{432902426637}  ni{Ethernet CONNECTED extra: d2:e9:f4:92:a0:9d} created=2026-11-03T18:49:26.395Z Score(Policies : IS_UNMETERED ; KeepConnected : 0)  created 73807514  lp{{InterfaceName: wlan0 LinkAddresses: [ 172.38.200.5/24,fe80::619d:4def:7dcd:7115/64 ] DnsAddresses: [ /8.8.8.8 ] Domains: null MTU: 0 TcpBufferSizes: 524288,1048576,3145728,524288,1048576,2097152 Routes: [ fe80::/64 -> :: wlan0 mtu 0,172.38.200.0/24 -> 0.0.0.0 wlan0 mtu 0,0.0.0.0/0 -> 172.38.200.1 wlan0 mtu 0 ]}}  nc{[ Transports: ETHERNET Capabilities: NOT_METERED&INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VPN&NOT_ROAMING&FOREGROUND&NOT_CONGESTED&NOT_SUSPENDED&NOT_VCN_MANAGED LinkUpBandwidth>=100000Kbps LinkDnBandwidth>=100000Kbps Specifier: <EthernetNetworkSpecifier (wlan0)> UnderlyingNetworks: Null]}  factorySerialNumber=1}
+---eth-tracker-log---
+---settings---
+null
+---sensors-prox---
+0x00000003) VCNL36827 Proximity       | Vishay          | ver: 1 | type: android.sensor.proximity(8) | perm: n/a | flags: 0x00000013
+---feature---
+feature:android.hardware.sensor.proximity

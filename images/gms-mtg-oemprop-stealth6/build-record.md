@@ -133,3 +133,22 @@ CEO options (score math):
 | D: accept −15 | NO | 15 pts | 69/100 (after net bake) |
 
 Full analysis: `docs/audits/stealth6/t3-gen3-network-proximity-wx.md`.
+
+---
+
+## WA-STEALTH6 gen4 (2026-11-04) — T3 hot-patch validation on fx2 (no bake, RAM gate)
+
+- gen3 WIP committed as 1281b13 (unverified-then-verified this run).
+- **Proximity FIXED re-confirmed** (flags 0x13 wakeUp in dumpsys, feature XML live, DevCheck no proximity issue).
+- **T3 design verified at runtime:** eth0→wlan0 rc-boot rename ✓; EthernetTracker CONNECTED on wlan0
+  (NetworkAgentInfo network 100, 172.38.200.5/24 via 172.38.200.1, dns 8.8.8.8, Android ping 0% loss);
+  SCR.apk `w.*\d` regex confirmed effective with `ethernet_iface_regex` setting NULL.
+- **DevCheck: 79/100 "Mostly consistent"** (cap gone; −15 wx, −3 model, −3 adb remain). Screenshots gen4-trust79/gen4-main79.
+- **Bake blocker found:** ipconfigstore on this host reads EMPTY (prints `ipv4: , mask: 0`, writes no file;
+  host 6.8 kernel has no /proc/net/ip_config_hash) → gen3 WIP patch-script produced 7-byte ipconfig.txt
+  (dd on missing input). v2 script must synthesize ipconfig.txt from golden template + live ip(8) values;
+  id field must equal renamed interface (`wlan0`); stale `settings global ethernet_iface_regex` must be deleted.
+  Golden 130B format decoded (from fx1 read-only ref): u32(0,3) + len-prefixed records
+  (ipAssignment STATIC / linkAddress+u32 mask 24,0,0,0 / gateway+u32 / dns / id / eos).
+- wx_segment: unchanged — RESIDUAL −15, CEO decision (options A–E in gen3 doc).
+- Full evidence: docs/audits/stealth6/t4-gen4-t3-validation.md (+ before/after read txts).

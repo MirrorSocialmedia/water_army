@@ -1,0 +1,24 @@
+=== BEFORE T3 fx2 reads (gen4 2026-11-03T18:40:54Z) ===
+--- /sys/class/net ---
+eth0
+lo
+--- ipconfig.txt hexdump (id section) ---
+00000050: 0000 0000 0000 0100 0c31 3732 2e33 382e  .........172.38.
+00000060: 3230 302e 3100 0364 6e73 0007 382e 382e  200.1..dns..8.8.
+00000070: 382e 3800 0269 6400 0465 7468 3000 0365  8.8..id..eth0..e
+00000080: 6f73                                     os
+--- dumpsys connectivity networks ---
+Active default network: none
+  NetworkOffer [ Provider Id (2) Score(Policies : TRANSPORT_PRIMARY&EVER_EVALUATED&IS_UNMETERED&EVER_VALIDATED&IS_VALIDATED ; KeepConnected : 0) Caps [ Transports: CELLULAR Capabilities: MMS&SUPL&DUN&FOTA&IMS&CBS&IA&RCS&XCAP&EIMS&INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VPN&MCX&NOT_VCN_MANAGED UnderlyingNetworks: Null] Needed by [76, 14, 1, 57, 37, 66, 44, 81, 32, 59, 64, 41, 79, 74, 46, 7, 18, 88, 30, 28, 52, 16, 20, 35, 50, 86, 2, 69, 83, 22]]
+  NetworkOffer [ Provider Id (6) Score(Policies : EVER_EVALUATED&IS_UNMETERED&EVER_VALIDATED&IS_VALIDATED ; KeepConnected : 0) Caps [ Transports: WIFI Capabilities: NOT_METERED&INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VPN&NOT_ROAMING&NOT_CONGESTED&NOT_SUSPENDED&NOT_VCN_MANAGED LinkUpBandwidth>=1048576Kbps LinkDnBandwidth>=1048576Kbps Specifier: <android.net.MatchAllNetworkSpecifier@0> UnderlyingNetworks: Null] Needed by [76, 14, 1, 57, 37, 66, 44, 81, 32, 59, 64, 41, 79, 74, 46, 7, 18, 88, 30, 28, 52, 16, 20, 35, 50, 86, 69, 83, 22]]
+  NetworkOffer [ Provider Id (7) Score(Policies : EVER_EVALUATED&IS_INVINCIBLE&IS_UNMETERED&EVER_VALIDATED&IS_VALIDATED ; KeepConnected : 0) Caps [ Transports: WIFI Capabilities: NOT_METERED&INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VPN&NOT_ROAMING&NOT_CONGESTED&NOT_SUSPENDED&NOT_VCN_MANAGED LinkUpBandwidth>=1048576Kbps LinkDnBandwidth>=1048576Kbps Specifier: <android.net.MatchAllNetworkSpecifier@0> UnderlyingNetworks: Null] Needed by [76, 14, 1, 57, 37, 66, 44, 81, 32, 59, 64, 41, 79, 74, 46, 7, 18, 88, 30, 28, 52, 16, 20, 35, 50, 86, 69, 83, 22]]
+  NetworkOffer [ Provider Id (8) Score(Policies : EVER_EVALUATED&IS_INVINCIBLE&IS_UNMETERED&EVER_VALIDATED&IS_VALIDATED ; KeepConnected : 0) Caps [ Transports: WIFI Capabilities: NOT_METERED&INTERNET&TRUSTED&NOT_VPN&NOT_ROAMING&NOT_CONGESTED&NOT_SUSPENDED&NOT_VCN_MANAGED LinkUpBandwidth>=1048576Kbps LinkDnBandwidth>=1048576Kbps Specifier: <android.net.MatchAllNetworkSpecifier@0> UnderlyingNetworks: Null] Needed by []]
+  NetworkOffer [ Provider Id (9) Score(Policies : EVER_EVALUATED&IS_INVINCIBLE&IS_UNMETERED&EVER_VALIDATED&IS_VALIDATED ; KeepConnected : 0) Caps [ Transports: WIFI Capabilities: NOT_METERED&INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VPN&NOT_ROAMING&NOT_CONGESTED&NOT_SUSPENDED&OEM_PAID&OEM_PRIVATE&NOT_VCN_MANAGED LinkUpBandwidth>=1048576Kbps LinkDnBandwidth>=1048576Kbps Specifier: <android.net.MatchAllNetworkSpecifier@0> UnderlyingNetworks: Null] Needed by [76, 14, 1, 57, 37, 66, 44, 81, 32, 59, 64, 41, 79, 74, 46, 7, 18, 88, 30, 28, 52, 16, 20, 35, 50, 86, 69, 83, 22]]
+--- android ping ---
+connect: Network is unreachable
+--- settings ethernet_iface_regex ---
+wland+
+--- SCR.apk on-device regex ---
+eeIdivayisi isebenzisa i-%1$s uma i-%2$s inganakho ukufinyelela kwe-inthanethi. Kungasebenza izindleko.
+//Inethiwekhi ayinakho ukufinyelela kwenethiwekhi
+99Inethiwekhi yeselula ayinakho ukufinyelela kwe-inthanethi
