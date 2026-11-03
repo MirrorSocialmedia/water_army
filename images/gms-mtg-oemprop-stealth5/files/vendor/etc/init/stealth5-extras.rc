@@ -1,0 +1,23 @@
+# WA-FIXALL S6 stealth5 extras — battery fake power_supply + sim.state carrier.
+# Companion facts recorded in images/gms-mtg-oemprop-stealth5/build-record.md.
+#
+# R59 battery EXTRA skin (S4 risk-ledger: BatteryManager EXTRA_* = Long.MIN
+# sentinel because redroid /sys/class/power_supply is empty and the AIDL
+# example health HAL reads healthd sysfs paths — "batteryPath not found").
+# Fix = static fake psy directory bind-mounted over the empty sysfs dir at
+# post-fs-data, BEFORE class hal/health service probes battery paths.
+# Init builtin mount is fail-soft: if the mount fails the image default
+# (empty dir, sentinel EXTRA) is preserved — no regression.
+# Values are model-level consumer-phone story (NOT per-identity; identity
+# battery level story stays in the BatteryService dumpsys-override layer).
+#
+# R42 detail: gsm.sim.state — telephony is present (gsm template) but no SIM
+# ever registers, so the prop stays empty on redroid (real no-SIM consumer
+# phone = "ABSENT"). One boot_completed setprop; measured: nothing else
+# writes the prop afterwards.
+
+on post-fs-data
+    mount none /vendor/etc/health-fake/battery /sys/class/power_supply none bind
+
+on property:sys.boot_completed=1
+    setprop gsm.sim.state ABSENT
