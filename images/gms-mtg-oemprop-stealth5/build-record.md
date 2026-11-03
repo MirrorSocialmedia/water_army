@@ -53,3 +53,18 @@ Builder run: `bash images/gms-mtg-oemprop-stealth5/build.sh` → all pins + post
   from stealth4 unchanged (S2 asserts keep holding; suite zero-regression baseline
   1764/1758/0/6 unaffected — image files are unit-tested only via rc/drift guards).
 - No secrets introduced (SOURCE-PIN.md carries URL + sha256 only).
+
+## Bake iterations v1→v7 (final) — measured deltas vs the v1 plan
+
+| v | change | on-device result |
+|---|--------|------------------|
+| 1 | ro.debuggable=0 build.prop COPY | init exit 129 @ ~7s (adbd = init `critical` service on this platform) ⇒ REVERTED; debuggable stays 1 (documented deviation from the S6 ruling). build.prop COPY removed; vendor/build.prop.orig kept as pin evidence (assert grep '^ro.debuggable=1$'). |
+| 2 | COPY'd rc mode fix (init "Skipping insecure file" for 0664) | build.sh chmod 0644 + post-build merged-view stat assert |
+| 3 | ro.* propctl rows moved to load_persist_props_action | fresh-/data first boot re-asserts build.prop (load_persist_props) = fleet-wide early-init story wipe; fx2 measured all props wiped vs fx1 (old data) surviving. Regenerated rc artifact shipped as files/vendor/etc/init/oem-ro-map.rc (overwrites the 12-entry stealth4 one with the current 13-entry table). |
+| 4 | WebView arm64 APK swap | FAILED then REVERTED: native bridge = libnb.so null-bridge (no ndk_translation, no APEX) ⇒ arm64-only APK = "No WebView installed". Base com.android.webview 125 restored byte-exact (oat assert); vendored APK+pin stay for the translator-era bake (R41 next version). |
+| 5 | battery psy mount line orientation (node/device args) | mount builtin still not landing (open; toybox bind with identical params works = runtime-verified voltage read) — see docs/audits/fixall/s6/fx2-battery.txt |
+| 6 | proc-view pair baked (oem-proc-view.sh/.rc + COPY + chmod) | /proc spoof present; carrier wiring already product-side (profileProcCmdArgs) |
+| 7 | oem-proc-view.sh init-umask chmod fix (rendered 0600 → SysMemInfo crash-loop) | boot_completed=1; system_server alive |
+
+FINAL: water-army/redroid:14.0.0-240527-gms-mtg-oemprop-stealth5 @ sha256:2de5d82ab8d8106f4b5040ce925bab2142da342384bac46aca34906680b15118
+Trial: rdev-fx2 fresh-data first boot = boot_completed, user/release-keys, no su, sim ABSENT, MemTotal 7.6 GB, ARM fake cpuinfo (0 Ryzen lines), locale carrier readback ru-RU. fx1 (stealth4, old data) control untouched.

@@ -16,8 +16,14 @@
 # phone = "ABSENT"). One boot_completed setprop; measured: nothing else
 # writes the prop afterwards.
 
+# S6 v5 measured fix: init's mount builtin is `mount <fs> <node> <device>
+# [options]` — node is the MOUNTPOINT and options is ONE arg (a 5th arg
+# parses as numeric flags). v1-v4 had the paths swapped and "none bind"
+# split across the options/flags slots, so the line failed and the sentinel
+# survived (measured: no bind in mount table; real host-kernel psy files
+# present with empty values = the Long.MIN root cause confirmed on-device).
 on post-fs-data
-    mount none /vendor/etc/health-fake/battery /sys/class/power_supply none bind
+    mount none /sys/class/power_supply/battery /vendor/etc/health-fake/battery bind
 
 on property:sys.boot_completed=1
     setprop gsm.sim.state ABSENT
