@@ -68,8 +68,68 @@
 - Proximity "absent" at DevCheck while present in SensorService list — framework
   proximity flag special-case rewrites our flags (0x416 → 0x12 in dumpsys); DevCheck
   check likely probes wake-up/broadcast semantics — investigate flags/fifo next pass.
+  **FIXED gen3:** see gen3 section below.
 - `hook:wx_segment` = native cross-check W|X segment tell (ndk_translation JIT on
   arm64 .so under x86_64 runtime) — structurally tied to translation, not our HAL
-  (our maps clean).
+  (our maps clean). **Investigated gen3; CEO decision options in t3-gen3 doc.**
 - SensorService only reconnects AIDL HAL on zygote restart (wrapper connect once at
   system_server start) — fine in production boot ordering; remember for restart-debug.
+
+---
+
+## WA-STEALTH6 gen3 (2026-11-03) — proximity fix + network design + wx investigation
+
+### Proximity fix (committed)
+
+**Root cause:** DevCheck calls `SensorManager.getDefaultSensor(8)` which defaults to
+`wakeUp=true` (AOSP 14 SensorManager.java). Our gen2 proximity had AIDL
+`flags=0x412` (no FLAG_WAKE_UP bit0) → `isWakeUpSensor()=false` → returns null →
+"proximity absent" (−8 pts).
+
+**Fix:** `kFlagsProximity = 0x413` = FLAG_WAKE_UP (0x01) | FLAG_ON_CHANGE (0x02) |
+FLAG_DIRECT_CHANNEL_ASHMEM (0x10) | FLAG_DATA_INJECTION (0x400).
+`config_useRuntimeProximityDetection` defaults to false (confirmed: no overlay in
+redroid framework-res) → wakeUp proximity stays visible to apps, not marked dynamic.
+
+**Verification (fresh boot, DevCheck 2.9.2):**
+- `dumpsys sensorservice`: proximity `flags: 0x00000013` — "wakeUp" shown in text ✓
+- DevCheck trust page: `Issues found · 4` (was 5; proximity −8 gone) ✓
+- HAL SHA: `af9368aff815a9085bc613cd6f4975aa65c83c7be29a0c55560ad6f834704b9f`
+
+### T3 Network — eth0→wlan0 (design; bake = stealth6-v2)
+
+DevCheck `checkNetworkInterfaces()`:
+1. Reads `/sys/class/net` (primary method)
+2. Any `eth\d+` interface → CRITICAL FAIL → −25 pts + "Cloud phone" verdict → score cap ≤ 10
+3. Any `wlan*` → PASS
+
+After rename eth0→wlan0: check passes → `deviceKind = null` → no cap.
+
+Bake plan (3 changes):
+1. `redroid.common.rc on post-fs-data`: rename eth0→wlan0 before netd
+2. Patch ipconfigstore (hardcodes eth0) or write ipconfig.txt with id=wlan0 manually
+3. Override `config_ethernet_iface_regex` → `wlan\d+` (RRO overlay for
+   ServiceConnectivityResources, or `settings put global ethernet_iface_regex wlan\\d+`)
+
+**Note:** framework strips FLAG_DATA_INJECTION (0x400) from proximity flags in
+SensorService's AIDL→Sensor conversion. Dumpsys shows 0x13 not 0x413. Not a HAL bug.
+
+### wx_segment (investigation; CEO decision needed)
+
+**Root cause:** ndk_translation JIT allocates 4MB anonymous `rwxp` code cache per
+process (all ARM64-translated processes get it). DevCheck `libtrustnative.so` (ARM64)
+scans `/proc/self/maps` for any segment with W+X → finds the JIT cache → −15.
+
+`ndk_translation.mode=interpreter`: eliminates JIT cache → 0 rwx segments ✓. BUT
+DevCheck ARM64 native code too slow in interpreter → app start timeout (5s) → cannot
+launch. Not viable without x86_64 native.
+
+CEO options (score math):
+| Option | wx gone | Cost | After net+prox+wx score |
+|--------|---------|------|------------------------|
+| A: interpreter mode at boot | YES | DevCheck can't start | N/A |
+| B: x86_64 native DevCheck | YES | x86_64 libtrustnative.so needed | 94/100 (best) |
+| C: patch libndk_translation.so W^X | YES | AOSP source patch | 94/100 |
+| D: accept −15 | NO | 15 pts | 69/100 (after net bake) |
+
+Full analysis: `docs/audits/stealth6/t3-gen3-network-proximity-wx.md`.

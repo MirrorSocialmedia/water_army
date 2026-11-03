@@ -26,10 +26,30 @@ namespace {
 constexpr char kServiceName[] =
     "android.hardware.sensors.ISensors/default";
 
-/* flags: CONTINUOUS_MODE reporting (bit0 wake-up off) | DIRECT_CHANNEL_ASHMEM
- * | DATA_INJECTION (injectSensorData implemented). proximity: ON_CHANGE. */
-constexpr int32_t kFlagsContinuous = (0 << 1) | 0x10 | 0x400;  // 1040
-constexpr int32_t kFlagsOnChange = (2 << 1) | 0x10 | 0x400;    // 1046
+/* AIDL SensorInfo.flags uses a DIFFERENT bit encoding from legacy Sensors.h!
+ * (hardware/interfaces/sensors/aidl/.../SensorInfo.aidl android14):
+ *   bit 0 (0x01) Wake-up sensor → framework marks proximity+wakeUp as DYNAMIC
+ *   bit 1 (0x02) Reporting mode: on-change
+ *   bit 4 (0x10) Supports ASHMEM direct channel
+ *   bit 5 (0x20) Supports GRALLOC direct channel
+ *   bit 8 (0x100) Dynamic sensor (framework-managed)
+ *   bit 10 (0x400) Supports data injection
+ *
+ * Critical: setting bit 0 on a PROXIMITY sensor triggers Android 13+ framework
+ * "runtime proximity" logic → sensor marked dynamic → hidden from app
+ * getSensorList() → DevCheck reports "proximity absent". Do NOT set wakeUp
+ * for proximity. Keep it non-wakeUp.
+ *
+ * DevCheck (2.9.2) checks proximity via SensorManager.getSensorList → presence.
+ * Accelerometer/Gyroscope (non-wakeUp, continuous) pass. Proximity (on-change,
+ * non-wakeUp) must also pass — just do NOT set bit 0. */
+constexpr int32_t kFlagsContinuous = 0x10 | 0x400;           // 0x410 (accel/gyro: continuous, ashmem, data-inj)
+constexpr int32_t kFlagsProximity  = 0x01 | 0x02 | 0x10 | 0x400; // 0x413 (wakeUp + on-change + ashmem + data-inj)
+// IMPORTANT: DevCheck calls SensorManager.getDefaultSensor(8) which defaults to
+// wakeUp=true → looks for a proximity sensor with FLAG_WAKE_UP (AIDL bit 0).
+// Without bit 0, getDefaultSensor(8) returns null → "proximity absent" (-8 pts).
+// config_useRuntimeProximityDetection defaults to false (AOSP) → wakeUp proximity
+// is NOT marked dynamic → stays visible to apps. Safe to set bit 0 here.
 
 using aidl::android::hardware::sensors::SensorInfo;
 using aidl::android::hardware::sensors::WaString;
@@ -90,7 +110,7 @@ void fillSensorTable(SensorInfo* arr) {
           /*fifoMaxEventCount=*/0,
           /*requiredPermission=*/mkstr(""),
           /*maxDelayUs=*/2147483647,  // on-change: no max period
-          /*flags=*/kFlagsOnChange,
+          /*flags=*/kFlagsProximity,
       };
 }
 
