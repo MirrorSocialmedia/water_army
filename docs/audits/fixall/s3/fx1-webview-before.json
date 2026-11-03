@@ -1,0 +1,135 @@
+{
+  "cdpBase": "http://127.0.0.1:19334",
+  "targetUrl": "about:blank",
+  "mode": "lite",
+  "evaluatedAt": "2026-11-03T08:02:55.210Z",
+  "probe": {
+    "sync": {
+      "_ts": "2026-11-03T08:02:51.681Z",
+      "href": "about:blank",
+      "userAgent": "Mozilla/5.0 (Linux; Android 14; Galaxy6FS Build/R0ABF9Z; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/125.0.6422.113 Mobile Safari/537.36",
+      "platform": "Linux i686",
+      "appVersion": "5.0 (Linux; Android 14; Galaxy6FS Build/R0ABF9Z; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/125.0.6422.113 Mobile Safari/537.36",
+      "vendor": "Google Inc.",
+      "languages": [
+        "en-US"
+      ],
+      "language": "en-US",
+      "uaData": null,
+      "webdriver": false,
+      "chromeRuntime": false,
+      "chromeRuntimeId": false,
+      "hardwareConcurrency": 16,
+      "maxTouchPoints": 1,
+      "pluginsLength": 0,
+      "mimeTypesLength": 0,
+      "pdfViewerEnabled": false,
+      "connection": {
+        "effectiveType": "4g",
+        "type": "ethernet",
+        "downlink": 9.9,
+        "rtt": 0,
+        "saveData": false
+      },
+      "cookieEnabled": true,
+      "doNotTrack": null,
+      "screen": {
+        "width": 412,
+        "height": 915,
+        "availWidth": 412,
+        "availHeight": 915,
+        "availLeft": 0,
+        "availTop": 0,
+        "colorDepth": 24,
+        "pixelDepth": 24,
+        "orientationType": "portrait-primary"
+      },
+      "dpr": 2.625,
+      "inner": {
+        "w": 980,
+        "h": 1831
+      },
+      "outer": {
+        "w": 412,
+        "h": 770
+      },
+      "visual": {
+        "w": 979.8095092773438,
+        "h": 1831.0302734375,
+        "scale": 0.420684278011322
+      },
+      "media": {
+        "fine": false,
+        "coarse": false,
+        "hover": false,
+        "anyHover": false,
+        "anyPointerCoarse": false
+      },
+      "intl": {
+        "locale": "en-US",
+        "calendar": "gregory",
+        "numberingSystem": "latn",
+        "timeZone": "America/Sao_Paulo",
+        "year": "numeric",
+        "month": "numeric",
+        "day": "numeric"
+      },
+      "intlNumberSample": "1,234.5",
+      "collatorLocale": "en-US",
+      "webgl": {
+        "vendor": "WebKit",
+        "renderer": "WebKit WebGL",
+        "unmaskedVendor": "IMG",
+        "unmaskedRenderer": "AMD Radeon Graphics",
+        "version": "WebGL 1.0 (OpenGL ES 2.0 Chromium)",
+        "shading": "WebGL GLSL ES 1.0 (OpenGL ES GLSL ES 1.0 Chromium)",
+        "maxTextureSize": 4096
+      },
+      "webgl2": true,
+      "fontsCheck": {
+        "Roboto": true,
+        "Noto Sans": true,
+        "Google Sans": true,
+        "Roboto Condensed": true,
+        "Droid Sans": true,
+        "Caveat": true,
+        "Source Sans Pro": true,
+        "Lato": true,
+        "Arial": true,
+        "Helvetica": true,
+        "Segoe UI": true,
+        "Times New Roman": true,
+        "Impact": true,
+        "monospace": true,
+        "serif": true,
+        "sans-serif": true
+      },
+      "fontsStatus": "loaded",
+      "fontsLoadedCount": 0,
+      "ontouchstart": true,
+      "historyLength": 1,
+      "serviceWorker": "absent",
+      "visibility": "visible",
+      "hidden": false
+    },
+    "phase2": {
+      "sensorCounts": {
+        "devicemotion": 0,
+        "deviceorientation": 0,
+        "deviceorientationabsolute": 0,
+        "devicelight": 0
+      },
+      "sensorWindowMs": 3505,
+      "async": {
+        "pending": false,
+        "battery": {
+          "supported": false
+        },
+        "uaFullVersionSync": "brands-only"
+      },
+      "perms": null
+    }
+  },
+  "networkRequests": [],
+  "secChUaCaptured": []
+}
