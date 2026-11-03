@@ -1,0 +1,17 @@
+# fx2 (stealth5 v7 image 2de5d82a, fresh-data first boot) 2026-11-03T09:46:45Z
+user
+release-keys
+1
+ABSENT
+Galaxy6FS
+NOTH-742181-S86Y
+nothing/galaxy-6fs/galaxy-6fsp5d6fsksyq:14/R0ABF9Z/024408:user/release-keys
+ru-RU
+America/Sao_Paulo
+  Current WebView package (name, version): (com.android.webview, 125.0.6422.113)
+8
+MemTotal:     7650410 kB
+MemAvailable: 3978233 kB
+8
+CPU part	: 0xd48
+0

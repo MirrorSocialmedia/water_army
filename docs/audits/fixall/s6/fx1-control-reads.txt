@@ -1,0 +1,9 @@
+# fx1 (control, stealth4) key props 2026-11-03T09:46:40Z
+userdebug
+dev-keys
+1
+/system/xbin/su
+ABSENT
+en-US
+MemTotal:       96439448 kB
+model name	: AMD Ryzen 7 9700X 8-Core Processor

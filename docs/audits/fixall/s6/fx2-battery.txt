@@ -1,0 +1,33 @@
+# R59 battery EXTRA skin — S6 state (image layer determined, see P4 below)
+
+v7 boot (stealth5 2de5d82a, init rc mount line present):
+  dumpsys battery: status:1 health:1 present:false level:0 voltage:0 temperature:0 technology:(empty)
+  mount | grep power_supply  -> (nothing)  = init builtin mount line did NOT land (cause open).
+
+Runtime bind verification (same params, toybox syntax):
+  adb root; mount -o bind /vendor/etc/health-fake /sys/class/power_supply  -> M_RC=0
+  ls /sys/class/power_supply -> battery
+  cat /sys/class/power_supply/battery/voltage_now -> 3895000   (fake psy readable)
+  -> fake psy directory + bind semantics VERIFIED at runtime.
+
+Framework restart (stop/start) and vendor.health-default restart:
+  dumpsys battery stays sentinel (all zero).
+  Cause: the example health HAL (vendor.health-default, class hal) does not
+  re-poll /sys once started on this container — no wakealarm/uevent plumbing
+  (container has no /dev/power_supply uevent feed). Initial read happened
+  BEFORE any bind existed = zeroes stick.
+
+P4 LAYER VERDICT (workorder item): battery Long.MIN = IMAGE health-HAL layer.
+  - `dumpsys battery set voltage|temperature|health|technology|...` = "Unknown
+    set option" on this build (only level/status/ac/usb/present... writable) =>
+    product-side BatteryService override cannot fix EXTRA/voltage tells.
+  - health HAL reads /sys/class/power_supply/battery/* (healthd-style sysfs).
+  - Fix belongs in the image (fake psy + mount + HAL update path) = bake lane.
+
+NEXT-VERSION TODO (2 items, honest deferral):
+  1. debug init builtin mount failure on the power_supply line (toybox works
+     with identical parameters = init arg parsing/order suspect).
+  2. make the sentinel stop reaching BatteryService: either the HAL update
+     trigger (uevent coldboot replay / ctl ordering) or accepting the frozen
+     initial read and restarting health AFTER the bind (post-fs-data ordering
+     is already correct — verify with the mount line fixed first).
