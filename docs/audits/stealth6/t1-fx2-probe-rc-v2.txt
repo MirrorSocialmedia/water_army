@@ -1,0 +1,7 @@
+# --- WA-STEALTH6 T1 field probe v2 (NOT baked; container-FS only; revert = remove this block) ---
+# abi -> arm64-primary story KEEPING x86_64 fallback (else packages.xml-stale x86_64 apps cannot fork: "Unsupported zygote ABI").
+on load_persist_props_action
+    exec -- /vendor/bin/oem-propctl ro.product.cpu.abi arm64-v8a
+    exec -- /vendor/bin/oem-propctl ro.product.cpu.abilist arm64-v8a,armeabi-v7a,x86_64
+    exec -- /vendor/bin/oem-propctl ro.product.cpu.abilist32 armeabi-v7a,armeabi,x86
+    exec -- /vendor/bin/oem-propctl ro.product.cpu.abilist64 arm64-v8a,x86_64
