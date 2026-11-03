@@ -1,0 +1,8 @@
+# WA-STEALTH6 T2 — wa-sensors: minimal userland AIDL sensors HAL (gen2).
+# Pattern follows the health example service (class hal, user system).
+# Registration name (in-binary): android.hardware.sensors.ISensors/default
+service vendor.sensors-default /vendor/bin/hw/android.hardware.sensors-service.example
+    class hal
+    interface android.hardware.sensors.ISensors/default
+    user system
+    group system

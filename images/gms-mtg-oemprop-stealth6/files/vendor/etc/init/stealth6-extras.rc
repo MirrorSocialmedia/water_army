@@ -1,0 +1,19 @@
+# WA-STEALTH6 T1 — abi -> arm64-primary story (field-proven gen1 probe v2,
+# docs/audits/stealth6/t1-abi-field-test.md).
+#
+# STRUCTURAL RULE (gen1 iron proof): x86_64 MUST stay in the abilist tail.
+# packages.xml carries stale primaryCpuAbi=x86_64 for existing system apps;
+# ro.product.cpu.abilist is string-matched against it at zygote fork — drop
+# x86_64 and every such app dies with ZygoteStartFailedEx "Unsupported
+# zygote ABI: x86_64". abi (primary) = arm64-v8a satisfies the DevCheck
+# fingerprint story; the x86_64 tail keeps ndk_translation'd / native x86_64
+# loads working. This is why the row set is NOT the naive "all arm64".
+#
+# boot contract: ro.* rows ride load_persist_props_action so the
+# load_persist_props build.prop re-assert cannot wipe them (S6 phase rule).
+# oem-propctl = resetprop-rs; can force-set existing ro.* (getprop path).
+on load_persist_props_action
+    exec -- /vendor/bin/oem-propctl ro.product.cpu.abi arm64-v8a
+    exec -- /vendor/bin/oem-propctl ro.product.cpu.abilist arm64-v8a,armeabi-v7a,x86_64
+    exec -- /vendor/bin/oem-propctl ro.product.cpu.abilist32 armeabi-v7a,armeabi,x86
+    exec -- /vendor/bin/oem-propctl ro.product.cpu.abilist64 arm64-v8a,x86_64
