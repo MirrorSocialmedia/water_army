@@ -149,7 +149,7 @@ test('overrides: templateProfileToRoOverrides maps the full expanded prop set, m
   const p = generateTemplateProfile('w1bmodel0aaaaaaaaaaaa');
   const o = templateProfileToRoOverrides(p);
   const flattened = profilePropEntries().map(([, prop]) => prop).sort();
-  assert.ok(flattened.length === 12, `expanded prop set must be 12 rows (11 fields incl. hardware x2), got ${flattened.length}`);
+  assert.ok(flattened.length === 13, `expanded prop set must be 13 rows (12 fields incl. hardware x2), got ${flattened.length}`);
   assert.deepEqual(Object.keys(o).sort(), flattened);
   assert.equal(o['ro.product.model'], p.model.replaceAll(' ', '%20'));
   assert.ok(!o['ro.product.model'].includes(' '), 'carrier value must not contain raw spaces');
@@ -182,13 +182,13 @@ test('rc artifact: committed file equals generator output (drift guard)', () => 
   assert.equal(committed, generateWaRoMapRc(), 'oem-ro-map.rc drifted — run scripts/w1b/generate-wa-ro-map-rc.mjs');
 });
 
-test('rc artifact: parses back to exactly the 12-entry mapping table (non-empty guard)', () => {
+test('rc artifact: parses back to exactly the 13-entry mapping table (non-empty guard)', () => {
   const { rows, problems } = parseWaRoMapRc(generateWaRoMapRc());
   assert.deepEqual(problems, []);
   const table = carrierMappingTable().map((r) => ({ carrier: r.carrier, target: r.target })).sort((a, b) => (a.target < b.target ? -1 : 1));
-  assert.ok(table.length === 12, 'mapping table must be 12 rows — a silently empty/short table is the vacuous-assertion failure mode');
+  assert.ok(table.length === 13, 'mapping table must be 13 rows — a silently empty/short table is the vacuous-assertion failure mode');
   assert.deepEqual([...rows].sort((a, b) => (a.target < b.target ? -1 : 1)), table);
-  assert.equal(rows.length, 12);
+  assert.equal(rows.length, 13);
   // L2 wave-1 phase discipline: persist.* maps in load_persist_props_action
   // ONLY (ro.* in early-init) — enforced by the parser too, but assert it
   // here at source (WA-OEMPROP S3: post-fs-data is NOT a safe phase for
@@ -227,7 +227,7 @@ test('consistency: device truth matching profile -> all PASS', () => {
   const r = checkProfileConsistency(p, devicePropsFrom(p));
   assert.ok(r.pass, JSON.stringify(r.rows.filter((x) => x.status !== 'PASS')));
   assert.equal(r.blocking, false);
-  assert.equal(r.rows.length, 12);
+  assert.equal(r.rows.length, 13);
   // L2 wave-1: timezone + hardware rows must EXIST and PASS (vacuous guard: a
   // row silently missing from the kernel would let device drift slip unnoticed)
   for (const prop of ['persist.sys.timezone', 'ro.hardware', 'ro.boot.hardware']) {
@@ -288,7 +288,7 @@ test('probe-assert runner: fixture dump -> per-field lines + VERDICT semantics',
   };
   const good = runAssert({ dump, expected: p });
   assert.equal(good.pass, true, good.lines.join('\n'));
-  assert.ok(good.lines.filter((l) => l.startsWith('PASS') && l.includes('(')).length === 12);
+  assert.ok(good.lines.filter((l) => l.startsWith('PASS') && l.includes('(')).length === 13);
   assert.ok(good.lines.filter((l) => l.startsWith('PASS') && l.includes('deviceSpec.')).length === 5, 'wave-2 deviceSpec rows all observed');
   const noObs = runAssert({ dump: { ...dump, deviceSpec: undefined, context: { 'ro.build.type': 'user', 'ro.build.tags': 'release-keys' }, props }, expected: p });
   assert.equal(noObs.pass, false, 'deviceSpec profile without observations = MISSING = blocking (never vacuous green)');

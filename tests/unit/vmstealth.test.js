@@ -213,7 +213,7 @@ describe('stealth rc artifact', () => {
   it('parses clean; every carrier — base and stealth — is swept after its phase', () => {
     const { rows, deleted, problems } = parseWaRoMapRc(rc);
     assert.deepEqual(problems, []);
-    assert.equal(rows.length, 12 + stealthDerivedPropList().length);
+    assert.equal(rows.length, 13 + stealthDerivedPropList().length);
     const carriers = rows.map((r) => r.carrier);
     assert.deepEqual([...deleted].sort(), [...carriers].sort());
     for (const prop of stealthDerivedPropList()) {
@@ -233,7 +233,7 @@ describe('stealth rc artifact', () => {
     assert.ok(firstSweep > lastWrite, 'a sweep section appears before the last write block');
     assert.equal(
       lines.filter((l) => l.includes('--delete-if-exist ro.boot.oem_')).length,
-      12 + stealthDerivedPropList().length,
+      13 + stealthDerivedPropList().length,
     );
   });
 

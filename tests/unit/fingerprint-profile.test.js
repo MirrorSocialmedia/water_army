@@ -160,8 +160,11 @@ test('carrier: profileToRoOverrides maps exactly the registered props', () => {
   assert.equal(map['persist.sys.timezone'], p.timezone);
   assert.equal(map['ro.hardware'], p.hardware);
   assert.equal(map['ro.boot.hardware'], p.hardware);
-  // locale/carrier still have NO ro.* carrier (settings-side, later phase)
-  assert.ok(!Object.keys(map).some((k) => /locale|carrier/i.test(k)));
+  // WA-FIXALL S6 (R50): locale now rides ro.product.locale (image default
+  // en-US was the leak; profile locale must reach the device).
+  assert.equal(map['ro.product.locale'], p.locale);
+  // carrier still has NO ro.* carrier (settings-side, later phase)
+  assert.ok(!Object.keys(map).some((k) => /carrier/i.test(k)));
 });
 
 test('carrier: W1 profiles carry a board name consistent with their device slug', () => {
@@ -209,9 +212,10 @@ test('carrier: buildRoCmdArgs deterministic order + throws on invalid (never par
 test('PROFILE_FIELDS registry matches the validator surface (drift guard)', () => {
   assert.equal(PROFILE_FIELDS.length, 15);
   assert.deepEqual(UNIQUE_PROFILE_FIELDS, ['fingerprint', 'serial', 'displayId']);
-  // L2 wave-1 (ADR-031) drift guard: 11 profile fields feed 12 props; the
-  // timezone + hardware additions must stay registered on BOTH sides
+  // L2 wave-1 (ADR-031) drift guard: timezone + hardware additions must stay
+  // registered on BOTH sides. WA-FIXALL S6 (R50): locale joins the carrier
+  // table → 12 profile fields feed 13 props.
   assert.deepEqual(profilePropEntries().filter((e) => e[1].startsWith('persist.')), [['timezone', 'persist.sys.timezone']]);
   assert.deepEqual(profilePropEntries().filter((e) => e[0] === 'hardware'), [['hardware', 'ro.hardware'], ['hardware', 'ro.boot.hardware']]);
-  assert.equal(profilePropEntries().length, 12);
+  assert.equal(profilePropEntries().length, 13);
 });

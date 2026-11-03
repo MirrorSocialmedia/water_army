@@ -29,6 +29,8 @@ on early-init && property:ro.boot.oem_ro_boot_hardware=*
     exec -- /vendor/bin/oem-propctl ro.boot.hardware ${ro.boot.oem_ro_boot_hardware}
 on early-init && property:ro.boot.oem_ro_hardware=*
     exec -- /vendor/bin/oem-propctl ro.hardware ${ro.boot.oem_ro_hardware}
+on early-init && property:ro.boot.oem_ro_product_locale=*
+    exec -- /vendor/bin/oem-propctl ro.product.locale ${ro.boot.oem_ro_product_locale}
 on early-init && property:ro.boot.oem_ro_product_manufacturer=*
     exec -- /vendor/bin/oem-propctl ro.product.manufacturer ${ro.boot.oem_ro_product_manufacturer}
 on early-init && property:ro.boot.oem_ro_product_model=*

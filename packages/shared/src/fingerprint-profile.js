@@ -35,8 +35,8 @@ import { validateDeviceSpec, memTotalKbForIdentity, SYNTHETIC_DEVICE_SPECS } fro
  * Android property a profile field maps to (the ro.* / persist.* set is the
  * androidboot-cmdline carrier; values reach the device via the generated
  * init mapping, see w1b-image-mapping.js). Array values = one field telling
- * several props the SAME story (hardware). locale/carrier ride
- * settings/telephony — no ro.* carrier for them.
+ * several props the SAME story (hardware). carrier rides settings/telephony
+ * — no ro.* carrier for it.
  */
 export const PROFILE_PROP_MAP = Object.freeze({
   brand: 'ro.product.brand',
@@ -55,6 +55,14 @@ export const PROFILE_PROP_MAP = Object.freeze({
   // stale /data value can never out-rank the identity story; and BEFORE
   // zygote, so every process resolves the identity timezone).
   timezone: 'persist.sys.timezone',
+  // WA-FIXALL S6 (R50, 2026-11-03): locale had NO carrier — the profile's
+  // locale lived only in the DB while the device kept the image default
+  // ro.product.locale (en-US forever; S3 field finding: DB ru-RU vs device
+  // en-US vs web en-US). Real devices bake the market locale into
+  // ro.product.locale at build time and the framework derives the default
+  // UI/web locale from it — same carrier mechanism, same phase (early-init
+  // ro.*): the identity locale now reaches navigator.language.
+  locale: 'ro.product.locale',
   // L2 wave-1 (ADR-031, D2): ro.hardware/ro.boot.hardware = "redroid" is a
   // classic container tell. One field, two targets, one story: real devices
   // carry the board name in both (init copies androidboot.hardware=<board>
