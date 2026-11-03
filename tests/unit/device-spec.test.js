@@ -296,19 +296,22 @@ test('template pool RED pair: verified template without deviceSpec fails the poo
 // this wave touched the generators. If these move, every stored legacy row
 // would falsely alarm drift; the rng tail rule is what protects them.
 const WAVE1_STICKY_HASHES = {
-  'ident-a1b2c3d4': { w1: '2ef55b5066bcbda4', tpl: '7f8675b9aa3f5f34' },
-  'ident-e5f6g7h8': { w1: 'dff35abe976bf614', tpl: 'd8ccddc57b77a173' },
-  'ident-j9k0l1m2': { w1: '5b3046c0d95b7b4b', tpl: 'd92ab38a4e227079' },
-  'wa-test-identity-0001': { w1: 'c1b52da0d0a69d7d', tpl: 'c3f85637d8d32091' },
-  identity_probe_42: { w1: '341d40dae6e28009', tpl: '57bebd5f42c6d525' },
+  // S6 (stealth4-next): identity fingerprint story moved to consumer build
+  // form (`:user/release-keys`, displayId without `.keys`) — wave-1 w1 hashes
+  // re-pinned intentionally (tpl streams unchanged).
+  'ident-a1b2c3d4': { w1: '8b83ffb1e395768d', tpl: '7f8675b9aa3f5f34' },
+  'ident-e5f6g7h8': { w1: '27b0ecbe0ea1bd5e', tpl: 'd8ccddc57b77a173' },
+  'ident-j9k0l1m2': { w1: 'fc4f23ea477a8b32', tpl: 'd92ab38a4e227079' },
+  'wa-test-identity-0001': { w1: '43ce85e4ec0b546c', tpl: 'c3f85637d8d32091' },
+  identity_probe_42: { w1: '7dc94fbbe26e00f9', tpl: '57bebd5f42c6d525' },
 };
 // Wave-2 full outputs (deviceSpec appended LAST) — pin current behaviour.
 const WAVE2_FULL_HASHES = {
-  'ident-a1b2c3d4': { w1: 'f3bda2aa29f2e8c1', tpl: 'b026ab04ba1aa556' },
-  'ident-e5f6g7h8': { w1: 'cddc96ae06f828a8', tpl: '208038dc8418c67b' },
-  'ident-j9k0l1m2': { w1: '5fa9cc06d8e8b7cf', tpl: '7dd8c21a999e98dc' },
-  'wa-test-identity-0001': { w1: 'd8948da19d4625c5', tpl: '2f119856e1ae051f' },
-  identity_probe_42: { w1: 'd127fe52bf7b1566', tpl: '2cec992e610af7e1' },
+  'ident-a1b2c3d4': { w1: 'fb1cdad2f72617cc', tpl: 'b026ab04ba1aa556' },
+  'ident-e5f6g7h8': { w1: 'ec388fcb887c3ee3', tpl: '208038dc8418c67b' },
+  'ident-j9k0l1m2': { w1: '2758709dac6624b2', tpl: '7dd8c21a999e98dc' },
+  'wa-test-identity-0001': { w1: '8fa2866df2f43cdb', tpl: '2f119856e1ae051f' },
+  identity_probe_42: { w1: 'c4e36c5b21c5672a', tpl: '2cec992e610af7e1' },
 };
 
 test('generator drift discipline: wave-1 field stream byte-sticky; wave-2 outputs golden-pinned', () => {

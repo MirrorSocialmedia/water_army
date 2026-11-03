@@ -283,8 +283,8 @@ export function generateFingerprintProfile(identityId) {
   // AOSP-style fingerprint (no spaces):
   // brand/device/product:release/buildId/number:type/keys — fpCode rides in
   // the product token so the full string is unique by construction.
-  const fingerprint = `${brandSlug}/${device}/${productName}${fpCode}:${androidRelease}/${buildId}/${buildNumber}:userdebug/dev-keys`;
-  const displayId = `${androidRelease}.${buildId}.${displayCode}.keys`;
+  const fingerprint = `${brandSlug}/${device}/${productName}${fpCode}:${androidRelease}/${buildId}/${buildNumber}:user/release-keys`;
+  const displayId = `${androidRelease}.${buildId}.${displayCode}`;
   const serial = `${brandSlug.slice(0, 4).toUpperCase()}-${rng.digits(6)}-${rng.code(4)}`;
   const carrier = rng.pick(POOL_CARRIERS);
   const profile = {
