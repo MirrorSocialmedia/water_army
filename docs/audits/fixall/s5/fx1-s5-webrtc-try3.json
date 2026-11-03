@@ -1,0 +1,24 @@
+{
+  "_ts": "2026-11-03T12:51:28.078Z",
+  "canvas": {
+    "dataUrlLen": 2306,
+    "sha256": "04831c6413f740758cd98db43e89735b899f7d7313cbe906c70ced69b2429732"
+  },
+  "webgl": {
+    "vendor": "WebKit",
+    "renderer": "WebKit WebGL",
+    "unmaskedVendor": "Google Inc. (IMG)",
+    "unmaskedRenderer": "ANGLE (IMG, AMD Radeon Graphics, OpenGL ES 3.2)",
+    "maxTextureSize": 8192
+  },
+  "webrtc": {
+    "candidates": [
+      "candidate:4033957890 1 udp 2113937151 172.38.200.3 37714 typ host generation 0 ufrag a7Eh network-cost 999",
+      "candidate:2249239272 1 udp 1677729535 27.45.51.81 6768 typ srflx raddr 172.38.200.3 rport 37714 generation 0 ufrag a7Eh network-cost 999"
+    ],
+    "state": "gathering",
+    "conn": "new",
+    "err": "InvalidAccessError: Failed to execute 'setLocalDescription' on 'RTCPeerConnection': Failed to set local offer sdp: The order of m-lines in subsequent offer doesn't match order from previous offer/answer."
+  },
+  "_err": null
+}
