@@ -1,0 +1,5 @@
+lo
+wlan0
+---
+Galaxy6FS
+PING_OK

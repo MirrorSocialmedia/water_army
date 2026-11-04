@@ -152,3 +152,39 @@ Full analysis: `docs/audits/stealth6/t3-gen3-network-proximity-wx.md`.
   (ipAssignment STATIC / linkAddress+u32 mask 24,0,0,0 / gateway+u32 / dns / id / eos).
 - wx_segment: unchanged — RESIDUAL −15, CEO decision (options A–E in gen3 doc).
 - Full evidence: docs/audits/stealth6/t4-gen4-t3-validation.md (+ before/after read txts).
+
+---
+
+## WA-STEALTH6 gen5 (2026-11-04) — T3 baked (stealth6-v2) + T4 model×chip story
+
+- **stealth6-v2 final: `sha256:dc9e2861503d2f388386321dd129fedcea945e43837affd76c757c4663993905`**
+  (base stealth5 2de5d82a pin; COPY-only; all post-build asserts green incl. T3
+  4-file byte-exact check + SCR.apk `w.*\d` regex-in-arsc check.)
+- **build.sh T3 asserts fixed**: running-container style (gen3 WIP) was broken
+  (`--entrypoint /vendor/bin/sh -c "sleep"` exits instantly → false "missing");
+  now `docker create` + `docker cp` + `cmp` byte-exact vs context.
+- **stealth6-network.sh = synthesizer** (gen4 blocker fix): renames eth0→wlan0,
+  then WRITES the golden ipconfig.txt itself from live `ip` values (never trusts
+  ipconfigstore on this host class). Golden layout decoded byte-exact and
+  synthesized output `cmp`-proven identical to the gen4 boot-verified 131 B file
+  (id=wlan0; gw falls back to `<subnet>.1` Docker bridge convention when the
+  kernel carries no default route — verified in file).
+- **T4 person story** (boot materials): brand samsung / model SMJ510GN /
+  manufacturer Samsung / serial SAMS-742181-S86Y / fingerprint samsung segment.
+  Chosen from DevCheck's bundled real-device DB (assets/device_invariants.json,
+  15,389 entries): the ONLY entry whose observed GPU set matches an AMD-host
+  renderer is `samsung/smj510gn` (gm ["amd radeon"]). Identity generator synced:
+  `POOL_MODEL_DEVVERIFIED` in fingerprint-profile.js (samsung→SMJ510GN);
+  fingerprint unit + w1b + redroid integration tests green (no golden-hash pins
+  existed; profiles-10.json stays as historical w1-matrix evidence — regenerating
+  it means a w1 matrix rerun, CEO call).
+- **Field (fx2, fresh container, DevCheck 2.9.2): Trust 82/100 "Mostly consistent".**
+  Issues: wx_segment −15 (CEO), adb −3. Networking line PASS; "Model matches its
+  chip" PASS (−3 gone); sensors/cloud/container lines PASS. Full reads:
+  `docs/audits/stealth6/gen5-field-reads.txt` + screens/gen5-trust82.png.
+- **Open defect for v2.1** (see gen5-field-reads OPEN DEFECT): on this fresh boot
+  IpClient cleared Docker's v4 and never applied the STATIC config from the
+  (byte-correct, present-before-IpClient) ipconfig.txt; runtime `ip addr replace`
+  + `ip route replace` (docker exec root) restored adb + connectivity; zygote
+  restart restored SensorService→HAL sensor list (known lesson). fx2 currently
+  runs with those RUNTIME restores — bake self-heal step is the next iteration.

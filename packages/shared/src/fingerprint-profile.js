@@ -180,6 +180,24 @@ const POOL_MODEL_LINES = Object.freeze([
   'Zenfone', 'Xperia', 'Nova', 'Magic', 'GT', 'Legion', 'Z-Pro',
 ]);
 
+/**
+ * WA-STEALTH6 T4 (2026-11-04): DevCheck AI 2.9.2 ships a real-device DB
+ * (assets/device_invariants.json, 15,389 entries; key = lowercased
+ * brand+"/"+model). Its "Model matches its chip" check passes only when the
+ * detected chip (GPU renderer string here — our hosts report AMD Radeon via
+ * ANGLE/radeonsi and ro.soc.model stays empty by boot contract) appears in
+ * that model's observed set. A full-DB scan found exactly one entry whose
+ * GPU set matches an AMD host: samsung/"SMJ510GN" (gm: ["amd radeon"]).
+ * Brands in this map get that real model string instead of the synthetic
+ * line+number model, so brand x model x chip stays DB-consistent.
+ * device/productName keep the line-slug (real Samsung device codenames do
+ * differ from the marketing model string, e.g. j5plinea vs SM-J510GN).
+ * Model strings must stay space-free (kernel cmdline carrier, MD %20 rule).
+ */
+const POOL_MODEL_DEVVERIFIED = Object.freeze({
+  samsung: 'SMJ510GN',
+});
+
 export const POOL_LOCALES = Object.freeze(['en-US', 'zh-HK', 'zh-CN', 'zh-TW', 'en-GB', 'ja-JP', 'ko-KR', 'fr-FR', 'de-DE', 'es-ES', 'pt-BR', 'ru-RU', 'id-ID', 'th-TH', 'vi-VN', 'en-IN']);
 export const POOL_TIMEZONES = Object.freeze(['Asia/Hong_Kong', 'Asia/Shanghai', 'Asia/Taipei', 'Asia/Tokyo', 'Asia/Seoul', 'Asia/Bangkok', 'Asia/Jakarta', 'Asia/Singapore', 'America/New_York', 'America/Los_Angeles', 'Europe/London', 'Europe/Berlin', 'Europe/Paris', 'Australia/Sydney', 'Asia/Kolkata', 'America/Sao_Paulo']);
 /** Carrier pool: name + home MCC/MNC (real registry values). */
@@ -265,7 +283,8 @@ export function generateFingerprintProfile(identityId) {
   const vendor = rng.pick(POOL_BRANDS);
   const line = rng.pick(POOL_MODEL_LINES);
   const modelNum = `${rng.digits(1)}${rng.code(2)}`; // e.g. "7KQ"
-  const model = `${line}${modelNum}`; // no-space form (kernel cmdline carrier forbids spaces), e.g. "Pixel7KQ"
+  // T4: DevCheck-DB-verified brand→model pairing wins when available.
+  const model = POOL_MODEL_DEVVERIFIED[vendor.brand] || `${line}${modelNum}`; // e.g. "Pixel7KQ"
   const slug = `${line.replace(/[^A-Za-z0-9]/g, '').toLowerCase()}-${modelNum.toLowerCase()}`;
   const device = slug.slice(0, 24);
   const productName = slug.slice(0, 24);

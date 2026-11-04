@@ -1,0 +1,69 @@
+# WA-STEALTH6 gen5 — field reads (stealth6-v2 baked image, fx2, 2026-11-04)
+
+Image: water-army/redroid:14.0.0-240527-gms-mtg-oemprop-stealth6-v2
+Digest: sha256:dc9e2861503d2f388386321dd129fedcea945e43837affd76c757c4663993905
+Container: redroid-rdev-fx2 (recreated; privileged; net water-army-devices; 127.0.0.1:15001->5555)
+RAM gate: MemAvailable 7,593 MB >= 2,500 OK
+
+## T3 baked networking — verified at fresh boot (zero hot-fixes at boot)
+- /sys/class/net: lo, wlan0 (eth0 rename baked, rc post-fs-data)
+- ipconfig.txt synthesized by stealth6-network.sh: 131 B, system:system,
+  mtime = boot (22:58), md5 ab2223bfa5338588c17884829dda007b
+  (byte-identical layout to the gen4 boot-verified golden; synthesis proven
+  cmp-byte-identical against golden4.bin on device)
+- settings global ethernet_iface_regex = null (SCR.apk w.*\d resource in effect)
+- EthernetTracker agent: net100 Ethernet CONNECTED, Specifier EthernetNetworkSpecifier (wlan0)
+- Active default network: 100
+- DevCheck "Phone-style networking": PASS — "Wi-Fi interface present, no wired ethernet"
+
+### OPEN DEFECT (bake follow-up, not fixed in v2)
+On THIS fresh boot the framework IpClient did NOT apply the STATIC config from
+the golden ipconfig.txt (v4 flushed: wlan0 had only link-local until runtime
+`ip addr replace 172.38.200.5/24` + `ip route replace default via 172.38.200.1`
+via docker exec root). Kernel-level Docker assignment existed at post-fs-data
+(script read it — file has correct live values) but was cleared by IpClient
+clearConfig; agent lp Routes then lacked the default route, so Android fwmark
+ping was "Network is unreachable" until runtime restore. Host-visible symptom:
+docker-proxy -> container:5555 needs v4, so adb showed OFFLINE until restore.
+Same file bytes applied fine in gen4 hot-patch sequence, so the race/order is
+boot-specific. NEXT: stealth6-v2.1 — self-heal step in stealth6-network.rc on
+`sys.boot_completed=1` (ip addr replace + ip route replace, idempotent), then a
+clean reboot to confirm agent default-route returns without manual steps.
+Also observed this boot (runtime, not boot state): SensorService got 0 sensors
+("No Sensors", devInitCheck:0) — fixed by `setprop ctl.restart zygote` (known
+wrapper-connect-once lesson); 3/3 sensors + proximity wakeUp 0x13 after.
+
+## T4 model x chip (baked boot materials, T4 person-story change)
+- ro.product.model  = SMJ510GN (6 partition segments)
+- ro.product.brand  = samsung (6 segments); manufacturer Samsung
+- ro.serialno       = SAMS-742181-S86Y
+- ro.build.fingerprint = samsung/galaxy-6fs/galaxy-6fsp5d6fsksyq:14/R0ABF9Z/024408:user/release-keys
+- story unchanged: device/productName galaxy-6fs, fpCode p5d6fsksyq, displayId 14.R0ABF9Z.DXKH5
+- rationale: DevCheck device_invariants.json (15,389 entries) — only entry whose
+  observed GPU set matches an AMD-host renderer is samsung/smj510gn
+  ({"gm":["amd radeon"],"s":["Qualcomm"],"c":[2]}). Generator synced:
+  fingerprint-profile.js POOL_MODEL_DEVVERIFIED {samsung: SMJ510GN};
+  unit+integration tests pass (deterministic pins recomputed).
+
+## DevCheck AI 2.9.2 field scan (post-bake, fresh container /data)
+Hardware Trust: 82 / 100 — "Mostly consistent" (was 79 in gen4 hot-patch; 10 capped pre-T3)
+Issues found 2:
+  - Native cross-check  -15  hook [hook:wx_segment]  (RESIDUAL — CEO decision, options A-E)
+  - USB debugging       -3   ADB on (informational; field-off is a fleet hygiene knob)
+Passed 18 — including:
+  - Phone-style networking PASS (Wi-Fi interface present, no wired ethernet)
+  - Model matches its chip PASS (DB hit; model -3 GONE)
+  - Core sensors present PASS (accel + gyro + proximity; proximity wakeUp FIXED holds)
+  - Not a cloud phone PASS; Not a container PASS; Real hardware PASS
+  - Build signature well-formed PASS (5/2 separators, brand-consistent)
+Not applicable 2:
+  - Chip and GPU match — "SoC not confidently identified — skipped" (by design; ro.soc empty)
+  - Uptime row = informational "Up 1 day(s) — normal"
+Score math: 100 - 15(wx) - 3(adb) = 82 exactly. wx -15 is the only structural
+residual left on-device (CEO's wx_segment decision moves the floor to 97).
+DevCheck uninstalled after read (pm list packages deviceinsight = 0).
+
+## Red-line compliance
+- D4 frozen untouched; fx1 untouched (read-only refs only); no new machines
+  (fx2 recreated in place); DevCheck installed->read->uninstalled; 3-strikes not
+  tripped (no repeated identical failure); no secrets in repo diff.

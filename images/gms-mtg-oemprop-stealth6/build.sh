@@ -33,7 +33,7 @@ note "built: $FINAL"
 # ---- post-build assertions (no boot) ---------------------------------------
 CTR=stealth6-assert
 docker rm -f "$CTR" 2>/dev/null || true
-docker run -d --name "$CTR" --entrypoint /vendor/bin/sh "$FINAL" -c "sleep 120" >/dev/null
+docker create --name "$CTR" "$FINAL" true >/dev/null
 trap 'docker rm -f "$CTR" >/dev/null 2>&1 || true' EXIT
 T="/tmp/stealth6-assert.$$"; mkdir -p "$T"
 docker cp "$CTR:/vendor/etc/init/stealth6-extras.rc" "$T/abi.rc"
@@ -55,15 +55,18 @@ docker cp "$CTR:/vendor/etc/init/oem-ro-map.rc" "$T/oem-ro-map.rc"
 cmp "$T/oem-ro-map.rc" "$DIR/../gms-mtg-oemprop-stealth5/files/vendor/etc/init/oem-ro-map.rc" \
   || { echo "ASSERT: oem-ro-map.rc drifted from stealth5 context (regenerate via generate-wa-ro-map-rc.mjs, not sneak-edit)" >&2; exit 1; }
 note "post-build asserts OK (4 COPY targets byte-exact; oem-ro-map unchanged)"
-# T3 bake assertions (started container — legacy builder create+cp misses new layers)
+# T3 bake assertions (create+cp, byte-exact vs context — cp works on created container)
 T3_OK=1
 for f in /vendor/etc/init/stealth6-network.rc /vendor/bin/stealth6-network.sh \
          /vendor/etc/permissions/android.hardware.sensor.proximity.xml \
          "/system/apex/com.android.tethering/priv-app/ServiceConnectivityResources@UD2A.240505.001.W1/ServiceConnectivityResources.apk"; do
-  docker exec "$CTR" test -f "$f" 2>/dev/null \
-    || { echo "ASSERT: $f missing in image" >&2; T3_OK=0; }
+  if docker cp "$CTR:$f" "$T/t3file" >/dev/null 2>&1 && cmp -s "$T/t3file" "$DIR/files$f"; then
+    :
+  else
+    echo "ASSERT: $f missing or not byte-exact in image" >&2; T3_OK=0
+  fi
 done
-[ "$T3_OK" = "1" ] && note "T3 bake asserts OK (4 T3 files present in image)"
+[ "$T3_OK" = "1" ] && note "T3 bake asserts OK (4 T3 files present, byte-exact)"
 # SCR.apk w.*\d regex check
 SCR_IMG="/tmp/stealth6-scr-$$.apk"
 docker cp "$CTR:/system/apex/com.android.tethering/priv-app/ServiceConnectivityResources@UD2A.240505.001.W1/ServiceConnectivityResources.apk" "$SCR_IMG" 2>/dev/null
