@@ -1,0 +1,81 @@
+# WA-STEALTH6 gen12 T6 closure — field reads (final image, fx2 = wa-stealth6:gen11b-rec)
+
+Date: 2026-11-04 (Asia/HK). Segment: docs + verification only (no image bake, no code change).
+Baseline: HEAD = origin/main = 19fa0b3 (confirmed clean at segment start).
+Test bed: fx2 (redroid-rdev-fx2, image wa-stealth6:gen11b-rec, image ID sha256:7120dbbd5ec6…, content 1,218,517,731 B / virtual 4.29 GB, Up 2 h at segment start).
+fx1 (stealth4, Up 26 h) untouched; rdev-f1 / redroid-mc-dogfood-1/2 left exited & untouched. Host adb full path, transport 127.0.0.1:15001 connected (adb-attached state during this segment).
+
+## 1. Engineer-machine / persona prop reads (adb getprop)
+
+```
+ro.build.type: user                     (扳到 — user build)
+ro.build.flavor: galaxy-6fs-user        (扳到 — no -debug/-userdebug form)
+ro.build.tags: release-keys             (扳到 — not dev-keys)
+ro.debuggable: 0                        (扳到 — gen11 T2 holds through boot+adb+DevCheck)
+ro.build.version.security_patch: 2026-09-05   (R51 ✓)
+ro.product.brand: samsung / ro.product.model: SMJ510GN
+ro.product.locale: pt-BR / persist.sys.locale: pt-BR   (R50 ✓)
+ro.serialno: SAMS742181S86Y             (R52 lesson applied: no hyphen)
+ro.adb.secure: 0                        (RESIDUAL — real user devices ship =1)
+su: absent (ls /system/xbin/su /system/bin/su /sbin/su → RC=1)  (扳到)
+ro.dalvik.vm.native.bridge: libnb.so (→ libndk_translation.so, ARC c05f2b7e…)
+ro.product.cpu.abi: arm64-v8a
+ro.product.cpu.abilist: arm64-v8a,armeabi-v7a,x86_64
+ro.product.cpu.abilist32: armeabi-v7a,armeabi,x86   (32-bit list without 32-bit runtime — see §4)
+ro.system/vendor/odm.product.cpu.abilist*: x86_64,x86,arm64-v8a,armeabi-v7a,armeabi (partition-level x86 residual)
+```
+
+## 2. Kernel / hostname / platform
+
+```
+net.hostname (prop): Pixel-7            (RESIDUAL inconsistency: Pixel hostname on a Samsung persona)
+uname: Linux localhost 6.8.0-117-generic #117-Ubuntu SMP PREEMPT_DYNAMIC x86_64 Toybox
+       (kernel nodename = localhost; host kernel string = Ubuntu — inherent redroid-container tell)
+settings global http_proxy: 172.38.200.1:20090   (wa-eme-httpfront → host 7897 mihomo; egress via proxy)
+```
+
+## 3. Sensors (dumpsys sensorservice)
+
+```
+Total 3 h/w sensors, 3 running 0 disabled clients
+0x1 BMI260 Accelerometer   | Bosch  | android.sensor.accelerometer | continuous 1000Hz
+0x2 BMI260 Gyroscope       | Bosch  | android.sensor.gyroscope     | continuous 1000Hz
+0x3 VCNL36827 Proximity    | Vishay | android.sensor.proximity     | on-change wakeUp (flags 0x13)
++ AOSP software sensors (Game Rotation Vector etc.) as stock
+```
+(= DevCheck "Core sensors present" PASS basis; unchanged vs gen2 T2 story.)
+
+## 4. WebView face — NEW FINDING this segment (report, not fix)
+
+webview_shell renders blank; renderer child fails to spawn, repeating:
+
+```
+E WebViewZygote: android.os.ZygoteStartFailedEx: Unsupported zygote ABI: x86
+E ActivityManager: Failure starting process com.android.webview:sandboxed_process{0,1}:org.chromium.content.app.SandboxedProcessService{0,1}:0
+I Process : Sending signal. PID: … SIG: 9   (WebViewZygote stack: WebViewZygoteStartIfNeeded → …)
+W cr_ChildProcessConn: Fallback to ComponentInfo{com.android.webview/…SandboxedProcessService1}
+```
+
+WebView = com.android.webview 125.0.6422.113 (versionCode 642211307, system image).
+Cause shape: WebViewZygote picks a 32-bit (x86) spawn ABI for the sandboxed child, but the redroid x86_64 base has no 32-bit zygote/app_process32 runtime — `ro.product.cpu.abilist32` *lists* x86/armeabi-v7a without a matching runtime ("soft" 32-bit story from T1).
+Consequences: (a) leakprobe/CDP web-face sampling blocked on fx2 (page never runs JS; CDP Runtime.evaluate wedges with the renderer dead); (b) fleet-relevant functional defect for webview-heavy apps; (c) fingerprint-plane impact nil for DevCheck (all 113 checks pass in-app, 0 issues — see §5).
+DevCheck 100/100 evidence predates this state (gen11b segment, same image): EME probe screens gen11b-eme-{before,after}.png rendered fine then — renderer health may be session/boot-state dependent; reproduce/fix owner = next D4-era boot audit, NOT fixed this segment (red line: 發現問題即報唔好即修).
+
+## 5. DevCheck cross-check (final image, recorded gen11b evidence, screens re-read this segment)
+
+- `screens/gen11b-devcheck-main.png` — Trust **100/100 "Genuine device, likely in-hand"**, banner "You can safely use device for all services", ADB shown "Informational only" (scan with adb transport null), SMJ510GN / android 14 / patch 2026-09-05 / ARM 64 / battery "Nao esta carregando" (pt-BR UI), sensors present, display 600 nit 1080×2340.
+- `screens/gen11b-devcheck-issues.png` — tab **113 Passed / 0 Issues**, "No issues found".
+- adb-attached scan state returns −3 → 97/100 (control line, unchanged).
+- Package `com.deviceinsight.ai` currently uninstalled on fx2 (pm list → none) ✓ zero residue.
+
+## 6. Suite / build (repo口径, HEAD 19fa0b3)
+
+- `npm test` → tests 1764 · **pass 1758 · fail 0 · skipped 6** (exact baseline口径 1764/1758/0/6) — zero regression.
+- `npm run build` (web) → ✓ built, EXIT=0 (vite 120 ms).
+- Golden-hash drift guards: re-pin already landed in prior commits — f10aaaa (S6/R43 build-form: wave-1 w1 hashes re-pinned, tpl streams unchanged) and c98b211 (R50 locale prop carrier: PROFILE_PROP_MAP +locale→ro.product.locale, rc artifacts regenerated, drift guards updated, suite 1764/1758/0/6 zero regression). R51 (2026-09-05) is device-side data fix; generator pool emits random `2025-xx` patches (fingerprint-profile.js:296), no pool re-pin required.
+- Host RAM: MemAvailable 9,349 MB ≥ 2,500 MB boot budget口径 ✓.
+
+## 7. Environment / user-stack untouched check
+
+- containers Up: water-army-api-1, water-army-worker-1, water-army-web-1, water-army-postgres-1, water-army-redis-1, wa-eme-httpfront (20090→7897), rdev-e1-gost, matrix-b-gost sidecars for fx1/fx2 — all pre-existing, not touched this segment.
+- Account danielrowe7144: DB gmail_accounts 0 rows, identities has no danielrowe row; S5-REVIEW records **unused ✓ (未創建、72h 未起表)**; no D4 signup ops this segment → state unchanged.
