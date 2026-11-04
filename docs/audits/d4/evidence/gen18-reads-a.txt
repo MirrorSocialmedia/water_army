@@ -1,0 +1,32 @@
+== gen18 reads A 2026-11-04T20:23:50Z ==
+ro.serialno=HONO-913716-PF9J
+ro.product.model=V-Series6XQ
+ro.product.brand=honor
+ro.product.manufacturer=Honor
+ro.product.device=vseries-6xq
+ro.product.name=vseries-6xq
+ro.build.fingerprint=honor/vseries-6xq/vseries-6xq2fjv8tyge5:15/M4ABRQM/384475:user/release-keys
+ro.build.display.id=15.M4ABRQM.4T69N
+ro.build.version.incremental=384475
+ro.product.locale=pt-BR
+ro.product.cpu.abi=arm64-v8a
+ro.product.cpu.abilist64=arm64-v8a,x86_64,x86
+ro.hardware.egl=mesa
+ro.runtime.firstboot=1793823808325
+-- framework locale/tz --
+null
+pt-BR
+-- proc --
+MemTotal:    12117344 kB
+MemAvailable: 6301025 kB
+16
+800000 100000
+-- battery --
+  AC powered: false
+  Max charging voltage: 0
+  status: 3
+  level: 61
+  voltage: 0
+  temperature: 0
+-- firstboot epoch --
+2026-11-04T20:23:28Z

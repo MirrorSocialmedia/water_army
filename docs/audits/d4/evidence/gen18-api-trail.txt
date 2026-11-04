@@ -1,0 +1,12 @@
+== gen18 WA-D4 RUN-1 product-API trail (all via 127.0.0.1:3012, admin session cookie) ==
+templates PUT db25d417-0387-4f20-ac55-688b0b3c3f07 {"cpuLimit":8} -> 200 (stealth6-v4 cpuLimit null->8; gpuMode/privileged unchanged)
+ram-gate pre-A: liveLeases=2 reserved=2400 wouldAdmitNext=ADMITTED (memAvail 6538.9, projected 2938)
+create A #1: {"name":"redroid-s6v4-g18a",...} -> 400 DATA_DIR_CLAIM_CONFLICT reqId 0050382b-3e80-4a32-9496-3d77314ac6da (identity claims data home redroid-s6v4-g17a)
+create A #2: {"name":"redroid-s6v4-g17a","templateName":"stealth6-v4","identityId":"9a991fc3-...","proxyUrl":"socks5://172.38.223.1:18443","idempotencyKey":"gen18-a-boot2"} -> 201 id 20961eea-cb65-47bf-94bf-c53ab794b9df adbPort 15002 gostPort 20082 sidecar redroid-matrix-b-gost-redroid-s6v4-g17a
+docker inspect g17a: HostConfig.NanoCpus=8000000000 Memory=0 (cpu story cap applied; container cpu.max=800000 100000, nproc=16 -> quota not affinity)
+create B #1 (no proxy): -> 400 EGRESS_PROXY_REQUIRED reqId cb605844-2f49-4387-83d1-098550490d5b (WA_W3_EGRESS_BINDING_ENABLED)
+create B #2 (card B + proxyUrl): -> 409 RAM_GATE_DENIED PROJECTED_BELOW_TARGET reqId 1e185735-a074-4b65-90f0-e9ff50c7d161 (memAvail 6441.7 projected 1641 liveCount 3; zero side-effects)
+ram-gate post-A: liveLeases=3 reserved=3600; admit line for 4th boot ~7300MiB; 7-poll window 04:34-04:37 memAvail 6365-6568 -> B suspended
+A egress check: socks5 172.38.200.1:20082 -> api.ipify.org = 103.194.185.206 (= card A expectedEgress, HK/Netsec per ip-api)
+device view A (id 20961eea): containerState=running adbState=unknown; proxy.state=provisioning network.state=STARTING canary UNKNOWN (egress manually verified)
+fx2 Chrome install (not API): base.apk copied from /var/lib/water-army/redroid/redroid-rdev-fx1/.../com.android.chrome-.../base.apk (326587630B md5 5022100d3f1e...); pm install -r -g; versionName 156.0.8078.47 primaryCpuAbi=x86_64
