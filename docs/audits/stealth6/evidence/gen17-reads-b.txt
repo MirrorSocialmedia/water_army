@@ -1,0 +1,40 @@
+== gen15 reads 2026-11-04T19:59:51Z serial=127.0.0.1:15002 ==
+-- identity/ro --
+ro.product.model=GT7VH
+ro.product.brand=honor
+ro.product.manufacturer=Honor
+ro.product.device=gt-7vh
+ro.product.name=gt-7vh
+ro.hardware=gt-7vh
+ro.serialno=HONO-512269-H8GM
+ro.build.fingerprint=honor/gt-7vh/gt-7vhwcq2fdhsn4:14/G8ABYP2/455024:user/release-keys
+ro.build.display.id=14.G8ABYP2.4FW64
+ro.build.id=G8ABYP2
+ro.product.cpu.abilist64=arm64-v8a,x86_64,x86
+persist.sys.timezone=Australia/Sydney
+net.hostname=
+ro.baseband=unknown
+-- proc story --
+MemTotal:    11752440 kB
+8
+localhost
+-- geometry --
+Physical size: 1440x3200
+Physical density: 525
+-- battery --
+-- uptime/boot --
+164432.35 2243481.11
+Thu Nov  5 06:59:51 AEDT 2026
+2026-11-03 09:19:18
+1793822365082
+-- boot props --
+1
+0
+user
+-- pkgs --
+6
+1
+-- egress --
+null
+    inet 172.38.200.7/24 brd 172.38.200.255 scope global wlan0
+1 packets transmitted, 1 received, 0% packet loss, time 0ms

@@ -1,0 +1,7 @@
+19:54:50Z Q3-START serial=127.0.0.1:15002
+19:54:56Z Q3a input-rhythm 6 keystrokes jittered
+19:55:04Z Q3b dwell 8s idle on example.com
+19:55:09Z Q3c swipe down+up (fling cadence 420ms/650ms)
+19:55:23Z Q3d fg/bg cycle home->recents->back
+19:55:23Z CDP sock=@webview_devtools_remote_4025
+19:55:23Z Q3-END

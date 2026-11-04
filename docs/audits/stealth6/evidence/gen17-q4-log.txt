@@ -1,0 +1,5 @@
+19:55:55Z google page: focus=  mCurrentFocus=Window{7f7c881 u0 org.chromium.webview_shell/org.chromium.webview_shell.WebViewBrowserActivity}
+19:56:21Z fb page: focus=  mCurrentFocus=Window{3cd5a17 u0 org.chromium.webview_shell/org.chromium.webview_shell.WebViewBrowserActivity}
+19:56:22Z challenge words: 
+19:56:33Z devcheck pkg=com.deviceinsight.ai
+19:56:55Z devcheck installed->captured->uninstalled

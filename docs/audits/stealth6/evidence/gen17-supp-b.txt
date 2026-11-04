@@ -1,0 +1,9 @@
+== gen17 supp B 2026-11-04T19:59:51Z
+persist.sys.locale=en-US
+ro.product.locale=en-US
+ro.runtime.firstboot=1793822365082
+batt_level=  level: 61
+thirdparty=[]
+egress_proxy=null
+wlan=    inet 172.38.200.7/24 brd 172.38.200.255 scope global wlan0
+batt_status=  AC powered: false;  USB powered: false;  status: 3;

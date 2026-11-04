@@ -1,0 +1,8 @@
+== gen17 product-API trail (all via 127.0.0.1:3012) ==
+A create:
+{"name": "redroid-s6v4-g17a", "id": "38aa096b-18b9-4367-b89a-9596d189d2ee", "containerName": "redroid-s6v4-g17a", "containerId": "94a880c52c491507bdb4e83a1470fc2a1c7228bbb818a414fcccf5f101365d08", "adbPort": 15002, "image": "water-army/redroid:14.0.0-240527-gms-mtg-oemprop-stealth6-v4", "width": 1440, "height": 3200, "dpi": 525}
+B create:
+{"name": "redroid-s6v4-g17b", "id": "276f1ade-38ed-4f90-a3fb-a701b52e41c6", "containerName": "redroid-s6v4-g17b", "containerId": "e3cd97280b0fd13cccca98720860aeb6f3b30b27a76d27d09b2f351321d23484", "adbPort": 15002}
+A delete: {"deleted":true,"name":"redroid-s6v4-g17a","containerRemoved":true,"removeData":true,"dataRemoved":false,"dataRemoveErrorCode":"DATA_DIR_PERM_DENIED","proxyTornDown":{"done":true},"gostRemoved":{"removed":true}} (alpine chown+rm -> dir gone)
+B delete: {"deleted":true,"name":"redroid-s6v4-g17b","containerRemoved":true,"removeData":true,"dataRemoved":false,"dataRemoveErrorCode":"DATA_DIR_PERM_DENIED","proxyTornDown":{"done":true}} (alpine chown+rm -> dir gone)
+ram-gate pre-A: liveLeases=2 reserved=2400 wouldAdmitNext=ADMITTED (memAvail 6928.4)

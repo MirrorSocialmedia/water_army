@@ -1,0 +1,28 @@
+== gen17 Q2 factory-breakpoint A 2026-11-04T19:54:30Z
+third-party pkgs: []
+ls: /data/data: Permission denied
+data/data count=0
+webview_shell data:
+cache/cookiestore:
+data/app count=0
+sdcard:
+Alarms
+Android
+Audiobooks
+DCIM
+Documents
+localtmp:
+ipconfig_wlan0.bin
+bluetooth:
+null
+android_id=88cceb4bfbe78c2d
+devprops adb_keys(harness trace)=/data/misc/adb/adb_keys
+-- docker-exec face (root in-container) follow-up:
+/data/data package-dirs=129 (image stock, no third-party)
+/data/app incremental=0 ; pm list packages -3 = []
+webview_shell data = cache/code_cache only (no browsing residue)
+cookies found=4, ALL under com.google.android.googlequicksearchbox,
+  mtime 2026-11-05 03:53:20 = container boot instant -> image seed,
+  NOT carried from fx2/previous machine (factory-breakpoint confirmed)
+/data/local/tmp = ipconfig_wlan0.bin only (gen11b baked rc artifact, boot-time)
+bluetooth_name=null ; android_id fresh ; /data/misc/adb/adb_keys = harness trace (honest note)

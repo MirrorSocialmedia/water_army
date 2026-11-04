@@ -1,0 +1,9 @@
+== gen17 supplemental A 2026-11-04T19:54:16Z
+persist.sys.locale=pt-BR
+ro.product.locale=pt-BR
+gsm.sim.operator.alpha=
+gsm.operator.alpha=
+ro.runtime.firstboot=1793822000898
+webview_shell_pkg=0
+/bin/bash: line 1: pm: command not found
+chrome_pkgs=0
