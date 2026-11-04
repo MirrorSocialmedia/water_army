@@ -33,3 +33,12 @@ COPY --chown=0:0 images/gms-mtg-oemprop-stealth6/files/vendor/bin/stealth6-netwo
 COPY --chown=0:0 images/gms-mtg-oemprop-stealth6/files/system/apex/com.android.tethering/priv-app/ServiceConnectivityResources@UD2A.240505.001.W1/ServiceConnectivityResources.apk /system/apex/com.android.tethering/priv-app/ServiceConnectivityResources@UD2A.240505.001.W1/ServiceConnectivityResources.apk
 # Proximity feature XML (required for SensorManager.hasSystemFeature(SENSOR_PROXIMITY))
 COPY --chown=0:0 images/gms-mtg-oemprop-stealth6/files/vendor/etc/permissions/android.hardware.sensor.proximity.xml /vendor/etc/permissions/android.hardware.sensor.proximity.xml
+# gen11 T5 (stealth6-v3 batch 1): maps-shim bake — the two gen10 container-layer files
+# (lost on container recreate) become image bytes. shim.so = LD_PRELOAD /proc/self/maps
+# rwx-line filter (clears DevCheck "native cross-check wx_segment" -15; field-proven
+# on fx2, score 82->97). init.redroid.rc = FULL official zygote service definition +
+# setenv LD_PRELOAD (scope: framework processes only; a bare duplicate drops class/sockets
+# and zygote never starts — first definition wins, imported before init.zygote64.rc).
+# Source + host build: images/gms-mtg-oemprop-stealth6/shim/build_shim.sh
+COPY --chown=0:0 images/gms-mtg-oemprop-stealth6/files/system/lib64/shim.so /system/lib64/shim.so
+COPY --chown=0:0 images/gms-mtg-oemprop-stealth6/files/init.redroid.rc /init.redroid.rc

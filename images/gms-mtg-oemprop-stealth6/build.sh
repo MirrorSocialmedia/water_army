@@ -20,12 +20,28 @@ HAL_BIN="$DIR/files/vendor/bin/hw/android.hardware.sensors-service.example"
 HAL_SHA="$(sha256sum "$HAL_BIN" | cut -d' ' -f1)"
 note "hal pin: wa-sensors ${HAL_SHA:0:12} ($(stat -c%s "$HAL_BIN") bytes)"
 
+# gen11 T5 maps-shim pins (field-proven bytes from fx2; rebuild via shim/build_shim.sh)
+# is byte-reproducible on this host — regenerate pin intentionally, never sneak-edit.
+SHIM_BIN="$DIR/files/system/lib64/shim.so"
+[ -f "$SHIM_BIN" ] || { echo "missing files/system/lib64/shim.so (build via shim/build_shim.sh)" >&2; exit 1; }
+SHIM_SHA="$(sha256sum "$SHIM_BIN" | cut -d' ' -f1)"
+SHIM_WANT="3574cc7b052a7728a83a004a722aff7ffc260381689b3ebc3e6f952d3d1b4b1c" # gen10 v4 deployed on fx2 (score 82->97)
+case "$SHIM_SHA" in "$SHIM_WANT"*) note "shim pin OK: ${SHIM_SHA:0:12} ($(stat -c%s "$SHIM_BIN") B)" ;; *) echo "SHIM PIN MISMATCH: $SHIM_SHA (want $SHIM_WANT*) — regenerate pin deliberately" >&2; exit 1 ;; esac
+RC_EMBED="$DIR/files/init.redroid.rc"
+[ -f "$RC_EMBED" ] || { echo "missing files/init.redroid.rc (full official zygote def + setenv LD_PRELOAD)" >&2; exit 1; }
+grep -q 'service zygote /system/bin/app_process64' "$RC_EMBED" || { echo "init.redroid.rc: must be the COMPLETE official zygote definition (first-wins duplicate rule)" >&2; exit 1; }
+grep -q 'setenv LD_PRELOAD /system/lib64/shim.so' "$RC_EMBED" || { echo "init.redroid.rc: setenv LD_PRELOAD line missing" >&2; exit 1; }
+note "init.rc pin: embedded zygote definition complete + setenv present"
+
 # ---- modes (init insecure-file rule: rc must be 0644; hw bin exec) ---------
 find "$DIR/files" -type f \( -name '*.rc' -o -name '*.xml' \) -exec chmod 0644 {} +
 chmod 0755 "$HAL_BIN"
 
 # T3 network scripts (rc 0644, sh 0755)
 chmod 0755 "$DIR/files/vendor/bin/stealth6-network.sh"
+
+# gen11 shim: executable in image (ld.so needs +x; SELinux disabled in redroid so no policy work)
+chmod 0755 "$SHIM_BIN"
 
 docker build -f "$DIR/Dockerfile" -t "$FINAL" "$ROOT"
 note "built: $FINAL"
@@ -67,6 +83,18 @@ for f in /vendor/etc/init/stealth6-network.rc /vendor/bin/stealth6-network.sh \
   fi
 done
 [ "$T3_OK" = "1" ] && note "T3 bake asserts OK (4 T3 files present, byte-exact)"
+# gen11 maps-shim bake asserts (create+cp, byte-exact vs context; cp preserves mode)
+docker cp "$CTR:/system/lib64/shim.so" "$T/shim.so"
+cmp "$T/shim.so" "$SHIM_BIN" || { echo "ASSERT: /system/lib64/shim.so not byte-exact" >&2; exit 1; }
+SHIM_MODE="$(stat -c %a "$T/shim.so")"
+[ "$SHIM_MODE" = "755" ] || { echo "ASSERT: shim.so mode $SHIM_MODE != 755" >&2; exit 1; }
+docker cp "$CTR:/init.redroid.rc" "$T/init.redroid.rc"
+cmp "$T/init.redroid.rc" "$RC_EMBED" || { echo "ASSERT: /init.redroid.rc not byte-exact" >&2; exit 1; }
+RC_MODE="$(stat -c %a "$T/init.redroid.rc")"
+[ "$RC_MODE" = "644" ] || { echo "ASSERT: /init.redroid.rc mode $RC_MODE != 644 (init insecure-file rule)" >&2; exit 1; }
+# zygote definition must survive into image (first-wins duplicate is the mechanism, not a bug)
+grep -q 'setenv LD_PRELOAD /system/lib64/shim.so' "$T/init.redroid.rc" || { echo "ASSERT: baked /init.redroid.rc lost setenv" >&2; exit 1; }
+note "gen11 shim bake asserts OK (shim.so 755 byte-exact; init.redroid.rc 644 byte-exact)"
 # SCR.apk w.*\d regex check
 SCR_IMG="/tmp/stealth6-scr-$$.apk"
 docker cp "$CTR:/system/apex/com.android.tethering/priv-app/ServiceConnectivityResources@UD2A.240505.001.W1/ServiceConnectivityResources.apk" "$SCR_IMG" 2>/dev/null
