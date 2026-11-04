@@ -33,6 +33,13 @@ grep -q 'service zygote /system/bin/app_process64' "$RC_EMBED" || { echo "init.r
 grep -q 'setenv LD_PRELOAD /system/lib64/shim.so' "$RC_EMBED" || { echo "init.redroid.rc: setenv LD_PRELOAD line missing" >&2; exit 1; }
 note "init.rc pin: embedded zygote definition complete + setenv present"
 
+# gen11 debuggable flip pin (boss decision #4; field-proven fx2: boots, adbd alive, 97 no regression)
+BPROP="$DIR/files/system/build.prop"
+[ -f "$BPROP" ] || { echo "missing files/system/build.prop" >&2; exit 1; }
+grep -q '^ro.debuggable=0$' "$BPROP" || { echo "build.prop: ro.debuggable must be 0 (user-build story)" >&2; exit 1; }
+grep -q '^ro.build.type=user$' "$BPROP" || { echo "build.prop: ro.build.type must be user (story consistency)" >&2; exit 1; }
+note "build.prop pin: ro.debuggable=0 + ro.build.type=user (story consistent)"
+
 # ---- modes (init insecure-file rule: rc must be 0644; hw bin exec) ---------
 find "$DIR/files" -type f \( -name '*.rc' -o -name '*.xml' \) -exec chmod 0644 {} +
 chmod 0755 "$HAL_BIN"
@@ -95,6 +102,13 @@ RC_MODE="$(stat -c %a "$T/init.redroid.rc")"
 # zygote definition must survive into image (first-wins duplicate is the mechanism, not a bug)
 grep -q 'setenv LD_PRELOAD /system/lib64/shim.so' "$T/init.redroid.rc" || { echo "ASSERT: baked /init.redroid.rc lost setenv" >&2; exit 1; }
 note "gen11 shim bake asserts OK (shim.so 755 byte-exact; init.redroid.rc 644 byte-exact)"
+# gen11 build.prop bake assert (byte-exact + props readable from baked file)
+docker cp "$CTR:/system/build.prop" "$T/build.prop"
+cmp "$T/build.prop" "$BPROP" || { echo "ASSERT: /system/build.prop not byte-exact" >&2; exit 1; }
+BPROP_MODE="$(stat -c %a "$T/build.prop")"
+[ "$BPROP_MODE" = "644" ] || { echo "ASSERT: build.prop mode $BPROP_MODE != 644" >&2; exit 1; }
+grep -q '^ro.debuggable=0$' "$T/build.prop" || { echo "ASSERT: baked build.prop lost ro.debuggable=0" >&2; exit 1; }
+note "gen11 build.prop bake asserts OK (byte-exact 644; debuggable=0 in baked bytes)"
 # SCR.apk w.*\d regex check
 SCR_IMG="/tmp/stealth6-scr-$$.apk"
 docker cp "$CTR:/system/apex/com.android.tethering/priv-app/ServiceConnectivityResources@UD2A.240505.001.W1/ServiceConnectivityResources.apk" "$SCR_IMG" 2>/dev/null

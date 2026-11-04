@@ -42,3 +42,11 @@ COPY --chown=0:0 images/gms-mtg-oemprop-stealth6/files/vendor/etc/permissions/an
 # Source + host build: images/gms-mtg-oemprop-stealth6/shim/build_shim.sh
 COPY --chown=0:0 images/gms-mtg-oemprop-stealth6/files/system/lib64/shim.so /system/lib64/shim.so
 COPY --chown=0:0 images/gms-mtg-oemprop-stealth6/files/init.redroid.rc /init.redroid.rc
+# gen11 T5 (stealth6-v3 batch 2, boss decision #4): debuggable re-attack — field-proven on
+# fx2: ro.debuggable=0 boots healthy (12s), adbd alive (it is class core/disabled/override,
+# NOT critical — the old S6 death was the user-build AUTH gap: without /data/misc/adb/adb_keys
+# provisioning the control line shows 'unauthorized', not a crash). Story aligns to
+# ro.build.type=user (effective value was already user via oem-persist; file bytes aligned
+# for raw-file consistency). DevCheck re-scan 97/100 no regression, 'ro.debuggable mismatch'
+# line gone. Ops: fleet must seed /data/misc/adb/adb_keys (host adbkey.pub) on user builds.
+COPY --chown=0:0 images/gms-mtg-oemprop-stealth6/files/system/build.prop /system/build.prop

@@ -1,0 +1,14 @@
+# gen11 T2 debuggable re-attack — before/after reads (fx2)
+## BEFORE (stealth6-v3 fresh boot, docs in t9/t10):
+ro.debuggable=1 ; ro.build.type=user (effective, via oem-persist; file said userdebug) ; ro.adb.secure=0
+DevCheck 97/100 but breakdown carried 'Androidproperty ro.debuggable = 1 -> 0 possible mismatch' (see t10-v3-fresh-97.png)
+## AFTER (build.prop ro.debuggable=0 + ro.build.type=user in file, docker-cp + docker restart):
+sys.boot_completed=1
+ro.debuggable=0
+ro.build.type=user
+ro.adb.secure=0
+adbd: ALIVE (class core, disabled, override — NOT critical; hypothesis 'critical adbd blocks flip' DISPROVED on this image)
+adb control line: works after seeding /data/misc/adb/adb_keys from host ~/.android/adbkey.pub (framework user-build auth path); without keys => 'device unauthorized' (= likely true cause of old S6 'death')
+sensors after restart: Total 3 h/w sensors, 3 running
+DevCheck re-scan: 97/100 'Likely genuine', Issues=1 (USB debugging -3 informational), Passed=19; ro.debuggable mismatch line GONE; screenshot t10-debug0-details.png
+sensitive: no secrets in diff (props only)
