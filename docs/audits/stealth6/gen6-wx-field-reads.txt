@@ -1,0 +1,30 @@
+WA-STEALTH6 gen6 — wx_segment option C investigation (2026-11-04 Asia/HK)
+Test bed: fx2 (redroid-rdev-fx2, image ...oemprop-stealth6-v2), adb 127.0.0.1:15001, model SMJ510GN
+Baseline HEAD: 7d03da4 (confirmed). DevCheck 82/100 reproduced (2 issues, 100% checks pass).
+
+== libndk_translation.so provenance ==
+path /system/lib64/libndk_translation.so  size 2467648  date 2023-01-27 (redroid base 240527 prebuilt)
+sha256 c05f2b7ef51d3c855576ae53c25f7511d0490695ca1bf6b16269627be6dbdb51
+file ELF64 x86-64 stripped  BuildID(md5/uuid) 9805a5ea90f28caa52fbba663bbe87b7
+soname libndk_translation.so ; NEEDED liblog/libandroid/libc++/libc/libm/libdl
+=> Google external/ndk_translation PREBUILT shipped in redroid base image (x86_64). No source on host.
+props: ro.dalvik.vm.isa.arm64=x86_64 ; abilist=arm64-v8a,armeabi-v7a,x86_64 ; ndk_translation.mode=(empty=JIT) ; ro.ndk_translation.version=(empty)
+
+== exported/machinery symbols (relevant) ==
+MmapForGuest, MmapImplOrDie, MmapImpl, LargeMmapImplOrDie, InitLargeMmap, MprotectOrDie, MprotectForGuest
+MmapPool<131072,2097152> (2MB blocks); GuestMapShadow::{Set,Clear,Remap,Is}Executable; FlushGuestCodeCache
+imports: mmap@LIBC, mmap64@LIBC, mprotect@LIBC.  CodeCache path string "/code_cache".
+TranslatorOptions props ONLY: ndk_translation.{flags,mode,profiling,tracing}, ro.ndk_translation.version.
+  -> NO --rwx/--no-rwx/single-step option. No runtime lever removes arena RWX. (mode=interpreter => 0 rwx but DevCheck attach-timeout, audit-proven.)
+
+== JIT arena on LIVE DevCheck (com.deviceinsight.ai) ==
+rwx regions: 1  =>  7d7d45a00000-7d7d45e00000  rwxp  (size 0x400000 = 4 MB, anonymous MAP_ANON)
+rwxs: 0.  Total writable-exec mappings = 1  => arena is the SOLE rwx source (removing it fully clears wx).
+arena Rss = 2844 KB / 4096 KB reserved at startup; STABLE across repeat native scans (no growth)
+  => ndk_translation translates each guest function ONCE and caches; W idle at steady state,
+     required only on first-touch translation of a not-yet-seen function.
+
+== DevCheck detail (gen5 part0.xml, authoritative) ==
+Issue "Native cross-check" -> detail text: hook/bypass: hook [hook:wx_segment]  -> -15 points
+Issue "USB debugging"      -> "ADB / USB debugging is turned on. Informational." -> -3 points
+=> 82 = 100 -15(wx) -3(adb). wx is the SOLE blocker to the >=90 target (fix wx => ~97).
