@@ -1,0 +1,21 @@
+# WA-STEALTH6 gen14 — stealth6-v4 bake (COPY-only delta over gen11b-rec).
+#
+# Base = wa-stealth6:gen11b-rec (7120dbbd5ec6) — the committed fx2 final state
+# (Widevine L3 CDM, GMS checkin SUCCESS, R45-R52 stories, maps-shim, all
+# stealth6-v1..v3 bytes). That state is NOT reproducible from the v1-v3
+# Dockerfile (which is FROM stealth5), so v4 layers on gen11b-rec, not stealth5.
+#
+# Bundle = the three gen13 container-layer fixes promoted to image bytes
+# (docs/audits/stealth6/t7-gen13b-cdp-verification.md §5):
+#   1) stealth6-extras.rc  : abilist64 += x86 (+ ro.dalvik.vm.isa.* pairings)
+#                            -> primary zygote accepts x86 renderer fork.
+#   2) stealth6-zygote-override.rc : secondary zygote WITHOUT --enable-lazy-
+#                            preload -> fixes the --query-abi-list protocol race
+#                            (system_server caching an empty secondary abiList).
+#   3) stealth6-webview.rc : debug.webview.devtools=1 -> WebView CDP socket.
+# No RUN / no network / COPY-only (repo bytes are the single source of truth).
+FROM wa-stealth6:gen11b-rec
+
+COPY --chown=0:0 images/gms-mtg-oemprop-stealth6/files/vendor/etc/init/stealth6-extras.rc /vendor/etc/init/stealth6-extras.rc
+COPY --chown=0:0 images/gms-mtg-oemprop-stealth6/files/vendor/etc/init/stealth6-zygote-override.rc /vendor/etc/init/stealth6-zygote-override.rc
+COPY --chown=0:0 images/gms-mtg-oemprop-stealth6/files/vendor/etc/init/stealth6-webview.rc /vendor/etc/init/stealth6-webview.rc

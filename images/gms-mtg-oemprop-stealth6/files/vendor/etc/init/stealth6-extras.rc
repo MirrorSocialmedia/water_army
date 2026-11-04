@@ -4,16 +4,35 @@
 # STRUCTURAL RULE (gen1 iron proof): x86_64 MUST stay in the abilist tail.
 # packages.xml carries stale primaryCpuAbi=x86_64 for existing system apps;
 # ro.product.cpu.abilist is string-matched against it at zygote fork — drop
-# x86_64 and every such app dies with ZygoteStartFailedEx "Unsupported
-# zygote ABI: x86_64". abi (primary) = arm64-v8a satisfies the DevCheck
-# fingerprint story; the x86_64 tail keeps ndk_translation'd / native x86_64
-# loads working. This is why the row set is NOT the naive "all arm64".
+# x86_64 and every such app dies with ZygoteStartFailedEx. abi (primary) =
+# arm64-v8a satisfies the DevCheck fingerprint story; the x86_64 tail keeps
+# ndk_translation'd / native x86_64 loads working.
 #
 # boot contract: ro.* rows ride load_persist_props_action so the
 # load_persist_props build.prop re-assert cannot wipe them (S6 phase rule).
 # oem-propctl = resetprop-rs; can force-set existing ro.* (getprop path).
+#
+# T11 (2026-11-04): WebViewZygote fix. WebView APK selects primaryCpuAbi=x86
+# (PackageManager scans APK lib/ dirs; x86 has highest bridge-priority in
+# AbiUtils.mAllAbis). The sandboxed renderer is forked via the secondary
+# zygote (app_process32). The secondary zygote's init filter removes x86
+# from its handshake ABI list because the native ISA check determines
+# x86's ISA = 'x86' but zygote's own ISA = 'x86_64' (64-bit host kernel).
+# FIX: set ro.dalvik.vm.isa.x86 = x86_64 so the ISA filter maps x86 ABI to
+# ISA x86_64, which matches zygote_secondary ISA → x86 is kept → handshake
+# succeeds → WebViewZygote preloadApp works → sandboxed renderer launches.
+#
+# Also set dalvik.vm.isa.x86.variant = x86 (not x86_64) so the ART runtime
+# correctly JITs x86 code on x86_64 ISA (ISA=base instruction set, variant=
+# microarch optimization level; x86 variant on x86_64 ISA = correct pairing).
+#
+# abilist32 keeps x86 (app_process32 hard-asserts non-empty; also needed
+# for x86 ABI lookup path in AbiUtils).
 on load_persist_props_action
     exec -- /vendor/bin/oem-propctl ro.product.cpu.abi arm64-v8a
-    exec -- /vendor/bin/oem-propctl ro.product.cpu.abilist arm64-v8a,armeabi-v7a,x86_64
+    exec -- /vendor/bin/oem-propctl ro.product.cpu.abilist arm64-v8a,x86_64,armeabi-v7a
     exec -- /vendor/bin/oem-propctl ro.product.cpu.abilist32 armeabi-v7a,armeabi,x86
-    exec -- /vendor/bin/oem-propctl ro.product.cpu.abilist64 arm64-v8a,x86_64
+    exec -- /vendor/bin/oem-propctl ro.product.cpu.abilist64 arm64-v8a,x86_64,x86
+    exec -- /vendor/bin/oem-propctl ro.dalvik.vm.isa.arm x86_64
+    exec -- /vendor/bin/oem-propctl ro.dalvik.vm.isa.x86 x86_64
+    exec -- /vendor/bin/oem-propctl dalvik.vm.isa.x86.variant x86

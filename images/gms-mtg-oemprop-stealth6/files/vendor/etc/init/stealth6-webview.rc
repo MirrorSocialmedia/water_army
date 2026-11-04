@@ -1,0 +1,14 @@
+# WA-STEALTH6 gen14 (stealth6-v4) — WebView CDP devtools socket persistence.
+#
+# debug.webview.devtools=1 is what enables the WebView DevTools abstract
+# socket (@webview_devtools_remote_<pid>) so CDP (Chrome/125, Protocol 1.3)
+# is reachable for platform probes + behavioural automation. On gen13 this
+# was a RUNTIME `setprop` (lost on every container recreate). Baked here so
+# a fresh stealth6-v4 boot has CDP out of the box.
+#
+# Trigger: load_persist_props_action (same phase as stealth6-extras.rc).
+# Fires before zygote (class main) starts, hence before any WebView provider
+# loads — the prop is therefore already set when webview_shell launches.
+# Not a persist.* prop, so no /data dependency; setprop is a valid init action.
+on load_persist_props_action
+    setprop debug.webview.devtools 1

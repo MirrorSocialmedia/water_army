@@ -188,3 +188,27 @@ Full analysis: `docs/audits/stealth6/t3-gen3-network-proximity-wx.md`.
   + `ip route replace` (docker exec root) restored adb + connectivity; zygote
   restart restored SensorService→HAL sensor list (known lesson). fx2 currently
   runs with those RUNTIME restores — bake self-heal step is the next iteration.
+
+---
+
+## WA-STEALTH6 gen14 (2026-11-04) — T7 STEP 0: stealth6-v4 bake (three gen13 container-layer fixes → image)
+
+- **stealth6-v4 final: `sha256:b631493d4b4f73b61e41c62db10f30d14689ac9a94ec7704fca5cb17074b61b3`**
+  tag `water-army/redroid:14.0.0-240527-gms-mtg-oemprop-stealth6-v4`.
+- **Base = `wa-stealth6:gen11b-rec` (`7120dbbd5ec6`)**, NOT stealth5. The v1-v3 Dockerfile is
+  FROM stealth5 and cannot reproduce gen11b-rec's committed fx2 state (Widevine L3 CDM, GSF
+  check-in SUCCESS, R45-R52, shim, build.prop). v4 = COPY-only delta on gen11b-rec; maps-shim
+  byte-identical carry-through asserted green in build.gen14.sh (proves base state preserved).
+- **Bundle (the three gen13 fixes, docs/audits/stealth6/t7-gen13b-cdp-verification.md §5):**
+  1. `stealth6-extras.rc` — `abilist64 = arm64-v8a,x86_64,x86` + `ro.dalvik.vm.isa.arm/x86=x86_64`
+     + `dalvik.vm.isa.x86.variant=x86` → primary zygote accepts x86 renderer fork (WebViewZygote fix).
+  2. `stealth6-zygote-override.rc` (NEW) — full secondary zygote def WITHOUT `--enable-lazy-preload`
+     → fixes the `--query-abi-list` protocol race (system_server caching an empty secondary abiList).
+  3. `stealth6-webview.rc` (NEW) — `setprop debug.webview.devtools 1` at load_persist_props_action
+     → WebView CDP socket (@webview_devtools_remote_<pid>) out of the box (was runtime-only on fx2).
+- **boot contract**: all ro.* rows ride `on load_persist_props_action` (S6 phase rule; load_persist_props
+  build.prop re-assert cannot wipe them) — unchanged. setprop for the non-ro debug prop is a valid
+  init action at the same trigger (fires before zygote class main / any WebView provider load).
+- **build.gen14.sh**: base pin 7120dbbd5ec6, content pins (abilist64 x86 tail / isa.x86 pair / lazy-preload
+  disabled / setprop line), rc mode 0644, byte-exact create+cp+cmp asserts, base shim carry-through. Green.
+- **Boot-verified in T7 (Q1)** — fresh stealth6-v4 boot readbacks recorded in docs/audits/stealth6/.

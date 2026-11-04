@@ -1,0 +1,15 @@
+# Override: disable lazy preload for zygote_secondary so Java loop is
+# always running when system_server sends --query-abi-list.
+# Root cause (T11): with lazy preload, preloadApp("x86") hits the native
+# forkRepeatedly loop during preload phase; native loop misreads the
+# --query-abi-list protocol as a fork command, causing system_server to
+# cache an empty abiList → "Unsupported zygote ABI: x86".
+service zygote_secondary /system/bin/app_process32 -Xzygote /system/bin --zygote --socket-name=zygote_secondary
+    class main
+    priority -20
+    user root
+    group root readproc reserved_disk
+    socket zygote_secondary stream 660 root system
+    socket usap_pool_secondary stream 660 root system
+    onrestart restart zygote
+    task_profiles ProcessCapacityHigh MaxPerformance
