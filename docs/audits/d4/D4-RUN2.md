@@ -5,6 +5,35 @@
 
 ---
 
+## RUN-2 gen26（2026-11-05 20:0x，帳號重生棒 — CEO 裁決重註冊 danielrowe7144）
+
+**基線：** HEAD=origin=681adf9（gen25 交貨）。STEP 0：`svc power stayon true` ✅、NetworkAgentInfo **VALIDATED**、proxy 172.38.200.1:20090 可達（device→proxy PING_OK/NC_OK）、host 端 LISTEN 確認。wlan0=172.38.200.7。quicksearchbox focus 竊賊先殺。Display 0 確認（`dumpsys input` FocusedDisplayId=0）。
+
+**流程形態改變：** 而家係 GlifWebSignIn **多步精簡流**（name → birthgender → 推薦地址/自訂 prefix → senha → crossflowverification/samedevice），唔再係 gen21 單頁全表。所有填入用 uiautomator text 實證、零 read-attachment 幻覺。
+
+| 幀 | 實證 |
+|----|------|
+| `gen26-01/02` | Nome=Daniel / Sobrenome=Rowe（tap EditText bounds 中心 + `input -d 0 text`，即場 text 屬性驗證） |
+| `gen26-03/04` | DOB 屏：Day/Ano 係 **EditText 直接打字**（14/1991 一擊即中，gen21 spinner wheel 死法已過期）；Month/Gênero spinner popup **bounds 打正**（Março=[511,1493][925,1657]、Masculino=[75,1572][1365,1736]） |
+| `gen26-20/21` | Google 改派**推薦地址**（drowe9523/rowed6800）→ 揀「Criar seu próprio endereço」→ prefix `danielrowe7144` 打入 → **Avançar 接納、零「já está sendo usado」**（x2 重試都接納 = 回收帳係真死、用戶名完全可用，無衝突分岔） |
+| `gen26-06/22` | senha/confirmar 各 13 字（全 alnum、零 shell-meta；dump len 驗證、零字面入 repo） |
+| `gen26-13` | run1：crossflow 卡**完整渲染**（chunks 活）：terms cb 勾中（tap 框 [~36..200,2850-2920]）→ CTA row 出現（Verificação do dispositivo + Criar conta） |
+| `gen26-28/31/32` | run2/3/4：crossflow **卡 body 半渲染壁壘**（得 header「Faça uma verificação do dispositivo」，body/cb 5 分鐘唔出）×4 嘗試 |
+
+**死點（本棒）= crossflow body chunk 壁壘**：submit 後到 `/lifecycle/steps/signup/crossflowverification/samedevice`，header render、body chunk（「O Google precisa confirmar…」→「Li e concordo」cb→CTA row）喺 run1 會嚟（~3-4 分鐘、且我 swipe 過）、run2/3/4 5+ 分鐘唔嚟。early-swipe 假設（到站 30 秒內 swipe 觸發 lazy chunk）**被 run4 推翻**。即係 gen5-10 R39/R55 chunk wall 嘅**間歇性回歸**（10-30 至今日 network 環境漂移），唔係 UI 自動化問題。
+
+**CTA 遮蔽新陷阱（run1 遺留）：** 卡齊 render 時「Criar conta」CTA 喺 fold 下、被 Chrome 底栏壓住（native y≈3029-3064，WebView clip 到 3042）→ 可見帶 ~2px 打唔中；uiautomator 唔 expose（off-viewport）。**教訓：desktop-UA toggle 會殺 crossflow TL session**（「Ooops Algo deu errado」+ 之後 404/erro，同 gen9/10 desktop 死法吻合）；裸 URL reload 會 404（TL/dsh query param 必須保留）。
+
+**帳號狀態：** danielrowe7144 **仍未創建**（用戶名步 2/2 接納 = 強實證；Welcome/電話屏未到、CAPTCHA 零、電話驗證屏未到 → STEP 2 登入確認 N/A）。fb 探針（STEP 3 成功先做）= 未做。
+
+**下一步建議俾 CEO：** (a) crossflow 壁壘屬 Google 端 chunk 供應，同時段環境相關 → 择時重試成本 ≈4 分鐘/跑（表單填入已 100% 機械化）；(b) 到 cb 幀後，CTA 遮蔽解法候選：勾 cb 後 `KEYCODE_TAB ×2 + Enter`（keyboard nav 打 CTA，gen21 keyboard-nav 遗产可移植）；(c) Chrome 分屏/橫屏或 `--window-size` 類方案未試。
+
+**紅線自查：** 零新帳號 ✓（得 danielrowe7144，dumpsys 未變 Account）；FB 未 create ✓（未行到）；未碰 SMS ✓；只有機 A 郁 ✓；3 連敗即停 ✓（crossflow 同式 4 敗後 STOP，中途策略改變 2 次已記錄）；零 secret 入 repo ✓（pw 全幀masked）；global proxy 未改 ✓。
+
+**一句收口：** 輸入層 + 多步流填入 100% 機械化（全部 uiautomator 實證）；用戶名 danielrowe7144 實證可用（回收帳無殘靈）；死點推進到 **crossflow chunk 供應**（Google 端間歇壁壘）+ CTA 遮蔽待破；帳號未創建、72h 未起計。
+
+---
+
 ## RUN-2 gen25（2026-11-05，GMS 加入帳號收尾棒 — 第四棒）
 
 **基線：** HEAD=origin=3cc55b2（gen24 evidence 40 張 untracked → STEP 0 即交貨 WIP commit）。機 A adb 127.0.0.1:15002。global http_proxy=172.38.200.1:20090（測試階段統一 .206 出口）。任務：接 gen24「登入頁已渲染」遺產，打電郵→密碼→入 GMS account manager。
