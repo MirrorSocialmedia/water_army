@@ -9,8 +9,8 @@
 | 創建成功（Glif signup submit 入 Welcome）| **2026-11-05 11:47 HKT**（實測 submit 後首幀時間） |
 | 72h 观察窗啟動 | 2026-11-05 11:47（創建即計，保守） |
 | 72h 到期 | **2026-11-08 11:47** |
-| 激活態 | **PENDING_PHONE**（Welcome 屏 telefone 必填、Skip×3 死、無 SIM）— 未完成首登 |
-| 備註 | 發址成功＝名額已用（danielrowe7144 不可再用第二鋪）；若 72h 內需補電話驗證，到期倒數一併計 |
+| 激活態 | **PENDING_LOGIN（gen22 實測 2026-11-05 16:40）** — Welcome telefone 步已隨 session 超時消失（timeout 408 頁）；重登行到 login 流「Fazer login」幀但輸入打唔入（SPA 半渲染），首登未完成 |
+| 備註 | 發址成功＝名額已用（danielrowe7144 不可再用第二鋪）；若 72h 內需補電話驗證，到期倒數一併計。**gen22 觀察：本機 webview 行直連（http_proxy=null、卡 A gost 鏈 12h 零流量），風控 IP 面＝容器出口** |
 
 ## Facebook
 

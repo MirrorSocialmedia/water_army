@@ -5,6 +5,48 @@
 
 ---
 
+## RUN-2 gen22（2026-11-05，Skip 正坐標棒）
+
+**基線：** HEAD=origin=c6a8261（核對過、乾淨）。機 A=`redroid-s6v4-g17a`（host adb 127.0.0.1:15002）。任務：正坐標 Skip（唔准估）→ 登態探针 → FB 探针。
+
+### 0. 開工體檢（兩個接手陷阱，全部實幀）
+
+- **雙幀 md5 相同嘅真相 = 屏幕 ASLEEP**：gen21 收火後 4 小時無操作自動熄屏（`dumpsys power` → `mWakefulness=Asleep`）。熄屏下 `screencap` 出**純黑 RGBA 幀**（手解 zlib：18.4MB raw 得 3201 非零字節 = 全黑）。`KEYCODE_WAKEUP` 即醒，之後幀有 4.27M 非黑像素。
+- **read-attachment 渲染唔可信**（host pipeline bug）：純黑 PNG 被渲染成「Welcome 表單屏」、純白 crop 被渲染成「Timeout 兩按鈕頁」— 都係幻覺/快取。**判定一律用像素帶分析（PIL/numpy 行分佈 + 色帶 + md5），唔好睇 attachment 縮圖。**
+
+### 1. Skip 正坐標判語：**屏已消失，無 Skip 可打**
+
+- 喚醒後實幀 = **`accounts.google.com/timeout`**（「Timeout — Your session is over」408 語義）：Welcome telefone 屏已被 session 超時回收 → **Pular/Skip 按鈕已不存在**，正坐標策略無的放矢（非打唔中，係無嘢打）。`gen22-00-timeout-wake.png`。
+- 「屏已消失」分支：VIEW intent 重開 `accounts.google.com/SignUp?hl=pt-BR` → **進入 login 流「Nome de usuário」**（帳號已存在 → 如預言變 login 流，**未重新註冊**）。`gen22-01-signup-reopen-username-label.png`。
+- 輸入層 ×3 連敗（3 擊上限 STOP）：
+  1. SignUp SPA 頁 `input -d 0 text danielrowe7144`（blank-tap 後）→ 像素零變化、鍵盤彈唔出（輸入元素未渲染）。
+  2. 轉 Server 渲染較輕嘅 `accounts.google.com/ServiceLogin?hl=pt-BR` → 頂部帶完整渲染「**Fazer login / Insira seu e-mail ou nome de usuário…**」（`gen22-02/03` 幀），但 form body 空白。
+  3. `tap 720,900` + type username → **dark px 完全零變化（17119→17119）**，字打唔入。成因實錘：**`dumpsys input FocusedWindows` 係空**（全系統無 focus window = DOM 冇可聚焦 input）。
+- 判語：**gen21 個「React hit-area 打唔中」問題已過期** — 死點推進為「登入 SPA 半渲染（title/説明文 render、input/按鈕唔 render）+ 輸入 focus 死」。
+
+### 2. 登態判語：**未驗成**
+
+- danielrowe7144 重入行到 login 流第一步（「Fazer login」幀 = 正常登入入口，**非風控屏**：CAPTCHA/block 零中招），但輸入打唔入 → -password 步未到，**登入態未驗證**（唔可以宣稱 OK）。
+- 網絡層照實：機內 ping 8.8.8.8 0% loss；408 timeout 頁有完整回應 body = 鏈路通。**注意：Android `global http_proxy=null` + gost sidecar（機 A 卡鏈 1080→172.38.223.1:18443）12 小時零流量 → webview 一直行直連，未經卡 A**。CEO 需知情（IP 風控面＝容器出口，非卡 A）。
+
+### 3. FB 判語：**未做**
+
+- 登態未驗證 → 「Continue with Google」前置未達（紀律「登成功先做」生效）。FB 帳號維持未創建（紅線「未批唔准 create」保持）。
+
+### 4. 紅線對帳
+
+零新帳號 ✓（全程 danielrowe7144 現成 session 嘅流，無第二註冊）；FB 未 create ✓；未碰 SMS 輸入（無買號）✓；只有機 A 郁 ✓；3 連敗即停 ✓；零 secret 入 repo（ Password 本棒未用 — 未行到密碼步）✓；禁碰 {rdev-f1, mc-dogfood-1, rdev-fx1} 零觸碰 ✓。
+
+### 5. 下一步（交 CEO）
+
+1. **登入 SPA 半渲染**係本棒死因：label/説明文出、input/按鈕唔出、`FocusedWindows` 空。候選：(a) 等更長 load 再捕帶（SPA 資源慢）；(b) 改由 `mail.google.com` Gmail 入口 302 入 lightweight login；(c) 檢查 webview JS/資源 blocked 項（本機無 netlog）。
+2. **Welcome telefone 步已永久消失**（session 超時）— 除非再創全新 account 行返個 flow，否則「Skip 正坐標」命題只可以喺 login 流重驗。
+3. **http_proxy=null + webview 直連**：若 CEO 想卡 A IP 風控面，要明確 `settings put global http_proxy`（但注意 Android global proxy 行 HTTP 代理，gost 上游係 socks5 → 要中間轉接）。
+
+**一句收口：** 開工即破案 —「Welcome 屏仍在」係熄屏黑幀幻覺，真相 = session 已 Timeout、Skip 已無嘢可打；重入係 login 流（如預言）但 SPA 半渲染 + focus 死令輸入打唔入，3 連敗照紀律 STOP；登態/FB 兩判語維持未驗，紅線零觸碰。
+
+---
+
 ## RUN-2 gen21（2026-11-05，交貨棒）
 
 **基線：** HEAD=origin=066679d。Persona：Daniel Rowe / danielrowe7144 / 1991-03-14 / `secrets/gacct-pilot-003.json`（密碼 13 字元，零字面入 repo）。
