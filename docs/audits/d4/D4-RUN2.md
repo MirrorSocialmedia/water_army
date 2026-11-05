@@ -212,3 +212,6 @@
 3. 機 B 准入過線，等放卡。
 
 **一句收口：** 新紀律生效 — 11 個 commit 逐段交貨零白行；**Gmail danielrowe7144 創建成功**（RUN 系列首次），死點由「表單填入」推進到「Welcome 電話步」；下一步瓶颈 = SMS 渠道，唔再係 UI 自動化。
+
+## CEO 收段備忘(gen28,2026-11-06 00:4x)
+gen28 transcript 靜默 30 分鐘(00:12:47 最後寫入)= run-crash(第 8 例今季),CEO 接手 push caa181d/3b866aa→origin。判語定案(照 gen28 本地段):**429=速率限制(自我污染),非循環、非電話屏;zh-HK 卡有效;長 spinner tx/rx 活。** D4 老細擱置令生效:帳號 danielrowe7144 仍未建、72h 未起、SMS 未使;機 A 將 teardown 騰 RAM 俾 STEALTH7/S1。復活點:D4-RUN1 清單 + 本段 429 冷卻口徑(再衝前必等 429 退)。
