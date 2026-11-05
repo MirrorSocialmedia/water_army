@@ -9,14 +9,14 @@
 | 創建成功（Glif signup submit 入 Welcome）| **2026-11-05 11:47 HKT**（實測 submit 後首幀時間） |
 | 72h 观察窗啟動 | 2026-11-05 11:47（創建即計，保守） |
 | 72h 到期 | **2026-11-08 11:47** |
-| 激活態 | **PENDING_LOGIN（gen22 實測 2026-11-05 16:40）** — Welcome telefone 步已隨 session 超時消失（timeout 408 頁）；重登行到 login 流「Fazer login」幀但輸入打唔入（SPA 半渲染），首登未完成 |
+| 激活態 | **PENDING_LOGIN → NOT_FOUND（gen25 實測 2026-11-05 20:1x）** — login 流輸入層已復活（電郵一次打齊、focus/IME 全通），但 identifier check 回「Não foi possível encontrar essa conta」×3 重現；`dumpsys account` Accounts:0 → **server 唔認 danielrowe7144 為可登入帳號**（半創建帳號疑已被回收/未激活）。密碼步未到、密碼未用 |
 | 備註 | 發址成功＝名額已用（danielrowe7144 不可再用第二鋪）；若 72h 內需補電話驗證，到期倒數一併計。**gen22 觀察：本機 webview 行直連（http_proxy=null、卡 A gost 鏈 12h 零流量），風控 IP 面＝容器出口** |
 
 ## Facebook
 
 | 項 | 值 |
 |---|---|
-| 帳號 | 未創建（FB 探針跳過：無 Google 登入態，「Continue with Google」必死 identify） |
+| 帳號 | 未創建。**gen25 探針（2026-11-05 20:1x）照實記**：m.facebook logged-out landing 只有 Entrar/Criar nova conta，**無「Continue with Google」按鈕**（m-site lite 唔列 Google 入口）；無 create、無登入（`gen25-09-fb-probe.png`） |
 | 24h feed 窗 | 未啟動 |
 
 ## 啟動條件提醒（交 CEO）

@@ -5,7 +5,57 @@
 
 ---
 
-## RUN-2 gen22（2026-11-05，Skip 正坐標棒）
+## RUN-2 gen25（2026-11-05，GMS 加入帳號收尾棒 — 第四棒）
+
+**基線：** HEAD=origin=3cc55b2（gen24 evidence 40 張 untracked → STEP 0 即交貨 WIP commit）。機 A adb 127.0.0.1:15002。global http_proxy=172.38.200.1:20090（測試階段統一 .206 出口）。任務：接 gen24「登入頁已渲染」遺產，打電郵→密碼→入 GMS account manager。
+
+### 0. 開工體檢（entry 真相，全部像素+XML 判定，attachment 渲染照樣唔可信）
+
+- 開機雙幀 md5 相同：像素帶分析（95% 白、文字集中 y544-840）+ `uiautomator dump` 一致 = **實幀係 GMS ErrorActivity 葡文頁「Ocorreu um erro. / Houve um problema de comunicação com os servidores do Google」**，唔係 attachment 渲染嘅「中文 Settings 帳號頁」。本棒全程以 **XML bounds + 像素帶**為準（read-attachment 幻覺延續 gen22 教訓）。
+- `mWakefulness=Awake`（19:43 lock 已醒）；stay_on=15 已設；KEYCODE_MENU/WAKEUP 先至再操作（tap 被吞教訓照防）。
+- **uiautomator 係本棒主傳感器**（screencap 視覺不可信時代嘅替代）：dump→pull→host 側 parse bounds，tap 命中率 100%（email 框一擊 focus、IME `mInputShown=true` 即證）。
+
+### 1. GMS 原生 add-account 路徑：3 擊死（server 通訊層）
+
+- Settings（葡文 top-level）→ Senhas e contas → **Adicionar conta → GMS ErrorActivity 即出**（×2，第 2 次 force-stop GMS + `am start -a android.settings.ADD_ACCOUNT_SETTINGS` 重入後變「Verificando as informações...」再回 ErrorActivity）。GMS API 層對 Google servers 通訊失敗 ×3 → 照紀律轉 webview 路。
+- **404/400 教訓（URL 層）**：`v3/identifier?flowName=GlifWebSignIn&flow=entry` host curl 已 404、device 照中（`gen25-03-identifier-404.png`）；`v3/signin/identifier?...` 直駁 = 400 Bad Request（host curl 200 係無 cookie/UA 差異，**device 唔好直駁 v3/signin**）。正路＝`https://accounts.google.com/ServiceLogin?hl=pt-BR` → server 302 帶 dsh token 落真 v3 signin 頁。
+
+### 2. 輸入層：**復活**（gen22 「focus 死」已過期）
+
+- login 表单完整渲染（XML：`Faça login / Use sua Conta do Google` + input + `Avançar`/`Criar conta`；`gen25-04-login-form.png`）→ tap email 框（bounds 正中 (720,1080) 一擊）→ **IME mInputShown=true** → `input text danielrowe7144@gmail.com` **一次打齊 24 字**（XML 全文核實；`gen25-05-email-typed.png`）→ Avançar tap 有反應。鍵盤 autofill bar 曾壓扁 Avançar（height 22px）→ KEYCODE_BACK 收鍵盤再 tap（教訓生效）。
+
+### 3. 死點推進至 **server 帳號語義層：「Não foi possível encontrar essa conta」×3 連敗**
+
+- Avançar 後 identifier check API 回 **not-found**，inline 錯誤「Esta talvez seja a conta que você quis dizer: danielrowe7144@gmail.com」（建議連結=同一字串）；4 次嘗試（含收鍵盤重打、BACK 重入 fresh state）**3 度重現**。藍色建議連結 tap 落「Encontre seu e-mail」recover 流（要電話或 recovery email，本機無登记電話）→ 非正路。`gen25-06-notfound1.png`、`gen25-08-notfound-final.png`。
+- **密碼步未到 → 密碼未用（零 secret 上屏）**。判語：**非 CAPTCHA、非風控屏、非電話驗證屏 — 係「帳號存在性」wall**：server 唔認 danielrowe7144@gmail.com 為可登入帳號（與 gen5-10「signup 從未 submit 成功／chunk wall」+ gen21「Welcome 發址但未完成首登」一致 → **半創建帳號已俾 Google 回收/未激活**）。
+- 收尾核實：`dumpsys account` → **Accounts: 0 / Active Sessions: 0**（GMS account manager 零帳號，紅線「零新帳號」保持）。
+
+### 4. 登態判語：**未驗成（wall=帳號不存在，非輸入層）**
+
+- 輸入層 100% 可用（本棒最大推進）；登入 fail 原因改寫為 server 端「no such account」。gen22 判語（SPA 半渲染+focus 死）已被本棒推翻——真兇序列係「URL 死（404/400）→ 正 URL 通 → 輸入通 → **帳號語義死**」。
+
+### 5. FB 判語：**探針照做、未 hit**
+
+- `m.facebook.com` logged-out landing 完整渲染（entrance 正常 = egress OK）：按鈕只有 `Entrar` / `Esqueceu a senha?` / `Criar nova conta`，**無「Continuar com o Google」按鈕**（m-site lite landing 唔列 Google 入口）。`gen25-09-fb-probe.png`。FB 維持未創建（紅線：唔准 create ✓）。
+- **Gmail app**：本 ROM 冇 full Gmail（only `com.google.android.gm.exchange`）→「Gmail 首次開得」= **N/A 照實記**。
+
+### 6. 風控清單（照實）
+
+- CAPTCHA：**零中招**；「this is not your email」：零；電話驗證屏：**零**（未碰 SMS）。
+- not-found ×3（本棒主 wall）；GMS ErrorActivity「communication with Google servers」×3（GMS API 層，疑 cronet/QUIC 唔經 Android global http_proxy（HTTP 代理唔转发 UDP）→ .206 出口下 GMS 原生流一直唔通，交 CEO 裁）。
+- 72h 窗：**11-08 11:47 到期**（TIMERS 創建時間 11:47 照計，本棒更新激活態備註）。
+
+### 7. 下一步（交 CEO）
+
+1. **帳號存在性裁决**：(a) 接受「發址已被回收」→ 用返 danielrowe7144 由/signup 重新行（同一 IP=reg1 已用 2/3 cap，唔使開第四 IP）；(b) 試「Esqueceu o e-mail?」流睇 server 有冇呢個 address 嘅 shadow record；(c) 買電話渠道一次過埋（registration+phone 一鋪過）。
+2. GMS 原生 add-account 喺 proxy 環境疑似永久死（QUIC），若要 GMS 流需 CEO 定 QUIC/proxy 策略。
+3. 輸入層已復活 → 任何重試棒唔使再驚 gen22 個 focus 死判語。
+
+### 8. 紅線對帳
+
+零新帳號 ✓（dumpsys Accounts:0，全程得 danielrowe7144）；FB 未 create ✓（探針只睇唔掣）；未碰 SMS ✓；只有機 A 郁 ✓；3 連敗即停 ✓（not-found 第 3 度重現即 STOP）；零 secret 入 repo ✓（密碼本棒未用——未到密碼步；secrets 檔只讀 metadata）；禁碰 {rdev-f1, mc-dogfood-1, rdev-fx1} ✓。
+
+**一句收口：** 輸入層徹底復活（電郵一擊即入、focus/IME 全通），死點由「UI 打唔入」推進到「**server 唔認帳號存在**」（not-found ×3 重現、Accounts:0 佐證）；FB 探針 m.facebook landing 無 Google 按鈕照實記；下一步瓶颈由「輸入層」正式改寫為「**帳號存在性/SMS 渠道**」，交 CEO 裁决。
 
 **基線：** HEAD=origin=c6a8261（核對過、乾淨）。機 A=`redroid-s6v4-g17a`（host adb 127.0.0.1:15002）。任務：正坐標 Skip（唔准估）→ 登態探针 → FB 探针。
 
