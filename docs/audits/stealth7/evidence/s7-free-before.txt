@@ -1,0 +1,4 @@
+=== free -m BEFORE delete ===
+               total        used        free      shared  buff/cache   available
+Mem:           94179       86291        7430       11527       18364        7888
+Swap:           8191        5527        2664
