@@ -1,0 +1,13 @@
+## getprop values (s7s2-a16, teddynight/redroid16:latest, 2026-11-06T01:57:43+08:00)
+ro.dalvik.vm.native.bridge=libnb.so
+ro.product.cpu.abilist=x86_64,arm64-v8a
+ro.product.cpu.abilist64=x86_64,arm64-v8a
+ro.product.cpu.abilist32=
+ro.product.cpu.abi=x86_64
+ro.build.fingerprint=redroid/redroid_x86_64_only/redroid_x86_64_only:16/BP2A.250605.031.A3/eng.root:userdebug/test-keys
+ro.build.version.sdk=36
+ro.build.version.release=16
+sys.boot_completed=1
+ro.boot.use_memfd=1
+ro.boot.redroid_gpu_mode=host
+ro.kernel.qemu=
