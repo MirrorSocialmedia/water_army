@@ -35,9 +35,24 @@ super 入面**冇 LP metadata**（gpGh 掃描零命中的）→ emulator 鏡像�
 
 抽檔方法：dd 抽 ext4（無 loop mount、無 QEMU）→ 宿主 debugfs 1.47 `dump/rdump`。全部檔案清單+`file` 核對：`evidence/s7-s3a-donor-inventory.txt`（donor 合共 84 檔 31MB）。
 
-## STEP 2 — 植入 s7s2-a16
+## STEP 2 — 植入 s7s2-a16 ✅（容器層生效）
 
-（進行中）
+**植入清單（docker cp 入 `/system`，overlay upper 可寫）：**
+
+| 目標路徑 | 內容 |
+|---|---|
+| `/system/lib64/` | `libndk_translation.so` + 20 個 `libndk_translation_proxy_*.so` + `libberberis_exec_region.so` + `libnativebridge_lazy.so` + `libnativeloader_lazy.so`（合共 23 檔） |
+| `/system/lib64/arm64/` | 56 個 guest arm64 庫（donor 原樣，含 linker 需要嘅 libandroid_runtime 等） |
+| `/system/bin/arm64/` | `linker64`、`app_process64`（aarch64） |
+| `/system/bin/` | `ndk_translation_program_runner_binfmt_misc_arm64`（x86-64 runner） |
+| `/system/etc/binfmt_misc/` | `arm64_exe`、`arm64_dyn`（註冊檔） |
+| `/system/etc/init/` | `ndk_translation.rc`（binfmt mount + register，gated by prop） |
+| `/system/etc/` | `ld.config.arm64.txt`、`cpuinfo.arm64.txt` |
+| `/vendor/build.prop` | `ro.dalvik.vm.native.bridge`: `libnb.so` → `libndk_translation.so`（其餘 native.bridge 家族 prop donor 已有嘅target本来就有：`ro.enable.native.bridge.exec=1`、`ro.dalvik.vm.isa.arm64=x86_64`） |
+
+**決定：** donor `libnblog.so` 唔覆蓋 target 現有 redroid 版 libnblog.so（避免動 redroid ashmem log shim）；ndk_translation NEEDED 只係 liblog/libc/libc++/libm/libdl/libandroid/libdl_android（全部 target 已有）。
+
+**生效層級實測：** `ro.*` property 係 init boot 時從 build.prop 載入 → **zygote 層重啟唔會 re-read**；`docker restart`（容器層）先至生效。重啟後 getprop：`native.bridge=libndk_translation.so` ✅、`sys.boot_completed=1`（~12 秒）、`/proc/sys/fs/binfmt_misc/{arm64_exe,arm64_dyn}` 已註冊 ✅（rc 生效）。
 
 ## STEP 3 — 判語
 
