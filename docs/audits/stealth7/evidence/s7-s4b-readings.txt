@@ -1,0 +1,26 @@
+s7-s4b gen35b readings (2026-11-06, Asia/Hong_Kong)
+====================================================
+STEP A (12:11-12:12): adb devices = unauthorized -> docker cp ~/.android/adbkey.pub -> /data/misc/adb/adb_keys
+  (chmod 0644 root:root) + sh -c 'setprop ctl.restart adbd' -> adb devices = device (galaxy-6fs SMJ510GN)
+  UsbDebuggingActivity focused -> keyevent 4 -> focus=QuickstepLauncher. Accounts:0. http_proxy=172.38.200.1:20092.
+STEP B (12:12-12:14): Chrome bg process alive, NO live signup Activity (dumpsys activities: no chrome ActivityRecord).
+  CDP sweep found 9 page targets: 7x signup/name (gen35 + my relaunch) + 1 v3/signin/identifier (gen35 leftover) + example.com probe.
+  All closed. DevCheck 95.5% baseline per s3d; egress echo .206 per a0d3349 (11:02 Chrome rendered fine).
+Diagnosis (12:14-12:22): Chrome white web layer. logcat chromium:E:
+  "GrContext creation failed" / "Failed to initialize Skia for SharedContextState" / "SharedImageStub" (mesa gpu passthrough).
+  chrome-command-line {"options":["--disable-gpu",...]} written; gpu process gone but white persists (Chrome 136+ file support doubtful).
+Patience probe run#1 (disable-gpu) 12:26-12:33: Runtime.evaluate 1+1 -> 35s timeout x6 (t+40s..t+4m). renderer CPU 107-108.
+Strike2 (12:33, no disable-gpu): same: renderer 107, CDP /json empty (HTTP dead), renderer cpu later 49.9 (dip).
+Strike3 (12:3x, relaunch VIEW): ChromeTabbedActivity fg; devtools socket=0; eval RemoteDisconnected.
+  renderer kill -9 (docker exec -u 0) -> Chrome respawned renderer -> SAME page 104% spin again => page-level JS behaviour.
+Strike4 (12:4x, full Chrome restart): fresh 2 tabs (session restore + new); eval 1+1 timeout; renderer 107.
+Patience window (strike4 tab, 5x60s):
+  t+1m eval=timeout | cpu 108 TIME=00:02:44 | accounts_conns_1m=1
+  t+2m eval=timeout | cpu 108 TIME=00:04:06 | accounts_conns_1m=0
+  t+3m eval=timeout | cpu 109 TIME=00:05:29 | accounts_conns_1m=2
+  t+4m eval=timeout | cpu 109 TIME=00:06:51 | accounts_conns_1m=0
+  t+5m eval=timeout | cpu 109 TIME=00:08:13 | accounts_conns_1m=0
+  => CPU-seconds/wall-clock ~= 100% single core sustained spin; URL TL/dsh never advanced; Accounts:0 end.
+VERDICT: LOOP (JS-layer spin). NOT success / NOT phone-screen / NOT 429. Duration ~50min (12:14-13:0x), 3-strike cap exhausted.
+Sidecar: accounts.google.com + www.google.com connections present, tx/rx alive, 0-2 conn/min; no 429 HTTP signature.
+free -m: Mem 90710/94179 used; Swap 8160/8191 (no QEMU used).
