@@ -1,0 +1,40 @@
+# s7g32-a16b STEP2-3 evidence (2026-11-06T00:09:14Z)
+=== image sha ===
+198619914bd7 stealth7-a16-v0-bridge:latest
+=== getprop ===
+libndk_translation.so
+redroid/redroid_x86_64_only/redroid_x86_64_only:16/BP2A.250605.031.A3/eng.root:userdebug/test-keys
+x86_64
+x86_64,arm64-v8a
+1
+=== binfmt ===
+arm64_dyn
+arm64_exe
+arm_dyn
+arm_exe
+python3.12
+register
+status
+=== EM_AARCH64 count ===
+0
+=== maps (translator entries) ===
+707b01027000-707b0107e000 r--p 00000000 00:14e 105537323                 /system/lib64/arm64/libc.so
+707b0107f000-707b01106000 r--p 00058000 00:14e 105537323                 /system/lib64/arm64/libc.so
+707b01107000-707b0110b000 r--p 000e0000 00:14e 105537323                 /system/lib64/arm64/libc.so
+707b0110b000-707b0110c000 rw-p 000e4000 00:14e 105537323                 /system/lib64/arm64/libc.so
+707b011d5000-707b011d9000 r--p 00000000 00:14e 105537371                 /system/lib64/libndk_translation_proxy_libc.so
+707b011d9000-707b011dc000 r-xp 00004000 00:14e 105537371                 /system/lib64/libndk_translation_proxy_libc.so
+707b011dd000-707b011de000 r--p 00008000 00:14e 105537371                 /system/lib64/libndk_translation_proxy_libc.so
+707b03e42000-707b03e55000 r--p 00000000 00:14e 105537338                 /system/lib64/arm64/libm.so
+707b03e56000-707b03e7a000 r--p 00014000 00:14e 105537338                 /system/lib64/arm64/libm.so
+707b03e7a000-707b03e7b000 r--p 00038000 00:14e 105537338                 /system/lib64/arm64/libm.so
+707b03e7e000-707b03e7f000 rw-p 0003c000 00:14e 105537338                 /system/lib64/arm64/libm.so
+707b03e98000-707b03e99000 r--p 00000000 00:14e 105537328                 /system/lib64/arm64/libdl.so
+707b03e9c000-707b03e9d000 r--p 00004000 00:14e 105537328                 /system/lib64/arm64/libdl.so
+707b03ea0000-707b03ea1000 r--p 00008000 00:14e 105537328                 /system/lib64/arm64/libdl.so
+707b03eec000-707b03f64000 r--p 00000000 00:14e 105537322                 /system/lib64/arm64/libc++.so
+707b03f67000-707b03fe7000 r--p 00077000 00:14e 105537322                 /system/lib64/arm64/libc++.so
+707b03fea000-707b03ff2000 r--p 000f6000 00:14e 105537322                 /system/lib64/arm64/libc++.so
+707b03ff5000-707b03ff6000 rw-p 000fd000 00:14e 105537322                 /system/lib64/arm64/libc++.so
+707b5fa7f000-707b5fbb1000 r--p 00000000 00:14e 105537359                 /system/lib64/libndk_translation.so
+707b5fbb3000-707b5fedf000 r-xp 00134000 00:14e 105537359                 /system/lib64/libndk_translation.so
