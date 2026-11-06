@@ -1,0 +1,54 @@
+# S3a donor inventory (x86_64-36_r07 system.img)
+
+== donor bridge props (system build.prop):
+12:ro.system.product.cpu.abilist64=x86_64,arm64-v8a
+90:# Removed by post_process_props.py because overridden by ro.dalvik.vm.native.bridge=libndk_translation.so
+91:#ro.dalvik.vm.native.bridge?=0
+122:ro.dalvik.vm.native.bridge=libndk_translation.so
+124:ro.dalvik.vm.isa.arm64=x86_64
+125:ro.dalvik.vm.isa.arm=x86
+126:ro.enable.native.bridge.exec=1
+
+== ITF version word (libndk_translation.so NativeBridgeItf @0x510090 first u32): 0x8 (ITF v8)
+
+== binfmt register:
+:arm64_exe:M::\x7fELF\x02\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\xb7::/system/bin/ndk_translation_program_runner_binfmt_misc_arm64:P
+
+:arm64_dyn:M::\x7fELF\x02\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x03\x00\xb7::/system/bin/ndk_translation_program_runner_binfmt_misc_arm64:P
+
+== engine files (x86_64 host libs):
+donor/libberberis_exec_region.so
+donor/libnativebridge_lazy.so
+donor/libnativeloader_lazy.so
+donor/libnblog.so
+donor/libndk_translation.so
+donor/ndk_translation_program_runner_binfmt_misc_arm64
+donor/proxy_libaaudio.so
+donor/proxy_libamidi.so
+donor/proxy_libandroid_runtime.so
+donor/proxy_libandroid.so
+donor/proxy_libbinder_ndk.so
+donor/proxy_libcamera2ndk.so
+donor/proxy_libc.so
+donor/proxy_libEGL.so
+donor/proxy_libGLESv1_CM.so
+donor/proxy_libGLESv2.so
+donor/proxy_libGLESv3.so
+donor/proxy_libjnigraphics.so
+donor/proxy_libmediandk.so
+donor/proxy_libnativehelper.so
+donor/proxy_libnativewindow.so
+donor/proxy_libneuralnetworks.so
+donor/proxy_libOpenMAXAL.so
+donor/proxy_libOpenSLES.so
+donor/proxy_libvulkan.so
+donor/proxy_libwebviewchromium_plat_support.so
+
+== bin_arm64:
+donor/bin_arm64_app_process64
+donor/bin_arm64_linker64
+
+== guest arm64 libs (/system/lib64/arm64):
+56
+donor/arm64/libc.so: ELF 64-bit LSB shared object, ARM aarch64, version 1 (SYSV), dynamica
+donor/proxy_libc.so: ELF 64-bit LSB shared object, x86-64, version 1 (SYSV), dynamically l
