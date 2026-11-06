@@ -1,0 +1,30 @@
+# S3a bridge transplant verdict evidence (2026-11-06T00:04:07Z)
+## getprop:
+libndk_translation.so
+1
+x86_64
+## binfmt_misc:
+arm64_dyn
+arm64_exe
+arm_dyn
+arm_exe
+python3.12
+register
+status
+## EM_AARCH64->EM_X86_64 dlopen errors in this boot (count):
+0
+## bridged arm64 app lib load (key line):
+11-06 00:03:27.925  2092  2092 D nativeloader: Load /data/app/~~_Xo8WqMZFY1RvM77xZ0MfA==/com.deviceinsight.ai-5MbTO2Em9cSgD_Yxz35S_g==/base.apk!/lib/arm64-v8a/libdatastore_shared_counter.so using class loader ns clns-9 (caller=/data/app/~~_Xo8WqMZFY1RvM77xZ0MfA==/com.deviceinsight.ai-5MbTO2Em9cSgD_Yxz35S_g==/base.apk): ok
+## app process maps: translator+guest lib residency:
+7
+79f71c443000-79f71c49a000 r--p 00000000 00:73 105534561                  /system/lib64/arm64/libc.so
+79f71c49b000-79f71c522000 r--p 00058000 00:73 105534561                  /system/lib64/arm64/libc.so
+79f71c523000-79f71c527000 r--p 000e0000 00:73 105534561                  /system/lib64/arm64/libc.so
+79f71c527000-79f71c528000 rw-p 000e4000 00:73 105534561                  /system/lib64/arm64/libc.so
+## activity displayed:
+11-06 00:03:27.947   705   727 I ActivityTaskManager: Displayed com.deviceinsight.ai/.ui.OnboardingActivity for user 0: +128ms
+## binfmt end-to-end probe (app_process64 -version via translator): (no output = inconclusive)
+## free -m host:
+               total        used        free      shared  buff/cache   available
+Mem:           94179       81165        4047       11391       27079       13013
+Swap:           8191        8182           9

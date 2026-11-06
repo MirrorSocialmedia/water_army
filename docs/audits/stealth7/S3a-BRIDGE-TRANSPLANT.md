@@ -54,6 +54,32 @@ super 入面**冇 LP metadata**（gpGh 掃描零命中的）→ emulator 鏡像�
 
 **生效層級實測：** `ro.*` property 係 init boot 時從 build.prop 載入 → **zygote 層重啟唔會 re-read**；`docker restart`（容器層）先至生效。重啟後 getprop：`native.bridge=libndk_translation.so` ✅、`sys.boot_completed=1`（~12 秒）、`/proc/sys/fs/binfmt_misc/{arm64_exe,arm64_dyn}` 已註冊 ✅（rc 生效）。
 
-## STEP 3 — 判語
+## STEP 3 — 判語 ✅（三選一實證 #1 + #2 同時命中）
 
-（待）
+重啟後裝回 DevCheck（`/tmp/devcheckai-arm64only.apk` S2 已裝、persist ✓）：
+
+- `su 0 am start -f 0x24000 -n com.deviceinsight.ai/.ui.OnboardingActivity` → **`Displayed ... +128ms`**，進程活（PID 2092）
+- **EM_AARCH64 (183) instead of EM_X86_64 (62) 錯誤呢輪 boot 計 0 次**（S2 基圖：每次 app 起動都有；呢輪 nativeloader 全無 EM_ 錯誤）
+- **arm64 app 庫 dlopen ok**：`Load .../base.apk!/lib/arm64-v8a/libdatastore_shared_counter.so ... : ok`（clns-9 bridged namespace）
+- **maps 實證**：`/proc/2092/maps` 見 `/system/lib64/arm64/libc.so`（guest 庫映射）+ `/system/lib64/libndk_translation_proxy_libc.so` + 7 處 `ndk_translation` 庫常駐
+- **截圖核**：`evidence/s7-s3a-devcheck-ui.png` — 1080×2400、2077 unique colors、非黑幀（DevCheck Onboarding UI 渲染正常）
+- 旁證：binfmt_misc 已註冊 `arm64_exe`/`arm64_dyn`（rc 生效）
+- 未算證據嘅探測：`/system/bin/arm64/app_process64 -version` 經 binfmt 執行 **無輸出（inconclusive）**，唔計入判語
+- 啟動教訓（A16 容器）：shell uid 2000  launch 非 exported activity 會 `SecurityException: not exported from uid`；要用 **`su 0 am start`**（S2 未遇，可能同 force-stop 後 stopped 狀態嘅 exported 檢查路徑有関）
+
+## 判語：**活**（三檔之「活」）
+
+berberis/ndk_translation 引擎 donor 移植成功：**A16 redroid 容器翻译层已活** — arm64 庫 dlopen 唔再被 EM_ 拒絕、translator 常駐進程、guest 庫映射可見、UI 非黑幀。
+
+**照實記錄嘅邊界（唔准美化位）：**
+1. 本轮只 Prove 到 app 入口屏嘅 arm64 native 庫（libdatastore_shared_counter）；DevCheck 深層功能屏嘅 `libtrustnative.so`/libkeyvault 未見載入紀錄 — 完整 app 覆蓋要後續逐屏場測（S3 烘焙段正经）。
+2. `NativeBridgeItf` 首 u32=`0x8`（**ITF v8**）→ A16 target 接受（stealth6 教訓：A14 HAL 只收 ≤6；v8 喺 A16 冇被拒，實證）。
+3. 呢個係 donor **ndk_translation（ARC 血統）**而唔係 AOSP berberis 正統後端 — 产品化鏡像來源/授權要喺 S3 定，同 S2 「唔好默默用社群鏡像上生产」同一原則。
+4. 機留起：`s7s2-a16` 容器未拆，俾 CEO 覆核；改動全喺 overlay upper（`docker commit` 先至可固化，本輪未 commit 鏡像）。
+
+## STEP 4 — 交貨
+
+- 本文檔 + `evidence/s7-s3a-donor-inventory.txt` + `evidence/s7-s3a-bridge-evidence.txt` + `evidence/s7-s3a-devcheck-ui.png`
+- donor 抽檔工作區：`/tmp/s7s3/`（sys/vendor ext4 切片 + donor/ 84 檔）— 未入 repo（零 secret，體積大）
+- Kairo `mw3q37y8zyzvd` 已 note；每步 done 即 commit（STEP1/2/3-4 三段）
+- free -m（收段時）：swap 8182/8191（接近爆照實）、MemAvailable ~13G；禁碰名單全程零沾
