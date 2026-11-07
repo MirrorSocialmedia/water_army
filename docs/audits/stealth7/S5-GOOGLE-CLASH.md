@@ -168,3 +168,41 @@
 - 機 `s7s38-a14` + `s7s38-gost` 留起開緊;A16 三件照停;零 secret 入 repo
 - **下次一擊建議(gen42)**:唔好再喺 webview 內 rc 賭命 —— 即刻重啟 fresh `/signup`(TL 新開)一口氣 name→birthday→CTA 連打唔好停,同埋考慮**設備 input 直擊**全程(CDP 喺 rc 階段不可靠)
 
+
+# gen42(2026-11-07 20:3x-21:2x,A14 fresh /signup 一口氣連打 · JS setter 正路 · 電話屏突破)
+
+## 17. 開局讀數(STEP 0,唔燒 strike)
+
+- **交棒態 = gen41 死訊一致**:webview 停 `accounts.google.com/info/sessionexpired`(幀 `s7-s42-00-state`)— §14 結尾紀錄吻合,無「重新流入」污染。
+- **free -m**:94G 总 / available 7.6G — 機冇内存壓力,排除資源因素。
+- **根因發現 ①(未入 strike)**:`input text` 俾 pinyin IME 吃掉 = 欄位 scramble(`lastName=DanielWongWong`、`firstName=[]`)——gen40b/41 部分「CTA 死/spinner」係假象,欄位根本填錯。**正路 = JS native `HTMLInputElement.prototype.value` setter + `input`/`change` 事件**(零鍵盤,唔使 adb IME)。
+- **rc engine 實證**:name 步 enterprise anchor 上,`grecaptcha.enterprise.execute(k,{action:'glif_signup'})` **~40 秒回 v3 token**;本輪全程 **3×3 圖文挑戰零次出現**(silent mode)。
+
+## 18. 三擊(上限 3,用盡)
+
+| 擊 | 路徑 | 判語 |
+|---|---|---|
+| 1 | 20:35:51 新 TL(新 dsh);name→birthday(耐心窗 3min,spinner auto-verify 後消)→username 過(無 429)→password→**samedevice 20:52:10**:R39 wall 變形成**可操作 device list UI**(SM-S901B 已揀 + 「繼續」) | **循環** @ device-check rc 握手:shadow 「繼續」tap ×2 無反應、`execute` 30s TMO ×2,主線程 ~5 分鐘後 block(eval/touch send 全無回覆) |
+| 2 | 20:57:52 新 TL;全 JS setter fast path,**首三步 ~100 秒 silent rc 連過**(名→生日→username 都唔使挑戰) | **循環**(rc 圈)@ username submit rc gate:page chip「正在載入」,`execute` 30s TMO ×3 + CTA 無反應,停留 ~4 分鐘 |
+| 3 | 21:02:26 新 TL;driver render-race bug(input 無 id、欄 render 慢兩拍)即場修復;username 一槍過→password→**samedevice 21:11:52**;3 分鐘耐心窗 + shadow 「繼續」→ **驗證圈 auto-verify 瞬間交俗 GMS `MinuteMaidActivity`(forwarding)**→ uiautomator 讀出系統 dialog「是,請繼續」raw tap(864,1412)→ **「驗證你的電話號碼」屏 +852-96491902** | **電話屏**(SMS 唔准買 → 停喺「驗證」門前;strike 時長 16.3 分鐘) |
+
+## 19. 判語 + 根因讀數(照實交)
+
+- **四檔判語 = 電話屏(擊 3 抵達)**:STEALTH7 線**首次穿過 R39 samedevice** 企到電話 leg 門口。danielrowe7144 未 created(`dumpsys account` 0 帳號覆核)、SMS 未買。
+- **GMS leg 拒 冇重觸**:gen41「我們無法驗證你的資料」錯頁本輪零出現;擊 3 嘅 MinuteMaid 交俗係**正面交棒**(GMS 接住 Daniel → 確認對話框 → 電話屏),唔係 gen41 擊 1 嘅交俗即死。教訓③修正:交俗唔係必然壞事,**關鍵喺嗰一下 tap 撞嘅係驗證圈「auto-verify 瞬間」定 challenge 渲染瞬間** — 前者 forwarding、後者交俗死。
+- **rc `execute` TMO ≠ server 拒**:username/samedevice 頁 TMO 多同 CDP eval 無回覆同時出現 = **主線程 busy(rc retry-loop 同族)**;同一 call 喺 name 頁 40 秒 has token。Google 判定嘅真 wall 仍係驗證 leg(device-check rc handshake 唔收口),但電話屏證明 **判定已放行、升格去下一關 = SMS 收訊**。
+- **R39 wall 變形時間線**:死頁(gen10/39)→ device list UI 渲染(擊 1)→ intro CTA + 系統確認 dialog(擊 3)。wall 仍在(rc 握手唔收口),但載體已企到 Google **native leg** 前面 — webview rc 圈唔再係唯一門。
+
+## 20. 工具教訓(入 memory)
+
+1. **pinyin IME 吃 `input text`** = 欄位 scramble 根因;填欄正路 = JS native value setter + `input`/`change`,唔使碰鍵盤。
+2. **username 頁 input 冇 id**(只有 `input[type=text]`);**password 欄 render 慢兩拍**(instant fill query 會 `missing`)—每步填前要 poll 欄存在(3s×6)。
+3. **GMS native leg 只用 uiautomator 讀**(CDP 睇唔到 GMS);呢部機 `wm size` = 1080x2400 raw = screencap px,`input tap` 直接用 raw 座標(唔使乘 1.2 — 嗰個 scale 只屬顯示層)。
+4. **rc gate 「繼續」定位 = rect + shadow leaf 深掃**(light DOM 搵唔到 Glif footer 按鈕;samedevice 「繼續」CSS px (350,621) via CDP touch)。
+5. **fresh TL → samedevice 乾淨 run ≈ 4-6 分鐘**;本次 16 分鐘入面 ~6 分鐘俾咗 driver 自己嘅 race bug — 下次每步 poll 欄先填,可以一口氣 <8 分鐘到電話屏。
+
+## 21. gen42 交付清單
+
+- evidence(33 幀):`s7-s42-00-state.png`(交棒死訊)、`s7-s42-st1-01…22` + `st1-rc-patience1…3`(擊 1 全程幀,含 samedevice device-list UI)、`s7-s42-st2-username-rcloop.png`(擊 2 rc 圈)、`s7-s42-st3-samedevice/end/gms-continue/gms-continue2/gms-after-ok.png`(擊 3:samedevice→GMS 確認→電話屏 +852)
+- 機 `s7s38-a14` + `s7s38-gost` 留起開緊,停喺電話屏;A16 三件照停;0 帳號;零 secret 入 repo(password 由 `secrets/gacct-pilot-003.json` 注入,13 字零字面)
+- **下次一擊建議(gen43)**:**買 1 條 SMS** 打 +852-96491902「驗證」— fast path 已實證可重試(fresh TL 一口氣到電話屏);先核 +852 號收訊渠道(sim90/收訊平台),code 入得落就有機會 `dumpsys account` 覆核成功判語。rc 圈同主線程 block 仍會喺 samedevice 出現 — 照擊 3 打法的耐心窗 + auto-verify 瞬間 tap 「繼續」即可 forwarded 入 GMS leg
