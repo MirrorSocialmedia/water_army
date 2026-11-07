@@ -1,0 +1,21 @@
+SSM-FX/KeyboxStatus community sample boxes (raw.githubusercontent SSM-FX/KeyboxStatus/main),
+chain parsed host-side with openssl (2026-11-08). google_root = chain root serial f92009e853b6b045
+(Google HW Attestation Root R1 self-signed 2019-11-22->2034-11-18). tee = leaf cert title=TEE.
+
+file                          chain leafserial(head)    google_root tee   leaf_expiry
+0000000209.xml                6       8caffcd6e1e3cd4bb06e   True       True   Sep 26 2030
+0000222.xml (hackerbox)       6       7394e350862fc6bd       True       False  May 24 2026 (EXPIRED)
+1120.xml  [= Box A tested]    6       157f92edc2dd51d9eb7f   True       True   Apr  7 2040
+2alL1ky.xml                   3       8e54db0f632eb24a8b1c   True       True   Sep 26 2030
+3YxC37x4.xml                  6       e23a5cdb6e2ff2e9       True       True   Jul 20 2028
+8qnsDAYP.xml                  6       bb1bea2a057e922d7725   True       True   Jan 11 2031
+BATR422448143171019170...xml  6       df3ecfdc772bda2253a2   True       True   Sep 26 2030
+DL1neMtH.xml                  6       35e0d466d6467970       True       True   Apr 15 2028
+KPZ1iysJ.xml                  6       026b244e023abdc307c0   True       True   Mar 17 2032
+M6DpviD5.xml                  6       094ca2793d91c305       True       True   Sep 17 2028
+U319AA-00500015.xml           6       1f408b8d0b771d7ee171   True       True   Jan 11 2031
+sw.xml (software box)         6       ?                      False      False  ?
+
+Current on-device gen43 free-pool box (tryigit.dev/keybox):
+  leaf serial 6ec0a9e1621459eff21b51f4eab5c3ce, TEE, Google root, 2020-06-10 -> 2030-06-08.
+  NOT among KeyboxHub surviving clean list (status API clean_count=2: RKP ids 909/910 only).
