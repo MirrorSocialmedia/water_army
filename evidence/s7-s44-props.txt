@@ -1,0 +1,28 @@
+# WA-STEALTH7 gen44 verified state (host mem-starved: strata-host 67GB/94GB -> zygote crash-loop, container exit 130 ~14s/boot)
+== STEP2 container-identity props ==
+ro.boot.hardware = msm8917
+ro.hardware = msm8917
+ro.product.board = MSM8917
+ro.board.platform = msm8917
+ro.bootmode = normal
+ro.soc.model = MSM8917
+ro.soc.manufacturer = QCOM
+ro.product.model = SMJ510GN
+ro.product.manufacturer = samsung
+== STEP1 sensors ==
+Total 3 h/w sensors, 3 running 0 disabled clients:
+== STEP3 magisk /sbin path targets ==
+drwxr-xr-x .magisk
+-rwxr-xr-x magisk
+lrwxrwxrwx /root/magiskboot
+lrwxrwxrwx /root/magiskinit
+-rwxr-xr-x magiskpolicy
+lrwxrwxrwx ./magisk
+lrwxrwxrwx ./magisk
+lrwxrwxrwx ./magiskpolicy
+== battery (runtime set, non-persistent) ==
+  status: 1
+  present: true
+  level: 86
+== DevCheck apk pkg ==
+package:com.deviceinsight.ai
