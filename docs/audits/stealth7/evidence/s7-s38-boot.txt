@@ -1,0 +1,13 @@
+=== STEP1 Magisk Delta injection proof 2026-11-07T06:34:20Z ===
+boot=1
+magisk=30.6:MAGISK:R
+su_id=uid=0(root) gid=0(root) groups=0(root)
+delta_mgr=
+zygiskd=2380
+libzygisk_in_zygote=3
+
+=== keystore2 tricky injection (Tricky ptrace landed) ===
+70dc892c2000-70dc89380000 r-xp 00000000 103:02 107616403                 /data/adb/modules/tricky_store/libtricky_store.so
+70dc89383000-70dc89384000 r--p 000bd000 103:02 107616403                 /data/adb/modules/tricky_store/libtricky_store.so
+70dc89387000-70dc89392000 rw-p 000bd000 103:02 107616403                 /data/adb/modules/tricky_store/libtricky_store.so
+note: delta_mgr line empty = manager APK not on machine at delivery (was installed+proven mid-run; apk on host /tmp/Magisk-delta-v30.7.apk, reinstallable). zygiskd64 + libzygisk-in-zygote = framework live; app-side module inject NOT landed (see PI-FIX-A14-PILOT.md §2).

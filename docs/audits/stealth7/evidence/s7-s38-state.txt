@@ -1,0 +1,35 @@
+=== s7s38-a14 final state 2026-11-07T06:33:14Z ===
+[magisk]
+30.6:MAGISK:R
+uid=0(root) gid=0(root) groups=0(root)
+[delta mgr]
+[sqlite settings]
+key=zygisk|value=1
+key=zygisk_impl|value=0
+key=bootloop|value=0
+[props]
+redroid14_x86_64
+redroid/redroid_x86_64/redroid_x86_64:14/UD2A.240505.001.W1/eng.frank.20240527.141332:userdebug/test-keys
+2024-05-05
+libnb.so
+[pif pif.prop]
+FINGERPRINT=google/bluejay_beta/bluejay:CANARY/ZP11.260918.007/16484274:user/release-keys
+MODEL=Pixel 6a
+SECURITY_PATCH=2026-10-05
+[modules]
+playintegrityfix
+tricky_store
+[zygiskd]
+2380
+[tricky]
+408
+teeBroken=false4
+[keystore2 inject]
+3
+[zygote zygisk lib]
+libzygisk.solibnb.so
+[PIF inject probe]
+com.android.vending pid=2377 pif_lib=0
+com.google.android.gms pid=2000 pif_lib=0
+[gms count]
+12
