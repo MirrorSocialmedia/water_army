@@ -1,0 +1,27 @@
+=== gen39 STEP1 props BEFORE (s7s38-a14 A14, 2026-11-07T06:41:28Z) ===
+ro.product.model = redroid14_x86_64
+ro.product.brand = redroid
+ro.product.manufacturer = redroid
+ro.product.name = redroid_x86_64
+ro.product.device = redroid_x86_64
+ro.build.fingerprint = redroid/redroid_x86_64/redroid_x86_64:14/UD2A.240505.001.W1/eng.frank.20240527.141332:userdebug/test-keys
+ro.build.version.security_patch = 2024-05-05
+ro.build.version.release = 14
+ro.build.type = user
+ro.build.tags = release-keys
+ro.debuggable = 0
+ro.serialno = 
+net.hostname = 
+ro.product.cpu.abi = arm64-v8a
+ro.product.cpu.abilist = arm64-v8a,x86_64,armeabi-v7a
+ro.product.cpu.abilist64 = arm64-v8a,x86_64,x86
+ro.product.system.model = redroid14_x86_64
+ro.product.vendor.model = redroid14_x86_64
+ro.product.odm.model = redroid14_x86_64
+ro.product.product.model = redroid14_x86_64
+ro.build.flavor = redroid_x86_64-userdebug
+ro.hardware = redroid
+ro.hardware.egl = mesa
+ro.adb.secure = 1
+persist.sys.locale = en-US
+ro.boottime.init = 16341006282774

@@ -1,0 +1,10 @@
+WA-STEALTH7 gen39 STEP0 RAM (2026-11-07 HKT) — stop redroid-s7s4-a16 + s7s4-gost-* + matrix-b-gost-*-s7s4-a16 (stop only, no rm)
+--- BEFORE ---
+               total        used        free      shared  buff/cache   available
+Mem:           94179       82525        4053       11384       20652       11654
+Swap:           8191        2043        6148
+--- AFTER ---
+               total        used        free      shared  buff/cache   available
+Mem:           94179       81800        5002       11378       20387       12378
+Swap:           8191        2043        6148
+avail 11654 -> 12378 MiB (+724); buff/cache 回收未計
