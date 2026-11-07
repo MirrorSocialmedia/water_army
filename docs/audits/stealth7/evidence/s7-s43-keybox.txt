@@ -1,0 +1,16 @@
+# gen43 STEP2 keybox swap evidence (2026-11-07 22:1x)
+old keybox = /data/adb/tricky_store/keybox.xml DeviceID="sw" (TrickyStore default software, 4 EC keys, 7513B)
+  backup: host /home/kenneth/keybox/keybox-sw-default-gen38.xml; device keybox.xml.bak-gen43
+new keybox = shall0e/KeyboxHub keybox_030632113e.xml (scraped from tryigit.dev/keybox free pool)
+  converted UTF-16->UTF-8 (repo files are UTF-16 BOM; TrickyStore needs UTF-8); 4554B; 1 EC key
+  chain verified: openssl leaf-ok against root f92009e853b6b045 (self-signed, 2019-11-22 -> 2034-11-18)
+  intermediates/leaf T=TEE notAfter 2030; private key host copy /home/kenneth/keybox/keybox.xml (repo zero secret)
+post-swap state (after docker restart; manual daemon restart failed 3x exit0 -> restart container):
+  TrickyStore pid 371 alive; keystore2 pid 37 maps libtricky_store.so x3; tee_status teeBroken=false
+KeyAttestation v1.8.4 (io.github.vvb2060.keyattestation, GitHub release v1.8.4) on-device reading:
+  banner "Google hardware attestation root certificate" + "Bootloader is locked"
+  chain: Google root f92009e853b6b045 -> TEE c15edebc15b6fef0b0da4ca4b6d14e76 -> TEE 6ec0a9e1621459eff21b51f4eab5c3ce -> CN=Android Keystore Key
+  security level TrustedEnvironment / Keymaster 4.1
+  = hardware keybox interception CONFIRMED at app layer (was Test-issuer software before)
+revoked-status caveat: tryigit status tracker data endpoint unread (JS); free pool key = shared, revocation unknown/unverified
+PI three-tier via YASNAC: NOT READABLE - r2yone/YASNAC repo 404; tryigit fork 404; F-Droid api 404; apkcombo connect dead even via 7897
