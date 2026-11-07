@@ -30,3 +30,15 @@ Play Integrity 分三級:MEETS_BASIC_INTEGRITY / MEETS_DEVICE_INTEGRITY / MEETS_
 - 我哋 redroid 容器**沒有 Magisk/KernelSU**——「經 Magisk/KernelSU 刷入」呢步係本機最大工程缺口,要評估:装 Magisk 入 redroid 嘅路數 或 PIFS/Tricky 有冇无 zygisk 平替
 - keybox 含私鑰 = 敏感資料,**唔准入 git repo**(零 secret 紀則)
 - DevCheck 兩條结构性扣分(無 HW keystore/無 verified boot)同呢套組合拳同源,修到即一石二鳥
+
+---
+
+## 筆記 #2(老細 11-07 13:57 補交)摘要
+- Redroid 難過 Device Check 嘅原因:硬件特徵穿幫(CPU 可能被讀成 2013 伺服器芯片)+ 環境特徵(VM/系統文件改動偵測);銀行/支付 app 即拒
+- 修復路:已 Root 環境經 Magisk 裝 **PlayIntegrityFix**;配 **pif.json 填真實熱門機型指紋**(三星/親兒子);**A13+ 要配 TrickyStore + 有效 keybox**
+- 預期管理:唔保證 100% 過;強風控 app 可能照拒;改系統有 boot 死風險,要備份/知道每一步做緊乜
+- 核心思路:**偽裝成熱門未改真機;工具係輔助;降低期望**
+
+## CEO 執行口徑(老細已表態「我傾向裝」)
+- Magisk/KernelSU 入 redroid = **已獲老細傾向授權**:gen37 需求矩陣若結論「必須 zygisk」,CTO 可直接喺實驗機 s7s4-a16 試裝(3 連敗即停,機本身可犧牲,數據照實報)
+- pif.json 熱門機型指紋:要同我哋 stealth 故事一致性檢查(而家 props 故事=samsung SM-J510GN,PIFS 填嘅 model 要跟到,唔准兩邊口徑 split)
