@@ -1,0 +1,40 @@
+== STEP1 final props 2026-11-07T07:29:21Z ==
+ro.product.model=SMJ510GN
+ro.product.brand=samsung
+ro.product.manufacturer=samsung
+ro.product.name=galaxy-6fs
+ro.product.device=galaxy-6fsp5d6fsksyq
+ro.build.fingerprint=samsung/galaxy-6fs/galaxy-6fsp5d6fsksyq:14/R0ABF9Z/024408:user/release-keys
+ro.build.id=R0ABF9Z
+ro.build.version.incremental=024408
+ro.build.version.security_patch=2026-09-05
+ro.build.type=user
+ro.build.tags=release-keys
+ro.build.flavor=galaxy-6fs-user
+ro.build.display.id=galaxy-6fs-user 14 R0ABF9Z 024408 release-keys
+ro.build.description=galaxy-6fs-user 14 R0ABF9Z 024408 release-keys
+ro.build.user=dpi240905
+ro.build.host=SWDH7921
+ro.build.date=Sun Sep  6 21:41:02 UTC 2026
+ro.debuggable=0
+ro.serialno=SAMS742181S89C
+net.hostname=SMJ510GN
+ro.product.cpu.abi=arm64-v8a
+ro.product.cpu.abilist=arm64-v8a,x86_64,armeabi-v7a
+ro.product.system_ext.model=redroid14_x86_64
+ro.system_ext.build.fingerprint=redroid/redroid_x86_64/redroid_x86_64:14/UD2A.240505.001.W1/frank05271411:userdebug/test-keys
+ro.hardware=redroid
+ro.build.version.sdk=34
+
+== mounts ==
+1
+14
+== modules ==
+playintegrityfix
+tricky_store
+== pif.prop ==
+FINGERPRINT=samsung/galaxy-6fs/galaxy-6fsp5d6fsksyq:14/R0ABF9Z/024408:user/release-keys
+MANUFACTURER=samsung
+MODEL=SMJ510GN
+SECURITY_PATCH=2026-09-05
+DEVICE_INITIAL_SDK_INT=32
