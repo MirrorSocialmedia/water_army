@@ -1,0 +1,5 @@
+# s7-s46 Q4 platform probes (live 2026-11-07T23:07:07Z)
+-- Google signin via VIEW --
+Starting: Intent { act=android.intent.action.VIEW dat=https://accounts.google.com/... cmp=org.chromium.webview_shell/.WebViewBrowserActivity }
+-- FB login via VIEW -- 23:07:46
+Starting: Intent { act=android.intent.action.VIEW dat=https://m.facebook.com/... cmp=org.chromium.webview_shell/.WebViewBrowserActivity }

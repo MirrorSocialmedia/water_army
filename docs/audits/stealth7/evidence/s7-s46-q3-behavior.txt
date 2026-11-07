@@ -1,0 +1,20 @@
+# s7-s46 Q3 behavior drive log (live 2026-11-07T23:05:08Z)
+-- webview_shell pkg --
+package:org.chromium.webview_shell
+-- launch webview_shell --
+Starting: Intent { cmp=org.chromium.webview_shell/org.chromium.WebViewShell }
+Error type 3
+-- launch -- 23:06:06
+Starting: Intent { cmp=org.chromium.webview_shell/.WebViewBrowserActivity }
+-- url bar tap --
+-- 6-key input w/ jitter --
+-- dwell 8s done --
+-- fling up 420ms --
+-- fling down 650ms --
+-- HOME --
+-- RECENTS --
+-- BACK --
+-- CDP socket --
+@webview_devtools_remote_23930
+-- devtools prop --
+1

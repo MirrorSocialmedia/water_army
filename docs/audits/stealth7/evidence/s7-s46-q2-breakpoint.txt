@@ -1,0 +1,22 @@
+# s7-s46 Q2 factory breakpoint (live 2026-11-07T23:04:25Z)
+-- third-party pkgs (non-system) --
+package:com.deviceinsight.ai
+package:rikka.safetynetchecker
+package:com.topjohnwu.magisk
+package:io.github.vvb2060.keyattestation
+-- /data/app dirs --
+-- cookie files --
+-- webview_shell data --
+-- /data/local/tmp --
+total 7176
+drwxrwx--x 3 shell shell   4096 2026-11-07 14:17 .
+drwxr-x--x 5 root  root    4096 2026-11-07 22:43 ..
+-rw-rw-r-- 1 shell shell 143132 2026-11-07 12:46 b1.png
+-rw-rw-r-- 1 shell shell 148955 2026-11-07 12:47 b2.png
+drwxrwxrwx 3 shell shell   4096 2026-11-07 07:42 dalvik-cache
+-rw-rw-rw- 1 shell shell  18779 2026-11-07 14:20 dc.xml
+-rw-rw-r-- 1 shell shell 144000 2026-11-07 13:17 end.png
+-rw------- 1 root  root     131 2026-11-07 22:56 ipconfig_wlan0.bin
+-rw-rw-rw- 1 shell shell  19692 2026-11-07 14:12 ka.xml
+-- Gaia/google svc trace sample --
+-- chromefile/ProviderCache --
