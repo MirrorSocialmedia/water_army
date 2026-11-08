@@ -206,3 +206,36 @@
 - evidence(33 幀):`s7-s42-00-state.png`(交棒死訊)、`s7-s42-st1-01…22` + `st1-rc-patience1…3`(擊 1 全程幀,含 samedevice device-list UI)、`s7-s42-st2-username-rcloop.png`(擊 2 rc 圈)、`s7-s42-st3-samedevice/end/gms-continue/gms-continue2/gms-after-ok.png`(擊 3:samedevice→GMS 確認→電話屏 +852)
 - 機 `s7s38-a14` + `s7s38-gost` 留起開緊,停喺電話屏;A16 三件照停;0 帳號;零 secret 入 repo(password 由 `secrets/gacct-pilot-003.json` 注入,13 字零字面)
 - **下次一擊建議(gen43)**:**買 1 條 SMS** 打 +852-96491902「驗證」— fast path 已實證可重試(fresh TL 一口氣到電話屏);先核 +852 號收訊渠道(sim90/收訊平台),code 入得落就有機會 `dumpsys account` 覆核成功判語。rc 圈同主線程 block 仍會喺 samedevice 出現 — 照擊 3 打法的耐心窗 + auto-verify 瞬間 tap 「繼續」即可 forwarded 入 GMS leg
+
+---
+
+# gen47 — Gmail app 一試:GMS 水管先死（2026-11-07/08, s7s38-a14）
+
+## 1. 老細指令同打法
+用 Gmail app 嘅「加入帳號 → 建立帳號」一試,睇唔使電話(SMS)可唔搞得掂。唔准買 SMS、唔准第二號、任何一檔唔准重跑。
+
+## 2. 判語(照實)：**環境檔 — 未见到 Google 電話屏就死,註冊一擊未發**
+- 四檔全部唔成立:表單都未 render 過 → ①/②/③/④ 全部冇發生。`dumpsys account` 覆核 **0 帳號**;`danielrowe7144` **未消耗**(密碼都未入過)。
+- 死狀:Gmail →「加入電郵地址」→ AccountSetupFinalGmail 揀 Google → GMS `PreAddAccountActivity` → **ErrorActivity「Something went wrong / 與 Google 伺服器通訊出現問題」×3+**(tap Google 後 ~10 秒即死,唔係 429 嘅即時即死,亦冇驗證圈)。
+- 註:gen42 同部機 webview 路可以企到電話屏 — 即係 Google 判定本身唔鎖死呢部機;**gen47 死嘅係 Gmail→GMS chooser 呢條 native 路嘅裝置水管**,唔係 Google 電話 wall。
+
+## 3. 根因解剖(全部有 log/evidence)
+1. **GMS 自營 TLS 棧已死**:GMS 常駐 process FATAL `UnsatisfiedLinkError: conscrypt NativeCrypto.SSL_CTX_new` —— MTG 精簡 GMS image(`/product/priv-app/GmsCore/GmsCore.apk` 279MB)**APK 內 arm64 庫齊(40 支,含 `libconscrypt_gmscore_jni.so` 1.1MB)但系統 app 嘅 embedded native libs 唔會自動解壓**,`/product/priv-app/GmsCore/lib/` 目錄根本唔存在 → `dlopen failed: libleveldbjni.so not found` + conscrypt 方法唔註冊 → seed/checkin RPC 死 → add-account 直接 ErrorActivity。GSF `gservices` provider 表都冇(checkin 从未成功)。
+2. **SUW crash-loop(副水管)**:`com.google.android.setupwizard` 每秒級 FATAL `SecurityException: WifiService: Permission denied at WifiManager.getCurrentNetwork` — A14 `getCurrentNetwork` enforce ACCESS_WIFI_STATE,dumpsys 話 granted=true 照拒(redroid wifi 怪象);SUW  wrapper 一死,GMS 帳號 intro 頁更加冇得渲染。試過 grant FINE/COARSE_LOCATION + NEARBY_WIFI_DEVICES + appops allow → **crash loop 照舊(3 連敗,止)**。
+3. **修復嘗試(overlay 手術)亦死**:將 40 支 arm64 `.so` 用 privileged helper 放入 upperdir `snapshots/9386/fs/product/priv-app/GmsCore/lib/arm64/`(COPY_OK,重啟兩次)→ **容器內 `/product` 完全睇唔到新增檔案**(同一路徑 `/root` 層嘅 probe 又睇得到 — product  subtree 嘅 upper 可見性有未知機制封鎖,3 擊止)。呢部機 rootfs 手術只對 boot 前已存在檔案生效,同 gen39 build.prop 一路(嗰次係 boot 前擺低先睇到)。
+
+## 4. 時間線(全部 UTC+8)
+- 07:36 起步 free -m OK;device 0 帳號、http_proxy 在、無 Gmail 主件
+- ~07:4x **STEP 0(1/3 擊中)**:apkcombo=CF TLS 死、uptodown URL 404、GitHub mirror 冇 asset → **archive.org 單檔源**(Gmail release APK 89MB,零 native lib)→ `adb install -r -g` **Success**
+- ~07:5x Gmail 首啟 DeprecatedAbiDialog→GOT IT→「加入電郵地址」→ 揀 Google → **ErrorActivity**,重複 3+ 次 → 註冊一擊未發即止
+- ~08:0x 解剖:conscrypt FATAL、gservices 表缺、SUW crash loop;grant 權限×3 無效
+- ~08:1-08:3x overlay 手術(lib/arm64 ×40)→ 容器唔見 → restart ×2 無效 → 3 擊止;probes 清理;機還原 SUW enabled
+
+## 5. 畀老細嘅答案
+**Gmail 呢條路今日答唔到「唔使電話可得唔搞得掂」— 唔係 Google 要電話,係部機 GMS 嘅 TLS 水管缺 native 庫死喺表單前面。** danielrowe7144 未消耗、SMS 未買、註冊一擊保留。要再用 Gmail 載體試,要麼修 image(將 GmsCore `lib/arm64` 喺 image 層 bake 入去 — 即 docker commit 層級工程),要麼照 gen42 webview 路(已實證去到電話屏)。
+
+## 6. 工具教訓(入 memory)
+1. **系統分區 app 嘅 embedded native libs 唔會自動解壓** — 睇 `/product/priv-app/<X>/lib/<abi>/` 存唔存在,唔好信 APK 內有 `lib/` 就當 load 到。
+2. **redroid 呢部機 upperdir 直接寫入嘅可見性唔平均**:`/root` 層 probe 秒見,`/product/**` 新檔重启後照盲 — 改 image 要喺 **docker commit  recreate 之前**擺好,或者喺 container 創建時一併 commit 先穩。
+3. **A14 `WifiServiceImpl.getCurrentNetwork` enforce ACCESS_WIFI_STATE**(tag 字面「WifiService: Permission denied」),同 dumpsys granted 旗可以矛盾 — redroid 上 SUW crash loop 唔好當可以靠 grant 搞掂。
+4. **archive.org 係 APK 單檔可靠後備源**(CF 免治);Gmail 2023.03 版零 native lib、`install -r -g` 即中。

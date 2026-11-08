@@ -1,0 +1,10 @@
+11-08 00:09:23.965 19107 19282 E AndroidRuntime: 	at com.google.android.gms.org.conscrypt.ClientSessionContext.<init>(:com.google.android.gms@264231013@26.42.31 (100400-1005867181):3)
+11-08 00:09:23.965 19107 19282 E AndroidRuntime: 	at com.google.android.gms.org.conscrypt.OpenSSLContextImpl.<init>(:com.google.android.gms@264231013@26.42.31 (100400-1005867181):83)
+11-08 00:09:23.965 19107 19282 E AndroidRuntime: 	at com.google.android.gms.org.conscrypt.OpenSSLContextImpl$TLSv13.<init>(:com.google.android.gms@264231013@26.42.31 (100400-1005867181):3)
+11-08 00:09:23.965 19107 19282 E AndroidRuntime: 	at com.google.android.gms.org.conscrypt.OpenSSLContextImpl.getPreferred(:com.google.android.gms@264231013@26.42.31 (100400-1005867181):3)
+11-08 00:09:24.461 19325 19436 E GmsNativeLibraryLoader: java.lang.UnsatisfiedLinkError: dlopen failed: library "libleveldbjni.so" not found
+11-08 00:09:24.464 19325 19436 E GmsNativeLibraryLoader: java.lang.UnsatisfiedLinkError: dlopen failed: library "libleveldbjni.so" not found
+11-08 00:09:49.595 26160 26160 E UncaughtExceptionHandle: java.lang.SecurityException: WifiService: Permission denied
+11-08 00:09:49.595 26160 26160 E UncaughtExceptionHandle: 	at android.net.wifi.IWifiManager$Stub$Proxy.getCurrentNetwork(IWifiManager.java:4953)
+11-08 00:09:49.595 26160 26160 E UncaughtExceptionHandle: 	at android.net.wifi.WifiManager.getCurrentNetwork(WifiManager.java:8292)
+11-08 00:09:49.595 26160 26160 E UncaughtExceptionHandle: 	at com.android.settingslib.compat.WifiManagerImpl.getCurrentNetwork(PG:1)
