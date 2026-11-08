@@ -1,0 +1,32 @@
+# s7-s53 M1 — getprop 欄位對帳(live 2026-11-08 17:4x UTC, s7s38-a14)
+Story = SM-J510GN / samsung galaxy-6fs / msm8917 / patch 2026-09-05
+
+| 欄位 | live 值 | 判 |
+|---|---|---|
+| ro.product.model | SMJ510GN | ✅ |
+| brand/manufacturer | samsung/samsung | ✅ |
+| device / name | galaxy-6fsp5d6fsksyq / galaxy-6fs | ✅ |
+| fingerprint 7 區(build/system/product/system_ext/vendor/odm/vendor_dlkm) | 全部 = samsung/galaxy-6fs/galaxy-6fsp5d6fsksyq:14/R0ABF9Z/024408:user/release-keys | ✅ 無 split |
+| security_patch | 2026-09-05 | ✅ |
+| type/tags/debuggable/secure | user / release-keys / 0 / 1 | ✅ |
+| ro.serialno | SAMS742181S89C | ✅ samsung 形 |
+| ro.hardware / ro.boot.hardware | msm8917 / msm8917 | ✅(service.d/99 跨 boot 生效,本 boot 2026-11-08T17:22Z) |
+| ro.bootmode | normal | ✅ |
+| ro.product.board / board.platform / soc.model / soc.manufacturer | MSM8917 / msm8917 / MSM8917 / QCOM | ✅ |
+| net.hostname | SMJ510GN | ✅(gen46 restart 後曾回退 localhost,本 boot 已跟 service.d 返) |
+| settings global http_proxy | 172.38.200.1:18317 | ✅ |
+| gsm.sim.state | ABSENT | ✅ 現階段預期 |
+| abilist | arm64-v8a,x86_64,armeabi-v7a | ℹ️ ndk_translation 出生證明(YELLOW) |
+| SDK / release | 34 / REL | ✅ A14 |
+| ro.build.date | Sun Sep 6 2026(patch 翌日,正常) | ✅ |
+
+PI 層對帳(/data/adb/modules/playintegrityfix/pif.prop):
+FINGERPRINT=同 story fp、MODEL=SMJ510GN、SECURITY_PATCH=2026-09-05、DEVICE_INITIAL_SDK_INT=32、spoofBuild/Props=true、spoofProvider/Signature=false → **同 build.prop 完全對齊,無 split(老細紅線 ✅)**;PIF+tricky_store 兩模組在席。
+
+殘留 tell(本輪新核實,照實):
+- `ro.boot.redroid_{width,height,dpi,fps,gpu_mode}` 5 條仍在 getprop 面(app 層可讀)— **ORANGE**
+- `ro.bionic.arch=x86_64`、`ro.dalvik.vm.isa.arm64=x86_64`、dalvik.vm.isa.x86_64.* — 翻譯層出生證明 — YELLOW(abilist 已露同源)
+- `ro.hardware.egl=mesa` / `ro.hardware.gralloc=gbm` / `ro.hardware.vulkan=lvp` — Mesa/LVP 非 Qualcomm 棧 — YELLOW(GPU 自報面,M2 核 renderer)
+- ro.vendor.build.security_patch 空值 — YELLOW(真機通常有值)
+
+M1 判語:**PASS**(story 欄位全對、PI/build 無 split;tells 全部 YELLOW/ORANGE 級,無 RED)。
