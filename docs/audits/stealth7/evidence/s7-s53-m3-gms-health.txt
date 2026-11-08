@@ -1,0 +1,18 @@
+== checkin SUCCESS lines:
+== checkin count:
+0
+== gservices provider:
+I/ActivityManager(51551): Start proc 52934:com.google.process.gservices/u0a36 for content provider {com.google.android.gsf/com.google.android.gsf.gservices.GservicesProvider}
+I/ActivityManager(54483): Start proc 55915:com.google.process.gservices/u0a36 for content provider {com.google.android.gsf/com.google.android.gsf.gservices.GservicesProvider}
+== dynamite signature failures:
+0
+      6 CronetDynamite
+     29 dynamite
+      4 dynamiteloader
+      2 DynamiteLoader
+      1 DynamiteLoaderV
+     17 DynamiteModule
+== SUW crash count:
+2345
+0
+== SUW rate sample:

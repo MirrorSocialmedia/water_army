@@ -1,0 +1,16 @@
+== checkin live trigger (2026-11-08T17:5xZ):
+I/Checkin: [CheckinOperation] Checkin Operation finished with result: SUCCESS (Reason:8 force=false)
+== SUW crash rate: FATAL=1734 / boot~33min ≈ 53/min(≈1/s)(boot 17:22:05Z)
+== WifiService denied:
+1716
+== dynamite signature fail lines:
+0
+1
+== SUW state:
+    User 0: ceDataInode=107610736 installed=true hidden=false suspended=false distractionFlags=0 stopped=true notLaunched=false enabled=3 instant=false virtual=false
+== gms/gsf enabled:
+    User 0: ceDataInode=107614786 installed=true hidden=false suspended=false distractionFlags=0 stopped=false notLaunched=false enabled=0 instant=false virtual=false
+    User 0: ceDataInode=107611397 installed=true hidden=false suspended=false distractionFlags=0 stopped=false notLaunched=false enabled=0 instant=false virtual=false
+== GservicesProvider start count this boot:
+2
+== phenotype.db mtime 17:28(1.15MB,boot+6min = 活);googlesettings.db 17:26;gservices.db 14:20(pre-boot 舊 fetch)
