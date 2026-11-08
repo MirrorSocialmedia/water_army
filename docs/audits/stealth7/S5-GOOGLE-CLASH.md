@@ -336,3 +336,37 @@
 ## 資產狀態交更
 - 帳號 0、danielrowe7144 未消耗、conscrypt 水管照活、checkin 重做完成、SUW disabled 嘗試失敗（shell 無權 pm disable）→ 維持 force-stop 手法。
 - evidence: s7-s50-00…58（evidence/）；機 s7s38-a14 留起（probe 彈窗已清）。
+
+---
+
+## gen51 + gen52（2026-11-09）— A 路救援：URL 直入破 hero 黑洞 → 撞「Verify your phone number」電話屏（一擊未消耗）
+
+**背景**：gen51 攻 item-nav（hero-variant dropdown item 黑洞）跑到一半 run-crash（00:42 transcript 凍結、零 commit、無完成事件）。gen52 接手 = 收皮救援棒 + 完成一擊。機 `s7s38-a14` @16701。
+
+**救援紀則（STEP 0）**：先 commit gen51 遺留 45 幀（`s7-s51-00..44`，防再丟）。發現 gen51 死機期間註冊表單狀態遺失、螢幕重置返 GMS Glif sign-in（`MinuteMaidActivity`，`mCurrentFocus=null` 僵窗）→ `docker restart s7s38-a14` 一次康復（鏡像/data 不動）。
+
+**破口（擊數記帳，總账仍 3 擊）**：
+- gen51 已用「擊2：Glif signup URL 直入 / dropdown」嘗試（dropdown 開到、用戶名 `danielrowe7144` 已輸入 — 幀 s7-s51-01/08）。
+- gen52 **放棄 hero-variant dropdown item 黑洞**，改用 `am start -a VIEW` 開 **`org.chromium.webview_shell`（純 DOM Chromium webview，冇 GMS Glif 嘅 DOM 觸控缺陷）**，直接 load 現代 GlifWebSignIn 建立帳號 URL → redirect 落 `lifecycle/steps/signup/name`。**唔使 dropdown、唔使 item，一 load 即入表單 page1**＝呢單真正嘅破口。
+
+**bounds=真相 覆核**：webview_shell 內 Chromium a11y 正常（uiautomator 俾真 bounds、可打字、DOM 點擊有效）；screencap 合成層仍同 hit-space 錯位（早期用 screencap 座標 tap  miss ~230px）。全程以 uiautomator bounds 操作、打後 re-dump。
+
+**註冊一擊（創建即消耗；由 page1 續做，唔重來）**：
+| 步驟 | 值 | 覆核 |
+|---|---|---|
+| Name | Daniel / Wong | dump `text="Daniel"` / `"Wong"` |
+| DOB+Gender | March / 14 / 1991 / Male | spinner 原生 list 選 + EditText；dump 覆核「March/14/1991/Male」 |
+| Username | `danielrowe7144` | 打字後 Google 非同步 check **冇「already taken」= 可用** |
+| Password | 13 字（secrets/gacct-pilot-003.json，零字面、唔 echo）| 入兩格 |
+| → Continue（password 頁）| → `steps/signup/password` 過 | — |
+| → Continue（device-check 頁）| 「Verify some info… / Do a device check」| — |
+| 結果頁 | **原生 GMS `MinuteMaidActivity`「Verify your phone number」** | SMS/carrier charge 提示、單一 **Verify** 按鈕 |
+
+**判語（四檔 → 電話屏）**：
+- **結果 = 電話屏（phone screen）**。電話驗證頁 **冇 Skip**（老細問題答案：raw dump 52 行 0 個 skip、只有 Verify + SMS charge 提示、無 phone-number EditText）。SMS/SIM 屬紅線（唔准買 SMS、唔准 ad-hoc phone）→ 呢度無法完成電話驗證。
+- **帳號未創建**（`dumpsys account` = Accounts: 0）→ `danielrowe7144` 未消耗、72h 未開始、註冊一擊未發。照實收手，唔重跑第二次。
+- MinuteMaid 視窗 screencap 變空白 = **FLAG_SECURE**（GMS auth 唔俾截圖），唔係 crash；a11y 文字先係真相（呼應「screencap 唔可信」）。
+
+**下次槓桿**：電話驗證係唯一殘牆（前面 name/DOB/username/password/device-check 全過）。破佢要：(a) 一部收得到 SMS 嘅電話（紅線鬆綁先准買 SMS）；(b) 搵 Google 喺 device-check 前俾「Skip verification / 用別的電話」入口（呢條 route 冇俾）；(c) 用舊 auth cookie 狀態令 Google 唔 force 電話驗證（gen50 flat-variant 先兆）。**webview_shell URL 直入 = 已驗證可用嘅穩定入口**（下次直接重用，唔使再同 hero dropdown 搏鬥）。
+
+**資產狀態**：帳號 0、`danielrowe7144` 未消耗、egress proxy `.206`（103.194.185.206，1-IP:3 cap）保留、conscrypt 水管照活、機 s7s38-a14 留起。evidence：`s7-s52-01…10`（evidence/）。
