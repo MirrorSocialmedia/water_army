@@ -1,0 +1,6 @@
+== STEP2 pipe evidence (boot-logcat.log excerpts) ==
+11-08 14:20:06.379  1898  2189 W Conscrypt: 	at com.google.android.gms.org.conscrypt.ConscryptFileDescriptorSocket.setSoWriteTimeout(:com.google.android.gms@264231013@26.42.31 (100400-1005867181):4)
+11-08 14:20:06.467  1898  2189 W Conscrypt: 	at com.google.android.gms.org.conscrypt.ConscryptFileDescriptorSocket.setSoWriteTimeout(:com.google.android.gms@264231013@26.42.31 (100400-1005867181):4)
+11-08 14:20:16.207  3863  4305 I Checkin : [CheckinOperation] Checkin Operation finished with result: SUCCESS finish time: 131194698.
+11-08 14:20:03.956  1111  1138 I ActivityManager: Start proc 2073:com.google.process.gservices/u0a36 for content provider {com.google.android.gsf/com.google.android.gsf.gservices.GservicesProvider}
+SSL_CTX_new occurrences: 0

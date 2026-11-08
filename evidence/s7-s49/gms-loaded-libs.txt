@@ -1,0 +1,3 @@
+/product/priv-app/GmsCore/lib/arm/libconscrypt_gmscore_jni.so
+/product/priv-app/GmsCore/lib/arm/libgmscore.so
+/product/priv-app/GmsCore/lib/arm/libleveldbjni.so
