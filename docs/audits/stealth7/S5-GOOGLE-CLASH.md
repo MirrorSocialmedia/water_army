@@ -239,3 +239,38 @@
 2. **redroid 呢部機 upperdir 直接寫入嘅可見性唔平均**:`/root` 層 probe 秒見,`/product/**` 新檔重启後照盲 — 改 image 要喺 **docker commit  recreate 之前**擺好,或者喺 container 創建時一併 commit 先穩。
 3. **A14 `WifiServiceImpl.getCurrentNetwork` enforce ACCESS_WIFI_STATE**(tag 字面「WifiService: Permission denied」),同 dumpsys granted 旗可以矛盾 — redroid 上 SUW crash loop 唔好當可以靠 grant 搞掂。
 4. **archive.org 係 APK 單檔可靠後備源**(CF 免治);Gmail 2023.03 版零 native lib、`install -r -g` 即中。
+
+---
+
+# gen48 — Gmail 第二擊：老細 x86_64 APK + image 層 GMS lib 工程（2026-11-08, s7s38-a14）
+
+## 1. 老細指令同打法
+老細親自落貨 Gmail 2025.03 x86_64 原生 APK（173MB, apkmirror）直接裝；GMS native 庫以 **docker commit → recreate** 方式 bake 入 image 層（gen47 教訓）。註冊一擊（創建帳號）保留至 STEP 2；唔准買 SMS、唔准第二號。
+
+## 2. 判語(照實)：**環境檔 — STEP 1 四擊止，註冊一擊未發**
+- 四檔全部唔成立：`PreAddAccountActivity` 之後 **ErrorActivity 照中**（第 3 次實測）→ 表單未 render。`dumpsys account` **0 帳號**；danielrowe7144 未消耗、密碼未入。
+- Gmail 載體本身 **完全可用**：x86_64 原生裝機 → 首啟 DeprecatedAbi「New in Gmail/GOT IT」→「Add an email address」→ AccountSetupFinalGmail「Set up email」→ Google → GMS chooser，全程流暢（老細 APK 係啱嘢）。
+- 死因剩餘：**GMS 自營 conscrypt 嘅 `libconscrypt_gmscore_jni.so` 照 load 唔到** → `UnsatisfiedLinkError: NativeCrypto.SSL_CTX_new "No implementation found"` → checkin RPC 死（CheckinIntentOperation 每次 FATAL crash-loop）→ `PreAddAccountState setCheckinResult result=false` → ErrorActivity。
+
+## 3. 四擊手術時間線（全部 UTC+8）
+| 擊 | 動作 | 結果 |
+|----|------|------|
+| v1 | 40 支 arm64 .so 寫 upperdir `product/priv-app/GmsCore/lib/arm64` → commit → recreate | **盲** — 揭穿真相：container 嘅 `/product` = overlay **`/system/product` 子路徑 bind**（mountinfo 實測），rootfs 頂層 `product/` 從來唔係 mount 源。**gen47「/product 神秘盲區」實為寫錯 subtree** |
+| v2 | 改寫 `system/product/.../lib/arm64` → commit → recreate | .so 可見 ✓；但 GMS `System.loadLibrary("gmscore")` 照敗 — 目錄名Convention 要 **abilist 全名** `arm64-v8a`（呢部 MTG 機 primary ABI = arm64-v8a）|
+| v3 | 加 `lib/arm64-v8a`（40 支, toybox tar 由 running container 搬）→ commit → recreate | **libleveldb / libgmscore load 成功**（GmsCorePageSize / GmsNativeLibraryLoader dlopen 錯誤消失）✓；唯獨 conscrypt jni 照敗，checkin 照 crash → ErrorActivity 照中 |
+| v4 | 40 支再拍平入 `lib/` 直頭（conscrypt loader legacy path 假設）→ commit → recreate | SSL_CTX_new FATAL **照中**（16 條）→ 3 連敗線達，STEP 1 止 |
+
+## 4. 根因更新（相比 gen47）
+1. **image 層工程正路成立**：upperdir 寫入 → docker commit → recreate 先至實淨（commit 後舊 snapshot 攤平；每次 recreate 新 upper 係空嘢，要再 copy）。
+2. **GMS 40 支 arm64 庫入面，leveldb/gmscore 已 load 到**；conscrypt gmscore jni 係 GMS 內置 `org.conscrypt` 自家用 loader 載入，路徑假設（nativeLibraryDir abi 子目錄、legacy lib/ 直頭）**全部試盡照敗**，且 nativeloader 零日誌（load 失敗字面被吞）— 懷疑喺 MTG translation 層（arm64 dlopen 喺 app namespace 無到）或 GMS conscrypt 要嘅係 **APK 內嵌解压路徑**（gen47 已證 embedded 唔會自動解压）。
+3. **副水管照舊**：SUW `WifiService: Permission denied` crash-loop（gen47 3 擊止，冇再戀戰）；CronetDynamite/MapsDynamite/MeasurementDynamite `uncompressed.apk failed signature check`（/data 嘅舊 dynamite 殘留同 GMS 簽名唔夾，非致命）。
+4. **SntpClient UDP timeout、NTP 中斷** — proxy 只通 HTTP(S)，正常。
+
+## 5. 畀老細嘅答案
+**Gmail 載體本身已通（老細 APK 零問題），但 GMS 自營 TLS 嘅最後一塊骨 — conscrypt gmscore jni — 用 image 層放庫嘅方法搞唔掂**；STEP 1 四擊止，註冊一擊保留（danielrowe7144 未消耗）。要再攻 Gmail 路，下一步係拆 GmsCore.apk 內嵌 lib 嘅 **解压落位**（`/data/app/.../lib` 或 GMS 自建解压目錄），或者接受 **webview 路（gen42 實證去到電話屏）先係主線**。機留喺 v4 image（`...stealth7-gmslib-v4`，lib 平放 + arm64 + arm64-v8a 三路齊）。
+
+## 6. 工具教訓(入 memory)
+1. **redroid container 嘅 `/product` = `/system/product` 子路徑 bind**（mountinfo 睇 mount source）；upperdir 寫入要寫 `fs/system/product/...` 先至生效 — gen47 嘅「未知封鎖機制」其實係路徑錯。
+2. **MTG 機 loadLibrary 嘅 convention 目錄 = abilist 全名**（`lib/arm64-v8a`，唔係 `lib/arm64`）；primary ABI 睇 `ro.product.cpu.abilist` 順序。
+3. **docker commit 之後舊 RW snapshot 會攤平**（舊 upper 目錄變空）；要由 running container `toybox tar -c` 搬檔最穩。
+4. **`pm install` 173MB 行 `pm install -r -g` on-device path 路**（cat|docker exec 入 /data/local/tmp 再 pm install）；adb tcp 大 file 會吐 `Broken pipe` 噪音 — 以 `pm path` 覆核為準，唔好信 exit code。
