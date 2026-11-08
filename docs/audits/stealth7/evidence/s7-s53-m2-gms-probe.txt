@@ -1,0 +1,17 @@
+== GMS(56802) maps .so dirs:
+    960 /system/lib64
+     66 /apex/com.android.art/lib64
+     65 /system/lib64/arm64
+     37 /apex/com.android.vndk.v34/lib64
+     18 /apex/com.android.i18n/lib64
+     14 /apex/com.android.runtime/lib64/bionic
+     11 /vendor/lib64
+     10 /vendor/lib64/egl
+      9 /product/priv-app/GmsCore/lib/arm
+      7 /apex/com.android.tethering/lib64
+      7 /apex/com.android.os.statsd/lib64
+      4 /vendor/lib64/hw
+== conscrypt/gmscore loaded:
+conscrypt_gmscore_jni.so
+conscrypt/lib64/libjavacrypto.so
+leveldbjni.so

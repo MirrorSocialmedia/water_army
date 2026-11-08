@@ -1,0 +1,33 @@
+# s7-s53 M2 — 進程/內核洩漏掃描(live 2026-11-08 17:4x-17:5x UTC)
+
+## logcat -d 洩漏字計數(57,937 行,全量存 s7-s53-m2-logcat-full.txt)
+| 字 | 計 | 性質 | 判 |
+|---|---|---|---|
+| redroid | 1 | `SystemConfig: Reading permissions from /vendor/etc/permissions/redroid-removed-permissions.xml` — **檔名在 /vendor 實面,任何 app 行目錄都見到** | ORANGE |
+| rancher/goldfish/generic_x86/houdini/docker | 0 | 乾淨 | ✅ |
+| x86_64 | 105 | linker/ndk_translation boot 噪音(tag 面) | YELLOW |
+| ndk_translation | 3 | `Initialized NDK translation (aarch64)`(程序 tag) | YELLOW |
+| docker | 0 | 無痕 | ✅ |
+| magisk | 61 | boot 期 `magiskpolicy --live` SIGABRT FATAL(pid 66,init 早期噪音)+ com.topjohnwu.magisk 包痕 | YELLOW(出生證明類) |
+| delta | 1 | 假陽性(`writeHistoryDelta`) | ✅ |
+| localhost | 0 | hostname 已返 SMJ510GN(見 M1) | ✅ |
+
+## 內核/宿主層(真機 J5 Prime 對照 = 4核 Cortex-A53 / 2GB / Adreno 308)
+- `/proc/cpuinfo`:**"AMD Ryzen 7 9700X 8-Core Processor" ×16 processor** — 型號+核數雙露餡 → **RED**(任何讀 cpuinfo 的探針;GMS 有讀)
+- `nproc`=16;`MemTotal=96,439,456 kB`(≈92GB,真機 2GB)→ **RED**
+- GPU 自報(SurfaceFlinger):`GLES: IMG, AMD Radeon Graphics, OpenGL ES 3.2 V@0615` — vendor=IMG + renderer=AMD Radeon(真機應 = Qualcomm/Adreno)→ **ORANGE**;props `ro.hardware.egl=mesa/vulkan=lvp/gralloc=gbm` 同露
+- sensors:**Total 3 h/w sensors, 3 running**(BMI260 Acc/Gyro + VCNL36827 Prox)✅ story 對(HAL 鏡像內;boot race 本 boot 未復現)
+- 電池:**起步即場 dumpsys = level 0 / present=false / status 1 — service.d/98 呢次 boot 未生效**(見事故欄)→ 本棒即場補 set(level 86/present 1/status 2 charging/AC 1/temp 260)= 回歸基準,非手術
+
+## service.d/98 電池事故(本輪新發現)
+- 腳本本身有效(手動跑同款命令 level/present 即返),`99-props` 本 boot 有生效(props 全 msm8917)→ 98 未生效根因 = 腳本只等 boot_completed **120 秒視窗**,本次 boot 宿主義_mem_緊(起步 available 4.5GB)啟動慢過視窗 → **視窗太短,電池 story 噉次 boot 冇返**;另 `status charging` 字眼無效(要 int `status 2`),`health/voltage/technology` 呢個 build 嘅 `dumpsys battery set` 唔收 → 補唔到,留 voltage=0/tech 空 = YELLOW 殘留
+- 影響:DevCheck Health 卡會紅(M5 讀到 battery 0 時)
+- 修法(俾老細批,本棒唔改腳本):視窗 120s→600s + `status 2` + set 失敗重試
+
+## GMS 自報面
+- GMS(pid 56802)實際 load:`/product/priv-app/GmsCore/lib/arm/`(conscrypt_gmscore_jni/leveldbjni/gmscore ×9 mappings,40 支在席)→ **maps 露 `lib/arm` 目錄名**;同 J5 Prime 真機 32-bit ROM 形態合理(真機 J5 Prime 多為 armeabi-v7a),唔新增 RED,但 abilist 含 arm64-v8a/x86_64 = ndk_translation 出生證明(YELLOW,已知)
+- `/system/lib64/arm64/` = bridge sysroot(libnative_bridge_vdso 在席)— maps 面露 "arm64 喺 lib64" 怪位 — YELLOW
+- 宿主進程隔離:機內 `ps -A | grep -icE "strata|python|node"` = **0** ✅(pid ns 乾淨)
+- GMS 版號:26.42.31、primaryCpuAbi=arm64-v8a
+
+M2 判語:**KNOWN_TELL 偏 PASS** — 洩漏字面乾淨(無 docker/rancher/localhost);**RED 兩條 = cpuinfo(AMD 16核)與 MemTotal(92GB)**(GMS 讀得到、至今未拒,平台探針面最大露餡);ORANGE = redroid-removed-permissions.xml 檔名、AMD GPU renderer、電池 boot 視窗短(已即場補 set,修法待批)。
