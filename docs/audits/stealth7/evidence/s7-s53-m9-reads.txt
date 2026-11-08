@@ -1,0 +1,19 @@
+# s7-s53 M9 — 穩定性(2026-11-08 18:12 UTC)
+
+## 容器
+- `docker inspect s7s38-a14`:**RestartCount=0**、StartedAt=2026-11-08T17:58:15Z(=本棒 M4 段唯一一次手動 docker restart,window 僵死破鎖,重啟級)、OOMKilled=false
+- 機 uptime:up 1d16h 係**宿主**口徑(容器內 /proc uptime 同宿主共享);容器實齡 = 14 分鐘(17:58 起)
+
+## logcat crash 計數(本 boot buffer)
+- FATAL EXCEPTION 總數 = **54**(含 system-process 段)
+- 歸因:**41 × com.android.vending `bgExecutor` fatal = `IllegalArgumentException: Unexpected safety source: GooglePlayProtect`** — **每分鐘 3–5 次嘅 crash-loop**(Play Store 背景線;Store 版號 vs Play Protect API 錯配,鏡像已知類)→ **本 boot 先至真係計到頻**(GMS 水管活咗之後 Store 先跑到 Play Protect 呼叫)
+- **SUW FATAL = 0**(force-stop 跨重啟生效)✅ — gen52 era 1734/boot crash-loop 已熄
+- **新增事故照實報(兩項,非 SUW):**
+  1. vending PlayProtect crash-loop(41/boot,~4/min)— ORANGE,見決鬥日清單(pm disable-user com.android.vending 即停,唔使卸)
+  2. **`FATAL EXCEPTION IN SYSTEM PROCESS: PackageManager` → `IllegalStateException: Unsupported isa 'x86_64'`(ART PrimaryDexopter.getAllAbis)×1**(boot 期)— 翻譯層出生證明級:系統 dexopt 唔認 x86_64 primary ISA;发生于 boot 早期(pid 1104),system_server 本 boot 未再死 → YELLOW(出生證明級,同 abilist tell 同源)
+- 本棒自傷照實:DevCheck 俾 LMK 殺 ×1(宿主 RAM 壓 9.8G available)、KeyAttestation 開完自動收 ×3、uiautomator null-root 本 boot 死(工具面)
+
+## RAM 現況(宿主 `free -m`)
+total 94179 / used 84296 / **available 9882 MB**;load avg 8.21(宿主多容器)— 唔算爆,但 redroid LMK 會殺 probe app(即場觀察到)
+
+## M9 判語:KNOWN_TELL(vending PlayProtect crash-loop 4/min + PMS dexopter isa fatal = GMS 水管活咗先見嘅新增事故;SUW 已熄;容器 0 非預期重啟)
