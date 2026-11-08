@@ -1,0 +1,19 @@
+# s7-s53 M5 — DevCheck live 重讀(2026-11-08 18:1x-18:2x UTC,重啟後 boot)
+
+## 主頁(dashboard)live ×3 幀(s7-s53-m5-devcheck-dash/dash2/dash3.png)
+- **Health Score = 100**(綠環)✅ — GMS 手術 + pm clear + 重啟後無回退(沿用閾值:gen46 100,今日新讀數確認仍 100)
+- **Phone AI 卡:96 —「Is your phone genuine? → Likely genuine」** ✅(gen46 live 94 → 今日 96;閘 90 遠過)
+- Battery **86% Charging**,剩餘倒數 3h0m→2h51m(三幀遞減=活樣本)✅ — 電池故事重啟後即場再 set 成功
+- Memory 83% (79085MB/94179MB) — 宿主 RAM 露餡(已知,M2 同款)
+- Storage 860.8GB free / 1875.7GB total — 宿主磁碟露餡(已知)
+- CPU info: 16 cores (16 online) + ARM 64 bit — 宿主核數露餡(已知)
+- Network: 103.194.185.206 / no SIM / Mobile+Wi-Fi(M7 出口 IP 佐證之一)
+- System 卡:「**redroid (container detected)**」紅 chip 仍在(summary 顯示;唔喺扣分 checklist — gen46 已知)
+
+## Trust 明細頁:本 boot 未達(3 連敗止,照實)
+- 本 boot uiautomator 死(null root)→ 純坐標盲 tap:AI card 中心=無效;(540,1000)=開「System settings」bottom sheet(DevCheck 選中 tab 再 tap 行為);灰底 column tap 無效;黑幀+LMK 殺 app 各 1 次
+- **96 = 100 −4** 構成無法拆細(推測 Root −3 + USB −1,新版權重可能調低 USB 項;gen46=−3/−3 得 94)
+- 決鬥日動作照 gen46 結論有效:`adb disconnect` + USB debugging 熄 → 預期回 97+
+
+## M5 判語:PASS(主頁 headline 三幀 live:Health 100 / AI 96 / 電池 Charging)
+KNOWN_TELL:Trust 明細頁本 boot 未達(uiautomator 死+UI 不穩);扣分構成 96−100=−4 未拆細 — 唔當回退(gen46 拆細過 −Root−USB 全 informational)。
