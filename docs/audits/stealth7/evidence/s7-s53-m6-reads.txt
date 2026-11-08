@@ -1,0 +1,21 @@
+# s7-s53 M6 — 出廠斷點 / probe 痕(2026-11-08 18:3x UTC)
+
+## 裝機 app 清單(pm list packages -3 + pm path 核)
+| app | pkg | 位置 | probe 身分 | 決鬥日建議(唔自行卸,交老細批) |
+|---|---|---|---|---|
+| Gmail | com.google.android.gm | /data(/data/app) | 出廠級(Google 內置)— **留** | 留(卸咗反而露餡) |
+| Magisk(Delta) | com.topjohnwu.magisk | /data | root 管理 — **留**(出生證明級) | 留;決鬥日唔開 app |
+| DevCheck | com.deviceinsight.ai | /data | probe | force-stop + 收 recent(決鬥日可卸) |
+| SafetyNetChecker(文檔一直叫「YASNAC」— 命名更正:實為 rikka.safetynetchecker,v12 有 PI/ATTS 區) | rikka.safetynetchecker | /data | probe | 同上 |
+| KeyAttestation | io.github.vvb2060.keyattestation | /data | probe | 同上 |
+| webview_shell(探號瀏覽器) | org.chromium.webview_shell | /product/app/Browser2(**系統分區,烘入**) | probe + **有 signup 痕**(見下) | 清 data 或卸;唔清就收 recent |
+| YASNAC _pkg_ | (冇 com.sihine.yasnac — 部機由始至終無呢隻) | — | — | 記檔,免誤查 |
+
+## probe 痕實測
+- **accounts=0**(dumpsys account AccountInfo count=0)✅ — signup 未成帳號,GMS 後端知唔知係另一回事(M3 checkin 已照實生)
+- **webview_shell Cookies(SQLite,24KB,mtime 17:38)**:`__Host-GAPS`(accounts.google.com 帳號 session cookie!)+ NID + OTZ + _ga(policies.google)= **瀏覽器曾經行過 Google 帳號流程嘅持久跡** — 決鬥日前清 webview_shell data 可抹走;唔清就只係瀏覽器級(帳號未開通,server 端 GAPS 對未注册帳號 = 中性)
+- **danielrowe7144 明文**:webview_shell/gms/gm data 全部 grep -a 無明文 residue ✅(input 未落 disk)
+- **recent tasks = 7 張**,包括 webview_shell「accounts.google.com/signup」卡、GMS UnpackingRedirect、keyattestation、safetynetchecker、DevCheck、launcher、FallbackHome → **決鬥日 must-clear**(recent 卡面直接露出 signup 痕 + probe app 群)
+- GMS checkin 服務端痕(phenotype/checkin 上報)— 本地清唔到,屬「後端答可用」範圍,照實記
+
+## M6 判語:PASS(清單齊、無帳號、無明文 username 殘留;已知痕 = GAPS cookie + recent 卡 + webview_shell 系統分區身分)
