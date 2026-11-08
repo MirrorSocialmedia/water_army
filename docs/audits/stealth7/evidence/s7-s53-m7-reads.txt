@@ -1,0 +1,19 @@
+# s7-s53 M7 — 出口層(2026-11-08 18:1x UTC 實測)
+
+## 出口 IP 單一
+- `curl -x http://127.0.0.1:7897 https://api.ipify.org` = **103.194.185.206**(= DevCheck 主頁 Network 卡讀數 103.194.185.206,兩路獨立同值)— **單一 HK 出口** ✅
+- gost 鏈路:`gost -L http://172.38.200.1:18317 -F http://127.0.0.1:7897`(機內 proxy 172.38.200.1:18317 → 宿主 verge-mihomo 7897 → 家出口);gost log JSON 全走 `dst=127.0.0.1:7897`
+
+## gost 48h 出口域名面(全 Google,無第三域)
+android.googleapis ×1828 / play.googleapis ×600 / www.google ×465 / connectivitycheck.gstatic ×420+102 / www.googleapis ×225 / firebaseinstallations ×160 / play.google ×134 / play-fe ×123 / www.gstatic ×106 / geller-pa ×78 / digitalassetlinks ×74 / accounts.google ×68 / safebrowsing ×48 — **無一非 Google 域**;android.googleapis 高頻 = GMS checkin/config 心跳(=M3 水管實據)
+
+## DNS 洩漏測試(機內 resolver)
+- 機內 DNS server = **8.8.8.8**(dumpsys connectivity)— **直接出(唔經代理)**,但係 Google 公 DNS 唔係中國解析
+- `ping accounts.google.com` 機內解析 = **173.194.203.84**(Google 173.194 段,GDS 正常回值;唔係中國 ISP CGNAT/阻塞段)→ **DNS 唔露餡**(8.8.8.8 直出 = 已知設計,ORANGE 級:出口國 ≠ DNS 查詢源 IP 國,但 Google 自己收 8.8.8.8 查詢,風險低)
+- 註:機內冇 getent/curl;`ping` 解析有效,ICMP 100% loss(封)屬正常
+
+## 時鐘
+- 機 `date -u` = 2026-11-08 18:11:51 UTC;Google 頭(`play.googleapis.com/log` Date)= 18:11:51 GMT → **skew ≈ 0s** ✅
+- `time_zone` global = null(未设)— YELLOW 小項:決鬥日可 set Asia/Hong_Kong(載體級)
+
+## M7 判語:PASS(出口單一 103.194.185.206 HK;DNS=8.8.8.8 直出唔係中國值;時鐘零偏移;出口面全 Google)
