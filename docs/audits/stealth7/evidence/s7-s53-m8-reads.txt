@@ -1,0 +1,14 @@
+# s7-s53 M8 — 帳號/介面態(2026-11-08 18:1x UTC)
+
+| 項 | 實測 | 判語 |
+|---|---|---|
+| 帳號 | dumpsys account = **0** | ✅(應) |
+| SIM/電話 | telephony `mServiceState` = voice/data **OUT_OF_SERVICE**,operator=null,mCallState=0 → 電話屏「No Service/No SIM」 | KNOWN(已知紅線:無卡) |
+| SetupWizard | `stopped=true`(重啟後仍停)、enabled=default | ✅(SUW 死透,crash-loop 唔再計頻) |
+| device_provisioned | 1 | ✅(冇 setup 通知) |
+| proxy | `settings get global http_proxy` = **172.38.200.1:18317**(重啟後照在) | ✅ |
+| Wi-Fi 開關 | `wifi_on=0`;mobile_data=1 | YELLOW:真機用 Wi-Fi 時 wifi_on=1 先合理 |
+| 網絡 transport | **ETHERNET** transport(介面名 wlan0,MAC ea:c8:6e:89:c5:b1,VALIDATED;DNS 8.8.8.8) | ORANGE:transport=ETHERNET ≠ 手機 Wi-Fi 故事;status bar 因此**冇 Wi-Fi 格仔、冇訊號格仔**(只有時鐘+100%電池)— 介面露餡,GMS 唔見 |
+| status bar 露餡 | 幀核(多張):頂欄只有 clock + 100% 電池圖示;冇 signal/Wi-Fi/alarm icon | YELLOW(決鬥日若截圖介面要知) |
+
+## M8 判語:KNOWN_TELL(帳號/SIM/proxy 全部照预期;露餡集中在 transport=ETHERNET → status bar 無格仔,出生證明級)
