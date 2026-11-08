@@ -309,3 +309,30 @@
 3. privileged alpine helper container mount `/var/lib/containerd` 寫 snapshot upperdir，係 host 無 root 權時嘅正路（gen48 模式跟住用）。
 4. `cmd input keyevent --repeat N 67` 先係大量 DEL 嘅正路（逐個 `input keyevent 67` 又慢又會喺 web combo 失控）。
 5. Gmail chooser 路由圖：Gmail「Add an email address」→ AccountSetupFinalGmail → Google → UnpackingRedirect → AccountIntro → **PreAddAccount（challenge）→ MinuteMaid(Glif webview)**；ErrorActivity 只係 checkin 死先會出。
+
+# gen50 — 攻 Glif webview 觸控路由：破「DOM 點擊全 no-op」真相 = hit-space 錯位（2026-11-08/09, s7s38-a14 @16701）
+
+## 手法矩陣結果（STEP 1）
+| 擊 | 手法 | 結果 |
+|---|---|---|
+| 1 | `input tap`（nominal 坐標） | 多數 no-op（幀 byte-identical）— 命中點偏左 ~115px、偏上下 ~16px |
+| 2 | `input --mouse tap` | **此機 input binary 唔支持 `--mouse`**（Unknown command）— 路線淘汰 |
+| 3 | pointer_location overlay 覆核 | 實命中點確認 dx≈−115；**修正後 tap「建立帳號」trigger → dropdown 開到**（幀 94K→147K，選單完整）＝**DOM 觸控有反應，路由破** |
+
+## 核心發現
+1. **DOM 點擊唔係死，係 screencap 畫面 ≠ hit-space**：webview 冇 a11y 橋（uiautomator dump 冇 WebView 節點，仲成日 segfault）→ 只有 screencap 做 geometry 來源，但佢係合成層，同輸入層可以差 **>500px**（例：GOT IT 按鈕畫面喺 y1470、實際 clickable bounds 喺 [0,2127][1080,2274] 底部 footer）。
+2. **底部 bar 定律**：Glif sign-in 嘅「建立帳號 for personal use ▾」trigger 實際命中位 = **y≈2200 底部 bar**（screencap 顯示喺 y≈1670）。(430,2200) 一 tap dropdown 即開。
+3. **menu item 黑洞**：dropdown 開到之後，item 行喺 hit-space 揾唔到（試過 y 2058/2093/2128/2160/2200/2238/2268 全 no-nav，`--mouse`/DPAD/ENTER 路都死）。23:59 曾經喺 **flat variant**（無 hero 版）成功 dropdown→註冊頁 page1（填到 Wong、日期 picker 都開到）→ **hero variant 先係呢家嘅病根**。
+4. **variant flip 源**：`pm clear com.google.android.gms`（清咗 auth cookie）後 Google 改 serve **hero variant**（Google logo hero + placeholder「Gmail 帳戶」）；之前 flat variant 係舊 cookie 先至有。**pm clear 唔傷 android_id（f6fec6ccc3677b 保住）**，checkin 重做 OK。
+
+## 副作用（重啟鏈）
+- `force-stop com.google.android.gms` 引發 SUW crash-loop 搶前台 + `mCurrentFocus=null`（窗口系統僵死）→ **docker restart s7s38-a14 一次**（鏡像/data 不動）先康復。教訓：**呢部機唔好 force-stop GMS**，要清 state 用 `pm clear`。
+
+## 判語（STEP 2 gate）
+- **觸控路由 = 唔係死症**：輸入框可打字、dropdown 可開、flat variant 下到到註冊頁（gen49 嘅「全 no-op」修正為「hit-space 錯位 + variant 漂移」）。
+- **註冊一擊未發**（帳號仍 0、danielrowe7144 未消耗）：hero variant 嘅 dropdown item 無導航 = 環境缺陷，唔係手法缺陷；未破 gate 唔准碰一擊，照實收手。
+- **下次槓桿**：(a) 用舊 cookie 狀態或等 A/B 翻 flat variant 再打 item；(b) sign-in 錯帳頁「建立帳號」純 HTML link（唔經 JS router）入口；(c) dropdown 開住時用 search box（IME 路）。
+
+## 資產狀態交更
+- 帳號 0、danielrowe7144 未消耗、conscrypt 水管照活、checkin 重做完成、SUW disabled 嘗試失敗（shell 無權 pm disable）→ 維持 force-stop 手法。
+- evidence: s7-s50-00…58（evidence/）；機 s7s38-a14 留起（probe 彈窗已清）。
