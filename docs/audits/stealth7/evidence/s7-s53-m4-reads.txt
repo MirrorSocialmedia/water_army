@@ -1,0 +1,26 @@
+# s7-s53 M4 — PI 三級 live 重讀(GMS TLS 活水管下首次真讀,2026-11-08 18:0x UTC)
+
+## ATTS(Play Integrity 語義,YASNAC ATTS 區,新 request ID 兩個時點一致:ai8OejqoWbW0cL… / ai8OeqV6J7VU6g2c…)
+| verdict | 讀數 |
+|---|---|
+| MEETS_BASIC_INTEGRITY | ✅ |
+| MEETS_DEVICE_INTEGRITY | ✅ |
+| **MEETS_STRONG_INTEGRITY** | **✅(新讀數 — 推翻 gen45c 時點 Strong ❌;今日 ATTS server 旗亮)** |
+| MEETS_NETWORK_INTEGRITY | ✅ |
+| MEETS_STRONG_VM | ✅ |
+| MEETS_INITIAL | ✅ |
+| MEETS_KEY_CERTIFICATE_VALIDITY | ❌(free-pool 盒證書有效性旗,已知類) |
+
+## SAFETYNET(legacy attest 通道 — gen46「API_NOT_CONNECTED ×3」今日醫活)
+- RESULT:**success**(Request ID /LAViXlW160K5g2c…)
+- BASIC INTEGRITY = **false** ❌;CTS PROFILE MATCH = **false** ❌;EVALUATION TYPE = **BASIC**;HOST = googleapis.com
+- 判語:legacy 通道有真回應(水管活);basic=false 屬 legacy 已死語義(Google 2024 收檔後 flag 停更/未註冊裝置),唔當新增 RED,照實記
+- KEYSTORE 區:auto 結果待補(本次未見 FATAL);PLAY PROTECT 區照舊 `API error 17 API_NOT_CONNECTED`(工具面,已知)
+
+## 事故與手腳(照實)
+- 本棒首讀時 window 系統僵死(mCurrentFocus=null、screencap 五幀同 md5、SystemUI 鐘停 17:22)→ **docker restart ×1**(17:58Z,重啟級小動作)→ 重啟後 focus 正常、網絡 validated(18:00:40)、GMS play.googleapis TLS 照走(gost 18:00:36 CONNECT ×3)
+- 重啟後 service.d/98 電池視窗照舊未生效(level 0)→ 即場再補 set(level 86/present/status 2/AC)
+- uiautomator 本 boot 死(null root ×3 止)— 全程 screencap+讀圖
+
+## M4 判語:PASS(新讀數,唔使沿用 gen46)
+三盞燈 **Basic/Device/Strong 全綠**(ATTS,雙時點一致);legacy SafetyNet 有真回應(basic/cts=false 記檔);強證 Red 項 = KEY_CERT_VALIDITY(free-pool 盒出生)。KeyAttestation 鏈覆核見 s7-s53-m4-keyattest-*。
