@@ -1,0 +1,21 @@
+#!/system/bin/sh
+# WA-STEALTH7 gen55: sensor HAL registration race fix (gen44 root cause).
+# If SensorService probed 0 h/w sensors at boot (HAL registered too late),
+# restart wa-sensors HAL then zygote ONCE. Bounded: no loops, max ~90s wait.
+i=0
+while [ $i -lt 30 ]; do
+  bc=$(getprop sys.boot_completed)
+  [ "$bc" = "1" ] && break
+  sleep 2
+  i=$((i+1))
+done
+sleep 8
+N=$(dumpsys sensorservice 2>/dev/null | grep -oE "Total [0-9]+ h/w sensors" | awk "{print \$2}")
+if [ -z "$N" ] || [ "$N" = "0" ]; then
+  setprop ctl.restart vendor.sensors-default
+  sleep 3
+  setprop ctl.restart zygote
+  log -t Stealth7Sensors "race hit: sensors=$N -> HAL+zygote restarted"
+else
+  log -t Stealth7Sensors "sensors=$N OK, no restart"
+fi

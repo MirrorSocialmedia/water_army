@@ -1,0 +1,8 @@
+GLES: IMG, AMD Radeon Graphics, OpenGL ES 3.2 V@0615
+[dalvik.vm.isa.x86_64.features]: [default]
+[dalvik.vm.isa.x86_64.variant]: [x86_64]
+[wifi.interface]: [wlan0]
+Total 3 h/w sensors, 3 running 0 disabled clients:
+0x00000001) BMI260 Accelerometer      | Bosch           | ver: 1 | type: android.sensor.accelerometer(1) | perm: n/a | flags: 0x00000410
+0x00000002) BMI260 Gyroscope          | Bosch           | ver: 1 | type: android.sensor.gyroscope(4) | perm: n/a | flags: 0x00000410
+0x00000003) VCNL36827 Proximity       | Vishay          | ver: 1 | type: android.sensor.proximity(8) | perm: n/a | flags: 0x00000013

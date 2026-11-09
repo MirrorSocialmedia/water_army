@@ -185,3 +185,117 @@ docker run -d \
 - **logcat grep SIGSEGV:** 容器內 grep pipe 崩潰（自噬）— 非 FATAL EXCEPTION 類型，照實記。
 
 **evidence:** `s7-s54-devcheck.png`（Health 100/AI 95/Battery 86%）、`s7-s54-att-check.png`（SafetyNetChecker checking 幀）、`s7-s54-snc-check.png`。
+
+---
+
+# gen55 深攻棒 — 四粒尾數逐個對付 + 感應器競態烘鏡像
+
+**機:** s7s38-a14 @16701(A14 redroid,SM-J510GN 故事)
+**日:** 2026-11-09(UTC)— 本棒 = 深攻(老細令:其餘全修好);紀則:每粒 3 擊止、照實報;唔准郁 keybox/身份層/proxy;/proc bind 兩檔照留。
+**對照基線:** gen53 九門 + gen54 手術表。
+
+---
+
+## 四粒逐粒(做法/擊數/前後對照)
+
+### 粒1 GPU renderer 去 AMD 餡 — **ORANGE 保留(3+1 擊止)**
+
+| 擊 | 做法 | 結果 |
+|---|---|---|
+| 定位 | dumpsys GLES 行、getprop、/proc/maps、strings 庫掃描 | GL 提供者=Mesa/gallium(radeonsi over host AMD iGPU 1002:13c0);renderer="AMD Radeon Graphics" 係**宿主 kernel amdgpu marketing name**(runtime ioctl,容器內冇呢個字面);fork 已 patch version 格式 `%s%u.%u%s V@0615` + vendor IMG |
+| 1 | 寫 /vendor/etc/drirc(內嵌 driconf 假設) | /vendor 運行期 ro mount → 失敗 |
+| 2 | drirc bind-mount(/data 副本 over /vendor/etc)+ gpu/sf 重啟 | GLES 行唔變 — 呢個 build 冇 file-based driconf(庫內冇 `.driconf/.drirc` 字面;app profiles 係 build 時內置) |
+| 3 | 容器 `-e force_gl_renderer="Adreno (TM) 306"`(env 假設) | EGL client 確有讀( screencap stderr:「ATTENTION: default value of option force_gl_renderer overridden by environment」)**但 SF GLES 行照舊** — fork 嘅 Qualcomm/Adreno 630/618 spoof 只喺 per-app profile(PUBG/GloftA9 先 spoof);SF/DevCheck 食真 driver 字串 |
+| 覆核 | v5e recreate 加 `force_gl_renderer`+`force_gl_vendor` env 再跑 | 照舊 → **ORANGE 保留照實**;目標字串「Adreno (TM) 306」已入 evidence |
+
+**根因(一句):** renderer 嚟自宿主 kernel amdgpu marketing name;容器層可改字路徑全部被 fork profile 邏輯擋住,要改需要 framework/apex 級手術(超出呢棒)。
+
+### 粒2 transport ETHERNET→WIFI — **ORANGE 保留(3 擊止)**
+
+- **定位:** `dumpsys connectivity` = NetworkAgentInfo network{100} EthernetNetworkSpecifier(wlan0)「Transports: ETHERNET」;wifi_on=1;wificond running;**容器同宿主都冇 ieee80211 PHY**(宿主有線機)→ wifi station 路徑物理上開唔到。
+- **擊1:** `setprop wifi.interface wlan0`(**烘入 99-stealth7-props.sh**)。
+- **擊2:** `svc wifi enable` + `ctl.restart wificond` → transport 照舊 ETHERNET。
+- **照實止:** transport 由 tethering APEX 入面 EthernetNetworkFactory 寫死;要變 WIFI 需要 patch apex apk(framework 級,超出呢棒)。status bar Wi-Fi 格仔同理欠。
+
+### 粒3 PlayProtect crash-loop — **復現唔到(0 擊,clear 留手)**
+
+- v4-proc 新 boot:**13 分鐘 logcat = 0 hit**「Unexpected safety source|GooglePlayProtect」;再 2 分鐘基線 = 0;v5-deep final boot **3 分鐘計頻 FATAL=0 / PlayProtect=0**。
+- **判語:** gen53 嘅 ~4/min loop 屬「GMS 帳號活躍期」狀態;出廠態(零帳號)重啟後**唔復現**。`pm clear com.android.vending` **冇執行**(loop 唔喺度 — 一擊留手:決鬥日如復現,即刻 clear)。
+- **根因(一句):** vending bgExecutor 對「Unexpected safety source: GooglePlayProtect」自檢 fatal = GMS 水管手術後 vending DB 內 safety-source 狀態不一致;冷 boot 即消。
+
+### 粒4 dexopt isa fatal — **出生證明保留(2 擊止)**
+
+- **定性:** 唔係 crash — **am_wtf ×4/boot**(PMS scan 期 event log):`[system_server,PackageManager,Unsupported isa 'x86_64']`;脈絡:`ro.dalvik.vm.isa.arm/arm64/x86 = x86_64`(ndk_translation)+ ART apex 冇 `etc/isaconfig` → DexUseManager WTF。
+- **擊1:** 定位(above)。**擊2:** `cmd package bg-dexopt-job` → 「Job encountered a fatal error」(bg-dexopt 喺呢 build 自己都食唔到 isa 翻譯);冇新增 am_wtf。
+- **判語:** **出生證明保留**(YELLOW,event-log 級,只對肯讀者;GMS 唔食 event log)。
+
+---
+
+## STEP Z — 感應器開機競態烘鏡像 ✅
+
+- **重新定性(gen55):** 唔係 SensorServer-before-HAL 咁簡單 — HAL(自家 wa-sensors AIDL,`/vendor/bin/hw/android.hardware.sensors-service.example`,init 註解 WA-STEALTH6 T2)註冊 servicemanager **vs SensorService probe** 競態;devInitCheck 過但 HAL 報 0 sensors。
+- **實測修復順序:** **淨 `ctl.restart zygote` = 唔够**(HAL 舊 state 報 0);**`ctl.restart vendor.sensors-default` → sleep 3 → `ctl.restart zygote` = 3/3**(BMI260 Accel + BMI260 Gyro + VCNL36827 Prox)。
+- **烘入:** 新腳本 `/data/adb/service.d/96-stealth7-sensors.sh` — 等 boot_completed → sleep 8 → 計 `Total N h/w sensors`;**N=0/空先重啟(HAL→zygote 各一次),唔循環**;有 log tag `Stealth7Sensors`。
+- **冷 boot 實測 ×2(v5-deep plain + v5e env):** log 自動「sensors=3 OK, no restart」+ `dumpsys sensorservice` = **Total 3 h/w sensors** ✅(呢兩 boot 冇中競態,腳本零副作用;競態 branch 已手動證 0→restart→3)。
+- ⚠️ **脚本人質喺 /data volume**(97/98/99 一樣):docker commit 唔 capture volume → **DR 重建(新 volume)要由 host 後備 copy 返 service.d 四隻腳本**;鏡像層只 guarantee 代碼/庫。
+
+---
+
+## STEP 5 — 烘鏡像 + 回歸 ✅
+
+- **鏡像:** `docker commit` → **`water-army/redroid:14.0.0-240527-gms-mtg-oemprop-stealth7-a14-v5-deep`**(本棒容器 fs 零改動 → 內容同 v4-proc 等價,tag 標記深攻完成態;新鏡像 4.56GB)。
+- **最終 run 配方(已實 boot 驗證):**
+
+```bash
+docker run -d \
+  --name s7s38-a14 \
+  --privileged \
+  --network water-army-devices \
+  -p 127.0.0.1:16701:5555 \
+  -v /var/lib/water-army/redroid/s7s38-a14:/data \
+  -v /home/kenneth/redroid-proc/cpuinfo:/data/stealth7-proc/cpuinfo:ro \
+  -v /home/kenneth/redroid-proc/meminfo:/data/stealth7-proc/meminfo:ro \
+  -e "force_gl_renderer=Adreno (TM) 306" \
+  -e "force_gl_vendor=Qualcomm" \
+  water-army/redroid:14.0.0-240527-gms-mtg-oemprop-stealth7-a14-v5-deep \
+  /init \
+    qemu=1 androidboot.hardware=redroid \
+    androidboot.redroid_width=1080 androidboot.redroid_height=2400 \
+    androidboot.redroid_dpi=420 androidboot.redroid_fps=60 \
+    androidboot.redroid_gpu_mode=host
+```
+
+(env 兩條 = 粒1 實驗遺留;Mesa 讀到但 fork profile 邏輯壓返真字串 — 留低無害,標記意圖)
+
+**回歸核對表(v5e boot 實測):**
+
+| 項 | 結果 |
+|---|---|
+| boot_completed | **1** ✅ |
+| /proc bind | Stealth7Proc mounted=1;cpuinfo AArch64、MemTotal 1,974,272 kB ✅ |
+| 電池(自動) | Stealth7Battery round 1:**86/present/status=2/AC=true** ✅ |
+| sensors(自動) | Stealth7Sensors「sensors=3 OK」+ Total 3 h/w sensors ✅(**gen54 嘅 0/3 已根治**) |
+| ATTS spot(無回退) | keybox md5 **d8f7b3f0…**(= gen45c 交貨值)、PIF patch 2026-09-05、model SM-J510GN、GMS 26.42.31、egress 7897→204 ✅ |
+| DevCheck 主頁 | **Health 100 / AI 95(96−1 ADB on 預期,無升無退) / Battery 86% Charging 倒數活** ✅ |
+| GLES 行 | IMG, AMD Radeon Graphics(無回退,ORANGE) |
+| transport | ETHERNET + wifi.interface=wlan0(無回退,ORANGE) |
+| **logcat 3 分鐘計頻** | **FATAL=0 / PlayProtect=0 / isaWTF=0**(對照 gen54 同窗口 ~1/min → **全零**)✅ |
+
+---
+
+## 洩漏狀態更新(gen55 後)
+
+- **ORANGE 保留(3 粒照實):** GPU renderer(宿主 kernel marketing name)、transport ETHERNET(冇 PHY,apex 寫死)、vending loop(出廠態唔復現 — 決鬥日 account 開通後覆睇)。
+- **轉好:** sensors 0/3 → **boot 自動 3/3**;crash 計頻 1/min → **0/3min**;dexopt「fatal」定性降級為 am_wtf(YELLOW 出生證明)。
+- **sensors pre-existing 問題解除:** gen54 標「鏡像層既有 0/3」— 而家先至真係修好(競態腳本 + 修復順序確立)。
+
+## 事故記錄(gen55 照實)
+- **driconf 假設死路:** 我以為 Mesa 24 讀 driconf 檔 → 呢個 redroid Mesa build 將 file 讀取 compile 咗-out(app profile 內置);env 讀到(`ATTENTION` stderr)但被 fork per-app profile 邏輯壓住。教訓:呢個 build 嘅 GL 字串唔會由 runtime config 改到。
+- **bg-dexopt-job 自fatal:** 呢 build 連 bg-dexopt 都食唔到 isa 翻譯 — 粒4 候補方案失效,照實「出生證明保留」。
+- **重啟後 adb「device offline」×多次:** adbd 起得慢;用 `docker exec dumpsys` 兜底,唔計連敗。
+- **service.d 脚本喺 /data volume(鏡像唔 capture):** 96/97/98/99 四隻 DR 重建要人手 restore(見 STEP Z ⚠️)。
+- **宿主 RAM 起步 7.7G available**(free -m 有記);全棒零 kill。
+
+**evidence:** `s7-s55-m1-m2-reads.txt`(粒1/2 定位+擊紀錄)、`s7-s55-m3-m4-reads.txt`(粒3/4 計頻+定性)、`s7-s55-z-sensor-script.txt` + `s7-s55-z-bootlog.txt`(STEP Z 腳本+冷 boot log)、`s7-s55-gles-final.txt`(最終 GLES/sensors/props)、`s7-s55-devcheck.png`(Health 100/AI 95/86% Charging)。
+
+**機留起:** s7s38-a14 @16701 运行緊(v5-deep 鏡像 + env 配方);決鬥日清理清單照 gen53 段,加「account 開通後覆睇 vending loop」。

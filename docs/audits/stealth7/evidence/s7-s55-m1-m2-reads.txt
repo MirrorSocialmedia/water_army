@@ -1,0 +1,11 @@
+# grain1 GPU renderer (gen55)
+BEFORE/AFTER(final): GLES: IMG, AMD Radeon Graphics, OpenGL ES 3.2 V@0615  (unchanged)
+props: ro.hardware.egl=mesa ro.hardware.gralloc=gbm ro.hardware.vulkan=lvp gralloc.gbm.device=/dev/dri/renderD128 ro.boot.redroid_gpu_mode=host
+host GPU: AMD PCI 1002:13c0 (Ryzen iGPU) — renderD128; kernel amdgpu marketing name -> "AMD Radeon Graphics" (runtime ioctl, not a container string)
+mesa fork evidence: libgallium has "%s%u.%u%s V@0615" (patched version fmt) + "IMG(%s:%ux%ux%u)"; libEGL_mesa.so app-profile table: force_gl_vendor=Qualcomm / force_gl_renderer="Adreno (TM) 630|618" only for PUBG/GloftA9 profiles
+driconf: file-based driconf NOT readable in this build (no .driconf/.drirc literals; drirc bind+restart = no effect)
+env override: -e force_gl_renderer="Adreno (TM) 306" -> EGL clients print "ATTENTION: default value of option force_gl_renderer overridden by environment." (conf seen) BUT SF GLES line unchanged (fork profile logic overrides real driver string per-app; SF not profiled) -> ORANGE kept (3+1 strikes)
+# grain2 transport
+diagnosis: NetworkAgentInfo network{100} EthernetNetworkSpecifier(wlan0) "Transports: ETHERNET"; no ieee80211 PHY in container OR host (host is wired) -> wifi station path impossible
+strikes: wifi.interface=wlan0 (baked into 99-stealth7-props.sh) + svc wifi enable (wifi_on=1) + ctl.restart wificond -> Transports: ETHERNET unchanged
+verdict: ORANGE kept (3 strikes); framework-level change needs tethering APEX patch (out of scope)

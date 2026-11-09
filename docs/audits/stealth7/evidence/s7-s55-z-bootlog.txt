@@ -1,0 +1,6 @@
+# v5-deep env-run boot (2026-11-09 ~01:57Z) — captured live, logcat -s Stealth7*
+11-09 01:57:08.571  2229  2229 I Stealth7Proc: cpuinfo+meminfo mounted=1
+11-09 01:57:08.594  2275  2275 I Stealth7Battery: battery OK round 1: level=86 present=true status=2 ac=true
+11-09 01:57:16.570  3884  3884 I Stealth7Sensors: sensors=3 OK, no restart
+# v5-deep plain boot (01:54Z): identical 3 lines (Proc 01:54:34 / Battery 01:54:34 / Sensors 01:54:42)
+# race branch proven manually (01:50Z boot): sensors=0 -> setprop ctl.restart vendor.sensors-default; sleep 3; setprop ctl.restart zygote -> "Total 3 h/w sensors"

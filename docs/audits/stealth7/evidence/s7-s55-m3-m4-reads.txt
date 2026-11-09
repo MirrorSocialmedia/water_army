@@ -1,0 +1,10 @@
+# grain3 vending PlayProtect (gen55)
+gen53 baseline: ~3-5/min "Unexpected safety source: GooglePlayProtect" bgExecutor fatal (GMS-account-active period)
+gen55 fresh v4-proc boot: 13-min buffer = 0 hits; 2-min baseline = 0; v5-deep final boot 3-min window: FATAL=0 PlayProtect=0
+=> crash-loop NOT reproduced in factory-state (zero account); pm clear NOT executed (loop absent — strike held for duel-day if recurrence)
+root cause one-liner: vending bgExecutor self-check fatal on "Unexpected safety source" (stale safety-source state after GMS plumbing, cleared by cold boot)
+# grain4 dexopt isa (gen55)
+nature: am_wtf events x4/boot @PMS scan: [system_server,PackageManager,Unsupported isa 'x86_64'] (event log, not a crash)
+context: ro.dalvik.vm.isa.arm/arm64/x86 = x86_64 (ndk_translation); ART apex has no /apex/com.android.art/etc/isaconfig -> DexUseManager WTF
+strike: cmd package bg-dexopt-job -> "Job encountered a fatal error" (bg-dexopt itself unsupported on this ndk_translation build); no new am_wtf
+verdict: birth-certificate kept (YELLOW, only visible to readers of event log)
