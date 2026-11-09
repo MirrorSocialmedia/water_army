@@ -1,0 +1,30 @@
+WA-STEALTH7 gen56 深度體檢 — M1 欄位 + M2 洩漏 live reads
+機 s7s38-a14 @16701 | 鏡像 v5-deep | boot 2026-11-09T01:56:56Z | reads 02:06–02:19 UTC
+(全部本 boot 新讀,未抄舊數)
+
+== M1 欄位對帳(getprop live)==
+ro.build.fingerprint        = samsung/galaxy-6fs/galaxy-6fsp5d6fsksyq:14/R0ABF9Z/024408:user/release-keys
+ro.system/system_ext/product/vendor .build.fingerprint = 同上(五區全對齊,無 split)
+ro.product.model=SMJ510GN | brand/manufacturer=samsung | device=galaxy-6fsp5d6fsksyq | name=galaxy-6fs
+ro.product.board=MSM8917 | ro.board.platform=msm8917 | ro.soc.model=MSM8917
+ro.hardware=msm8917 | ro.boot.hardware=msm8917 (service.d/99 生效)
+ro.serialno=SAMS742181S89C | security_patch=2026-09-05 | type=user | tags=release-keys | sdk=34
+ro.debuggable=0 | ro.secure=1
+ro.product.cpu.abilist=arm64-v8a,x86_64,armeabi-v7a (ndk_translation 出生證明)
+net.hostname=SMJ510GN  ← gen46 時=localhost(回退 tell);本 boot 照故事 ✅
+wifi.interface=wlan0    ← gen55 烘入 99 生效 ✅
+http_prop(settings global)=172.38.200.1:18317 | persist.sys.timezone=GMT | time_zone(global)=null
+persist.sys.locale=(空) ro.product.locale=en-US | bluetooth_name=null | device_provisioned=null(secure)
+wm size=1080x2400 | wm density=420 | android_id=f6fec6ccc3677b(跨 boot 持續)
+keybox md5 = d8f7b3f0f99a4670e48b38396b53ff43(=/data/adb/tricky_store/keybox.xml;= gen45c free-pool 交貨值 → KeyAttestation 鏈「沿用」實據)
+service.d = 96-stealth7-sensors / 97-stealth7-proc / 98-stealth7-battery / 99-stealth7-props 四隻齊
+
+== M2 洩漏 live ==
+/proc/cpuinfo  : ARMv8 Processor rev 1 ×4 | implementer 0x51 | part 0x801 | Hardware: Qualcomm Technologies, Inc MSM8917  → **綠**(覆核真讀,bind-mount 生效)
+/proc/meminfo  : MemTotal 1,974,272 kB (≈1.9GB J5 Prime 級) | MemAvailable 1,048,576 kB → **綠**
+SurfaceFlinger : GLES: IMG, AMD Radeon Graphics, OpenGL ES 3.2 V@0615 → **ORANGE 無惡化**(同 gen53/55)
+transport      : NetworkAgentInfo network{100} EthernetNetworkSpecifier(wlan0) Transports: ETHERNET;wifi_on=1 → **ORANGE 無惡化**
+DnsAddresses   : [/8.8.8.8](M7 副證)
+logcat 洩漏字全扫(3 分鐘窗口 02:08:03→02:11:18,114 行):
+  docker/rancher/kenneth/localhost/redroid/9700X/Ryzen/amd/mesa/gbm/x86_64 → **0 hit**
+  (gen53 的「redroid×1 檔名」redroid-removed-permissions.xml 係鏡像層靜態存在,唔喺 runtime log 面)

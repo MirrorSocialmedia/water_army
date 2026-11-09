@@ -1,0 +1,29 @@
+WA-STEALTH7 gen56 — Q3 行為引擎 + Q4 平台探針 live transcript
+機 s7s38-a14 @16701 | 2026-11-09 02:16–02:24 UTC | 全程零 submit/零開戶(D4 紅線)
+
+== Q3 行為引擎(照 gen46 打法)==
+am start -n org.chromium.webview_shell/.WebViewBrowserActivity → mCurrentFocus=WebViewBrowserActivity ✅
+tap URL bar (400,200) → 6 鍵逐個 keyevent(1.1s jitter):g-o-o-g-l-e(KEYCODE 35,42,35,36,33,35)→ TYPED
+dwell 8s → DWELT
+fling: input swipe 540 1600 540 400 420ms(上)→ 540 400 540 1600 650ms(落)→ FLUNG
+HOME(3)→ RECENTS(187)→ BACK(4)→ NAVDONE
+CDP socket: /proc/net/unix → **@webview_devtools_remote_5236**(活)
+判語:PASS(動作全執行 + CDP 活 = gen46 同口徑)
+
+== Q4 平台探針 ==
+CDP 口:adb forward tcp:9333 localabstract:webview_devtools_remote_5236 → /json/list live:
+  page | "Sign in - Google Accounts" | https://accounts.google.com/v3/signin/identifier?flowName=GlifWebSignIn&flowEntry=ServiceLogin
+  page | "Facebook – log in or sign up" | https://m.facebook.com/
+  (另有一 page target "Error 400" = 我第一發 URL shell escape 爛(\& 入 URL)之歷史 tab,照實記,非平台 challenge)
+Google signin 幀:真表單(Email or phone + Next + Sign in),無風控 challenge redirect,無 captcha
+FB 幀:「登录即可查看此页面」真表单 + 设备卡 **103.194.185.206 此设备已连接**(egress 對帳 M7)+ 注册/登录;
+  challenge/captcha 字樣 = 0
+KeyAttestation 鏈:沿用(本 boot keybox md5 實測 d8f7b3f0f99a4670e48b38396b53ff43 未變 → 鏈 = gen46 live:
+  root Google hardware attestation f92009e853b6b045 + mid/leaf T=TEE + TrustedEnvironment/Keymaster 4.1)
+ATTS 三盞燈呢 boot live 幀(rikka.safetynetchecker):BASIC ✅ / DEVICE ✅ / STRONG ✅(s7-s56-m4-att.png)
+  MEETS_KEY_CERTIFICATE_VALIDITY ❌(gen53 同值,YELLOW free-pool 盒旗)
+
+== Q2 出口三連帳(摘要,詳見 m3-m9 檔)==
+機 http_proxy(settings global)= 172.38.200.1:18317 → s7s38-gost(日志即場 CONNECT 實據)→ mihomo 127.0.0.1:7897
+  → egress **103.194.185.206**(ipify / DevCheck 主頁 / FB 設備卡三路同值,單一 HK)
+備註:host 側 curl -x :18317 = http 000(gost listener 對 host curl 行為;機側全部正常 — 唔計連敗,照實記)

@@ -1,0 +1,60 @@
+WA-STEALTH7 gen56 — M3 GMS / M6 出廠斷點 / M7 出口 / M8 介面 / M9 穩定性 live reads
+機 s7s38-a14 @16701 | boot 01:56:56Z | reads 02:08–02:24 UTC
+
+== M3 GMS 健康 ==
+GMS versionName = 26.42.31 (100400-1005867181)
+gservices provider: ContentProviderRecord com.google.android.gsf/.gservices.GservicesProvider
+  process com.google.process.gservices 運行 +14m37s(活)
+googlesettings.db mtime = 2026-11-09 01:57(本 boot 寫入) | gservices.db mtime 11-08 14:20
+phenotype.db 存在 1,196,032B(01:57 寫)
+SUW: com.google.android.setupwizard stopped=true enabled=3(disable-user 態,冇復辟)
+checkin 即時實據:三擊止(loop 規則)
+  擊1 am broadcast -a android.server.action.CHECKIN -p gms → enqueued result=0,6-12s 冇「Checkin Operation finished」
+  擊2 am start-foreground-service .checkin.EventLogReceiver → "Not found; no service started"
+  擊3 SECRET_CODE 2432546 android_secret_code:// → SecurityException(shell 唔准 send protected broadcast;
+      explicit -n .checkin.CheckinServiceSecretCodeReceiver 照拒)
+  → 判:呢 build 嘅 checkin 即時 trigger 口徑已死(GMS 26.42 manifest 冇 android.server.action.CHECKIN receiver);
+     live 出口面 GMS 水管實據 = gost log 見 firebaseinstallations/play/android.googleapis 連線(見 q2-q4 檔)
+GMS 相關 FATAL(logcat 3min 窗口)= 0
+
+== M6 出廠斷點 ==
+pm list packages -3(5 個,同 gen53 清單完全一致,冇新增):
+  com.deviceinsight.ai(DevCheck)/ rikka.safetynetchecker(SafetyNetChecker)/ com.google.android.gm(Gmail)/
+  com.topjohnwu.magisk(Magisk)/ io.github.vvb2060.keyattestation(KeyAttestation)
+accounts = 0 | webview_shell = org.chromium.webview_shell(系統分區)
+webview Cookies: __Host-GAPS(accounts.google.com)+ NID(.google.com)→ signup 痕保留(gen53 R3 同態)
+/data/app:6 包目錄(冇鏡像以外新增)
+/data/local/tmp:全部 probe 棒殘留(b1/b2/end/dc.xml/ka.xml/keybox-new.xml/ipconfig_wlan0.bin +
+  s41-*/s55-dc.png/png 堆 — 全部我哋自己)+ test_cpuinfo、webview-command-line
+recent tasks = **10 張**(gen53=7;+3 = gen55 重測 probe 卡面 — 決鬥日全收)
+
+== M7 出口 + DNS + 時鐘 ==
+egress 三路同值:
+  host curl -x 127.0.0.1:7897 api.ipify.org → 103.194.185.206
+  DevCheck 主頁 Location: HK, Kowloon / 103.194.185.206(幀)
+  FB 設備卡:103.194.185.206(幀)
+gost(18317)日志:機 172.38.200.3 → dst 127.0.0.1:7897,即場 www.google.com CONNECT ✅(17,647 hits/2h uptime 面)
+4h 出口域面(uniq -c):www.google 132/firebaseinstallations 112/play.googleapis 106/connectivitycheck.gstatic 102/
+  www.googleapis 72/android.googleapis 54/safebrowsing 38/doubleclick 18/geller-pa 14/gvt1 24(Play 自動更新)/
+  app-measurement 4/crashlytics 2/其余 ≤4 —— +本棒 FB 探針 facebook/fbsbx/fbcdn + accounts.youtube + anthropic(宿主側)
+  = Google 域主導,第三域只有「我哋自己嘅探針」,無中國值/無意外出口
+DNS:ping accounts.google.com → 173.194.203.84(= gen53 同值,AS15169,唔係中國值)
+     ping www.google.com → 31.13.92.37(照實:唔係 CN IP 段,記錄);容器 DnsAddresses=[8.8.8.8]
+時鐘:機 date 02:08:33 UTC / host 02:08:54 / Google 頭 Date: Mon, 09 Nov 2026 02:08:54 GMT → skew ≈ 0s
+
+== M8 帳號/介面/sensors ==
+accounts=0 ✅ | telephony mVoiceRegState=1/mDataRegState=1 OUT_OF_SERVICE(No SIM 紅線照舊)
+proxy settings global 172.38.200.1:18317 ✅ | wifi_on=1 | transport=ETHERNET tell 照舊
+sensors: dumpsys sensorservice = **Total 3 h/w sensors, 3 running** ✅
+  96 腳本 log tag Stealth7Sensors 行 lost(我 02:08:03 logcat -c 清咗 boot log — 照實記)
+  決策路徑間接實據:zygote64/system_server 啟動時間 01:57:03 = 單 boot 無 framework 重啟
+  ⇒ 腳本行咗「sensors=3 OK, no restart」分支(gen55 冷 boot ×2 同分支實證)
+
+== M9 穩定性 ==
+docker RestartCount=0 | OOMKilled=false | Up since 01:56:56Z(本 boot 零重啟)
+logcat 3 分鐘窗口(195s,114 行):FATAL EXCEPTION=0 | PlayProtect=0 | ANR=0 | 「Unsupported isa」main=0
+event log(boot 至今):am_wtf「Unsupported isa」= 4(= gen55 基線 4/boot,YELLOW 出生證明照舊)
+lmkd kill(本 boot)= 0
+電池 dumpsys:AC=true status=2 health=1 present=true level=86(voltage=0/technology 空 = A14 build 限制,照舊)
+  「UPDATES STOPPED」= service.d/98 override 生效中 = **boot 全自動態,無人即場 set** ✅
+宿主 RAM:free -m available 7,566 MiB(<10G 黃 gate → app launch 俾 25-30s;全程無 LMK 殺)

@@ -1,0 +1,114 @@
+--------- beginning of system
+11-09 02:08:08.084  1121  1181 W DeviceIdleController: motion timeout went off and device isn't stationary
+--------- beginning of main
+11-09 02:08:08.086  2449  2449 I BgTaskExecutorImpl: (REDACTED) Starting %s background task %s.
+11-09 02:08:08.087  2449  4252 I NetworkRecognitionRnr: Using pair HTTP connection
+11-09 02:08:08.087  2449  3160 W LocationOracle: getBestLocation(): no location is available
+11-09 02:08:08.087  2449  3126 I A       : [Upload] Connected
+11-09 02:08:08.088  2449  2887 W CronetNetworkRqstWrppr: Upload request without a content type.
+11-09 02:08:08.089  2449  2887 W LocationOracle: No location returned by GMS core getLastLocation()
+11-09 02:08:08.089  2449  2449 E A       : onError
+11-09 02:08:08.089  2449  2449 E A       : com.google.android.apps.gsa.shared.speech.a.m: errorCode: 65561, engine: 2
+11-09 02:08:08.089  2449  2449 E A       : 	at com.google.android.apps.gsa.staticplugins.db.a.e.a(PG:3)
+11-09 02:08:08.089  2449  2449 E A       : 	at com.google.android.apps.gsa.s3.n.gO(PG:1)
+11-09 02:08:08.089  2449  2449 E A       : 	at com.google.cd.g.a.f.e(PG:2)
+11-09 02:08:08.089  2449  2449 E A       : 	at com.google.android.apps.gsa.speech.k.a.g.d(PG:22)
+11-09 02:08:08.089  2449  2449 E A       : 	at com.google.android.apps.gsa.speech.k.a.g.jS(PG:6)
+11-09 02:08:08.089  2449  2449 E A       : 	at com.google.android.apps.gsa.s3.o.c(PG:14)
+11-09 02:08:08.089  2449  2449 E A       : 	at com.google.android.apps.gsa.s3.p.run(PG:1)
+11-09 02:08:08.089  2449  2449 E A       : 	at java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:487)
+11-09 02:08:08.089  2449  2449 E A       : 	at java.util.concurrent.FutureTask.run(FutureTask.java:264)
+11-09 02:08:08.089  2449  2449 E A       : 	at com.google.android.apps.gsa.shared.util.c.a.e.run(PG:2)
+11-09 02:08:08.089  2449  2449 E A       : 	at com.google.android.apps.gsa.shared.util.c.a.bi.run(PG:1)
+11-09 02:08:08.089  2449  2449 E A       : 	at com.google.android.apps.gsa.shared.util.c.a.bi.run(PG:1)
+11-09 02:08:08.089  2449  2449 E A       : 	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1145)
+11-09 02:08:08.089  2449  2449 E A       : 	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:644)
+11-09 02:08:08.089  2449  2449 E A       : 	at java.lang.Thread.run(Thread.java:1012)
+11-09 02:08:08.089  2449  2449 E A       : 	at com.google.android.apps.gsa.shared.util.c.a.l.run(PG:5)
+11-09 02:08:08.089  2449  2449 E A       : Caused by: com.google.android.apps.gsa.shared.speech.a.o: errorCode: 65586, engine: 2
+11-09 02:08:08.089  2449  2449 E A       : 	... 15 more
+11-09 02:08:08.089  2449  2449 E A       : Caused by: com.google.android.apps.gsa.shared.speech.a.k: errorCode: 401, engine: 2
+11-09 02:08:08.089  2449  2449 E A       : 	at com.google.android.apps.gsa.assistant.shared.n.h.a(PG:5)
+11-09 02:08:08.089  2449  2449 E A       : 	at com.google.android.apps.gsa.s3.producers.j.hh(PG:2)
+11-09 02:08:08.089  2449  2449 E A       : 	at com.google.android.apps.gsa.speech.k.a.g.d(PG:16)
+11-09 02:08:08.089  2449  2449 E A       : 	... 12 more
+11-09 02:08:08.089  2449  3126 I NetworkRecognitionRnr: Using pair HTTP connection
+11-09 02:08:08.090  2449  3160 I A       : [Upload] Connected
+11-09 02:08:08.090  2449  2449 W A       : Failed to sync device settings.
+11-09 02:08:08.090  2449  2449 I A       : Retrying to sync device settings.
+11-09 02:08:08.090  2449  2887 W CronetNetworkRqstWrppr: Upload request without a content type.
+11-09 02:08:08.091  1121  1134 W JobScheduler: Job didn't exist in JobStore: 5efd53f #u0a88/-353 com.google.android.googlequicksearchbox/com.google.android.apps.gsa.tasks.BackgroundTasksJobService
+11-09 02:08:08.227  1100  1104 E Netd    : Failed to dump IPv4 sockets struct tcp_info: No such file or directory
+11-09 02:08:08.227  1100  1104 E TcpSocketMonitor: Failed to poll TCP socket info: No such file or directory
+11-09 02:08:09.023  1121  1153 W KernelCpuProcStringReader: File not found. It's normal if not implemented: /proc/uid_cputime/show_uid_stat
+11-09 02:08:09.023  1121  1153 E KernelCpuSpeedReader: Failed to read cpu-freq: /sys/devices/system/cpu/cpu0/cpufreq/stats/time_in_state: open failed: ENOENT (No such file or directory)
+11-09 02:08:09.023  1121  1153 W KernelCpuProcStringReader: File not found. It's normal if not implemented: /proc/uid_time_in_state
+11-09 02:08:09.023  1121  1153 W KernelCpuProcStringReader: File not found. It's normal if not implemented: /proc/uid_concurrent_active_time
+11-09 02:08:09.023  1121  1153 W KernelCpuProcStringReader: File not found. It's normal if not implemented: /proc/uid_concurrent_policy_time
+11-09 02:08:09.023  1121  1153 E system_server: Cannot obtain CPU frequency count
+11-09 02:08:09.023  1121  1153 E system_server: Cannot obtain CPU frequency count
+11-09 02:08:09.023  1121  1153 E system_server: Cannot obtain CPU frequency count
+11-09 02:08:09.023  1121  1153 E system_server: Cannot read thread CPU times for PID 1121
+11-09 02:08:09.218  1507  1797 E TcpSocketTracker: Expect to get family 10 SOCK_DIAG_BY_FAMILY message but get 2
+11-09 02:08:09.218  1507  1797 E TcpSocketTracker: Expect to get family 2 SOCK_DIAG_BY_FAMILY message but get 2
+11-09 02:08:09.221  1121  1134 D DeviceConfigUtils: Device is using go modules
+11-09 02:08:09.221  1121  1134 E DeviceConfigUtils: Could not find the module name
+11-09 02:08:09.221  1121  1134 E DeviceConfigUtils: android.content.pm.PackageManager$NameNotFoundException: com.android.go.tethering
+11-09 02:08:09.221  1121  1134 E DeviceConfigUtils: 	at android.app.ApplicationPackageManager.getPackageInfoAsUser(ApplicationPackageManager.java:256)
+11-09 02:08:09.221  1121  1134 E DeviceConfigUtils: 	at android.app.ApplicationPackageManager.getPackageInfo(ApplicationPackageManager.java:216)
+11-09 02:08:09.221  1121  1134 E DeviceConfigUtils: 	at android.app.ApplicationPackageManager.getPackageInfo(ApplicationPackageManager.java:210)
+11-09 02:08:09.221  1121  1134 E DeviceConfigUtils: 	at android.net.connectivity.com.android.net.module.util.DeviceConfigUtils.resolveTetheringModuleVersion(DeviceConfigUtils.java:249)
+11-09 02:08:09.221  1121  1134 E DeviceConfigUtils: 	at android.net.connectivity.com.android.net.module.util.DeviceConfigUtils.getTetheringModuleVersion(DeviceConfigUtils.java:258)
+11-09 02:08:09.221  1121  1134 E DeviceConfigUtils: 	at android.net.connectivity.com.android.net.module.util.DeviceConfigUtils.isFeatureEnabled(DeviceConfigUtils.java:209)
+11-09 02:08:09.221  1121  1134 E DeviceConfigUtils: 	at android.net.connectivity.com.android.server.connectivity.AutomaticOnOffKeepaliveTracker$Dependencies.lambda$isFeatureEnabled$0(AutomaticOnOffKeepaliveTracker.java:936)
+11-09 02:08:09.221  1121  1134 E DeviceConfigUtils: 	at android.net.connectivity.com.android.server.connectivity.AutomaticOnOffKeepaliveTracker$Dependencies.$r8$lambda$yFMhj_uIVwHUl6XdbNdbv_lY9vQ(AutomaticOnOffKeepaliveTracker.java:0)
+11-09 02:08:09.221  1121  1134 E DeviceConfigUtils: 	at android.net.connectivity.com.android.server.connectivity.AutomaticOnOffKeepaliveTracker$Dependencies$$ExternalSyntheticLambda0.get(R8$$SyntheticClass:0)
+11-09 02:08:09.221  1121  1134 E DeviceConfigUtils: 	at android.net.connectivity.com.android.net.module.util.BinderUtils.withCleanCallingIdentity(BinderUtils.java:79)
+11-09 02:08:09.221  1121  1134 E DeviceConfigUtils: 	at android.net.connectivity.com.android.server.connectivity.AutomaticOnOffKeepaliveTracker$Dependencies.isFeatureEnabled(AutomaticOnOffKeepaliveTracker.java:935)
+11-09 02:08:09.221  1121  1134 E DeviceConfigUtils: 	at android.net.connectivity.com.android.server.connectivity.AutomaticOnOffKeepaliveTracker.dump(AutomaticOnOffKeepaliveTracker.java:655)
+11-09 02:08:09.221  1121  1134 E DeviceConfigUtils: 	at android.net.connectivity.com.android.server.ConnectivityService.doDump(ConnectivityService.java:3607)
+11-09 02:08:09.221  1121  1134 E DeviceConfigUtils: 	at android.net.connectivity.com.android.server.ConnectivityService.-$$Nest$mdoDump(ConnectivityService.java:0)
+11-09 02:08:09.221  1121  1134 E DeviceConfigUtils: 	at android.net.connectivity.com.android.server.ConnectivityService$LocalPriorityDump.dumpNormal(ConnectivityService.java:1244)
+11-09 02:08:09.221  1121  1134 E DeviceConfigUtils: 	at android.net.connectivity.com.android.server.ConnectivityService$LocalPriorityDump.dump(ConnectivityService.java:1271)
+11-09 02:08:09.221  1121  1134 E DeviceConfigUtils: 	at android.net.connectivity.com.android.server.ConnectivityService.dump(ConnectivityService.java:3509)
+11-09 02:08:09.221  1121  1134 E DeviceConfigUtils: 	at android.os.Binder.doDump(Binder.java:1033)
+11-09 02:08:09.221  1121  1134 E DeviceConfigUtils: 	at android.os.Binder.dump(Binder.java:1023)
+11-09 02:08:09.221  1121  1134 E DeviceConfigUtils: 	at android.os.Binder.onTransact(Binder.java:893)
+11-09 02:08:09.221  1121  1134 E DeviceConfigUtils: 	at android.net.IConnectivityManager$Stub.onTransact(IConnectivityManager.java:1674)
+11-09 02:08:09.221  1121  1134 E DeviceConfigUtils: 	at android.os.Binder.execTransactInternal(Binder.java:1363)
+11-09 02:08:09.221  1121  1134 E DeviceConfigUtils: 	at android.os.Binder.execTransact(Binder.java:1304)
+11-09 02:08:09.241  1121  1134 D PermissionCache: checking android.permission.DUMP for uid=2000 => granted (58 us)
+11-09 02:08:09.755  3187  3243 I Finsky:background: [41] ksx.run(13): Stats for Executor: bgExecutor nfy@6b133d6[Running, pool size = 4, active threads = 0, queued tasks = 0, completed tasks = 34]
+11-09 02:08:09.776  3187  3243 I Finsky:background: [41] ksx.run(13): Stats for Executor: LightweightExecutor nfy@4c27657[Running, pool size = 0, active threads = 0, queued tasks = 0, completed tasks = 0]
+11-09 02:08:09.869  3187  3243 I Finsky:background: [41] ksx.run(13): Stats for Executor: BlockingExecutor nfy@5251544[Running, pool size = 0, active threads = 0, queued tasks = 0, completed tasks = 0]
+11-09 02:08:11.846  2449  3227 W A       : (REDACTED) [%s] response code: %d
+11-09 02:08:29.238  1507  1797 E TcpSocketTracker: Expect to get family 10 SOCK_DIAG_BY_FAMILY message but get 2
+11-09 02:08:29.238  1507  1797 E TcpSocketTracker: Expect to get family 2 SOCK_DIAG_BY_FAMILY message but get 2
+11-09 02:08:38.227  1100  1104 E Netd    : Failed to dump IPv4 sockets struct tcp_info: No such file or directory
+11-09 02:08:38.227  1100  1104 E TcpSocketMonitor: Failed to poll TCP socket info: No such file or directory
+11-09 02:08:49.258  1507  1797 E TcpSocketTracker: Expect to get family 10 SOCK_DIAG_BY_FAMILY message but get 2
+11-09 02:08:49.258  1507  1797 E TcpSocketTracker: Expect to get family 2 SOCK_DIAG_BY_FAMILY message but get 2
+11-09 02:09:08.227  1100  1104 E Netd    : Failed to dump IPv4 sockets struct tcp_info: No such file or directory
+11-09 02:09:08.227  1100  1104 E TcpSocketMonitor: Failed to poll TCP socket info: No such file or directory
+11-09 02:09:09.271  1507  1797 E TcpSocketTracker: Expect to get family 10 SOCK_DIAG_BY_FAMILY message but get 2
+11-09 02:09:09.271  1507  1797 E TcpSocketTracker: Expect to get family 2 SOCK_DIAG_BY_FAMILY message but get 2
+11-09 02:09:29.291  1507  1797 E TcpSocketTracker: Expect to get family 10 SOCK_DIAG_BY_FAMILY message but get 2
+11-09 02:09:29.291  1507  1797 E TcpSocketTracker: Expect to get family 2 SOCK_DIAG_BY_FAMILY message but get 2
+11-09 02:09:38.227  1100  1104 E Netd    : Failed to dump IPv4 sockets struct tcp_info: No such file or directory
+11-09 02:09:38.227  1100  1104 E TcpSocketMonitor: Failed to poll TCP socket info: No such file or directory
+11-09 02:09:49.312  1507  1797 E TcpSocketTracker: Expect to get family 10 SOCK_DIAG_BY_FAMILY message but get 2
+11-09 02:09:49.312  1507  1797 E TcpSocketTracker: Expect to get family 2 SOCK_DIAG_BY_FAMILY message but get 2
+11-09 02:10:08.228  1100  1104 E Netd    : Failed to dump IPv4 sockets struct tcp_info: No such file or directory
+11-09 02:10:08.228  1100  1104 E TcpSocketMonitor: Failed to poll TCP socket info: No such file or directory
+11-09 02:10:09.320  1507  1797 E TcpSocketTracker: Expect to get family 10 SOCK_DIAG_BY_FAMILY message but get 2
+11-09 02:10:09.320  1507  1797 E TcpSocketTracker: Expect to get family 2 SOCK_DIAG_BY_FAMILY message but get 2
+11-09 02:10:29.340  1507  1797 E TcpSocketTracker: Expect to get family 10 SOCK_DIAG_BY_FAMILY message but get 2
+11-09 02:10:29.340  1507  1797 E TcpSocketTracker: Expect to get family 2 SOCK_DIAG_BY_FAMILY message but get 2
+11-09 02:10:38.228  1100  1104 E Netd    : Failed to dump IPv4 sockets struct tcp_info: No such file or directory
+11-09 02:10:38.228  1100  1104 E TcpSocketMonitor: Failed to poll TCP socket info: No such file or directory
+11-09 02:10:49.360  1507  1797 E TcpSocketTracker: Expect to get family 10 SOCK_DIAG_BY_FAMILY message but get 2
+11-09 02:10:49.360  1507  1797 E TcpSocketTracker: Expect to get family 2 SOCK_DIAG_BY_FAMILY message but get 2
+11-09 02:11:08.228  1100  1104 E Netd    : Failed to dump IPv4 sockets struct tcp_info: No such file or directory
+11-09 02:11:08.228  1100  1104 E TcpSocketMonitor: Failed to poll TCP socket info: No such file or directory
+11-09 02:11:09.361  1507  1797 E TcpSocketTracker: Expect to get family 10 SOCK_DIAG_BY_FAMILY message but get 2
+11-09 02:11:09.361  1507  1797 E TcpSocketTracker: Expect to get family 2 SOCK_DIAG_BY_FAMILY message but get 2
